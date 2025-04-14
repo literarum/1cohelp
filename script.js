@@ -1,7 +1,7 @@
         // Initialize IndexedDB
         let db;
         const DB_NAME = '1C_Support_Guide';
-        const DB_VERSION = 2;
+        const DB_VERSION = 3;
         let userPreferences = { theme: 'auto' };
 
         let categoryDisplayInfo = {
@@ -12,58 +12,29 @@
 
         const CATEGORY_INFO_KEY = 'reglamentCategoryInfo';
 
-        // Configuration for object stores
         const storeConfigs = [
             {
                 name: 'algorithms',
                 options: { keyPath: 'section' }
             },
-
             {
                 name: 'links',
-                options:
-                {
-                    keyPath: 'id',
-                    autoIncrement: true
-                }, indexes: [
-                    {
-                        name: 'category',
-                        keyPath: 'category',
-                        options: { unique: false }
-                    }]
+                options: { keyPath: 'id', autoIncrement: true },
+                indexes: [{ name: 'category', keyPath: 'category', options: { unique: false } }]
             },
             {
                 name: 'bookmarks',
-                options: {
-                    keyPath: 'id',
-                    autoIncrement: true
-                },
-                indexes: [
-                    {
-                        name: 'folder',
-                        keyPath: 'folder',
-                        options: { unique: false }
-                    }]
+                options: { keyPath: 'id', autoIncrement: true },
+                indexes: [{ name: 'folder', keyPath: 'folder', options: { unique: false } }]
             },
             {
                 name: 'reglaments',
-                options: {
-                    keyPath: 'id',
-                    autoIncrement: true
-                },
-                indexes: [
-                    {
-                        name: 'category',
-                        keyPath: 'category',
-                        options: { unique: false }
-                    }]
+                options: { keyPath: 'id', autoIncrement: true },
+                indexes: [{ name: 'category', keyPath: 'category', options: { unique: false } }]
             },
             {
                 name: 'clientData',
-                options: {
-                    keyPath: 'id',
-                    autoIncrement: true
-                }
+                options: { keyPath: 'id', autoIncrement: true }
             },
             {
                 name: 'preferences',
@@ -71,46 +42,67 @@
             },
             {
                 name: 'bookmarkFolders',
-                options:
-                {
-                    keyPath: 'id',
-                    autoIncrement: true
-                }
+                options: { keyPath: 'id', autoIncrement: true }
             },
             {
                 name: 'extLinks',
-                options: {
-                    keyPath: 'id',
-                    autoIncrement: true
-                },
-                indexes: [
-                    {
-                        name: 'category',
-                        keyPath: 'category',
-                        options: { unique: false }
-                    }]
+                options: { keyPath: 'id', autoIncrement: true },
+                indexes: [{ name: 'category', keyPath: 'category', options: { unique: false } }]
+            },
+            {
+                name: 'searchIndex',
+                options: { keyPath: 'word' }
             }
         ];
+
 
         // Initialize the database
         function initDB() {
             return new Promise((resolve, reject) => {
+                console.log(`Opening database ${DB_NAME} version ${DB_VERSION}`);
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
-                request.onerror = e => (console.error("IndexedDB error:", e.target.error), reject("Failed to open database. Using fallback storage."));
+                request.onerror = e => {
+                    console.error("IndexedDB error:", e.target.error);
+                    reject("Failed to open database. Using fallback storage.");
+                };
                 request.onsuccess = e => {
                     db = e.target.result;
                     console.log("Database opened successfully");
                     db.onerror = ev => console.error("Database error:", ev.target.error);
-                    resolve(db);
+
+                    checkAndBuildIndex().then(() => resolve(db)).catch(reject);
+
                 };
                 request.onupgradeneeded = e => {
                     const currentDb = e.target.result;
+                    const transaction = e.target.transaction;
+                    console.log(`Upgrading database from version ${e.oldVersion} to ${e.newVersion}`);
+
                     storeConfigs.forEach(config => {
                         if (!currentDb.objectStoreNames.contains(config.name)) {
+                            console.log(`Creating object store: ${config.name}`);
                             const store = currentDb.createObjectStore(config.name, config.options);
-                            config.indexes?.forEach(index => store.createIndex(index.name, index.keyPath, index.options || {}));
+                            config.indexes?.forEach(index => {
+                                console.log(`Creating index '${index.name}' on store '${config.name}'`);
+                                store.createIndex(index.name, index.keyPath, index.options || {});
+                            });
+                        } else {
+                            if (config.indexes) {
+                                const store = transaction.objectStore(config.name);
+                                config.indexes.forEach(index => {
+                                    if (!store.indexNames.contains(index.name)) {
+                                        console.log(`Creating missing index '${index.name}' on existing store '${config.name}'`);
+                                        store.createIndex(index.name, index.keyPath, index.options || {});
+                                    }
+                                });
+                            }
                         }
                     });
+
+                    if (transaction) {
+                        transaction._rebuildIndexNeeded = true;
+                        console.log("Marked transaction for index rebuild after upgrade.");
+                    }
                 };
             });
         }
@@ -588,124 +580,93 @@
                 title: "Главный алгоритм работы",
                 steps: [
                     {
-                        title: "Приветствие",
-                        description: "Обозначьте клиенту, куда он дозвонился, представьтесь, поприветствуйте клиента.",
-                        example: "Пример: \"Техническая поддержка сервиса 1С-Отчетность, меня зовут Максим. Здравствуйте!\""
+                        title: "Шаг 1: Приветствие",
+                        description: "Поприветствуйте клиента, представьтесь, назовите компанию и спросите, чем можете помочь.",
+                        example: 'Пример: "Добрый день! Техническая поддержка 1С-Отчетность, меня зовут [ваше имя]. Чем могу помочь?"'
                     },
-
                     {
-                        title: "Уточнение ИНН",
-                        description: "Запросите ИНН организации для идентификации клиента в системе и дальнейшей работы.",
-                        example: "Пример: \"Назовите, пожалуйста, ИНН организации.\""
+                        title: "Шаг 2: Уточнение ИНН",
+                        description: "Запросите ИНН организации для идентификации клиента в системе.",
+                        example: 'Пример: "Для начала работы, подскажите, пожалуйста, ИНН вашей организации."',
+                        innLink: true
                     },
-
                     {
-                        title: "Идентификация проблемы",
-                        description: "Выясните суть проблемы, задавая уточняющие вопросы. Важно выяснить как можно больше деталей для составления полной картины.",
-                        example: "Примеры вопросов:<ul class=\"list-disc ml-5 mt-1\"><li>Уточните, пожалуйста, полный текст ошибки</li><li>При каких действиях возникает ошибка?</li></ul>"
+                        title: "Шаг 3: Идентификация проблемы",
+                        description: "Выясните суть проблемы, задавая уточняющие вопросы.",
+                        example: {
+                            type: 'list',
+                            intro: "Примеры вопросов:",
+                            items: [
+                                "<strong>Назовите, пожалуйста, полный текст ошибки</strong> (записать точнее, в идеале, дословно)",
+                                "Когда впервые возникла проблема?"
+                            ]
+                        }
                     },
-
                     {
-                        title: "Решение проблемы",
-                        description: "Четко для себя определите категорию (направление) проблемы и перейдите к соответствующему разделу в помощнике (либо статье на track.astral.ru) с инструкциями по решению.",
-                        example: ""
+                        title: "Шаг 4: Решение проблемы",
+                        description: "Определите категорию проблемы и перейдите к соответствующему разделу с инструкциями по решению.",
+                        example: null
                     }
                 ]
             },
-
             program: [
                 {
                     id: "program1",
                     title: "Место для вашей рекламы...",
                     description: "Место для вашей рекламы...",
                     steps: [
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        },
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        }]
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." },
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." }
+                    ]
                 },
-
                 {
                     id: "program2",
                     title: "Место для вашей рекламы...",
                     description: "Место для вашей рекламы...",
                     steps: [
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        },
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        }]
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." },
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." }
+                    ]
                 }
             ],
-
             skzi: [
                 {
                     id: "skzi1",
                     title: "Ошибка подписания документа",
                     description: "Базовая ошибка при подписании любого документа, либо автонастройке",
                     steps: [
-                        {
-                            title: "Проверка данных подписанта и носителя",
-                            description: "Проверь информацию о подписанте (сверь информацию, указанную в сертификате, с данными клиента)."
-                        },
-                        {
-                            title: "Подписант рукль или физик?",
-                            description: "Если рукль - уточни, присутствует ли физически токен в компьютере, горит ли на нем индикатор, отображается ли он в системном трее или диспетчере устройств, отображется ли контейнер в КриптоПро"
-                        }]
+                        { title: "Проверка данных подписанта и носителя", description: "Проверь информацию о подписанте (сверь информацию, указанную в сертификате, с данными клиента)." },
+                        { title: "Подписант рукль или физик?", description: "Если рукль - уточни, присутствует ли физически токен в компьютере, горит ли на нем индикатор, отображается ли он в системном трее или диспетчере устройств, отображется ли контейнер в КриптоПро" }
+                    ]
                 },
-
                 {
                     id: "skzi2",
                     title: "Место для вашей рекламы...",
                     description: "Место для вашей рекламы...",
                     steps: [
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        },
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        }]
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." },
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." }
+                    ]
                 }
             ],
-
             webReg: [
                 {
                     id: "webreg1",
                     title: "Место для вашей рекламы...",
                     description: "Место для вашей рекламы...",
                     steps: [
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        },
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        }]
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." },
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." }
+                    ]
                 },
-
                 {
                     id: "webreg2",
                     title: "Место для вашей рекламы...",
                     description: "Место для вашей рекламы...",
                     steps: [
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        },
-                        {
-                            title: "Место для вашей рекламы...",
-                            description: "Место для вашей рекламы..."
-                        }]
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." },
+                        { title: "Место для вашей рекламы...", description: "Место для вашей рекламы..." }
+                    ]
                 }
             ]
         };
@@ -1141,31 +1102,100 @@
 
             if (!algorithms || !algorithms.main || !Array.isArray(algorithms.main.steps)) {
                 console.error("Main algorithm data is missing or invalid for rendering.");
-                mainAlgorithmContainer.innerHTML = '<p class="text-red-500">Ошибка: Не удалось загрузить главный алгоритм.</p>';
+                mainAlgorithmContainer.innerHTML = '<p class="text-red-500 dark:text-red-400">Ошибка: Не удалось загрузить главный алгоритм.</p>';
                 return;
             }
 
             let htmlContent = '';
             algorithms.main.steps.forEach(step => {
-                htmlContent += `
-                    <div class="algorithm-step bg-white dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary">
-                        <h3 class="font-bold text-lg">${step.title || 'Без заголовка'}</h3>
-                        <p>${step.description || 'Нет описания'}</p>
-                        ${step.example ? `<p class="text-gray-600 dark:text-gray-400 mt-2">${step.example}</p>` : ''}
-                `;
+                const descriptionHtml = linkify(step.description || 'Нет описания');
 
-                if (step.title === "Уточнение ИНН") {
+                let exampleBlockHtml = '';
+                if (step.example) {
+                    if (typeof step.example === 'object' && step.example.type === 'list' && Array.isArray(step.example.items)) {
+                        const introHtml = step.example.intro ? `<p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">${linkify(step.example.intro)}</p>` : '';
+                        const listItemsHtml = step.example.items.map(item =>
+                            `<li>${linkify(item)}</li>`
+                        ).join('');
+
+                        exampleBlockHtml = `
+                    ${introHtml}
+                    <ul class="list-disc list-inside pl-5 mt-1 text-gray-600 dark:text-gray-400 text-sm">
+                        ${listItemsHtml}
+                    </ul>
+                `;
+                    } else if (typeof step.example === 'string') {
+                        const exampleContentHtml = linkify(step.example);
+                        exampleBlockHtml = `<p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">${exampleContentHtml}</p>`;
+                    }
+                }
+
+                htmlContent += `
+            <div class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary mb-content-sm">
+                <h3 class="font-bold text-base">${step.title || 'Без заголовка'}</h3>
+                <p class="text-sm mt-1">${descriptionHtml}</p>
+                ${exampleBlockHtml}
+        `;
+
+                if (step.innLink === true) {
                     htmlContent += `
-                        <p class="text-sm text-gray-500 mt-1 italic">
-                            <a href="#" class="text-primary hover:underline" id="noInnLink">Что делать, если клиент не может назвать ИНН?</a>
-                        </p>
-                    `;
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
+                    <a href="#" class="text-primary hover:underline" id="noInnLink">Что делать, если клиент не может назвать ИНН?</a>
+                </p>
+            `;
                 }
 
                 htmlContent += `</div>`;
             });
 
             mainAlgorithmContainer.innerHTML = htmlContent;
+
+            const noInnLinkElement = mainAlgorithmContainer.querySelector('#noInnLink');
+            if (noInnLinkElement && typeof attachNoInnLinkHandler === 'function') {
+                attachNoInnLinkHandler(noInnLinkElement);
+            } else if (noInnLinkElement) {
+                noInnLinkElement.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    console.log("Ссылка 'Что делать, если клиент не может назвать ИНН?' нажата.");
+                    let modal = document.getElementById('noInnModal');
+                    if (!modal) {
+                        modal = document.createElement('div');
+                        modal.id = 'noInnModal';
+                        modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-[60] p-4 flex items-center justify-center hidden';
+                        modal.innerHTML = `
+                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                         <div class="p-6">
+                             <div class="flex justify-between items-center mb-4">
+                                 <h2 class="text-xl font-bold">Клиент не знает ИНН</h2>
+                                 <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Закрыть"><i class="fas fa-times text-xl"></i></button>
+                             </div>
+                             <div class="space-y-3 text-sm">
+                                 <p>Альтернативные способы идентификации:</p>
+                                 <ol class="list-decimal ml-5 space-y-1.5">
+                                     <li>Полное наименование организации</li>
+                                     <li>Юридический адрес</li>
+                                     <li>КПП или ОГРН</li>
+                                     <li>ФИО руководителя</li>
+                                     <li>Проверить данные через <a href="https://egrul.nalog.ru/" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">сервис ФНС</a></li>
+                                 </ol>
+                                 <p class="mt-3 text-xs italic text-gray-600 dark:text-gray-400">Тщательно проверяйте данные при идентификации без ИНН.</p>
+                             </div>
+                             <div class="mt-6 flex justify-end">
+                                 <button class="close-modal px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">Понятно</button>
+                             </div>
+                         </div>
+                     </div>`;
+                        document.body.appendChild(modal);
+
+                        modal.addEventListener('click', (e) => {
+                            if (e.target === modal || e.target.closest('.close-modal')) {
+                                modal.classList.add('hidden');
+                            }
+                        });
+                    }
+                    modal.classList.remove('hidden');
+                });
+            }
         }
 
 
@@ -1189,12 +1219,17 @@
             try {
                 let stepsHtml;
                 if (algorithm?.steps && Array.isArray(algorithm.steps)) {
-                    stepsHtml = algorithm.steps.map((step, index) => `
-                <div class="algorithm-step bg-white dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3">
-                    <h3 class="font-bold text-lg">${step?.title ?? `Шаг ${index + 1}`}</h3>
-                    <p>${step?.description ?? 'Нет описания.'}</p>
-                    ${step?.example ? `<div class="text-gray-600 dark:text-gray-400 mt-2 text-sm prose dark:prose-invert max-w-none">${step.example}</div>` : ''}
-                </div>`).join('');
+                    stepsHtml = algorithm.steps.map((step, index) => {
+                        const descriptionHtml = linkify(step?.description ?? 'Нет описания.');
+                        const exampleHtml = step?.example ? linkify(step.example) : '';
+
+                        return `
+                    <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3">
+                        <h3 class="font-bold text-lg">${step?.title ?? `Шаг ${index + 1}`}</h3>
+                        <p class="mt-1">${descriptionHtml}</p>
+                        ${exampleHtml ? `<div class="text-gray-600 dark:text-gray-400 mt-2 text-sm prose dark:prose-invert max-w-none">${exampleHtml}</div>` : ''}
+                    </div>`;
+                    }).join('');
                 } else {
                     stepsHtml = '<p class="text-orange-500">Данные шагов отсутствуют или некорректны.</p>';
                 }
@@ -1303,7 +1338,7 @@
                 } else {
                     algorithm.steps.forEach((step, index) => {
                         const stepDiv = document.createElement('div');
-                        stepDiv.className = 'edit-step mb-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg';
+                        stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm';
 
                         const showExampleField = ('example' in step) || section === 'main';
                         const exampleInputHtml = showExampleField
@@ -1680,7 +1715,7 @@
             const isMainAlgorithm = editModal?.dataset.section === 'main';
 
             const stepDiv = document.createElement('div');
-            stepDiv.className = 'edit-step mb-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg';
+            stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm';
             stepDiv.innerHTML = createStepElementHTML(stepCount + 1, isMainAlgorithm);
 
             const deleteBtn = stepDiv.querySelector('.delete-step');
@@ -1813,12 +1848,13 @@
             newAlgorithmTitle.value = '';
             newAlgorithmDesc.value = '';
 
+            newStepsContainer.className = 'space-y-4';
 
             newStepsContainer.innerHTML = `
-        <div class="edit-step mb-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            ${createStepElementHTML(1, false)}
-        </div>
-    `;
+                                            <div class="edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4">
+                                                ${createStepElementHTML(1, false)}
+                                            </div>
+                                        `;
 
             const firstDeleteBtn = newStepsContainer.querySelector('.delete-step');
             if (firstDeleteBtn) {
@@ -1838,7 +1874,7 @@
             const stepCount = newStepsContainer.children.length;
 
             const stepDiv = document.createElement('div');
-            stepDiv.className = 'edit-step mb-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg';
+            stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm';
             stepDiv.innerHTML = createStepElementHTML(stepCount + 1, false);
 
             const deleteBtn = stepDiv.querySelector('.delete-step');
@@ -1974,6 +2010,7 @@
                 console.log("Инициализация appInit завершена. Статус БД:", dbReady);
 
                 initClearDataFunctionality();
+                initFullscreenToggles();
 
                 if (dbReady) {
                     console.log("Применение настроек UI из IndexedDB...");
@@ -2124,117 +2161,188 @@
             const results = [];
 
             if (!normalizedQuery) {
-                searchResults.innerHTML = '<div class="p-3 text-center text-gray-500">Ничего не найдено</div>';
+                searchResults.innerHTML = '<div class="p-3 text-center text-gray-500">Начните вводить запрос</div>';
                 searchResults.classList.add('hidden');
                 return;
             }
 
-            const sections = new Set([...document.querySelectorAll('.search-section:checked')].map(cb => cb.value));
             const fields = new Set([...document.querySelectorAll('.search-field:checked')].map(cb => cb.value));
+            console.log('[Search Debug] Active search fields:', fields); // Лог активных полей
+
             const includesIgnoreCase = (text, query) => text && text.toLowerCase().includes(query);
+
             const addResult = (item, section, type, id, title, description = null) => {
+                // Проверяем, что такой результат еще не добавлен
                 if (!results.some(r => r.id === id && r.section === section && r.type === type)) {
+                    console.log(`[Search Debug] Adding result:`, { title, section, type, id }); // Лог добавления результата
                     results.push({ title, description, section, type, id });
+                } else {
+                    // console.log(`[Search Debug] Skipping duplicate result:`, { title, section, type, id });
                 }
             };
 
+            // --- Источники данных для поиска ---
             const searchSources = [
+                // ... (источник для main) ...
                 {
-                    section: 'main', type: 'algorithm', id: 'main', data: algorithms.main,
+                    section: 'main',
+                    type: 'algorithm',
+                    id: 'main',
+                    data: algorithms.main, // Данные уже в памяти
                     check: (item) => {
                         if (!item) return false;
-                        if (fields.has('title') && includesIgnoreCase(item.title, normalizedQuery)) return true;
+                        const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
+                        let stepsMatch = false;
                         if (fields.has('steps')) {
-                            return item.steps?.some(step =>
-                                includesIgnoreCase(step.title, normalizedQuery) ||
-                                includesIgnoreCase(step.description, normalizedQuery) ||
-                                includesIgnoreCase(step.example, normalizedQuery)
+                            stepsMatch = item.steps?.some(step =>
+                                (step.title && includesIgnoreCase(step.title, normalizedQuery)) ||
+                                (step.description && includesIgnoreCase(step.description, normalizedQuery)) ||
+                                (step.example && typeof step.example === 'string' && includesIgnoreCase(step.example, normalizedQuery)) ||
+                                (step.example?.type === 'list' && step.example.items?.some(listItem => includesIgnoreCase(listItem, normalizedQuery)))
                             );
                         }
-                        return false;
+                        // console.log(`[Search Debug] Checking main: Title Match: ${titleMatch}, Steps Match: ${stepsMatch}`);
+                        return titleMatch || stepsMatch;
                     },
-                    getResult: (item) => ({ title: item.title })
+                    getResult: (item) => ({ title: item.title, id: 'main' })
                 },
+                // ... (источник для links) ...
                 {
                     section: 'links',
                     type: 'link',
-                    getData: getAllCibLinks,
-                    check: (item) => item && (
-                        (fields.has('title') && includesIgnoreCase(item.title, normalizedQuery)) ||
-                        (fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.link, normalizedQuery)))
-                    ),
+                    getData: getAllCibLinks, // Функция для получения данных из DB
+                    check: (item) => {
+                        if (!item) return false;
+                        const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
+                        const descMatch = fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.link, normalizedQuery));
+                        // console.log(`[Search Debug] Checking link ID ${item.id}: Title Match: ${titleMatch}, Desc/Link Match: ${descMatch}`);
+                        return titleMatch || descMatch;
+                    },
                     getResult: (item) => ({
                         title: item.title,
-                        description: item.description,
+                        description: item.link,
                         id: item.id
                     })
                 },
+                // ... (источники для program, skzi, webReg) ...
                 ...['program', 'skzi', 'webReg'].map(section => ({
-                    section: section, type: 'algorithm', data: algorithms[section],
+                    section: section,
+                    type: 'algorithm',
+                    data: algorithms[section], // Данные уже в памяти
                     check: (item) => {
                         if (!item) return false;
-                        if ((fields.has('title') && includesIgnoreCase(item.title, normalizedQuery)) ||
-                            (fields.has('description') && includesIgnoreCase(item.description, normalizedQuery))) {
-                            return true;
-                        }
+                        const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
+                        const descMatch = fields.has('description') && includesIgnoreCase(item.description, normalizedQuery);
+                        let stepsMatch = false;
                         if (fields.has('steps')) {
-                            return item.steps?.some(step =>
-                                includesIgnoreCase(step.title, normalizedQuery) ||
-                                includesIgnoreCase(step.description, normalizedQuery)
+                            stepsMatch = item.steps?.some(step =>
+                                (step.title && includesIgnoreCase(step.title, normalizedQuery)) ||
+                                (step.description && includesIgnoreCase(step.description, normalizedQuery))
                             );
                         }
-                        return false;
+                        // console.log(`[Search Debug] Checking ${section} algo ID ${item.id}: Title: ${titleMatch}, Desc: ${descMatch}, Steps: ${stepsMatch}`);
+                        return titleMatch || descMatch || stepsMatch;
                     },
                     getResult: (item) => ({ title: item.title, description: item.description, id: item.id })
                 })),
+                // *** ИСТОЧНИК ДЛЯ РЕГЛАМЕНТОВ ***
                 {
-                    section: 'reglaments', type: 'reglament', data: getAllReglaments(),
-                    check: (item) => item && (
-                        (fields.has('title') && includesIgnoreCase(item.title, normalizedQuery)) ||
-                        (fields.has('description') && includesIgnoreCase(item.content, normalizedQuery))
-                    ),
-                    getResult: (item) => ({ title: item.title, description: item.category, id: item.id })
+                    section: 'reglaments',
+                    type: 'reglament',
+                    getData: getAllReglaments, // Используем функцию для получения ВСЕХ регламентов
+                    check: (item) => {
+                        if (!item) return false;
+                        const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
+                        // Ищем в item.content, если включен чекбокс "Описание/Содержимое" (value="description")
+                        const contentMatch = fields.has('description') && item.content && includesIgnoreCase(item.content, normalizedQuery);
+                        // console.log(`[Search Debug] Checking reglament ID ${item.id} ('${item.title}'): Title Match (${fields.has('title')}): ${titleMatch}, Content Match (${fields.has('description')} && content exists): ${contentMatch}`);
+                        return titleMatch || contentMatch;
+                    },
+                    getResult: (item) => ({
+                        title: item.title,
+                        description: categoryDisplayInfo[item.category]?.title || item.category || 'Без категории', // Показываем название категории
+                        id: item.id
+                    })
                 },
+                // ... (источник для bookmarks) ...
                 {
-                    section: 'bookmarks', type: 'bookmark', data: getAllBookmarks(),
-                    check: (item) => item && (
-                        (fields.has('title') && includesIgnoreCase(item.title, normalizedQuery)) ||
-                        (fields.has('description') && includesIgnoreCase(item.description, normalizedQuery))
-                    ),
-                    getResult: (item) => ({ title: item.title, description: item.description, id: item.id })
+                    section: 'bookmarks',
+                    type: 'bookmark',
+                    getData: getAllBookmarks,
+                    check: (item) => {
+                        if (!item) return false;
+                        const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
+                        const descMatch = fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.url, normalizedQuery));
+                        // console.log(`[Search Debug] Checking bookmark ID ${item.id}: Title Match: ${titleMatch}, Desc/URL Match: ${descMatch}`);
+                        return titleMatch || descMatch;
+                    },
+                    getResult: (item) => ({ title: item.title, description: item.description || item.url, id: item.id })
+                },
+                // ... (источник для extLinks) ...
+                {
+                    section: 'extLinks',
+                    type: 'extLink',
+                    getData: getAllExtLinks,
+                    check: (item) => {
+                        if (!item) return false;
+                        const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
+                        const descMatch = fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.url, normalizedQuery));
+                        // console.log(`[Search Debug] Checking extLink ID ${item.id}: Title Match: ${titleMatch}, Desc/URL Match: ${descMatch}`);
+                        return titleMatch || descMatch;
+                    },
+                    getResult: (item) => ({
+                        title: item.title,
+                        description: item.description || item.url,
+                        id: item.id
+                    })
                 }
             ];
 
-            searchResults.innerHTML = '<div class="p-3 text-center text-gray-500">Идет поиск...</div>';
-            results.length = 0;
+            // --- Выполнение поиска ---
+            searchResults.innerHTML = '<div class="p-3 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Идет поиск...</div>';
+            searchResults.classList.remove('hidden');
 
-            for (const source of searchSources) {
-                if (sections.has(source.section)) {
-                    let items = [];
-                    try {
-                        if (source.data) {
-                            items = Array.isArray(source.data) ? source.data : [source.data];
-                        } else if (source.getData) {
-                            items = await source.getData();
-                            items = Array.isArray(items) ? items : (items ? [items] : []);
+            const searchPromises = searchSources.map(async (source) => {
+                let items = [];
+                try {
+                    if (source.data) {
+                        items = Array.isArray(source.data) ? source.data : [source.data];
+                    } else if (source.getData) {
+                        items = await source.getData(); // Получаем данные асинхронно
+                        items = Array.isArray(items) ? items : (items ? [items] : []);
+                        // *** ДОБАВИТЬ ДЛЯ ДЕБАГА ***
+                        if (source.section === 'reglaments') {
+                            console.log(`[Search Debug] Reglaments fetched by getAllReglaments:`, items);
                         }
-
-                        items.forEach(item => {
-                            if (item && source.check(item)) {
-                                const resultData = source.getResult(item);
-                                addResult(item, source.section, source.type, resultData.id ?? source.id ?? item.id, resultData.title, resultData.description);
-                            }
-                        });
-                    } catch (error) {
-                        console.error(`Ошибка при поиске в разделе ${source.section}:`, error);
+                        // *** КОНЕЦ ДЕБАГА ***
                     }
-                }
-            }
 
+                    // Проверяем каждый элемент из источника
+                    items.forEach(item => {
+                        if (item && source.check(item)) { // Вызываем check для проверки совпадения
+                            const resultData = source.getResult(item); // Форматируем результат
+                            const finalId = resultData.id ?? item.id ?? source.id; // Определяем ID
+                            if (finalId !== undefined) {
+                                addResult(item, source.section, source.type, finalId, resultData.title, resultData.description);
+                            } else {
+                                console.warn(`[Search Debug] Результат пропущен из-за отсутствия ID:`, { item, source });
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error(`[Search Error] Ошибка при поиске в разделе ${source.section}:`, error);
+                }
+            });
+
+            // Ждем завершения всех асинхронных операций поиска
+            await Promise.all(searchPromises);
+            console.log(`[Search Debug] Total results found: ${results.length}`);
+
+            // --- Отображение результатов ---
             if (results.length === 0) {
                 searchResults.innerHTML = '<div class="p-3 text-center text-gray-500">Ничего не найдено</div>';
             } else {
-                searchResults.innerHTML = '';
+                searchResults.innerHTML = ''; // Очищаем предыдущие результаты
 
                 const sectionDetails = {
                     main: { icon: 'fa-sitemap text-primary', name: 'Главный алгоритм' },
@@ -2242,8 +2350,9 @@
                     skzi: { icon: 'fa-key text-yellow-500', name: 'СКЗИ' },
                     webReg: { icon: 'fa-globe text-blue-500', name: 'Веб-Регистратор' },
                     links: { icon: 'fa-link text-purple-500', name: 'Ссылки 1С' },
-                    reglaments: { icon: 'fa-file-alt text-red-500', name: 'Регламенты' },
-                    bookmarks: { icon: 'fa-bookmark text-orange-500', name: 'Закладки' }
+                    reglaments: { icon: 'fa-file-alt text-red-500', name: 'Регламенты' }, // Добавлено для регламентов
+                    bookmarks: { icon: 'fa-bookmark text-orange-500', name: 'Закладки' },
+                    extLinks: { icon: 'fa-external-link-alt text-teal-500', name: 'Внешние ресурсы' }
                 };
 
                 const fragment = document.createDocumentFragment();
@@ -2251,34 +2360,41 @@
                     const resultElement = document.createElement('div');
                     resultElement.className = 'p-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-200 dark:border-gray-700 last:border-0';
 
-                    const details = sectionDetails[result.section];
+                    const details = sectionDetails[result.section] || { icon: 'fa-question-circle', name: result.section }; // Фоллбэк для неизвестных секций
                     const sectionIcon = `<i class="fas ${details.icon} mr-2"></i>`;
                     const sectionName = details.name;
+                    // Отображаем description, если он есть (для регламентов это будет название категории)
+                    const descriptionHtml = result.description ? `<div class="text-sm text-gray-600 dark:text-gray-400 truncate">${result.description}</div>` : '';
 
                     resultElement.innerHTML = `
-                <div class="font-medium">${result.title}</div>
-                ${result.description ? `<div class="text-sm text-gray-600 dark:text-gray-400">${result.description}</div>` : ''}
-                <div class="text-xs text-gray-500 mt-1">${sectionIcon}${sectionName}</div>
-            `;
+                        <div class="font-medium">${result.title || 'Без заголовка'}</div>
+                        ${descriptionHtml}
+                        <div class="text-xs text-gray-500 mt-1">${sectionIcon}${sectionName}</div>
+                    `;
 
+                    // Обработчик клика для перехода к результату
                     resultElement.addEventListener('click', () => {
                         navigateToResult(result);
-                        searchResults.classList.add('hidden');
+                        searchResults.classList.add('hidden'); // Скрываем результаты после клика
+                        document.getElementById('searchInput').value = ''; // Очищаем инпут поиска
                     });
                     fragment.appendChild(resultElement);
                 });
                 searchResults.appendChild(fragment);
             }
+            // Показываем/скрываем контейнер результатов в зависимости от их наличия
             searchResults.classList.toggle('hidden', results.length === 0);
         }
 
 
         function navigateToResult(result) {
-            if (!result || typeof result !== 'object' || !result.section || !result.type || !result.id) {
+            if (!result || typeof result !== 'object' || !result.section || !result.type || result.id === undefined) {
                 console.error("navigateToResult: Invalid or incomplete result object provided.", result);
                 showNotification("Ошибка навигации: некорректные данные результата.", "error");
                 return;
             }
+
+            console.log(`Navigating to result:`, result);
 
             setActiveTab(result.section);
 
@@ -2286,25 +2402,28 @@
                 setTimeout(() => {
                     const activeContent = document.querySelector('.tab-content:not(.hidden)');
                     if (!activeContent) {
-                        console.warn(`[scrollToAndHighlight] Active tab content container not found.`);
+                        console.warn(`[scrollToAndHighlight] Active tab content container not found for section ${result.section}.`);
+                        showNotification("Ошибка: Не найден активный контейнер вкладки.", "error");
                         return;
                     }
 
                     const element = activeContent.querySelector(`${selector}[data-id="${id}"]`);
 
                     if (element) {
+                        console.log(`[scrollToAndHighlight] Element found:`, element);
                         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                        const highlightClasses = ['bg-yellow-100', 'dark:bg-yellow-800', 'ring-2', 'ring-yellow-400', 'transition-all', 'duration-300'];
+                        const highlightClasses = ['bg-yellow-100', 'dark:bg-yellow-800', 'ring-2', 'ring-yellow-400', 'transition-all', 'duration-300', 'rounded-md', 'shadow-lg', '-m-1', 'p-1'];
                         element.classList.add(...highlightClasses);
 
                         setTimeout(() => {
                             element.classList.remove(...highlightClasses);
                         }, 2500);
                     } else {
-                        console.warn(`[scrollToAndHighlight] Element not found: selector='${selector}', id='${id}' within active tab.`);
+                        console.warn(`[scrollToAndHighlight] Element not found: selector='${selector}', id='${id}' within active tab ${activeContent.id}.`);
+                        showNotification(`Не удалось найти элемент ${result.title} на вкладке.`, "warning");
                     }
-                }, 150);
+                }, 250);
             };
 
             try {
@@ -2317,6 +2436,8 @@
                             } else {
                                 console.warn(`[navigateToResult] Algorithm data not found in memory for ID ${result.id} in section ${result.section}.`);
                                 showNotification(`Не найдены данные для алгоритма ID ${result.id}`, "warning");
+                                const container = document.getElementById(`${result.section}Algorithms`);
+                                container?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             }
                         } else {
                             document.getElementById('mainContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2337,6 +2458,7 @@
                         } else {
                             console.error("[navigateToResult] Function 'showReglamentDetail' is not defined. Cannot show reglament details.");
                             showNotification("Ошибка: Функция отображения регламента не найдена.", "error");
+                            document.getElementById('reglamentsContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                         break;
 
@@ -2356,6 +2478,304 @@
 
             document.getElementById('searchResults')?.classList.add('hidden');
             document.getElementById('searchInput')?.blur();
+        }
+
+
+        function tokenize(text) {
+            if (!text || typeof text !== 'string') {
+                return [];
+            }
+            const tokens = text.toLowerCase()
+                .replace(/[.,!?;:()"'\-\n\r\t«»]/g, ' ')
+                .split(/\s+/)
+                .filter(token => token.length >= 3);
+            return [...new Set(tokens)];
+        }
+
+
+        function getTextForItem(storeName, itemData) {
+            if (!itemData) return '';
+            let texts = [];
+
+            try {
+                switch (storeName) {
+                    case 'algorithms':
+                        if (itemData.data) {
+                            Object.values(itemData.data).forEach(sectionData => {
+                                if (sectionData) {
+                                    texts.push(sectionData.title);
+                                    if (sectionData.steps && Array.isArray(sectionData.steps)) {
+                                        sectionData.steps.forEach(step => {
+                                            texts.push(step.title, step.description, step.example);
+                                        });
+                                    } else if (sectionData.description) {
+                                        texts.push(sectionData.description);
+                                    }
+                                }
+                            });
+                            ['program', 'skzi', 'webReg'].forEach(key => {
+                                if (Array.isArray(itemData.data[key])) {
+                                    itemData.data[key].forEach(algo => {
+                                        texts.push(algo.title, algo.description);
+                                        algo.steps?.forEach(step => {
+                                            texts.push(step.title, step.description, step.example);
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                        break;
+                    case 'links':
+                        texts.push(itemData.title, itemData.link, itemData.description);
+                        break;
+                    case 'bookmarks':
+                        texts.push(itemData.title, itemData.url, itemData.description);
+                        break;
+                    case 'reglaments':
+                        texts.push(itemData.title, itemData.content);
+                        break;
+                    case 'extLinks':
+                        texts.push(itemData.title, itemData.url, itemData.description);
+                        break;
+                    case 'clientData':
+                        texts.push(itemData.notes);
+                        break;
+                    case 'bookmarkFolders':
+                        texts.push(itemData.name);
+                        break;
+                    default:
+                        break;
+                }
+            } catch (error) {
+                console.error(`Error extracting text from item in store ${storeName}:`, itemData, error);
+            }
+
+            return texts.filter(t => t).join(' ');
+        }
+
+
+        async function updateSearchIndex(storeName, id, data, operationType = 'update') {
+            if (!db) {
+                console.error("Cannot update search index: DB not initialized.");
+                return;
+            }
+            if (storeName === 'preferences' || storeName === 'searchIndex') {
+                return;
+            }
+
+            console.log(`Updating search index for ${storeName}/${id}, operation: ${operationType}`);
+
+            let currentTokens = [];
+            if (operationType === 'update' && data) {
+                const text = getTextForItem(storeName, data);
+                currentTokens = tokenize(text);
+            }
+
+            let previousTokens = [];
+            try {
+                if (operationType === 'delete' || operationType === 'update') {
+                    let textForOldTokens = '';
+                    if (operationType === 'delete' && data) {
+                        textForOldTokens = getTextForItem(storeName, data);
+                    }
+
+                    if (textForOldTokens) {
+                        previousTokens = tokenize(textForOldTokens);
+                    }
+                }
+            } catch (error) {
+                console.error("Error getting previous tokens for index update:", error);
+            }
+
+            const docRef = { store: storeName, id: id };
+            const tokensToAddRef = new Set(currentTokens);
+            const tokensToRemoveRef = new Set(previousTokens);
+
+            if (operationType === 'update') {
+                previousTokens.forEach(token => {
+                    if (!tokensToAddRef.has(token)) {
+                        tokensToRemoveRef.add(token);
+                    }
+                });
+            }
+
+
+            const allTokens = new Set([...tokensToAddRef, ...tokensToRemoveRef]);
+
+            if (allTokens.size === 0) {
+                return;
+            }
+
+            try {
+                const transaction = db.transaction(['searchIndex'], 'readwrite');
+                const indexStore = transaction.objectStore('searchIndex');
+
+                const promises = Array.from(allTokens).map(token => {
+                    return new Promise((resolve, reject) => {
+                        const request = indexStore.get(token);
+                        request.onsuccess = e => resolve({ token, result: e.target.result });
+                        request.onerror = e => reject(e.target.error);
+                    });
+                });
+
+                const results = await Promise.all(promises);
+
+                results.forEach(({ token, result }) => {
+                    let refs = result?.refs || [];
+                    const refExists = refs.some(ref => ref.store === docRef.store && ref.id === docRef.id);
+
+                    if (tokensToAddRef.has(token) && !refExists) {
+                        refs.push(docRef);
+                    } else if (tokensToRemoveRef.has(token) && refExists) {
+                        refs = refs.filter(ref => !(ref.store === docRef.store && ref.id === docRef.id));
+                    }
+
+                    if (refs.length > 0) {
+                        indexStore.put({ word: token, refs: refs });
+                    } else if (result) {
+                        indexStore.delete(token);
+                    }
+                });
+
+
+                await new Promise((resolve, reject) => {
+                    transaction.oncomplete = () => {
+                        resolve();
+                    };
+                    transaction.onerror = e => {
+                        console.error(`Search index transaction error for ${storeName}/${id}:`, e.target.error);
+                        reject(e.target.error);
+                    };
+                    transaction.onabort = e => {
+                        console.error(`Search index transaction aborted for ${storeName}/${id}:`, e.target.error);
+                        reject(e.target.error || 'Transaction aborted');
+                    }
+                });
+                console.log(`Index update successful for ${storeName}/${id}`);
+
+            } catch (error) {
+                console.error(`Failed to update search index for ${storeName}/${id}:`, error);
+            }
+        }
+
+
+        async function checkAndBuildIndex() {
+            if (!db) return;
+
+            try {
+                const transaction = db.transaction(['searchIndex'], 'readonly');
+                const store = transaction.objectStore('searchIndex');
+                const countRequest = store.count();
+
+                return new Promise((resolve, reject) => {
+                    countRequest.onsuccess = async (e) => {
+                        const count = e.target.result;
+                        if (count === 0 || transaction._rebuildIndexNeeded) {
+                            if (transaction._rebuildIndexNeeded) {
+                                console.warn("Database upgrade detected or index empty. Rebuilding search index...");
+                            } else {
+                                console.log("Search index is empty. Building initial index...");
+                            }
+
+                            const loadingOverlay = document.getElementById('loadingOverlay');
+                            if (loadingOverlay) {
+                                const statusDiv = document.createElement('div');
+                                statusDiv.id = 'indexingStatus';
+                                statusDiv.className = 'text-sm text-gray-600 dark:text-gray-400 mt-2';
+                                statusDiv.textContent = 'Индексация данных для поиска...';
+                                loadingOverlay.querySelector('.text-center')?.appendChild(statusDiv);
+                                loadingOverlay.style.display = 'flex';
+                            }
+
+                            try {
+                                await buildInitialSearchIndex();
+                                console.log("Initial search index build complete.");
+                                if (loadingOverlay) loadingOverlay.style.display = 'none';
+                                resolve();
+                            } catch (buildError) {
+                                console.error("Error building initial search index:", buildError);
+                                if (loadingOverlay) loadingOverlay.innerHTML = '<div class="text-red-500">Ошибка индексации данных</div>';
+                                reject(buildError);
+                            }
+                        } else {
+                            console.log("Search index already exists and seems populated.");
+                            resolve();
+                        }
+                    };
+                    countRequest.onerror = (e) => {
+                        console.error("Error counting items in searchIndex:", e.target.error);
+                        reject(e.target.error);
+                    };
+                });
+            } catch (error) {
+                console.error("Error accessing searchIndex for check:", error);
+                return Promise.reject(error);
+            }
+        }
+
+        async function buildInitialSearchIndex() {
+            if (!db) return Promise.reject("DB not available for index build.");
+
+            console.log("Starting initial index build...");
+            const storesToIndex = ['algorithms', 'links', 'bookmarks', 'reglaments', 'extLinks', 'clientData', 'bookmarkFolders'];
+            const indexingStatusDiv = document.getElementById('indexingStatus');
+
+            try {
+                console.log("Clearing existing search index...");
+                if (indexingStatusDiv) indexingStatusDiv.textContent = 'Очистка старого индекса...';
+                const clearTransaction = db.transaction(['searchIndex'], 'readwrite');
+                const clearStore = clearTransaction.objectStore('searchIndex');
+                const clearRequest = clearStore.clear();
+                await new Promise((res, rej) => {
+                    clearRequest.onsuccess = res;
+                    clearRequest.onerror = rej;
+                    clearTransaction.oncomplete = res;
+                    clearTransaction.onerror = rej;
+                    clearTransaction.onabort = rej;
+                });
+                console.log("Old index cleared.");
+
+
+                for (const storeName of storesToIndex) {
+                    console.log(`Indexing store: ${storeName}...`);
+                    if (indexingStatusDiv) indexingStatusDiv.textContent = `Индексация: ${storeName}...`;
+
+                    const transaction = db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const items = await new Promise((resolve, reject) => {
+                        const request = store.getAll();
+                        request.onsuccess = e => resolve(e.target.result);
+                        request.onerror = e => reject(e.target.error);
+                    });
+
+                    console.log(`Found ${items.length} items in ${storeName}.`);
+
+                    for (const item of items) {
+                        let itemId;
+                        if (storeName === 'algorithms') {
+                            itemId = item.section;
+                        } else if (storeName === 'clientData') {
+                            itemId = item.id || 'current';
+                        } else {
+                            itemId = item.id;
+                        }
+
+                        if (itemId !== undefined) {
+                            await updateSearchIndex(storeName, itemId, item, 'update');
+                        } else {
+                            console.warn(`Skipping item in ${storeName} due to missing ID:`, item);
+                        }
+                    }
+                    console.log(`Finished indexing ${storeName}.`);
+                }
+                if (indexingStatusDiv) indexingStatusDiv.textContent = 'Индексация завершена!';
+
+                return Promise.resolve();
+
+            } catch (error) {
+                console.error("Error during initial index build:", error);
+                return Promise.reject(error);
+            }
         }
 
 
@@ -2645,15 +3065,33 @@
         function initExternalLinksSystem() {
             const addExtLinkBtn = document.getElementById('addExtLinkBtn');
             const extLinksContainer = document.getElementById('extLinksContainer');
-
-            if (!addExtLinkBtn || !extLinksContainer) return;
-
-            addExtLinkBtn.addEventListener('click', showAddExtLinkModal);
-
             const extLinkSearchInput = document.getElementById('extLinkSearchInput');
-            extLinkSearchInput?.addEventListener('input', debounce(filterExtLinks, 250));
-
             const extLinkCategoryFilter = document.getElementById('extLinkCategoryFilter');
+
+            if (!extLinksContainer) {
+                console.error("Ошибка инициализации: Контейнер #extLinksContainer не найден.");
+                return;
+            }
+            if (!addExtLinkBtn) {
+                console.warn("Кнопка добавления #addExtLinkBtn не найдена.");
+            }
+            if (!extLinkSearchInput) {
+                console.warn("Поле поиска #extLinkSearchInput не найдено.");
+            }
+            if (!extLinkCategoryFilter) {
+                console.warn("Фильтр категорий #extLinkCategoryFilter не найден.");
+            }
+
+
+            addExtLinkBtn?.addEventListener('click', showAddExtLinkModal);
+
+            if (extLinkSearchInput && typeof debounce === 'function') {
+                extLinkSearchInput.addEventListener('input', debounce(filterExtLinks, 250));
+            } else if (extLinkSearchInput) {
+                console.warn("Функция debounce не найдена, поиск будет срабатывать при каждом вводе.");
+                extLinkSearchInput.addEventListener('input', filterExtLinks);
+            }
+
             extLinkCategoryFilter?.addEventListener('change', filterExtLinks);
 
             loadExtLinks();
@@ -3096,7 +3534,6 @@
                                 <label class="block text-sm font-medium mb-1" for="bookmarkFolder">Папка</label>
                                 <select id="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
                                     <option value="">Выберите папку</option>
-                                    <!-- Folder options will be added here -->
                                 </select>
                             </div>
                             <div class="flex justify-end mt-6">
@@ -3444,7 +3881,10 @@
 
         function initCibLinkModal() {
             const modal = document.getElementById('cibLinkModal');
-            if (!modal) return;
+            if (!modal) {
+                console.warn("CIB Link modal (#cibLinkModal) not found during init.");
+                return;
+            }
 
             const form = modal.querySelector('#cibLinkForm');
             if (!form) {
@@ -3453,16 +3893,12 @@
             }
 
             modal.querySelectorAll('.close-modal, .cancel-modal').forEach(button => {
-                button.addEventListener('click', () => modal.classList.add('hidden'));
+                button.addEventListener('click', () => {
+                    modal.classList.add('hidden');
+                });
             });
 
             form.addEventListener('submit', handleCibLinkSubmit);
-
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
-                    modal.classList.add('hidden');
-                }
-            });
         }
 
 
@@ -3566,7 +4002,7 @@
                     </div>
                     ${link.description ? `<p class="text-gray-500 dark:text-gray-400 text-sm mt-1">${link.description}</p>` : ''}
                 </div>
-                <div class="flex flex-shrink-0 items-center gap-1 md:ml-4 mt-2 md:mt-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"> <!-- Кнопки -->
+                <div class="flex flex-shrink-0 items-center gap-1 md:ml-4 mt-2 md:mt-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <button class="edit-cib-link p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Редактировать">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -3760,11 +4196,26 @@
 
         // СИСТЕМА РЕГЛАМЕНТОВ
         function initReglamentsSystem() {
-            document.getElementById('addReglamentBtn')?.addEventListener('click', showAddReglamentModal);
-            document.getElementById('addReglamentCategoryBtn')?.addEventListener('click', () => showAddCategoryModal());
-
+            const addReglamentBtn = document.getElementById('addReglamentBtn');
+            const addCategoryBtn = document.getElementById('addReglamentCategoryBtn');
             const categoryGrid = document.getElementById('reglamentCategoryGrid');
             const reglamentsListDiv = document.getElementById('reglamentsList');
+            const backToCategoriesBtn = document.getElementById('backToCategories');
+
+            if (!addReglamentBtn) console.error("Кнопка #addReglamentBtn не найдена!");
+            if (!addCategoryBtn) console.error("Кнопка #addReglamentCategoryBtn не найдена!");
+            if (!categoryGrid) console.error("Сетка категорий #reglamentCategoryGrid не найдена!");
+            if (!reglamentsListDiv) console.error("Контейнер списка #reglamentsList не найден!");
+            if (!backToCategoriesBtn) console.error("Кнопка #backToCategories не найдена!");
+
+            addReglamentBtn?.addEventListener('click', () => {
+                const currentCategoryId = reglamentsListDiv && !reglamentsListDiv.classList.contains('hidden')
+                    ? reglamentsListDiv.dataset.currentCategory
+                    : null;
+                showAddReglamentModal(currentCategoryId);
+            });
+
+            addCategoryBtn?.addEventListener('click', () => showAddCategoryModal());
 
             if (!categoryGrid) {
                 console.error("Reglament category grid not found in initReglamentsSystem.");
@@ -3787,16 +4238,175 @@
                     showAddCategoryModal(categoryId);
                 } else {
                     showReglamentsForCategory(categoryId);
+                    if (addCategoryBtn) {
+                        addCategoryBtn.classList.add('hidden');
+                    }
+                    if (reglamentsListDiv) {
+                        reglamentsListDiv.dataset.currentCategory = categoryId;
+                    }
                 }
             });
 
-            document.getElementById('backToCategories')?.addEventListener('click', () => {
-                if (reglamentsListDiv) reglamentsListDiv.classList.add('hidden');
+            backToCategoriesBtn?.addEventListener('click', () => {
+                if (reglamentsListDiv) {
+                    reglamentsListDiv.classList.add('hidden');
+                    delete reglamentsListDiv.dataset.currentCategory;
+                }
                 if (categoryGrid) categoryGrid.classList.remove('hidden');
                 const reglamentsContainer = document.getElementById('reglamentsContainer');
                 if (reglamentsContainer) reglamentsContainer.innerHTML = '';
-                document.getElementById('currentCategoryTitle').textContent = '';
+                const currentCategoryTitle = document.getElementById('currentCategoryTitle');
+                if (currentCategoryTitle) currentCategoryTitle.textContent = '';
+
+                if (addCategoryBtn) {
+                    addCategoryBtn.classList.remove('hidden');
+                }
             });
+        }
+
+
+        async function showReglamentDetail(reglamentId) {
+            if (typeof reglamentId !== 'number' && typeof reglamentId !== 'string') {
+                console.error("showReglamentDetail: Invalid reglamentId provided:", reglamentId);
+                showNotification("Ошибка: Неверный ID регламента.", "error");
+                return;
+            }
+            const numericId = parseInt(reglamentId, 10);
+            if (isNaN(numericId)) {
+                console.error("showReglamentDetail: Could not parse reglamentId to number:", reglamentId);
+                showNotification("Ошибка: Неверный формат ID регламента.", "error");
+                return;
+            }
+
+            const modalId = 'reglamentDetailModal';
+            const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4';
+
+            const modalHTML = `
+                                <div class="flex items-center justify-center min-h-full">
+                                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95%] max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+
+                                        <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                                            <div class="flex justify-between items-center">
+                                                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100" id="reglamentDetailTitle">Детали регламента</h2>
+                                                <button class="close-detail-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors" aria-label="Закрыть">
+                                                    <i class="fas fa-times text-xl"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex-1 overflow-y-auto p-6" id="reglamentDetailContent">
+                                            <p class="text-center text-gray-500 dark:text-gray-400">Загрузка данных...</p>
+                                        </div>
+
+                                        <div class="flex-shrink-0 px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                                            <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                                                <span class="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left" id="reglamentDetailMeta"></span>
+                                                <div class="flex items-center gap-2 flex-shrink-0">
+                                                    <button type="button" id="editReglamentFromDetailBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm font-medium inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        <i class="fas fa-edit mr-1.5"></i> Редактировать
+                                                    </button>
+                                                    <button type="button" class="close-detail-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition text-sm font-medium">
+                                                        Закрыть
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>`;
+
+            const setupDetailModal = (modalElement) => {
+                const editButton = modalElement.querySelector('#editReglamentFromDetailBtn');
+                if (editButton) {
+                    editButton.addEventListener('click', () => {
+                        const currentId = modalElement.dataset.currentReglamentId;
+                        if (currentId) {
+                            if (typeof editReglament === 'function') {
+                                modalElement.classList.add('hidden');
+                                editReglament(parseInt(currentId, 10));
+                            } else {
+                                console.error("Функция editReglament не найдена!");
+                                showNotification("Ошибка: Функция редактирования недоступна.", "error");
+                            }
+                        } else {
+                            console.error("Не найден ID регламента для редактирования в dataset модального окна");
+                            showNotification("Ошибка: Не удалось определить ID для редактирования.", "error");
+                        }
+                    });
+                } else {
+                    console.error("Кнопка редактирования #editReglamentFromDetailBtn не найдена в модальном окне деталей");
+                }
+            };
+
+            const modal = getOrCreateModal(modalId, modalClassName, modalHTML, setupDetailModal);
+
+            const titleElement = modal.querySelector('#reglamentDetailTitle');
+            const contentElement = modal.querySelector('#reglamentDetailContent');
+            const metaElement = modal.querySelector('#reglamentDetailMeta');
+            const editButton = modal.querySelector('#editReglamentFromDetailBtn');
+
+            if (titleElement) titleElement.textContent = 'Загрузка регламента...';
+            if (contentElement) contentElement.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Загрузка данных...</p>';
+            if (metaElement) metaElement.textContent = '';
+            if (editButton) editButton.disabled = true;
+            modal.dataset.currentReglamentId = numericId;
+
+            modal.classList.remove('hidden');
+
+            try {
+                const reglament = await getFromIndexedDB('reglaments', numericId);
+
+                if (!reglament) {
+                    if (titleElement) titleElement.textContent = 'Ошибка';
+                    if (contentElement) contentElement.innerHTML = `<p class="text-red-500 text-center font-semibold">Регламент с ID ${numericId} не найден.</p>`;
+                    showNotification("Регламент не найден", "error");
+                    if (editButton) editButton.disabled = true;
+                    return;
+                }
+
+                if (titleElement) titleElement.textContent = reglament.title || 'Без заголовка';
+
+                if (contentElement) {
+                    try {
+                        const preElement = document.createElement('pre');
+                        preElement.className = 'whitespace-pre-wrap break-words text-sm font-sans';
+                        preElement.textContent = reglament.content || 'Содержимое отсутствует.';
+                        contentElement.innerHTML = '';
+                        contentElement.appendChild(preElement);
+
+
+                    } catch (error) {
+                        console.error("Error setting reglament content:", error);
+                        contentElement.textContent = 'Ошибка отображения содержимого.';
+                    }
+                }
+
+                if (metaElement) {
+                    const categoryInfo = reglament.category ? categoryDisplayInfo[reglament.category] : null;
+                    const categoryName = categoryInfo ? categoryInfo.title : reglament.category || 'Без категории';
+                    const dateAdded = reglament.dateAdded ? new Date(reglament.dateAdded).toLocaleDateString() : 'Неизвестно';
+                    const dateUpdated = reglament.dateUpdated ? new Date(reglament.dateUpdated).toLocaleDateString() : null;
+
+                    let metaParts = [
+                        `ID: ${reglament.id}`,
+                        `Категория: ${categoryName}`,
+                        `Добавлен: ${dateAdded}`
+                    ];
+                    if (dateUpdated) {
+                        metaParts.push(`Обновлен: ${dateUpdated}`);
+                    }
+                    metaElement.textContent = metaParts.join(' | ');
+                }
+
+                if (editButton) editButton.disabled = false;
+
+            } catch (error) {
+                console.error(`Error fetching or displaying reglament ${numericId}:`, error);
+                if (titleElement) titleElement.textContent = 'Ошибка загрузки';
+                if (contentElement) contentElement.innerHTML = `<p class="text-red-500 text-center font-semibold">Не удалось загрузить регламент.</p>`;
+                showNotification("Ошибка при загрузке регламента", "error");
+                if (editButton) editButton.disabled = true;
+            }
         }
 
 
@@ -4247,266 +4857,245 @@
         const getOrCreateModal = (id, baseClassName, innerHTML, setupCallback) => {
             let modal = document.getElementById(id);
             if (modal) {
+                if (typeof setupCallback === 'function' && !modal.dataset.setupComplete) {
+                    try {
+                        setupCallback(modal);
+                        modal.dataset.setupComplete = 'true';
+                    } catch (error) {
+                        console.error(`[getOrCreateModal] Error re-executing setupCallback for existing modal #${id}:`, error);
+                    }
+                }
                 return modal;
             }
 
             modal = document.createElement('div');
             modal.id = id;
-
             modal.className = baseClassName;
             modal.classList.add('flex', 'items-center', 'justify-center');
-
             modal.innerHTML = innerHTML;
 
             if (!document.body) {
+                console.error(`[getOrCreateModal] document.body not available when creating modal #${id}. Appending might fail.`);
                 throw new Error(`[getOrCreateModal] document.body not available when creating modal #${id}.`);
             }
             document.body.appendChild(modal);
 
             modal.addEventListener('click', (event) => {
                 const target = event.target;
-                if (target === modal || target.closest('.close-modal, .cancel-modal, .close-detail-modal, .cancel-edit-modal, .close-sample-modal')) {
+                if (target.closest('.close-modal, .cancel-modal, .close-detail-modal, .cancel-edit-modal, .close-sample-modal, .cancel-add-modal, .closeConfirmClearModalBtns, .close-edit-modal')) {
+                    console.log(`[${id} Click Handler] Close button clicked. Hiding modal.`);
                     modal.classList.add('hidden');
+                } else {
                 }
             });
 
             if (typeof setupCallback === 'function') {
                 try {
                     setupCallback(modal);
+                    modal.dataset.setupComplete = 'true';
                 } catch (error) {
                     console.error(`[getOrCreateModal] Error executing setupCallback for modal #${id}:`, error);
                 }
+            } else {
+                modal.dataset.setupComplete = 'true';
             }
 
             return modal;
         };
 
 
-        const loadMarkedIfNeeded = (() => {
-            let loadingPromise = null;
-            return () => {
-                if (window.marked) {
-                    return Promise.resolve(window.marked);
-                }
-                if (loadingPromise) {
-                    return loadingPromise;
-                }
-
-                const existingScript = document.querySelector('script[src*="marked.min.js"]');
-                if (existingScript) {
-                    loadingPromise = new Promise((resolve, reject) => {
-                        const MAX_WAIT = 5000;
-                        let waited = 0;
-                        const interval = setInterval(() => {
-                            if (window.marked) {
-                                clearInterval(interval);
-                                loadingPromise = null;
-                                return resolve(window.marked);
-                            }
-                            waited += 100;
-                            if (waited >= MAX_WAIT) {
-                                clearInterval(interval);
-                                console.error("marked.js loading timed out (script tag existed).");
-                                loadingPromise = null;
-                                return reject(new Error("marked.js loading timed out"));
-                            }
-                        }, 100);
-                        existingScript.addEventListener('error', () => {
-                            clearInterval(interval);
-                            console.error("marked.js script tag reported an error.");
-                            loadingPromise = null;
-                            reject(new Error("Failed to load marked.js"));
-                        }, { once: true });
-                    });
-                    return loadingPromise;
-                }
-
-                loadingPromise = new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
-                    script.async = true;
-                    script.onload = () => {
-                        loadingPromise = null;
-                        resolve(window.marked);
-                    };
-                    script.onerror = (err) => {
-                        console.error("Failed to load marked.js:", err);
-                        loadingPromise = null;
-                        reject(new Error("Failed to load marked.js"));
-                    };
-                    document.head.appendChild(script);
-                });
-                return loadingPromise;
-            };
-        })();
-
-
-        const renderMarkdown = async (element, markdownContent) => {
-            try {
-                const marked = await loadMarkedIfNeeded();
-                if (marked) {
-                    element.innerHTML = marked.parse(markdownContent);
-                } else {
-                    element.innerHTML = `<pre>${markdownContent.replace(/</g, "<")}</pre>`;
-                    showNotification("Не удалось загрузить редактор Markdown", "warning");
-                }
-            } catch (error) {
-                element.innerHTML = `<pre>${markdownContent.replace(/</g, "<")}</pre>`;
-            }
-        };
-
-
-        function showAddReglamentModal() {
+        async function showAddReglamentModal(currentCategoryId = null) {
             const modalId = 'reglamentModal';
             const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
+
             const modalHTML = `
-                                <div class="flex items-center justify-center min-h-full">
-                                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full">
-                                        <div class="p-6">
-                                            <div class="flex justify-between items-center mb-4">
-                                                <h2 class="text-xl font-bold">Добавить регламент</h2>
-                                                <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                    <i class="fas fa-times text-xl"></i>
-                                                </button>
-                                            </div>
-                                            <form id="reglamentForm">
-                                                <div class="mb-4">
-                                                    <label class="block text-sm font-medium mb-1" for="reglamentTitle">Название</label>
-                                                    <input type="text" id="reglamentTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                </div>
-                                                <div class="mb-4">
-                                                    <label class="block text-sm font-medium mb-1" for="reglamentCategory">Категория</label>
-                                                    <select id="reglamentCategory" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                        <option value="">Выберите категорию</option>
-                                                        <option value="difficult-client">Работа с трудным клиентом</option>
-                                                        <option value="tech-support">Общий регламент</option>
-                                                        <option value="emergency">Чрезвычайные ситуации</option>
-                                                    </select>
-                                                </div>
-                                                <div class="mb-4">
-                                                    <label class="block text-sm font-medium mb-1" for="reglamentContent">Содержание</label>
-                                                    <textarea id="reglamentContent" rows="10" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
-                                                    <p class="text-sm text-gray-500 mt-1">Вы можете использовать Markdown для форматирования текста</p>
-                                                </div>
-                                                <div class="flex justify-end mt-6">
-                                                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
-                                                        Отмена
-                                                    </button>
-                                                    <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                                                        Сохранить
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
+                <div class="flex items-center justify-center min-h-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95%] h-[90vh] flex flex-col overflow-hidden">
+
+                        <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between items-center">
+                                <h2 class="text-xl font-bold" id="reglamentModalTitle">Добавить регламент</h2>
+                                <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Закрыть">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto p-6">
+                            <form id="reglamentForm">
+                                <input type="hidden" id="reglamentId">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1" for="reglamentTitle">Название</label>
+                                        <input type="text" id="reglamentTitle" name="reglamentTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
                                     </div>
-                                </div>`;
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1" for="reglamentCategory">Категория</label>
+                                        <select id="reglamentCategory" name="reglamentCategory" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                                            <option value="">Выберите категорию</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium mb-1" for="reglamentContent">Содержание</label>
+                                    <textarea id="reglamentContent" name="reglamentContent" rows="17" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base min-h-[300px]"></textarea>
+                                </div>
+                            </form>
+                        </div>
 
+                        <div class="flex-shrink-0 px-6 py-4 dark:bg-gray-750">
+                            <div class="flex justify-end">
+                                <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
+                                    Отмена
+                                </button>
+                                <button type="submit" form="reglamentForm" id="saveReglamentBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                    <i class="mr-1"></i> Сохранить
+                                </button>
+                            </div>
+                        </div>
 
-            const setupAddForm = (modal) => {
-                const form = modal.querySelector('#reglamentForm');
-                const titleInput = modal.querySelector('#reglamentTitle');
-                const categorySelect = modal.querySelector('#reglamentCategory');
-                const contentTextarea = modal.querySelector('#reglamentContent');
+                    </div>
+                </div>`;
 
-                form.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const title = titleInput.value.trim();
-                    const category = categorySelect.value;
-                    const content = contentTextarea.value.trim();
+            const setupAddForm = (modalElement) => {
+                const form = modalElement.querySelector('#reglamentForm');
+                if (!form) {
+                    console.error("Форма #reglamentForm не найдена в модальном окне регламента!");
+                    return;
+                }
+                const titleInput = form.elements.reglamentTitle;
+                const categorySelect = form.elements.reglamentCategory;
+                const contentTextarea = form.elements.reglamentContent;
+                const idInput = form.elements.reglamentId;
+                const saveButton = document.getElementById('saveReglamentBtn');
 
-                    if (!title || !category || !content) {
-                        showNotification("Пожалуйста, заполните все обязательные поля", "error");
-                        return;
-                    }
-
-                    const reglament = { title, category, content, dateAdded: new Date().toISOString() };
-
-                    try {
-                        await saveToIndexedDB('reglaments', reglament);
-
-                        const currentCategoryTitle = document.getElementById('currentCategoryTitle');
-                        if (currentCategoryTitle && !currentCategoryTitle.parentElement.classList.contains('hidden')) {
-                            const activeCategoryElement = document.querySelector('.reglament-category.active');
-                            if (activeCategoryElement?.dataset.category === category) {
-                                showReglamentsForCategory(category);
-                            }
-                        }
-
-                        showNotification("Регламент добавлен");
-                        modal.classList.add('hidden');
-                        form.reset();
-                    } catch (error) {
-                        console.error("Error saving reglament:", error);
-                        showNotification("Ошибка при сохранении регламента", "error");
-                    }
-                });
-            };
-
-            const modal = getOrCreateModal(modalId, modalClassName, modalHTML, setupAddForm);
-            modal.classList.remove('hidden');
-        }
-
-
-        async function showReglamentDetail(id) {
-            try {
-                const reglament = await getFromIndexedDB('reglaments', id);
-                if (!reglament) {
-                    showNotification("Регламент не найден", "error");
+                if (!saveButton) {
+                    console.error("Кнопка сохранения #saveReglamentBtn не найдена!");
                     return;
                 }
 
-                const modalId = 'viewReglamentModal';
-                const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
-                const modalHTML = `
-                                    <div class="flex items-center justify-center min-h-full">
-                                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                                            <div class="p-6">
-                                                <div class="flex justify-between items-center mb-4">
-                                                    <h2 id="reglamentDetailTitle" class="text-2xl font-bold">Название регламента</h2>
-                                                    <div class="flex">
-                                                        <button id="editReglamentBtn" class="px-3 py-1 bg-primary hover:bg-secondary text-white rounded-md transition mr-2">
-                                                            <i class="fas fa-edit mr-1"></i>Изменить
-                                                        </button>
-                                                        <button class="close-detail-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                            <i class="fas fa-times text-xl"></i>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div id="reglamentDetailContent" class="prose dark:prose-invert max-w-none">
-                                                    <!-- Content will be loaded here -->
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>`;
+                if (!form.dataset.submitHandlerAttached) {
+                    form.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        saveButton.disabled = true;
+                        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
 
+                        const title = titleInput.value.trim();
+                        const category = categorySelect.value;
+                        const content = contentTextarea.value.trim();
+                        const reglamentId = idInput.value;
 
-                const setupDetailView = (modal) => {
-                    modal.querySelector('#editReglamentBtn').addEventListener('click', () => {
-                        const currentId = modal.dataset.reglamentId;
-                        if (currentId) {
-                            editReglament(parseInt(currentId));
-                            modal.classList.add('hidden');
-                        } else {
-                            console.error("Reglament ID not found on detail modal.");
-                            showNotification("Ошибка: Не удалось определить ID регламента для редактирования", "error");
+                        if (!title || !category || !content) {
+                            if (typeof showNotification === 'function') {
+                                showNotification("Пожалуйста, заполните все обязательные поля (Название, Категория, Содержание)", "error");
+                            }
+                            saveButton.disabled = false;
+                            saveButton.innerHTML = '<i class="mr-1"></i> Сохранить';
+                            return;
+                        }
+
+                        const reglamentData = {
+                            title,
+                            category,
+                            content,
+                            dateAdded: new Date().toISOString(),
+                        };
+
+                        try {
+                            if (typeof saveToIndexedDB !== 'function') {
+                                throw new Error("Функция saveToIndexedDB не определена.");
+                            }
+                            await saveToIndexedDB('reglaments', reglamentData);
+
+                            const reglamentsListDiv = document.getElementById('reglamentsList');
+                            const currentCategoryTitleEl = document.getElementById('currentCategoryTitle');
+
+                            if (reglamentsListDiv && !reglamentsListDiv.classList.contains('hidden') && currentCategoryTitleEl) {
+                                const displayedCategoryTitle = currentCategoryTitleEl.textContent;
+                                const displayedCategoryInfo = Object.entries(categoryDisplayInfo || {}).find(([id, info]) => info.title === displayedCategoryTitle);
+                                const displayedCategoryId = displayedCategoryInfo ? displayedCategoryInfo[0] : null;
+
+                                if (displayedCategoryId === category && typeof showReglamentsForCategory === 'function') {
+                                    console.log(`Reglament added to currently viewed category (${category}). Refreshing list.`);
+                                    await showReglamentsForCategory(category);
+                                }
+                            }
+
+                            if (typeof showNotification === 'function') {
+                                showNotification("Регламент успешно добавлен");
+                            }
+                            modalElement.classList.add('hidden');
+                            form.reset();
+
+                        } catch (error) {
+                            console.error("Ошибка при сохранении регламента:", error);
+                            if (typeof showNotification === 'function') {
+                                showNotification("Ошибка при сохранении регламента: " + error.message, "error");
+                            }
+                        } finally {
+                            saveButton.disabled = false;
+                            saveButton.innerHTML = '<i class="mr-1"></i> Сохранить';
+                            idInput.value = '';
                         }
                     });
-                };
+                    form.dataset.submitHandlerAttached = 'true';
+                }
+            };
 
-                const modal = getOrCreateModal(modalId, modalClassName, modalHTML, setupDetailView);
+            const modal = getOrCreateModal(modalId, modalClassName, modalHTML, setupAddForm);
 
-                modal.dataset.reglamentId = id;
-                modal.querySelector('#reglamentDetailTitle').textContent = reglament.title;
-                const contentElement = modal.querySelector('#reglamentDetailContent');
+            const categorySelect = modal.querySelector('#reglamentCategory');
+            const titleInput = modal.querySelector('#reglamentTitle');
 
-                contentElement.innerHTML = 'Загрузка содержимого...';
-                await renderMarkdown(contentElement, reglament.content);
+            if (categorySelect) {
+                while (categorySelect.options.length > 1) {
+                    categorySelect.remove(1);
+                }
+                if (typeof populateReglamentCategoryDropdowns === 'function') {
+                    populateReglamentCategoryDropdowns();
+                } else {
+                    console.error("Функция populateReglamentCategoryDropdowns не найдена!");
+                }
 
-                modal.classList.remove('hidden');
+                if (currentCategoryId) {
+                    setTimeout(() => {
+                        const optionExists = categorySelect.querySelector(`option[value="${currentCategoryId}"]`);
+                        if (optionExists) {
+                            categorySelect.value = currentCategoryId;
+                            console.log(`Reglament category pre-selected in modal: ${currentCategoryId}`);
+                        } else {
+                            console.warn(`Attempted to pre-select category ${currentCategoryId}, but option not found.`);
+                            categorySelect.value = '';
+                        }
+                    }, 100);
+                } else {
+                    categorySelect.value = '';
+                }
+            } else {
+                console.error("Элемент <select> #reglamentCategory не найден!");
+            }
 
-            } catch (error) {
-                console.error("Error loading reglament:", error);
-                showNotification("Ошибка при загрузке регламента", "error");
+            const form = modal.querySelector('#reglamentForm');
+            if (form) {
+                form.reset();
+                const idInput = form.querySelector('#reglamentId');
+                if (idInput) idInput.value = '';
+            }
+            const saveBtn = document.getElementById('saveReglamentBtn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
+                saveBtn.setAttribute('form', 'reglamentForm');
+            }
+
+            const modalTitleEl = modal.querySelector('#reglamentModalTitle');
+            if (modalTitleEl) modalTitleEl.textContent = 'Добавить регламент';
+
+
+            modal.classList.remove('hidden');
+
+            if (titleInput) {
+                setTimeout(() => titleInput.focus(), 50);
             }
         }
 
@@ -4551,35 +5140,9 @@
                                                     <div class="mb-2 flex-1 flex flex-col overflow-hidden">
                                                         <label class="block text-sm font-medium mb-1" for="editReglamentContent">Содержание</label>
                                                         <div class="markdown-editor flex-1 flex flex-col overflow-hidden">
-                                                            <div class="markdown-toolbar flex flex-wrap gap-1 mb-2 bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-300 dark:border-gray-600">
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Полужирный" data-action="bold"><i class="fas fa-bold"></i></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Курсив" data-action="italic"><i class="fas fa-italic"></i></button>
-                                                                <div class="h-6 mx-1 w-px bg-gray-300 dark:bg-gray-600"></div>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Заголовок 1" data-action="h1"><i class="fas fa-heading"></i><span class="text-xs">1</span></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Заголовок 2" data-action="h2"><i class="fas fa-heading"></i><span class="text-xs">2</span></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Заголовок 3" data-action="h3"><i class="fas fa-heading"></i><span class="text-xs">3</span></button>
-                                                                <div class="h-6 mx-1 w-px bg-gray-300 dark:bg-gray-600"></div>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Маркированный список" data-action="ulist"><i class="fas fa-list-ul"></i></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Нумерованный список" data-action="olist"><i class="fas fa-list-ol"></i></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Задача" data-action="task"><i class="fas fa-tasks"></i></button>
-                                                                <div class="h-6 mx-1 w-px bg-gray-300 dark:bg-gray-600"></div>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Ссылка" data-action="link"><i class="fas fa-link"></i></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Цитата" data-action="quote"><i class="fas fa-quote-right"></i></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Код" data-action="code"><i class="fas fa-code"></i></button>
-                                                                <button type="button" class="md-btn p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Таблица" data-action="table"><i class="fas fa-table"></i></button>
-                                                                <div class="ml-auto">
-                                                                    <div class="flex items-center">
-                                                                        <input type="checkbox" id="editorPreviewToggle" class="mr-2">
-                                                                        <label for="editorPreviewToggle" class="text-sm cursor-pointer">Предпросмотр</label>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="editor-container flex-1 flex flex-col md:flex-row min-h-[200px] md:h-[400px] overflow-hidden">
-                                                                <div id="markdownEditorWrapper" class="flex-1 h-full md:h-auto overflow-hidden">
-                                                                    <textarea id="editReglamentContent" class="w-full h-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base font-mono resize-none"></textarea>
-                                                                </div>
-                                                                <div id="markdownPreview" class="hidden md:w-1/2 md:ml-4 h-full md:h-auto overflow-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md p-4">
-                                                                    <!-- Preview content will be shown here -->
+                                                            <div class="editor-container flex-1 flex flex-col min-h-[200px] md:h-[400px] overflow-hidden">
+                                                                <div id="markdownEditorWrapper" class="flex-1 h-full overflow-hidden">
+                                                                    <textarea id="editReglamentContent" class="w-full h-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base resize-none"></textarea>
                                                                 </div>
                                                             </div>
                                                             <p class="text-sm text-gray-500 mt-2 flex items-center">
@@ -4616,25 +5179,7 @@
                     const titleInput = modal.querySelector('#editReglamentTitle');
                     const categorySelect = modal.querySelector('#editReglamentCategory');
                     const contentTextarea = modal.querySelector('#editReglamentContent');
-                    const previewToggle = modal.querySelector('#editorPreviewToggle');
-                    const markdownEditorWrapper = modal.querySelector('#markdownEditorWrapper');
-                    const markdownPreview = modal.querySelector('#markdownPreview');
                     const deleteButton = modal.querySelector('#deleteReglamentBtn');
-                    const addSampleTextBtn = modal.querySelector('#addSampleTextBtn');
-
-                    initMarkdownEditor(modal);
-
-                    previewToggle.addEventListener('change', () => {
-                        const showPreview = previewToggle.checked;
-                        markdownPreview.classList.toggle('hidden', !showPreview);
-                        markdownEditorWrapper.classList.toggle('md:w-1/2', showPreview);
-                        markdownEditorWrapper.classList.toggle('md:w-full', !showPreview);
-                        if (showPreview) {
-                            updateMarkdownPreview(modal);
-                        }
-                    });
-
-                    addSampleTextBtn.addEventListener('click', () => addSampleTextToEditor(modal));
 
                     form.addEventListener('submit', async (e) => {
                         e.preventDefault();
@@ -4713,17 +5258,6 @@
                 modal.querySelector('#editReglamentCategory').value = reglament.category;
                 modal.querySelector('#editReglamentContent').value = reglament.content;
 
-                const previewToggle = modal.querySelector('#editorPreviewToggle');
-                const markdownEditorWrapper = modal.querySelector('#markdownEditorWrapper');
-                const markdownPreview = modal.querySelector('#markdownPreview');
-                const showPreview = previewToggle.checked;
-                markdownPreview.classList.toggle('hidden', !showPreview);
-                markdownEditorWrapper.classList.toggle('md:w-1/2', showPreview);
-                markdownEditorWrapper.classList.toggle('md:w-full', !showPreview);
-                if (showPreview) {
-                    updateMarkdownPreview(modal);
-                }
-
                 modal.classList.remove('hidden');
 
             } catch (error) {
@@ -4733,245 +5267,76 @@
         }
 
 
-        function initMarkdownEditor(modal) {
-            const textarea = modal.querySelector('#editReglamentContent');
-            const mdButtons = modal.querySelectorAll('.md-btn');
-
-            mdButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const action = button.dataset.action;
-                    applyMarkdownFormat(textarea, action);
-                    updateMarkdownPreview(modal);
-                });
-            });
-
-            textarea.addEventListener('input', () => {
-                const previewToggle = modal.querySelector('#editorPreviewToggle');
-                if (previewToggle?.checked) {
-                    updateMarkdownPreview(modal);
-                }
-            });
-        }
-
-
-        function applyMarkdownFormat(textarea, action) {
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const selectedText = textarea.value.substring(start, end);
-            let prefix = '', suffix = '', replacement = '';
-            const currentLineStart = textarea.value.lastIndexOf('\n', start - 1) + 1;
-            const currentLine = textarea.value.substring(currentLineStart, start).trim() ? textarea.value.substring(currentLineStart) : '';
-
-            switch (action) {
-                case 'bold': prefix = '**'; suffix = '**'; break;
-                case 'italic': prefix = '*'; suffix = '*'; break;
-                case 'h1': prefix = '# '; break;
-                case 'h2': prefix = '## '; break;
-                case 'h3': prefix = '### '; break;
-                case 'ulist': prefix = '- '; break;
-                case 'olist': prefix = '1. '; break;
-                case 'task': prefix = '- [ ] '; break;
-                case 'link':
-                    replacement = selectedText.trim().startsWith('http')
-                        ? `[Ссылка](${selectedText})`
-                        : `[${selectedText || 'Текст ссылки'}](https://)`;
-                    break;
-                case 'quote': prefix = '> '; break;
-                case 'code': prefix = '`'; suffix = '`'; break;
-                case 'table':
-                    replacement = `| Заголовок 1 | Заголовок 2 |\n|------------|------------|\n| Ячейка 1   | Ячейка 2   |\n| Ячейка 4   | Ячейка 5   |`;
-                    break;
-            }
-
-            textarea.focus();
-
-            if (['h1', 'h2', 'h3', 'ulist', 'olist', 'task', 'quote'].includes(action)) {
-                const lines = textarea.value.substring(start, end).split('\n');
-                const actualStart = textarea.value.lastIndexOf('\n', start - 1) + 1;
-                let actualEnd = textarea.value.indexOf('\n', end);
-                if (actualEnd === -1) actualEnd = textarea.value.length;
-                else if (end === actualStart) actualEnd = start;
-
-                const textToModify = textarea.value.substring(actualStart, actualEnd);
-                const modifiedLines = textToModify.split('\n').map((line, index) => {
-                    if (!line.trim() && lines.length > 1) return '';
-                    line = line.replace(/^(\d+\.|-|\*|>|- \[.?\])\s*/, '');
-                    if (action === 'olist') return `${index + 1}. ${line}`;
-                    return `${prefix}${line}`;
-                }).join('\n');
-
-                textarea.setRangeText(modifiedLines, actualStart, actualEnd, 'select');
-
-            } else if (replacement) {
-                textarea.setRangeText(replacement, start, end, 'select');
-            } else if (prefix || suffix) {
-                const currentText = textarea.value;
-                const textBefore = currentText.substring(start - prefix.length, start);
-                const textAfter = currentText.substring(end, end + suffix.length);
-
-                if (textBefore === prefix && textAfter === suffix) {
-                    textarea.setRangeText(selectedText, start - prefix.length, end + suffix.length, 'select');
-                } else {
-                    textarea.setRangeText(`${prefix}${selectedText}${suffix}`, start, end, 'select');
-                }
-            }
-            textarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-        }
-
-
-        async function updateMarkdownPreview(modal) {
-            const textarea = modal.querySelector('#editReglamentContent');
-            const previewElement = modal.querySelector('#markdownPreview');
-            if (!textarea || !previewElement || previewElement.classList.contains('hidden')) return;
-
-            const markdownContent = textarea.value;
-            previewElement.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i> Обновление...</div>';
-
-            await renderMarkdown(previewElement, markdownContent);
-        }
-
-
-        function addSampleTextToEditor(modalContext = null) {
-            const editorTextarea = document.getElementById('editReglamentContent');
-            if (!editorTextarea) {
-                console.error("Editor textarea not found");
-                return;
-            }
-
-            const samples = [
-                {
-                    title: "Регламент обработки звонков в технической поддержке",
-                    content: `## Приветствие\n\n*   Разговор необходимо начать с четкого и доброжелательного приветствия.\n*   Обязательно озвучивать название технической поддержки сервиса, свое имя и приветствие («Техническая поддержка сервиса …….., меня зовут ….., здравствуйте!»).\n\n## Идентификация клиента\n\n*   Необходимо провести первичную идентификацию клиента, это обязательно для каждого входящего звонка.\n*   Уточните ИНН или другой реквизит, по которому можно определить ИНН (например, наименование организации, рег.номер СФР, СНИЛС подписанта по учётной записи и т.д.).\n*   Если по данному ИНН зарегистрировано несколько организаций, уточните также КПП.\n*   Если система Манго автоматически отобразила данные об организации, подтвердите отображенную информацию («Уточните, пожалуйста, Вы обращаетесь по вопросу компании «Северный путь»»).\n*   В некоторых случаях может потребоваться дополнительная идентификация (например, первые символы id учетной записи клиента).\n*   Если клиент отказывается предоставить ИНН или любой другой возможный реквизит, оператор может пропустить идентификацию и приступить к консультации, если это представляется возможным.\n\n## Выявление причины обращения\n\n*   Необходимо четко, последовательно, подробно выявить причину обращения и суть вопроса клиента, если первоначальной информации недостаточно.\n*   Задайте уточняющие вопросы:\n    *   "Уточните, пожалуйста, какой у вас вопрос?"\n    *   "Какая именно ошибка возникает? Прочтите, пожалуйста, текст ошибки"\n    *   "При каких действиях возникает ошибка?"\n\n## Предоставление консультации и решение проблемы (если компетентен)\n\n1.  **Стиль общения:** Диалог необходимо вести бодрым, уверенным голосом, с четким произношением, тоном без раздражения и в умеренном темпе, внятно.\n2.  **Грамотность:** Необходимо использовать грамотную, четкую, ясную и точную информацию в официально-деловом стиле. Избегайте грамматических и логических ошибок, неверных окончаний и ударений, уменьшительно-ласкательных суффиксов, сленга и просторечий.\n3.  **Чистота речи:** Необходимо обеспечить чистоту речи, избегать междометий, слов-паразитов, личных оценок, внутренних терминов.\n4.  **Вовлеченность:** Необходимо проявлять вовлеченность в диалог (активное слушание, отсутствие длительных пауз), поддерживать инициативу на своей стороне, не перебивать клиента, использовать развернутые ответы при необходимости.\n5.  **Комфорт и этикет:** Необходимо создавать комфорт в беседе, соблюдать речевой этикет (фразы вежливости).\n6.  **Паузы:** Необходимо избегать длительных пауз без предупреждения (более 5 секунд). Также следует избегать трех и более коротких пауз без предупреждения.\n7.  **Ожидание (Уточнение):** Если необходимо время для уточнения информации, предупредите клиента и попросите оставаться на линии, используя вежливые фразы, например: «Оставайтесь, пожалуйста, на линии, я уточню для Вас информацию».\n8.  **Возвращение после ожидания:** При возвращении после уточнения информации, поблагодарите клиента за ожидание, например: «Спасибо за ожидание, ...». Если для проверки информации требуется больше времени (свыше 120 секунд), сообщите об этом клиенту.\n9.  **Точность и полнота:** Необходим быстрый и точный поиск информации, информацию нужно предоставлять в полном объеме, избегать односложных ответов.\n10. **Удаленное подключение:** На удаленном подключении необходимо комментировать все проводимые действия.\n11. **Предупреждение о последствиях:** При выполнении определенных действий (например, удаление криптопровайдера) необходимо предупредить клиента о возможных последствиях, предложить создать точку восстановления ОС, убедиться в сохранности важных данных.\n\n## Завершение разговора\n\n1.  **Резюмирование:** При возникновении небольшой паузы после консультации, если клиент не завершает разговор, необходимо резюмировать итоги консультации в виде вопроса («На данный момент у Вас остались ещё вопросы?») или через подведения итога консультации.\n2.  **Прощание:** Стандартные фразы прощания: для входящего звонка - «Спасибо за обращение, всего доброго, до свидания!», для исходящего - «Спасибо за уделенное время, всего доброго, до свидания». Допускаются вариации («Спасибо за Ваш звонок»).\n3.  **Обязательность прощания:** Прощание является обязательным, за исключением случаев, когда от клиента не поступил ответ на вопрос о слышимости, консультация не окончена или у оператора не было возможности попрощаться по техническим причинам.`
-                },
-
-                {
-                    title: "Частые проблемы и решения",
-                    content: `# Часто возникающие проблемы и их решения\n\n## Проблемы при настройке 1С-Отчетности\n\n### Проблема: Ошибка при установке криптопровайдера\n\n**Симптомы:**\n- Появляется сообщение "Ошибка установки компонента безопасности"\n- В логах присутствуют записи об ошибке доступа\n\n**Решение:**\n1. Закройте все приложения 1С\n2. Запустите установку от имени администратора\n3. Временно отключите антивирус\n4. Проверьте, нет ли конфликтующих СКЗИ\n\n> **Примечание:** Если проблема сохраняется, необходимо проверить системный журнал Windows.\n\n## Проблемы при отправке отчетности\n\n### Проблема: Ошибка "Сервер временно недоступен"\n\n**Возможные причины:**\n- [ ] Проблемы с подключением к интернету\n- [ ] Профилактические работы на сервере контролирующего органа\n- [ ] Неверные настройки прокси-сервера\n\n**Диагностика и решение:**\n\n1. Проверьте доступность интернета\n2. Проверьте статус серверов на сайте службы поддержки\n3. Проверьте настройки прокси в программе\n\n### Таблица кодов ошибок\n\n| Код ошибки | Описание | Решение |\n|------------|----------|---------|\n| 1001 | Ошибка подключения | Проверить интернет |\n| 1002 | Ошибка аутентификации | Проверить сертификат |\n| 1003 | Ошибка формата файла | Проверить формат файла |`
-                },
-
-                {
-                    title: "Регламент проведения обновления",
-                    content: `# Регламент проведения обновления системы\n\n## Подготовительные мероприятия\n\n### 1. Уведомление пользователей\n- Отправьте уведомления всем пользователям за 3 дня до обновления\n- Укажите точное время и ожидаемую продолжительность работ\n- Опишите, какие изменения будут внесены\n\n### 2. Резервное копирование\n- [ ] Создать полную резервную копию базы данных\n- [ ] Проверить целостность резервной копии\n- [ ] Сохранить копию на отдельном физическом носителе\n\n### 3. Тестирование обновления\n- Развернуть тестовую среду\n- Выполнить обновление в тестовой среде\n- Проверить основные бизнес-процессы после обновления\n\n## Процедура обновления\n\n> **Внимание!** Обновление должно проводиться в нерабочее время.\n\n1. **Подготовка** (30 минут):\n- Остановка сервера приложений\n- Отключение всех пользователей от системы\n- Проверка резервной копии\n\n2. **Обновление** (1-2 часа):\n- Установка обновлений в соответствии с инструкцией\n- Обновление схемы базы данных\n- Миграция данных (при необходимости)\n\n3. **Проверка** (1 час):\n- Запуск сервера приложений\n- Проверка основных функций системы\n- Тестирование критичных бизнес-процессов\n\n## Действия при возникновении проблем\n\n| Проблема | Действия | Ответственный |\n|----------|----------|---------------|\n| Ошибка обновления БД | Восстановление из резервной копии | Администратор БД |\n| Ошибка запуска сервера | Анализ логов, откат изменений | Системный администратор |\n| Ошибки в работе приложения | Исправление конфигурации, применение патчей | Разработчик |\n\n## Завершение работ\n\n- Отправьте уведомление об успешном завершении обновления\n- Обновите документацию системы\n- Проведите обучение пользователей по новым функциям`
-                }
-            ];
-
-            const sampleModalId = 'sampleTextModal';
-            document.getElementById(sampleModalId)?.remove();
-
-            const modal = document.createElement('div');
-            modal.id = sampleModalId;
-            modal.className = 'fixed inset-0 bg-black bg-opacity-60 z-[60] p-4 flex items-center justify-center';
-            modal.innerHTML = `
-                                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full">
-                                    <div class="p-6">
-                                        <div class="flex justify-between items-center mb-4">
-                                            <h2 class="text-xl font-bold">Выберите шаблон</h2>
-                                            <button class="close-sample-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                <i class="fas fa-times text-xl"></i>
-                                            </button>
-                                        </div>
-                                        <div class="sample-list space-y-3 max-h-96 overflow-y-auto">
-                                            ${samples.map((sample, index) => `
-                                                <div class="sample-item bg-gray-50 dark:bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition duration-150" data-index="${index}">
-                                                    <h3 class="font-bold text-lg pointer-events-none">${sample.title}</h3>
-                                                    <p class="text-gray-600 dark:text-gray-400 text-sm mt-1 pointer-events-none">Нажмите, чтобы использовать этот шаблон</p>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                        <div class="mt-6 flex justify-end">
-                                            <button class="close-sample-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
-                                                Отмена
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>`;
-
-            modal.addEventListener('click', (event) => {
-                const target = event.target;
-                if (target.closest('.close-sample-modal')) {
-                    modal.remove();
-                    return;
-                }
-                const sampleItem = target.closest('.sample-item');
-                if (sampleItem) {
-                    const index = parseInt(sampleItem.dataset.index);
-                    if (samples[index]) {
-                        if (confirm('Вставить выбранный шаблон? Текущее содержимое будет заменено.')) {
-                            editorTextarea.value = samples[index].content;
-                            if (modalContext) {
-                                updateMarkdownPreview(modalContext);
-                                editorTextarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-                            }
-                            modal.remove();
-                        }
-                    }
-                }
-            });
-
-            document.body.appendChild(modal);
-        }
-
-
         // СИСТЕМА ВНЕШНИХ РЕСУРСОВ
         async function loadExtLinks() {
             const extLinksContainer = document.getElementById('extLinksContainer');
             if (!extLinksContainer) return;
 
+            extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500">Загрузка ресурсов...</div>';
+
             try {
-                let extLinks = await getAllFromIndexedDB('extLinks');
+                let extLinks = await getAllExtLinks();
 
                 if (!extLinks?.length) {
+                    console.log("База внешних ссылок пуста. Добавляем стартовый набор.");
                     const sampleExtLinks = [
-
                         {
                             title: 'ЕГРЮЛ',
                             url: 'https://egrul.nalog.ru/',
                             description: 'Чекни инфу по орге',
-                            category: 'gov'
+                            category: 'gov',
+                            dateAdded: new Date().toISOString()
                         },
 
                         {
                             title: 'Портал ИТС 1С',
                             url: 'https://its.1c.ru/',
                             description: 'Инфа по 1ЭС',
-                            category: 'docs'
+                            category: 'docs',
+                            dateAdded: new Date().toISOString()
                         },
 
                         {
                             title: 'Track Astral',
                             url: 'https://track.astral.ru/support/display/Support1CO',
                             description: 'Знания древних...',
-                            category: 'docs'
+                            category: 'docs',
+                            dateAdded: new Date().toISOString()
                         },
 
                         {
                             title: 'База (знаний) Astral',
                             url: 'https://astral.ru/help/1s-otchetnost/',
                             description: 'Инфа для обычных людишек...',
-                            category: 'docs'
+                            category: 'docs',
+                            dateAdded: new Date().toISOString()
                         }
                     ];
                     await Promise.all(sampleExtLinks.map(link => saveToIndexedDB('extLinks', link)));
-                    extLinks = await getAllFromIndexedDB('extLinks');
+                    extLinks = await getAllExtLinks();
+                    console.log("Стартовые внешние ссылки добавлены и загружены.");
                 }
 
                 renderExtLinks(extLinks);
             } catch (error) {
-                console.error('Error loading external links:', error);
-                extLinksContainer.textContent = 'Ошибка при загрузке внешних ресурсов';
-                extLinksContainer.className = 'text-center py-6 text-gray-500';
+                console.error('Ошибка при загрузке внешних ресурсов:', error);
+                extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-red-500">Не удалось загрузить ресурсы.</div>';
+                applyCurrentView('extLinksContainer');
             }
         }
 
 
         function renderExtLinks(links) {
             const extLinksContainer = document.getElementById('extLinksContainer');
-            if (!extLinksContainer) return;
+            if (!extLinksContainer) {
+                console.error("Контейнер #extLinksContainer не найден для рендеринга.");
+                return;
+            }
 
             extLinksContainer.innerHTML = '';
 
             if (!links?.length) {
-                extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500">Нет внешних ресурсов</div>';
+                extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500">Нет сохраненных внешних ресурсов</div>';
                 applyCurrentView('extLinksContainer');
                 return;
             }
@@ -4980,15 +5345,22 @@
                 docs: { name: 'Документация', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300', icon: 'fa-file-alt' },
                 gov: { name: 'Гос. сайты', color: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300', icon: 'fa-landmark' },
                 tools: { name: 'Инструменты', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300', icon: 'fa-tools' },
-                default: { name: 'Прочее', color: 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300', icon: 'fa-link' }
+                other: { name: 'Прочее', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300', icon: 'fa-link' },
+                default: { name: 'Без категории', color: 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300', icon: 'fa-question-circle' }
             };
 
             const fragment = document.createDocumentFragment();
 
             links.forEach(link => {
+                if (!link || typeof link !== 'object') {
+                    console.warn("Пропущен невалидный элемент link при рендеринге:", link);
+                    return;
+                }
+
                 const linkElement = document.createElement('div');
-                linkElement.className = 'ext-link-item view-item';
+                linkElement.className = 'ext-link-item view-item group flex justify-between items-start p-4 rounded-lg shadow-sm hover:shadow-md bg-white dark:bg-gray-700 transition';
                 linkElement.dataset.id = link.id;
+
                 const categoryKey = link.category && categoryMap[link.category] ? link.category : 'default';
                 const categoryData = categoryMap[categoryKey];
                 linkElement.dataset.category = link.category || '';
@@ -4998,21 +5370,25 @@
                     : '';
 
                 linkElement.innerHTML = `
-                                            <div class="flex-grow min-w-0 mr-3">
-                                                <h3 class="font-bold text-lg truncate" title="${link.title}">${link.title}</h3>
-                                                <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mt-1 truncate">${link.description || ''}</p>
-                                                <div class="ext-link-meta mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                                    ${categoryBadge}
-                                                    <a href="${link.url}" target="_blank" class="ext-link-url inline-flex items-center text-primary hover:underline text-sm">
-                                                        <i class="fas fa-external-link-alt mr-1"></i>Открыть
-                                                    </a>
-                                                </div>
-                                            </div>
-                                            <div class="flex flex-shrink-0 items-center">
-                                                <button class="edit-ext-link p-1 text-gray-500 hover:text-primary" title="Редактировать"><i class="fas fa-edit"></i></button>
-                                                <button class="delete-ext-link p-1 text-gray-500 hover:text-red-500 ml-1" title="Удалить"><i class="fas fa-trash"></i></button>
-                                            </div>
-                                        `;
+            <div class="flex-grow min-w-0 mr-3">
+                <h3 class="font-bold text-base group-hover:text-primary dark:group-hover:text-primary truncate" title="${link.title || ''}">${link.title || 'Без названия'}</h3>
+                <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mt-1 truncate">${link.description || 'Нет описания'}</p>
+                <div class="ext-link-meta mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    ${categoryBadge}
+                </div>
+            </div>
+            <div class="ext-link-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+                 <a href="${link.url || '#'}" target="_blank" rel="noopener noreferrer" class="ext-link-url p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Открыть ${link.url || ''}">
+                    <i class="fas fa-external-link-alt"></i>
+                </a>
+                <button class="edit-ext-link p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="delete-ext-link p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
 
                 linkElement.querySelector('.edit-ext-link')?.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -5021,16 +5397,17 @@
 
                 linkElement.querySelector('.delete-ext-link')?.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (confirm('Вы уверены, что хотите удалить этот ресурс?')) {
+                    if (confirm(`Вы уверены, что хотите удалить ресурс "${link.title || 'Без названия'}"?`)) {
                         deleteExtLink(link.id);
                     }
                 });
 
                 linkElement.addEventListener('click', (e) => {
-                    if (!e.target.closest('button, a.ext-link-url')) {
-                        console.log("Клик по карточке внешнего ресурса:", link.id);
+                    if (!e.target.closest('button, a')) {
+                        console.log("Клик по карточке внешнего ресурса (не по кнопке/ссылке):", link.id);
                     }
                 });
+
 
                 fragment.appendChild(linkElement);
             });
@@ -5043,75 +5420,111 @@
         function filterExtLinks() {
             const searchInput = document.getElementById('extLinkSearchInput');
             const categoryFilter = document.getElementById('extLinkCategoryFilter');
-            const linkItems = document.querySelectorAll('.ext-link-item');
+            const container = document.getElementById('extLinksContainer');
 
-            if (!searchInput || !categoryFilter || !linkItems.length) return;
+            if (!container) {
+                console.error("Контейнер #extLinksContainer не найден для фильтрации.");
+                return
+            };
+            if (!searchInput) {
+                console.warn("Поле поиска #extLinkSearchInput не найдено для фильтрации.");
+            }
+            if (!categoryFilter) {
+                console.warn("Фильтр категорий #extLinkCategoryFilter не найден для фильтрации.");
+            }
 
-            const searchValue = searchInput.value.trim().toLowerCase();
-            const categoryValue = categoryFilter.value;
+            const linkItems = container.querySelectorAll('.ext-link-item');
 
+            const searchValue = searchInput ? searchInput.value.trim().toLowerCase() : '';
+            const categoryValue = categoryFilter ? categoryFilter.value : '';
+
+            console.log(`Фильтрация внешних ресурсов: Поиск="${searchValue}", Категория="${categoryValue}"`);
+
+            let visibleCount = 0;
             linkItems.forEach(item => {
                 const title = item.querySelector('h3')?.textContent.trim().toLowerCase() || '';
                 const description = item.querySelector('p.ext-link-description')?.textContent.trim().toLowerCase() || '';
                 const category = item.dataset.category || '';
 
                 const matchesSearch = !searchValue || title.includes(searchValue) || description.includes(searchValue);
+
                 const matchesCategory = !categoryValue || category === categoryValue;
 
-                item.hidden = !(matchesSearch && matchesCategory);
+                const shouldBeVisible = matchesSearch && matchesCategory;
+
+                item.hidden = !shouldBeVisible;
+
+                if (shouldBeVisible) {
+                    visibleCount++;
+                }
             });
+
+            console.log(`Фильтрация завершена. Видимых элементов: ${visibleCount}`);
+
+            const noResultsMessage = container.querySelector('.no-results-message');
+            if (visibleCount === 0 && linkItems.length > 0) {
+                if (!noResultsMessage) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'no-results-message col-span-full text-center py-6 text-gray-500';
+                    msgDiv.textContent = 'По вашему запросу ничего не найдено.';
+                    container.appendChild(msgDiv);
+                }
+            } else {
+                if (noResultsMessage) {
+                    noResultsMessage.remove();
+                }
+            }
         }
 
 
         function ensureExtLinkModal() {
             let modal = document.getElementById('extLinkModal');
             if (!modal) {
+                console.log("Модальное окно #extLinkModal не найдено, создаем новое.");
                 modal = document.createElement('div');
                 modal.id = 'extLinkModal';
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center'; // Добавлены классы для центрирования
                 modal.innerHTML = `
-                                    <div class="flex items-center justify-center min-h-full">
-                                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-                                            <div class="p-6">
-                                                <div class="flex justify-between items-center mb-4">
-                                                    <h2 class="text-xl font-bold" id="extLinkModalTitle"></h2>
-                                                    <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                        <i class="fas fa-times text-xl"></i>
-                                                    </button>
-                                                </div>
-                                                <form id="extLinkForm">
-                                                    <input type="hidden" id="extLinkId">
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="extLinkTitle">Название</label>
-                                                        <input type="text" id="extLinkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="extLinkUrl">URL</label>
-                                                        <input type="url" id="extLinkUrl" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="extLinkDescription">Описание</label>
-                                                        <textarea id="extLinkDescription" rows="3" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="extLinkCategory">Категория</label>
-                                                        <select id="extLinkCategory" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                            <option value="">Без категории</option>
-                                                            <option value="docs">Документация</option>
-                                                            <option value="gov">Государственные сайты</option>
-                                                            <option value="tools">Инструменты</option>
-                                                            <option value="other">Прочее</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="flex justify-end mt-6">
-                                                        <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">Отмена</button>
-                                                        <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">Сохранить</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    `;
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold" id="extLinkModalTitle">Заголовок окна</h2>
+                        <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <form id="extLinkForm">
+                        <input type="hidden" id="extLinkId">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1" for="extLinkTitle">Название</label>
+                            <input type="text" id="extLinkTitle" name="extLinkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1" for="extLinkUrl">URL</label>
+                            <input type="url" id="extLinkUrl" name="extLinkUrl" required placeholder="https://example.com" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1" for="extLinkDescription">Описание (опционально)</label>
+                            <textarea id="extLinkDescription" name="extLinkDescription" rows="3" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1" for="extLinkCategory">Категория</label>
+                            <select id="extLinkCategory" name="extLinkCategory" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                                <option value="">Без категории</option>
+                                <option value="docs">Документация</option>
+                                <option value="gov">Государственные сайты</option>
+                                <option value="tools">Инструменты</option>
+                                <option value="other">Прочее</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end mt-6">
+                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">Отмена</button>
+                            <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">Сохранить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
                 document.body.appendChild(modal);
 
                 const closeModal = () => modal.classList.add('hidden');
@@ -5136,6 +5549,7 @@
 
         async function handleExtLinkFormSubmit(e) {
             e.preventDefault();
+            const form = e.target;
             const modalElements = ensureExtLinkModal();
             const { modal, idInput, titleInput, urlInput, descriptionInput, categoryInput } = modalElements;
 
@@ -5144,9 +5558,16 @@
             const url = urlInput.value.trim();
 
             if (!title || !url) {
-                showNotification("Пожалуйста, заполните Название и URL", "error");
+                showNotification("Пожалуйста, заполните поля 'Название' и 'URL'", "error");
                 return;
             }
+            try {
+                new URL(url);
+            } catch (_) {
+                showNotification("Пожалуйста, введите корректный URL (например, https://example.com)", "error");
+                return;
+            }
+
 
             try {
                 const linkData = {
@@ -5156,22 +5577,29 @@
                     category: categoryInput.value || null
                 };
 
+                const timestamp = new Date().toISOString();
+                let isEditing = false;
+
                 if (id) {
+                    isEditing = true;
                     linkData.id = parseInt(id, 10);
-                    linkData.dateUpdated = new Date().toISOString();
+                    const existingLink = await getFromIndexedDB('extLinks', linkData.id);
+                    linkData.dateAdded = existingLink?.dateAdded || timestamp;
+                    linkData.dateUpdated = timestamp;
                 } else {
-                    linkData.dateAdded = new Date().toISOString();
+                    linkData.dateAdded = timestamp;
                 }
 
                 await saveToIndexedDB('extLinks', linkData);
-                const updatedLinks = await getAllFromIndexedDB('extLinks');
+
+                const updatedLinks = await getAllExtLinks();
                 renderExtLinks(updatedLinks);
 
-                showNotification(id ? "Ресурс обновлен" : "Ресурс добавлен");
+                showNotification(isEditing ? "Ресурс обновлен" : "Ресурс добавлен");
                 modal.classList.add('hidden');
 
             } catch (error) {
-                console.error("Error saving external link:", error);
+                console.error("Ошибка при сохранении внешнего ресурса:", error);
                 showNotification("Ошибка при сохранении", "error");
             }
         }
@@ -5179,10 +5607,48 @@
 
         function showAddExtLinkModal() {
             const { modal, form, titleEl, idInput } = ensureExtLinkModal();
+            if (!form) {
+                console.error("Не удалось получить форму из ensureExtLinkModal");
+                return;
+            }
             form.reset();
             idInput.value = '';
             titleEl.textContent = 'Добавить внешний ресурс';
             modal.classList.remove('hidden');
+            form.elements.extLinkTitle?.focus();
+        }
+
+        async function showEditExtLinkModal(id) {
+            const { modal, form, titleEl, idInput, titleInput, urlInput, descriptionInput, categoryInput } = ensureExtLinkModal();
+
+            if (!form) {
+                console.error("Не удалось получить форму из ensureExtLinkModal для редактирования");
+                return;
+            }
+
+            try {
+                const link = await getFromIndexedDB('extLinks', id);
+                if (!link) {
+                    showNotification("Внешний ресурс не найден", "error");
+                    return;
+                }
+
+                form.reset();
+                idInput.value = link.id;
+                titleInput.value = link.title || '';
+                urlInput.value = link.url || '';
+                descriptionInput.value = link.description || '';
+                categoryInput.value = link.category || '';
+                titleEl.textContent = 'Редактировать ресурс';
+
+                modal.classList.remove('hidden');
+                titleInput.focus();
+
+            } catch (error) {
+                console.error("Ошибка при загрузке внешнего ресурса для редактирования:", error);
+                showNotification("Ошибка при загрузке ресурса", "error");
+                modal.classList.add('hidden');
+            }
         }
 
         async function showEditExtLinkModal(id) {
@@ -5213,13 +5679,18 @@
 
 
         async function deleteExtLink(id) {
+            if (isNaN(parseInt(id))) {
+                console.error("Попытка удаления с невалидным ID:", id);
+                showNotification("Ошибка: Неверный ID для удаления.", "error");
+                return;
+            }
             try {
-                await deleteFromIndexedDB('extLinks', id);
-                const links = await getAllFromIndexedDB('extLinks');
+                await deleteFromIndexedDB('extLinks', parseInt(id));
+                const links = await getAllExtLinks();
                 renderExtLinks(links);
-                showNotification("Ресурс удален");
+                showNotification("Внешний ресурс удален");
             } catch (error) {
-                console.error("Error deleting external link:", error);
+                console.error("Ошибка при удалении внешнего ресурса:", error);
                 showNotification("Ошибка при удалении", "error");
             }
         }
@@ -5850,7 +6321,6 @@
             '#folderForm button[type="submit"]', '#bookmarkForm button[type="submit"]',
             '#linkForm button[type="submit"]', '#reglamentForm button[type="submit"]',
             '#extLinkForm button[type="submit"]', '#editReglamentForm button[type="submit"]',
-            '#addSampleTextBtn'
         ].join(', ');
 
 
@@ -5890,3 +6360,162 @@
                 }
             }
         });
+
+
+        // ПРОЧЕЕ
+        function linkify(text) {
+            if (!text) return '';
+
+            const escapeHtml = (unsafe) => {
+                if (!unsafe) return '';
+                return unsafe
+                    .replace(/&/g, "&")
+                    .replace(/</g, "<")
+                    .replace(/>/g, ">")
+                    .replace(/"/g, "")
+                    .replace(/'/g, "'");
+            }
+
+            const urlPattern = /(https?:\/\/[^\s<>"]+)/g;
+
+            const parts = text.split(urlPattern);
+            let resultHTML = "";
+
+            for (let i = 0; i < parts.length; i++) {
+                if (i % 2 === 0) {
+                    resultHTML += escapeHtml(parts[i]);
+                } else {
+                    let url = parts[i];
+                    if (url.startsWith('http://') || url.startsWith('https://')) {
+                        let escapedUrl = escapeHtml(url);
+                        resultHTML += `<a href="${escapedUrl}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">${escapedUrl}</a>`;
+                    } else {
+                        resultHTML += escapeHtml(parts[i]);
+                    }
+                }
+            }
+
+            resultHTML = resultHTML.replace(/\n/g, '<br>');
+
+            return resultHTML;
+        }
+
+
+        function toggleModalFullscreen(modalId, buttonId, classToggleConfig, innerContainerSelector, contentAreaSelector) {
+            const modalElement = document.getElementById(modalId);
+            const buttonElement = document.getElementById(buttonId);
+            const innerContainer = modalElement?.querySelector(innerContainerSelector);
+            const contentArea = modalElement?.querySelector(contentAreaSelector);
+
+            if (!modalElement || !buttonElement || !innerContainer || !contentArea) {
+                console.error(`[toggleModalFullscreen] Error: Elements not found for modalId: ${modalId}`);
+                return;
+            }
+
+            const icon = buttonElement.querySelector('i');
+            const isCurrentlyFullscreen = modalElement.classList.contains('is-fullscreen');
+
+            modalElement.classList.toggle('is-fullscreen', !isCurrentlyFullscreen);
+            classToggleConfig.modal.forEach(cls => modalElement.classList.toggle(cls));
+
+            classToggleConfig.innerContainer.forEach(cls => innerContainer.classList.toggle(cls));
+
+            if (classToggleConfig.contentArea && classToggleConfig.contentArea.length > 0) {
+                classToggleConfig.contentArea.forEach(cls => contentArea.classList.toggle(cls));
+            }
+
+            if (icon) {
+                icon.classList.toggle('fa-expand', isCurrentlyFullscreen);
+                icon.classList.toggle('fa-compress', !isCurrentlyFullscreen);
+            }
+            buttonElement.setAttribute('title', isCurrentlyFullscreen ? 'Развернуть на весь экран' : 'Свернуть');
+
+            console.log(`Modal ${modalId} fullscreen toggled. New state: ${!isCurrentlyFullscreen}`);
+        }
+
+
+        function initFullscreenToggles() {
+            const viewBtn = document.getElementById('toggleFullscreenViewBtn');
+            const addBtn = document.getElementById('toggleFullscreenAddBtn');
+            const editBtn = document.getElementById('toggleFullscreenEditBtn');
+
+            if (viewBtn) {
+                viewBtn.addEventListener('click', () => toggleModalFullscreen(
+                    'algorithmModal',
+                    'toggleFullscreenViewBtn',
+                    {
+                        modal: ['max-w-6xl', 'p-4'],
+                        innerContainer: ['h-full', 'flex', 'flex-col'],
+                        contentArea: ['flex-1']
+                    },
+                    '.bg-white',
+                    '#algorithmSteps'
+                ));
+            } else {
+                console.warn("Fullscreen toggle button for View modal not found.");
+            }
+
+            if (addBtn) {
+                addBtn.addEventListener('click', () => toggleModalFullscreen(
+                    'addModal',
+                    'toggleFullscreenAddBtn',
+                    {
+                        modal: ['max-w-4xl', 'p-4'],
+                        innerContainer: ['h-full', 'flex', 'flex-col', 'max-h-[90vh]'],
+                        contentArea: []
+                    },
+                    '.bg-white',
+                    '.p-content.overflow-y-auto.flex-1'
+                ));
+            } else {
+                console.warn("Fullscreen toggle button for Add modal not found.");
+            }
+
+            if (editBtn) {
+                editBtn.addEventListener('click', () => toggleModalFullscreen(
+                    'editModal',
+                    'toggleFullscreenEditBtn',
+                    {
+                        modal: ['max-w-4xl', 'p-4'],
+                        innerContainer: ['h-full', 'flex', 'flex-col', 'max-h-[90vh]'],
+                        contentArea: []
+                    },
+                    '.bg-white',
+                    '.p-content.overflow-y-auto.flex-1'
+                ));
+            } else {
+                console.warn("Fullscreen toggle button for Edit modal not found.");
+            }
+        }
+
+
+        async function getAllExtLinks() {
+            try {
+                if (typeof getAllFromIndexedDB !== 'function') {
+                    throw new Error("Функция getAllFromIndexedDB не определена.");
+                }
+                const links = await getAllFromIndexedDB('extLinks');
+                return links || [];
+            } catch (error) {
+                console.error("Ошибка при получении всех внешних ссылок из IndexedDB:", error);
+                showNotification("Не удалось получить список внешних ресурсов", "error");
+                return [];
+            }
+        }
+
+        if (typeof debounce === 'undefined') {
+            function debounce(func, wait, immediate) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const context = this;
+                    const later = function () {
+                        timeout = null;
+                        if (!immediate) func.apply(context, args);
+                    };
+                    const callNow = immediate && !timeout;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                    if (callNow) func.apply(context, args);
+                };
+            }
+        }
