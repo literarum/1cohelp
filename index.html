@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1СО Help</title>
+    <link rel="icon"
+        href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: 'var(--color-primary, #5D5CDE)',
+                        secondary: 'var(--color-secondary, #4B4AB2)', blue: {
+                            ...tailwind.colors.blue,
+                            DEFAULT: 'var(--color-primary, #5D5CDE)',
+                        },
+                    },
+
+                    borderRadius: {
+                        'none': '0px',
+                        'sm': 'calc(var(--border-radius, 8px) * 0.5)',
+                        'DEFAULT': 'var(--border-radius, 8px)',
+                        'md': 'calc(var(--border-radius, 8px) * 0.75)',
+                        'lg': 'calc(var(--border-radius, 8px) * 1.25)',
+                        'xl': 'calc(var(--border-radius, 8px) * 1.75)',
+                        '2xl': 'calc(var(--border-radius, 8px) * 2.25)',
+                        '3xl': 'calc(var(--border-radius, 8px) * 3.0)',
+                        'full': '9999px',
+                    },
+
+                    spacing: {
+                        'content': 'var(--content-spacing, 1rem)',
+                        'content-sm': 'calc(var(--content-spacing, 1rem) * 0.75)',
+                        'content-lg': 'calc(var(--content-spacing, 1rem) * 1.5)',
+                    },
+
+                    gap: (theme) => ({
+                        ...theme('spacing'),
+                    }),
+
+                    padding: (theme) => ({
+                        ...theme('spacing'),
+                    }),
+
+                    margin: (theme) => ({
+                        ...theme('spacing'),
+                    }),
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .my-sortable-ghost {
+            background-color: #d1d5db;
+            opacity: 0.75;
+            border-radius: 0.375rem;
+        }
+
+        .dark .my-sortable-ghost {
+            background-color: #4b5563;
+        }
+
+        .reglament-item {
+            margin-top: 0 !important;
+        }
+
+        .color-swatch.ring-primary {
+            --tw-ring-color: var(--color-primary, #5D5CDE);
+        }
+    </style>
+</head>
+
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-200">
+
+    <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
+        <header class="mb-4">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-3 mb-3">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold text-primary">1С-Отчетность: Интерактивное спасение</h1>
+                    <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Помощник для младших специалистов
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="themeToggle"
+                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                        title="Сменить тему">
+                        <i class="fas fa-sun text-yellow-500 dark:hidden"></i>
+                        <i class="fas fa-moon text-blue-300 hidden dark:inline"></i>
+                    </button>
+                    <div class="relative">
+                        <div class="relative">
+                            <input type="text" id="searchInput" placeholder="Поиск..."
+                                class="w-48 md:w-64 pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                            <i
+                                class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                        <div id="searchResults"
+                            class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto">
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="customizeUIBtn"
+                            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                            title="Настройки">
+                            <i class="fas fa-sliders-h"></i>
+                        </button>
+                        <button id="exportDataBtn"
+                            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                            title="Экспорт данных">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button id="importDataBtn"
+                            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                            title="Импорт данных">
+                            <i class="fas fa-upload"></i>
+                        </button>
+                        <input type="file" id="importFileInput" accept=".json" class="hidden">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Расширенные опции поиска -->
+            <div id="advancedSearchOptions" class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Искать в
+                            разделах:</label>
+                        <div class="flex flex-wrap gap-2">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary" value="main">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Главный алгоритм</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary"
+                                    value="program">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Программа 1С</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary" value="skzi">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">СКЗИ</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary" value="webReg">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Веб-Регистратор</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary" value="links">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Ссылки 1С</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary"
+                                    value="reglaments">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Регламенты</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-section form-checkbox text-primary focus:ring-primary"
+                                    value="bookmarks">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Закладки</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Искать
+                            по:</label>
+                        <div class="flex flex-wrap gap-2">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-field form-checkbox text-primary focus:ring-primary" value="title">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Заголовок</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-field form-checkbox text-primary focus:ring-primary"
+                                    value="description">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Описание/Содержимое</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" checked
+                                    class="search-field form-checkbox text-primary focus:ring-primary" value="steps">
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Шаги</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex justify-end items-end">
+                        <button id="toggleAdvancedSearch"
+                            class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-times mr-1"></i>Скрыть параметры
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Навигация по вкладкам -->
+        <div class="mb-3 border-b border-gray-200 dark:border-gray-700">
+            <nav class="flex flex-wrap -mb-px text-sm font-medium text-center">
+                <button id="mainTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-home mr-1"></i>Главная
+                </button>
+                <button id="programTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-desktop mr-1"></i>Программа 1С
+                </button>
+                <button id="linksTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-link mr-1"></i>Ссылки 1С
+                </button>
+                <button id="extLinksTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-globe mr-1"></i>Внешние ресурсы
+                </button>
+                <button id="skziTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-key mr-1"></i>СКЗИ
+                </button>
+                <button id="webRegTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-plug mr-1"></i>Веб-Регистратор
+                </button>
+                <button id="reglamentsTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-clipboard-list mr-1"></i>Регламенты
+                </button>
+                <button id="bookmarksTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-bookmark mr-1"></i>Закладки
+                </button>
+                <div class="relative group ml-auto md:ml-1">
+                    <button id="moreTabsBtn"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </button>
+                    <div id="moreTabsDropdown"
+                        class="absolute hidden right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10 w-48">
+                    </div>
+                </div>
+            </nav>
+        </div>
+
+
+        <!-- Главная -->
+        <div id="mainContent" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-content">
+                <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-content-sm">
+                        <h2 class="text-xl font-bold">Главный алгоритм работы</h2>
+                        <button id="editMainBtn"
+                            class="p-1.5 lg:px-3 lg:py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition sm:self-start"
+                            title="Редактировать">
+                            <i class="fas fa-edit lg:mr-1"></i>
+                            <span class="hidden lg:inline">Редактировать</span>
+                        </button>
+                    </div>
+                    <div id="mainAlgorithm" class="space-y-content-sm">
+                        <div
+                            class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary">
+                            <h3 class="font-bold text-base">Шаг 1: Приветствие</h3>
+                            <p class="text-sm">Поприветствуйте клиента, представьтесь, назовите компанию и спросите, чем
+                                можете помочь.</p>
+                            <p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">Пример: "Добрый день! Техническая
+                                поддержка 1С-Отчетность, меня зовут [ваше имя]. Чем могу помочь?"</p>
+                        </div>
+                        <div
+                            class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary">
+                            <h3 class="font-bold text-base">Шаг 2: Уточнение ИНН</h3>
+                            <p class="text-sm">Запросите ИНН организации для идентификации клиента в системе.</p>
+                            <p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">Пример: "Для начала работы,
+                                подскажите, пожалуйста, ИНН вашей организации."</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
+                                <a href="#" class="text-primary hover:underline" id="noInnLink">Что делать, если клиент
+                                    не может назвать ИНН?</a>
+                            </p>
+                        </div>
+                        <div
+                            class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary">
+                            <h3 class="font-bold text-base">Шаг 3: Идентификация проблемы</h3>
+                            <p class="text-sm">Выясните суть проблемы, задавая уточняющие вопросы.</p>
+                            <p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">Примеры вопросов:</p>
+                            <ul class="list-disc ml-5 mt-1 text-gray-600 dark:text-gray-400 text-sm">
+                                <li>Какая версия программы 1С у вас установлена?</li>
+                                <li><strong>Назовите, пожалуйста, полный текст ошибки</strong> (важно записать дословно)
+                                </li>
+                                <li>Когда впервые возникла проблема?</li>
+                            </ul>
+                        </div>
+                        <div
+                            class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary">
+                            <h3 class="font-bold text-base">Шаг 4: Решение проблемы</h3>
+                            <p class="text-sm">Определите категорию проблемы и перейдите к соответствующему разделу с
+                                инструкциями по решению.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-content-sm">
+                        <h2 class="text-lg font-bold">Информация по обращению</h2>
+                        <div class="flex gap-2">
+                            <button id="clearClientDataBtn"
+                                class="p-1.5 lg:px-2 lg:py-1 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition text-sm"
+                                title="Очистить">
+                                <i class="fas fa-trash lg:mr-1"></i>
+                                <span class="hidden lg:inline">Очистить</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm">
+                        <textarea id="clientNotes" rows="10"
+                            placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
+                            class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Программа 1С -->
+        <div id="programContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Программа 1С</h2>
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addProgramAlgorithmBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить
+                        </button>
+                    </div>
+                </div>
+                <div id="programAlgorithms" class="grid gap-content" data-section-id="programAlgorithms"
+                    data-default-view="cards">
+                </div>
+            </div>
+        </div>
+
+        <!-- СКЗИ -->
+        <div id="skziContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">СКЗИ</h2>
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addSkziAlgorithmBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить
+                        </button>
+                    </div>
+                </div>
+                <div id="skziAlgorithms" class="grid gap-content" data-section-id="skziAlgorithms"
+                    data-default-view="cards">
+                </div>
+            </div>
+        </div>
+
+        <!-- Веб-Регистратор -->
+        <div id="webRegContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Веб-Регистратор</h2>
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addWebRegAlgorithmBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить
+                        </button>
+                    </div>
+                </div>
+                <div id="webRegAlgorithms" class="grid gap-content" data-section-id="webRegAlgorithms"
+                    data-default-view="cards">
+                </div>
+            </div>
+        </div>
+
+        <!-- Ссылки 1С -->
+        <div id="linksContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Ссылки в программе 1С</h2>
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addLinkBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить ссылку
+                        </button>
+                    </div>
+                </div>
+                <div
+                    class="mb-content p-content-sm bg-blue-50 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                    <i class="fas fa-info-circle mr-1"></i> Это внутренние ссылки 1С (формат `e1cib/...`). Используйте
+                    кнопку <i class="fas fa-copy"></i> для копирования.
+                </div>
+                <div class="mb-content flex flex-col md:flex-row gap-content-sm">
+                    <input type="text" id="linkSearchInput" placeholder="Поиск по названию или ссылке..."
+                        class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                </div>
+
+                <div id="linksContainer" class="flex flex-col" data-section-id="linksContainer"
+                    data-default-view="list">
+                    <div class="text-center py-6 text-gray-500 dark:text-gray-400">Загрузка ссылок...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Регламенты -->
+        <div id="reglamentsContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Регламенты</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="addReglamentCategoryBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm">
+                            <i class="fas fa-plus mr-1"></i> Добавить категорию
+                        </button>
+                        <button id="addReglamentBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить регламент
+                        </button>
+                    </div>
+                </div>
+                <div id="reglamentCategoryGrid" class="grid grid-cols-1 md:grid-cols-3 gap-content mb-content-lg">
+                    <div class="text-center py-6 text-gray-500 md:col-span-3">Загрузка категорий...</div>
+                </div>
+
+                <div id="reglamentsList" class="hidden">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-content gap-3">
+                        <div class="flex items-center">
+                            <button id="backToCategories"
+                                class="p-2 mr-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                title="Назад к категориям">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <h3 id="currentCategoryTitle" class="text-xl font-bold"></h3>
+                        </div>
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5 self-end sm:self-center">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                    </div>
+                    <div id="reglamentsContainer" class="space-y-content-sm" data-section-id="reglamentsContainer"
+                        data-default-view="list">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Закладки -->
+        <div id="bookmarksContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Закладки</h2>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addBookmarkBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить закладку
+                        </button>
+                        <button id="organizeBookmarksBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-folder mr-2"></i>Управление папками
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-content flex flex-col md:flex-row gap-content-sm">
+                    <input type="text" id="bookmarkSearchInput" placeholder="Поиск по закладкам..."
+                        class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                    <select id="bookmarkFolderFilter"
+                        class="px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 md:max-w-xs">
+                        <option value="">Все папки</option>
+                    </select>
+                </div>
+                <div id="bookmarksContainer" class="grid gap-content" data-section-id="bookmarksContainer"
+                    data-default-view="cards">
+                </div>
+            </div>
+        </div>
+
+        <!-- Внешние ресурсы -->
+        <div id="extLinksContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Внешние ресурсы</h2>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addExtLinkBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить ресурс
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-content flex flex-col md:flex-row gap-content-sm">
+                    <input type="text" id="extLinkSearchInput" placeholder="Поиск по ресурсам..."
+                        class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                    <select id="extLinkCategoryFilter"
+                        class="px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 md:max-w-xs">
+                        <option value="">Все категории</option>
+                        <option value="docs">Документация</option>
+                        <option value="gov">Государственные сайты</option>
+                        <option value="tools">Инструменты</option>
+                        <option value="other">Прочее</option>
+                    </select>
+                </div>
+                <div id="extLinksContainer" class="grid gap-content" data-section-id="extLinksContainer"
+                    data-default-view="cards">
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ================= Модальные окна ================= -->
+
+        <div id="algorithmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto ">
+            <div class="flex items-center justify-center min-h-full py-content">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+                    <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                            <h2 id="modalTitle" class="text-2xl font-bold">Название алгоритма</h2>
+                            <div class="flex flex-wrap gap-2 justify-end flex-shrink-0">
+                                <button id="editAlgorithmBtn"
+                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm">
+                                    <i class="fas fa-edit mr-2"></i>Редактировать
+                                </button>
+                                <button id="deleteAlgorithmBtn"
+                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition text-sm">
+                                    <i class="fas fa-trash mr-2"></i>Удалить
+                                </button>
+                                <button id="closeModalBtn"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Закрыть">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="algorithmSteps" class="p-content space-y-content-sm overflow-y-auto flex-1">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
+            <div class="flex items-center justify-center min-h-full py-content">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+                    <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center">
+                            <h2 id="editModalTitle" class="text-2xl font-bold">Редактирование алгоритма</h2>
+                            <button id="closeEditModalBtn"
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-content overflow-y-auto flex-1">
+                        <div class="mb-4">
+                            <label for="algorithmTitle"
+                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название
+                                алгоритма</label>
+                            <input type="text" id="algorithmTitle"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        </div>
+                        <div id="editSteps">
+                        </div>
+                        <div class="mt-4">
+                            <button id="addStepBtn"
+                                class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                <i class="fas fa-plus mr-2"></i>Добавить шаг
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
+                        <div class="flex justify-end gap-2">
+                            <button id="cancelEditBtn"
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                Отмена
+                            </button>
+                            <button id="saveAlgorithmBtn"
+                                class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                Сохранить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
+            <div class="flex items-center justify-center min-h-full py-content">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+                    <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center">
+                            <h2 id="addModalTitle" class="text-2xl font-bold">Новый алгоритм</h2>
+                            <button id="closeAddModalBtn"
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-content overflow-y-auto flex-1">
+                        <div class="mb-4">
+                            <label for="newAlgorithmTitle"
+                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название
+                                алгоритма</label>
+                            <input type="text" id="newAlgorithmTitle"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        </div>
+                        <div class="mb-4">
+                            <label for="newAlgorithmDesc"
+                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Краткое
+                                описание</label>
+                            <textarea id="newAlgorithmDesc" rows="3"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"></textarea>
+                        </div>
+                        <div id="newSteps">
+                        </div>
+                        <div class="mt-4">
+                            <button id="addNewStepBtn"
+                                class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                <i class="fas fa-plus mr-2"></i>Добавить шаг
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
+                        <div class="flex justify-end gap-2">
+                            <button id="cancelAddBtn"
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                Отмена
+                            </button>
+                            <button id="saveNewAlgorithmBtn"
+                                class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                Сохранить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно Настройки UI -->
+        <div id="customizeUIModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
+            <div class="flex items-center justify-center min-h-full py-content">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+                    <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-2xl font-bold">Настройка интерфейса</h2>
+                            <button id="closeCustomizeUIModalBtn"
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-content overflow-y-auto flex-1">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-content-lg">
+                            <div>
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Ориентация
+                                        главного экрана</label>
+                                    <div class="flex space-x-3 mt-2">
+                                        <label class="flex items-center">
+                                            <input type="radio" name="mainLayout" value="horizontal"
+                                                class="form-radio text-primary focus:ring-primary mr-2" checked>
+                                            <span class="text-gray-700 dark:text-gray-300">Горизонтальная</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" name="mainLayout" value="vertical"
+                                                class="form-radio text-primary focus:ring-primary mr-2">
+                                            <span class="text-gray-700 dark:text-gray-300">Вертикальная</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Управление
+                                        разделами (вкладками)</label>
+                                    <div class="space-y-2 mt-2">
+                                        <div id="panelSortContainer" class="space-y-2">
+                                        </div>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">* Перетаскивайте
+                                            элементы для изменения порядка вкладок</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-content-sm text-gray-900 dark:text-gray-100">Внешний
+                                    вид</h3>
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Цветовая
+                                        схема</label>
+                                    <div class="grid grid-cols-5 gap-2 mt-2">
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-indigo-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#5D5CDE"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-blue-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#2563EB"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-green-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#16A34A"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-red-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#DC2626"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-purple-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#9333EA"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-orange-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#EA580C"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-teal-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#0D9488"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-pink-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#DB2777"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-amber-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#D97706"></button>
+                                        <button
+                                            class="color-swatch w-8 h-8 rounded-full bg-gray-600 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 focus:ring-primary"
+                                            data-color="#4B5563"></button>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Режим
+                                        темы</label>
+                                    <div class="flex space-x-3 mt-2">
+                                        <label class="flex items-center">
+                                            <input type="radio" name="themeMode" value="light"
+                                                class="form-radio text-primary focus:ring-primary mr-2">
+                                            <span class="text-gray-700 dark:text-gray-300">Светлая</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" name="themeMode" value="dark"
+                                                class="form-radio text-primary focus:ring-primary mr-2">
+                                            <span class="text-gray-700 dark:text-gray-300">Темная</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" name="themeMode" value="auto"
+                                                class="form-radio text-primary focus:ring-primary mr-2" checked>
+                                            <span class="text-gray-700 dark:text-gray-300">Системная</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Размер
+                                        шрифта</label>
+                                    <div class="flex items-center space-x-3 mt-2">
+                                        <button id="decreaseFontBtn"
+                                            class="p-1.5 rounded border border-gray-300 dark:border-gray-600 focus:outline-none text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                            <i class="fas fa-minus"></i> </button>
+                                        <span id="fontSizeLabel" class="text-gray-700 dark:text-gray-300">100%</span>
+                                        <button id="increaseFontBtn"
+                                            class="p-1.5 rounded border border-gray-300 dark:border-gray-600 focus:outline-none text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                            <i class="fas fa-plus"></i> </button>
+                                        <button id="resetFontBtn"
+                                            class="ml-2 text-xs text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded">Сбросить
+                                            на 100%</button>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Округление
+                                        углов</label>
+                                    <input type="range" min="0" max="20" value="8"
+                                        class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        id="borderRadiusSlider">
+                                    <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Квадратные</span>
+                                        <span>Скругленные</span>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Плотность
+                                        информации</label>
+                                    <input type="range" min="0" max="6" value="3"
+                                        class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        id="densitySlider">
+                                    <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Компактная</span>
+                                        <span>Просторная</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
+                        <div class="flex justify-between gap-2 flex-wrap">
+                            <button id="resetUISettingsBtn"
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                Сбросить настройки
+                            </button>
+                            <div class="flex gap-2">
+                                <button id="cancelUISettingsBtn"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                    Отмена
+                                </button>
+                                <button id="saveUISettingsBtn"
+                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                    Сохранить
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно Ссылки 1С -->
+        <div id="cibLinkModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
+            <div class="flex items-center justify-center min-h-full py-content">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full">
+                    <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center">
+                            <h2 id="cibLinkModalTitle" class="text-xl font-bold">Добавить ссылку 1С</h2>
+                            <button
+                                class="close-modal p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <form id="cibLinkForm">
+                        <div class="p-content space-y-4">
+                            <input type="hidden" id="cibLinkId">
+                            <div>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                    for="cibLinkTitle">Название (для отображения)</label>
+                                <input type="text" id="cibLinkTitle" required
+                                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                    for="cibLinkValue">Ссылка 1С (e1cib/...)</label>
+                                <input type="text" id="cibLinkValue" required
+                                    placeholder="e1cib/list/РегистрСведений.ЧтоТоТам"
+                                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                    for="cibLinkDescription">Описание (опционально)</label>
+                                <textarea id="cibLinkDescription" rows="3"
+                                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
+                            </div>
+                        </div>
+                        <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
+                            <div class="flex justify-end gap-2">
+                                <button type="button"
+                                    class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                    Отмена
+                                </button>
+                                <button type="submit" id="saveCibLinkBtn"
+                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                    <i class="fas fa-save mr-1"></i> Сохранить
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="fixed inset-0 z-[9999] flex items-center justify-center bg-white dark:bg-gray-900">
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
+            <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
+        </div>
+    </div>
+
+    <script defer src="./script.js"></script>
+</body>
+
+</html>
