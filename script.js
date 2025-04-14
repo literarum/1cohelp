@@ -1323,11 +1323,11 @@
                 </div>
                 <div class="mb-2">
                     <label class="block text-sm font-medium mb-1">Заголовок шага</label>
-                    <input type="text" class="step-title w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base" value="${step?.title ?? ''}">
+                    <input type="text" class="step-title w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800" value="${step?.title ?? ''}">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Описание</label>
-                    <textarea class="step-desc w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base" rows="3">${step?.description ?? ''}</textarea>
+                    <textarea class="step-desc w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800" rows="3">${step?.description ?? ''}</textarea>
                 </div>
                 ${exampleInputHtml}
                 `;
@@ -1620,11 +1620,11 @@
         </div>
         <div class="mb-2">
             <label class="block text-sm font-medium mb-1">Заголовок шага</label>
-            <input type="text" class="step-title w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+            <input type="text" class="step-title w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800">
         </div>
         <div>
             <label class="block text-sm font-medium mb-1">Описание</label>
-            <textarea class="step-desc w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
+            <textarea class="step-desc w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800"></textarea>
         </div>
         ${exampleInputHTML}
     `;
@@ -1919,7 +1919,6 @@
                 dbInitialized = true;
 
                 await Promise.all([
-                    loadThemePreference(),
                     loadCategoryInfo(),
                     loadFromIndexedDB()
                 ]);
@@ -2379,7 +2378,7 @@
 
             const exportTextBtn = document.createElement('button');
             exportTextBtn.id = 'exportTextBtn';
-            exportTextBtn.className = 'p-1.5 lg:px-2 lg:py-1 bg-green-500 hover:bg-green-600 text-white rounded-md transition text-sm ml-2';
+            exportTextBtn.className = 'p-2 lg:px-2 lg:py-1 bg-green-500 hover:bg-green-600 text-white rounded-md transition text-lg ml-2';
             exportTextBtn.title = 'Сохранить как .txt';
             exportTextBtn.innerHTML = `
                                         <i class="fas fa-file-download lg:mr-1"></i>
@@ -2476,17 +2475,50 @@
 
 
         const themeToggleBtn = document.getElementById('themeToggle');
-        themeToggleBtn?.addEventListener('click', () => {
-            const currentTheme = document.querySelector('input[name="themeMode"]:checked')?.value || 'auto';
-            const nextTheme = currentTheme === 'dark' ? 'light' : (currentTheme === 'light' ? 'auto' : 'dark');
+        themeToggleBtn?.addEventListener('click', async () => {
+            let currentSavedTheme = DEFAULT_UI_SETTINGS.themeMode;
 
-            const nextThemeRadio = document.querySelector(`input[name="themeMode"][value="${nextTheme}"]`);
-            if (nextThemeRadio) {
-                nextThemeRadio.checked = true;
-                setTheme(nextTheme);
-                saveUISettings().then(success => {
-                    if (success) showNotification(`Тема изменена на: ${nextTheme}`);
-                });
+            try {
+                const uiSettings = await getFromIndexedDB('preferences', 'uiSettings');
+                currentSavedTheme = uiSettings?.themeMode || DEFAULT_UI_SETTINGS.themeMode;
+
+            } catch (error) {
+                console.error("Error fetching current theme setting:", error);
+            }
+
+            let nextTheme;
+            if (currentSavedTheme === 'dark') {
+                nextTheme = 'light';
+            } else if (currentSavedTheme === 'light') {
+                nextTheme = 'auto';
+            } else {
+                nextTheme = 'dark';
+            }
+            console.log("Next theme to apply:", nextTheme);
+
+            setTheme(nextTheme);
+
+            try {
+                let settingsToSave = await getFromIndexedDB('preferences', 'uiSettings') || { id: 'uiSettings' };
+
+                settingsToSave.themeMode = nextTheme;
+
+                await saveToIndexedDB('preferences', settingsToSave);
+
+                const themeName = nextTheme === 'dark' ? 'темная' : (nextTheme === 'light' ? 'светлая' : 'автоматическая');
+                showNotification(`Тема изменена на: ${themeName}`);
+
+                const customizeUIModal = document.getElementById('customizeUIModal');
+                if (customizeUIModal && !customizeUIModal.classList.contains('hidden')) {
+                    const nextThemeRadio = customizeUIModal.querySelector(`input[name="themeMode"][value="${nextTheme}"]`);
+                    if (nextThemeRadio) {
+                        nextThemeRadio.checked = true;
+                    }
+                }
+
+            } catch (error) {
+                console.error("Ошибка при сохранении настроек UI после смены темы:", error);
+                showNotification("Ошибка сохранения темы", "error");
             }
         });
 
@@ -2720,7 +2752,7 @@
         }
 
 
-        function handleBookmarkAction(event) {
+        async function handleBookmarkAction(event) {
             const target = event.target;
             const button = target.closest('button[data-action]');
             const bookmarkItem = target.closest('.bookmark-item');
@@ -2740,7 +2772,28 @@
                     deleteBookmark(bookmarkId);
                 }
             } else if (!target.closest('a') && !button) {
-                console.log("Клик по закладке:", bookmarkId);
+                console.log("Клик по телу закладки, попытка открыть URL:", bookmarkId);
+                try {
+                    const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
+                    if (bookmark && bookmark.url) {
+                        try {
+                            new URL(bookmark.url);
+                            window.open(bookmark.url, '_blank', 'noopener,noreferrer');
+                        } catch (urlError) {
+                            console.error(`Invalid URL for bookmark ${bookmarkId}:`, bookmark.url, urlError);
+                            showNotification(`Некорректный URL у закладки "${bookmark.title}"`, "error");
+                        }
+                    } else if (bookmark) {
+                        console.warn(`Bookmark ${bookmarkId} found, but has no URL.`);
+                        showNotification(`У закладки "${bookmark.title}" не указан URL`, "warning");
+                    } else {
+                        console.warn(`Bookmark with ID ${bookmarkId} not found in DB.`);
+                        showNotification("Не удалось найти данные закладки", "error");
+                    }
+                } catch (error) {
+                    console.error("Error fetching or opening bookmark:", error);
+                    showNotification("Ошибка при открытии закладки", "error");
+                }
             }
         }
 
@@ -3047,7 +3100,7 @@
                                 </select>
                             </div>
                             <div class="flex justify-end mt-6">
-                                <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition mr-2">
+                                <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
                                     Отмена
                                 </button>
                                 <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -3834,7 +3887,7 @@
                                                     </div>
                                                 </div>
                                                 <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex justify-end">
-                                                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition mr-2">
+                                                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2 ">
                                                         Отмена
                                                     </button>
                                                     <button type="submit" id="categorySubmitBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -4336,7 +4389,7 @@
                                                     <p class="text-sm text-gray-500 mt-1">Вы можете использовать Markdown для форматирования текста</p>
                                                 </div>
                                                 <div class="flex justify-end mt-6">
-                                                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition mr-2">
+                                                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
                                                         Отмена
                                                     </button>
                                                     <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -4543,7 +4596,7 @@
                                                             <button type="button" id="addSampleTextBtn" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition mr-2">
                                                                 <i class="fas fa-puzzle-piece mr-1"></i>Вставить шаблон
                                                             </button>
-                                                            <button type="button" class="cancel-edit-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition mr-2">
+                                                            <button type="button" class="cancel-edit-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
                                                                 Отмена
                                                             </button>
                                                             <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -4826,7 +4879,7 @@
                                             `).join('')}
                                         </div>
                                         <div class="mt-6 flex justify-end">
-                                            <button class="close-sample-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition">
+                                            <button class="close-sample-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
                                                 Отмена
                                             </button>
                                         </div>
@@ -5051,7 +5104,7 @@
                                                         </select>
                                                     </div>
                                                     <div class="flex justify-end mt-6">
-                                                        <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition mr-2">Отмена</button>
+                                                        <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">Отмена</button>
                                                         <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">Сохранить</button>
                                                     </div>
                                                 </form>
