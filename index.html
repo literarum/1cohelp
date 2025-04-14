@@ -74,6 +74,52 @@
         .color-swatch.ring-primary {
             --tw-ring-color: var(--color-primary, #5D5CDE);
         }
+
+        .is-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            z-index: 90 !important;
+            padding: 0 !important;
+            overflow: hidden;
+        }
+
+        .is-fullscreen>.flex {
+            padding: 0 !important;
+            height: 100%;
+            min-height: 100%;
+        }
+
+        .is-fullscreen .bg-white {
+            border-radius: 0 !important;
+            height: 100%;
+            width: 100%;
+            max-width: none !important;
+            max-height: none !important;
+        }
+
+        .is-fullscreen .p-content.overflow-y-auto.flex-1,
+        .is-fullscreen #algorithmSteps.flex-1 {
+            flex-grow: 1;
+            height: auto;
+            overflow-y: auto;
+        }
+
+        .is-fullscreen .p-content.border-t {
+            margin-top: auto;
+        }
+
+        .is-fullscreen .edit-step .step-desc {
+            min-height: 150px;
+        }
+
+        .is-fullscreen #editSteps,
+        .is-fullscreen #newSteps {
+            height: auto;
+        }
     </style>
 </head>
 
@@ -130,50 +176,6 @@
             <div id="advancedSearchOptions" class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Искать в
-                            разделах:</label>
-                        <div class="flex flex-wrap gap-2">
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary" value="main">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">Главный алгоритм</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary"
-                                    value="program">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">Программа 1С</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary" value="skzi">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">СКЗИ</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary" value="webReg">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">Веб-Регистратор</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary" value="links">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">Ссылки 1С</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary"
-                                    value="reglaments">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">Регламенты</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="checkbox" checked
-                                    class="search-section form-checkbox text-primary focus:ring-primary"
-                                    value="bookmarks">
-                                <span class="ml-2 text-gray-700 dark:text-gray-300">Закладки</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Искать
                             по:</label>
                         <div class="flex flex-wrap gap-2">
@@ -195,10 +197,10 @@
                             </label>
                         </div>
                     </div>
-                    <div class="flex justify-end items-end">
+                    <div class="flex justify-end items-end md:col-start-3">
                         <button id="toggleAdvancedSearch"
                             class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition">
-                            <i class="fas fa-times mr-1"></i>Скрыть параметры
+                            <i class="fas fa-cog mr-1"></i>Параметры поиска
                         </button>
                     </div>
                 </div>
@@ -291,8 +293,7 @@
                             <h3 class="font-bold text-base">Шаг 3: Идентификация проблемы</h3>
                             <p class="text-sm">Выясните суть проблемы, задавая уточняющие вопросы.</p>
                             <p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">Примеры вопросов:</p>
-                            <ul class="list-disc ml-5 mt-1 text-gray-600 dark:text-gray-400 text-sm">
-                                <li>Какая версия программы 1С у вас установлена?</li>
+                            <ul class="list-disc list-inside pl-5 mt-1 text-gray-600 dark:text-gray-400 text-sm">
                                 <li><strong>Назовите, пожалуйста, полный текст ошибки</strong> (важно записать дословно)
                                 </li>
                                 <li>Когда впервые возникла проблема?</li>
@@ -320,7 +321,7 @@
                         </div>
                     </div>
                     <div class="bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm">
-                        <textarea id="clientNotes" rows="15"
+                        <textarea id="clientNotes" rows="20"
                             placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
                             class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
                     </div>
@@ -560,10 +561,9 @@
 
 
         <!-- ================= Модальные окна ================= -->
-
-        <div id="algorithmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto ">
-            <div class="flex items-center justify-center min-h-full py-content">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div id="algorithmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto">
+            <div class="flex items-center justify-center min-h-full p-4 sm:p-6 md:p-8">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                             <h2 id="modalTitle" class="text-2xl font-bold">Название алгоритма</h2>
@@ -576,6 +576,11 @@
                                     class="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition text-sm">
                                     <i class="fas fa-trash mr-2"></i>Удалить
                                 </button>
+                                <button id="toggleFullscreenViewBtn"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Развернуть на весь экран">
+                                    <i class="fas fa-expand"></i>
+                                </button>
                                 <button id="closeModalBtn"
                                     class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                     title="Закрыть">
@@ -584,11 +589,13 @@
                             </div>
                         </div>
                     </div>
-                    <div id="algorithmSteps" class="p-content space-y-content-sm overflow-y-auto flex-1">
+                    <div id="algorithmSteps"
+                        class="p-content space-y-content-sm overflow-y-auto max-h-[calc(90vh-150px)]">
                     </div>
                 </div>
             </div>
         </div>
+
 
         <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
             <div class="flex items-center justify-center min-h-full py-content">
@@ -596,22 +603,30 @@
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
                             <h2 id="editModalTitle" class="text-2xl font-bold">Редактирование алгоритма</h2>
-                            <button id="closeEditModalBtn"
-                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                title="Закрыть">
-                                <i class="fas fa-times text-xl"></i>
-                            </button>
+                            <div>
+                                <button id="toggleFullscreenEditBtn"
+                                    class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle"
+                                    title="Развернуть на весь экран">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                                <button id="closeEditModalBtn"
+                                    class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle"
+                                    title="Закрыть">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div class="p-content overflow-y-auto flex-1">
+
+                    <div class="p-content overflow-y-auto flex-1 bg-gray-100 dark:bg-gray-700">
                         <div class="mb-4">
                             <label for="algorithmTitle"
                                 class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название
                                 алгоритма</label>
                             <input type="text" id="algorithmTitle"
-                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                         </div>
-                        <div id="editSteps">
+                        <div id="editSteps" class="space-y-4">
                         </div>
                         <div class="mt-4">
                             <button id="addStepBtn"
@@ -620,10 +635,12 @@
                             </button>
                         </div>
                     </div>
-                    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
+
+                    <div
+                        class="p-content border-t border-gray-200 dark:border-gray-600 mt-auto bg-gray-100 dark:bg-gray-700">
                         <div class="flex justify-end gap-2">
                             <button id="cancelEditBtn"
-                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
                                 Отмена
                             </button>
                             <button id="saveAlgorithmBtn"
@@ -642,30 +659,40 @@
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
                             <h2 id="addModalTitle" class="text-2xl font-bold">Новый алгоритм</h2>
-                            <button id="closeAddModalBtn"
-                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                title="Закрыть">
-                                <i class="fas fa-times text-xl"></i>
-                            </button>
+                            <div>
+                                <button id="toggleFullscreenAddBtn"
+                                    class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle"
+                                    title="Развернуть на весь экран">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                                <button id="closeAddModalBtn"
+                                    class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle"
+                                    title="Закрыть">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div class="p-content overflow-y-auto flex-1">
+
+                    <div class="p-content overflow-y-auto flex-1 bg-gray-100 dark:bg-gray-700">
                         <div class="mb-4">
                             <label for="newAlgorithmTitle"
                                 class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название
                                 алгоритма</label>
                             <input type="text" id="newAlgorithmTitle"
-                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                         </div>
                         <div class="mb-4">
                             <label for="newAlgorithmDesc"
                                 class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Краткое
                                 описание</label>
                             <textarea id="newAlgorithmDesc" rows="3"
-                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"></textarea>
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"></textarea>
                         </div>
-                        <div id="newSteps">
+
+                        <div id="newSteps" class="space-y-4">
                         </div>
+
                         <div class="mt-4">
                             <button id="addNewStepBtn"
                                 class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -673,10 +700,11 @@
                             </button>
                         </div>
                     </div>
-                    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
+
+                    <div class="p-content border-t border-gray-200 dark:border-gray-600 mt-auto">
                         <div class="flex justify-end gap-2">
                             <button id="cancelAddBtn"
-                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
                                 Отмена
                             </button>
                             <button id="saveNewAlgorithmBtn"
@@ -979,7 +1007,7 @@
         </div>
     </div>
 
-<script defer src="./script.js"></script>    
+    <script defer src="./script.js"></script>  
 </body>
 
 </html>
