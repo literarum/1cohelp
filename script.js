@@ -836,7 +836,7 @@
             fontSize: 90,          // 90%
             borderRadius: 2,        // 2px (скругление обычно в px)
             contentDensity: 3,       // 3 (соответствует 50% на слайдере 0-10)
-            themeMode: 'auto',
+            themeMode: 'dark',
             mainLayout: 'horizontal'
         };
 
