@@ -157,12 +157,9 @@
                         <i class="fas fa-moon text-blue-300 dark:hidden"></i>
                     </button>
                     <div class="relative">
-                        <div class="relative">
-                            <input type="text" id="searchInput" placeholder="Поиск..."
-                                class="w-48 md:w-64 pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                            <i
-                                class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        </div>
+                        <input type="text" id="searchInput" placeholder="Поиск..."
+                            class="w-48 md:w-64 pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                         <div id="searchResults"
                             class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto">
                         </div>
@@ -182,6 +179,11 @@
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                             title="Импорт данных">
                             <i class="fas fa-download"></i>
+                        </button>
+                        <button id="forceReloadBtn"
+                            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                            title="Обновить приложение (перезагрузка)">
+                            <i class="fas fa-sync-alt"></i>
                         </button>
                         <input type="file" id="importFileInput" accept=".json" class="hidden">
                     </div>
@@ -1025,7 +1027,6 @@
             <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
         </div>
     </div>
-    
     <script defer src="./script.js"></script>
 </body>
 
