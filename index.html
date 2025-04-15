@@ -124,6 +124,18 @@
         body.modal-open {
             overflow: hidden;
         }
+
+        @media (min-width: 768px) {
+
+            #customizeUIModal .p-content.overflow-y-auto.flex-1 {
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+
+            #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar {
+                display: none;
+            }
+        }
     </style>
 </head>
 
