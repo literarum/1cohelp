@@ -120,6 +120,10 @@
         .is-fullscreen #newSteps {
             height: auto;
         }
+
+        body.modal-open {
+            overflow: hidden;
+        }
     </style>
 </head>
 
@@ -434,7 +438,7 @@
                 </div>
 
                 <div id="linksContainer" class="flex flex-col" data-section-id="linksContainer"
-                    data-default-view="list">
+                    data-default-view="cards">
                     <div class="text-center py-6 text-gray-500 dark:text-gray-400">Загрузка ссылок...</div>
                 </div>
             </div>
@@ -720,7 +724,7 @@
         <!-- Модальное окно Настройки UI -->
         <div id="customizeUIModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
             <div class="flex items-center justify-center min-h-full py-content">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-screen flex flex-col">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
                             <h2 class="text-2xl font-bold">Настройка интерфейса</h2>
@@ -731,6 +735,7 @@
                             </button>
                         </div>
                     </div>
+
                     <div class="p-content overflow-y-auto flex-1">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-content-lg">
                             <div>
@@ -763,6 +768,7 @@
                                     </div>
                                 </div>
                             </div>
+
                             <div>
                                 <h3 class="text-lg font-semibold mb-content-sm text-gray-900 dark:text-gray-100">Внешний
                                     вид</h3>
@@ -868,6 +874,7 @@
                             </div>
                         </div>
                     </div>
+
                     <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto">
                         <div class="flex justify-between gap-2 flex-wrap">
                             <button id="clearAllDataBtn"
@@ -1006,8 +1013,8 @@
             <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
         </div>
     </div>
-
-    <script defer src="./script.js"></script>  
+    
+    <script defer src="./script.js"></script>
 </body>
 
 </html>
