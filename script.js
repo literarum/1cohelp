@@ -731,8 +731,15 @@
         }
 
 
-        function showNotification(message, type = "success") {
+        function showNotification(message, type = "success", duration = 3000) {
             let notificationElement = document.getElementById('notification');
+            const container = document.body;
+
+            if (!container) {
+                console.error("Не удалось найти body для отображения уведомления.");
+                return;
+            }
+
             if (notificationElement) {
                 const existingHideTimeoutId = parseInt(notificationElement.dataset.hideTimeoutId || '0');
                 if (existingHideTimeoutId) {
@@ -742,23 +749,31 @@
                 if (existingRemoveTimeoutId) {
                     clearTimeout(existingRemoveTimeoutId);
                 }
-                notificationElement.classList.add('translate-x-full');
-                notificationElement.classList.remove('opacity-0');
-            } else {
-                notificationElement = document.createElement('div');
-                notificationElement.id = 'notification';
-                notificationElement.className = 'fixed z-50 top-4 right-4 p-4 rounded-lg shadow-lg transform transition-transform duration-300 translate-x-full';
-                document.body.appendChild(notificationElement);
+                notificationElement.remove();
             }
 
-            const bgColor = type === "error" ? 'bg-red-500' : (type === 'warning' ? 'bg-yellow-500' : 'bg-green-500');
-            notificationElement.className = `fixed z-50 top-4 right-4 p-4 rounded-lg shadow-lg transform transition-transform duration-300 ${bgColor} text-white`;
-            notificationElement.textContent = message;
+            notificationElement = document.createElement('div');
+            notificationElement.id = 'notification';
 
-            notificationElement.classList.add('translate-x-full');
+            let bgColorClass = 'bg-green-500';
+            if (type === "error") {
+                bgColorClass = 'bg-red-600 dark:bg-red-700';
+            } else if (type === "warning") {
+                bgColorClass = 'bg-yellow-500 dark:bg-yellow-600';
+            } else if (type === "info") {
+                bgColorClass = 'bg-blue-500 dark:bg-blue-600';
+            }
+
+            notificationElement.className = `fixed z-[10000] top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm font-medium transform transition-transform duration-300 ease-out ${bgColorClass} translate-x-full max-w-sm`;
+            notificationElement.textContent = message;
+            notificationElement.setAttribute('role', 'alert');
+
+            container.appendChild(notificationElement);
 
             requestAnimationFrame(() => {
-                notificationElement.classList.remove('translate-x-full');
+                requestAnimationFrame(() => {
+                    notificationElement.classList.remove('translate-x-full');
+                });
             });
 
             const hideTimeoutId = setTimeout(() => {
@@ -766,14 +781,14 @@
 
                 const removeTimeoutId = setTimeout(() => {
                     const currentNotification = document.getElementById('notification');
-                    if (currentNotification) {
+                    if (currentNotification === notificationElement) {
                         currentNotification.remove();
                     }
                 }, 300);
 
                 notificationElement.dataset.removeTimeoutId = removeTimeoutId.toString();
 
-            }, 3000);
+            }, duration);
 
             notificationElement.dataset.hideTimeoutId = hideTimeoutId.toString();
         }
@@ -2283,6 +2298,7 @@
 
                 initClearDataFunctionality();
                 initFullscreenToggles();
+                initReloadButton();
 
                 if (dbReady) {
                     console.log("Применение настроек UI из IndexedDB...");
@@ -7138,5 +7154,36 @@
                     timeout = setTimeout(later, wait);
                     if (callNow) func.apply(context, args);
                 };
+            }
+        }
+
+
+        function forceReloadApp() {
+            const confirmation = confirm(
+                "Вы уверены, что хотите перезагрузить приложение?\n\n" +
+                "Это действие аналогично обновлению страницы в браузере (F5).\n" +
+                "Если вы хотите гарантированно загрузить последнюю версию после обновления, " +
+                "используйте 'жесткую перезагрузку' вашего браузера (обычно Ctrl+F5 или Cmd+Shift+R)."
+            );
+
+            if (confirmation) {
+                console.log("Перезагрузка приложения по запросу пользователя...");
+                showNotification("Перезагрузка приложения...", "info");
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                console.log("Перезагрузка отменена пользователем.");
+            }
+        }
+
+
+        function initReloadButton() {
+            const reloadBtn = document.getElementById('forceReloadBtn');
+            if (reloadBtn) {
+                reloadBtn.addEventListener('click', forceReloadApp);
+                console.log("Кнопка перезагрузки инициализирована.");
+            } else {
+                console.warn("Кнопка перезагрузки #forceReloadBtn не найдена.");
             }
         }
