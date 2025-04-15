@@ -319,139 +319,83 @@
         }
 
 
+        const tabsConfig = [
+            { id: 'main', name: 'Главный алгоритм' },
+            { id: 'program', name: 'Программа 1С' },
+            { id: 'links', name: 'Ссылки 1С' },
+            { id: 'extLinks', name: 'Внешние ресурсы' },
+            { id: 'skzi', name: 'СКЗИ' },
+            { id: 'webReg', name: 'Веб-Регистратор' },
+            { id: 'reglaments', name: 'Регламенты' },
+            { id: 'bookmarks', name: 'Закладки' }
+        ];
+        const defaultPanelOrder = tabsConfig.map(t => t.id);
+        const defaultPanelVisibility = tabsConfig.map(() => true);
+
+
         async function loadUISettings() {
+            console.log("Loading UI settings for modal...");
+            let loadedSettings = {};
             try {
-                const uiSettings = await getFromIndexedDB('preferences', 'uiSettings') || {};
-                const modal = document.getElementById('customizeUIModal');
-
-                const assignIfTruthy = (settingValue, selector, assignFunc) => {
-                    const valueToUse = settingValue;
-                    if (valueToUse) {
-                        const element = document.querySelector(selector);
-                        if (element) assignFunc(element);
+                const settingsFromDB = await getFromIndexedDB('preferences', 'uiSettings');
+                if (settingsFromDB && typeof settingsFromDB === 'object') {
+                    loadedSettings = {
+                        ...DEFAULT_UI_SETTINGS,
+                        ...settingsFromDB,
+                        id: 'uiSettings'
+                    };
+                    if (!Array.isArray(loadedSettings.panelOrder) || loadedSettings.panelOrder.length !== tabsConfig.length) {
+                        console.warn("Loaded panelOrder is invalid, using default.");
+                        loadedSettings.panelOrder = defaultPanelOrder;
                     }
-                };
-                const assignByIdIfPresent = (settingValue, elementId, assignFunc, defaultValue) => {
-                    const valueToAssign = settingValue !== undefined && settingValue !== null ? settingValue : defaultValue;
-                    if (valueToAssign !== undefined) {
-                        const element = document.getElementById(elementId);
-                        if (element) assignFunc(element, valueToAssign);
-                    }
-                };
-
-                const layoutToSet = uiSettings.mainLayout || DEFAULT_UI_SETTINGS.mainLayout;
-                assignIfTruthy(layoutToSet, `input[name="mainLayout"][value="${layoutToSet}"]`, el => el.checked = true);
-
-                const themeToSet = uiSettings.themeMode || DEFAULT_UI_SETTINGS.themeMode;
-                assignIfTruthy(themeToSet, `input[name="themeMode"][value="${themeToSet}"]`, el => el.checked = true);
-
-                const savedPrimaryColor = uiSettings.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
-                modal?.querySelectorAll('.color-swatch').forEach(s => {
-                    s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-                    s.classList.add('border-2', 'border-transparent');
-                    if (s.getAttribute('data-color') === savedPrimaryColor) {
-                        s.classList.remove('border-transparent');
-                        s.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-                    }
-                });
-
-                assignByIdIfPresent(uiSettings.fontSize, 'fontSizeLabel', (el, val) => el.textContent = val + '%', DEFAULT_UI_SETTINGS.fontSize);
-                assignByIdIfPresent(uiSettings.borderRadius, 'borderRadiusSlider', (el, val) => el.value = val, DEFAULT_UI_SETTINGS.borderRadius);
-                assignByIdIfPresent(uiSettings.contentDensity, 'densitySlider', (el, val) => el.value = val, DEFAULT_UI_SETTINGS.contentDensity);
-
-                const panelSortContainer = document.getElementById('panelSortContainer');
-                if (panelSortContainer) {
-                    panelSortContainer.innerHTML = '';
-
-                    const tabsConfig = [
-                        { id: 'main', name: 'Главный алгоритм' },
-                        { id: 'program', name: 'Программа 1С' },
-                        { id: 'links', name: 'Ссылки 1С' },
-                        { id: 'extLinks', name: 'Внешние ресурсы' },
-                        { id: 'skzi', name: 'СКЗИ' },
-                        { id: 'webReg', name: 'Веб-Регистратор' },
-                        { id: 'reglaments', name: 'Регламенты' },
-                        { id: 'bookmarks', name: 'Закладки' }
-                    ];
-
-                    const savedOrder = Array.isArray(uiSettings.panelOrder) && uiSettings.panelOrder.length === tabsConfig.length
-                        ? uiSettings.panelOrder
-                        : tabsConfig.map(t => t.name);
-
-                    const savedVisibility = Array.isArray(uiSettings.panelVisibility) && uiSettings.panelVisibility.length === tabsConfig.length
-                        ? uiSettings.panelVisibility
-                        : tabsConfig.map(() => true);
-
-                    const nameToConfigMap = tabsConfig.reduce((map, tab) => {
-                        map[tab.name] = tab;
-                        return map;
-                    }, {});
-                    const nameToVisibilityMap = savedOrder.reduce((map, name, index) => {
-                        map[name] = savedVisibility[index] ?? true;
-                        return map;
-                    }, {});
-
-                    savedOrder.forEach(panelName => {
-                        const config = nameToConfigMap[panelName];
-                        if (config) {
-                            const isVisible = nameToVisibilityMap[panelName];
-                            const panelItem = createPanelItemElement(config.id, config.name, isVisible);
-                            panelSortContainer.appendChild(panelItem);
-                        }
-                    });
-
-                    panelSortContainer.querySelectorAll('.toggle-visibility').forEach(button => {
-                        button.removeEventListener('click', toggleSectionVisibility);
-                        button.addEventListener('click', toggleSectionVisibility);
-                    });
-
-                    if (window.Sortable && typeof panelSortContainer.sortableInstance?.destroy === 'function') {
-                        panelSortContainer.sortableInstance.destroy();
-                    }
-                    if (window.Sortable) {
-                        try {
-                            panelSortContainer.sortableInstance = new Sortable(panelSortContainer, { animation: 150, handle: '.fa-grip-lines', ghostClass: 'my-sortable-ghost' });
-                        } catch (e) {
-                            console.error("Failed to initialize Sortable:", e);
-                        }
+                    if (!Array.isArray(loadedSettings.panelVisibility) || loadedSettings.panelVisibility.length !== loadedSettings.panelOrder.length) {
+                        console.warn("Loaded panelVisibility is invalid, using default.");
+                        loadedSettings.panelVisibility = defaultPanelVisibility;
                     }
 
+                    console.log("Loaded UI settings from DB:", loadedSettings);
                 } else {
-                    console.warn("Panel sort container not found in loadUISettings");
+                    console.log("No UI settings found in DB or invalid format, using defaults.");
+                    loadedSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
                 }
-
             } catch (error) {
-                console.error("Error loading UI settings:", error);
+                console.error("Error loading UI settings from DB:", error);
+                showNotification("Ошибка загрузки настроек интерфейса", "error");
+                loadedSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
             }
+
+            originalUISettings = JSON.parse(JSON.stringify(loadedSettings));
+            currentPreviewSettings = JSON.parse(JSON.stringify(loadedSettings));
+            isUISettingsDirty = false;
+
+            try {
+                populateModalControls(currentPreviewSettings);
+                await applyPreviewSettings(currentPreviewSettings);
+            } catch (error) {
+                console.error("Error applying loaded UI settings:", error);
+                showNotification("Ошибка применения настроек к интерфейсу", "error");
+            }
+            console.log("Finished loading UI settings process.");
         }
 
 
         async function saveUISettings() {
             console.log("Saving UI settings...");
+            const settingsToSave = { ...currentPreviewSettings };
+
+            if (!settingsToSave.id) {
+                settingsToSave.id = 'uiSettings';
+            }
+
+            console.log("Settings object being saved:", settingsToSave);
+
             try {
-                const selectedColorSwatch = document.querySelector('#customizeUIModal .color-swatch.ring-primary');
-                const primaryColor = selectedColorSwatch
-                    ? selectedColorSwatch.getAttribute('data-color')
-                    : '#5D5CDE';
-                console.log("Selected primaryColor for saving:", primaryColor);
+                await saveToIndexedDB('preferences', settingsToSave);
+                console.log("UI settings save successful to DB.");
 
-                const uiSettings = {
-                    mainLayout: document.querySelector('input[name="mainLayout"]:checked')?.value || 'horizontal',
-                    themeMode: document.querySelector('input[name="themeMode"]:checked')?.value || 'auto',
-                    primaryColor: primaryColor,
-                    fontSize: parseInt(document.getElementById('fontSizeLabel')?.textContent) || 100,
-                    borderRadius: parseInt(document.getElementById('borderRadiusSlider')?.value) || 8,
-                    contentDensity: parseInt(document.getElementById('densitySlider')?.value) || 3,
-                    panelVisibility: Array.from(document.querySelectorAll('#panelSortContainer .toggle-visibility')).map(btn =>
-                        btn.querySelector('i')?.classList.contains('fa-eye') ?? true
-                    ),
-                    panelOrder: Array.from(document.querySelectorAll('#panelSortContainer .panel-item span')).map(span => span.textContent)
-                };
+                originalUISettings = JSON.parse(JSON.stringify(settingsToSave));
+                isUISettingsDirty = false;
 
-                console.log("Settings object being saved:", uiSettings);
-
-                await saveToIndexedDB('preferences', { id: 'uiSettings', ...uiSettings });
-                console.log("UI settings save successful.");
                 return true;
             } catch (error) {
                 console.error("Error saving UI settings:", error);
@@ -461,66 +405,328 @@
         }
 
 
-        function exportAllData() {
+        async function exportAllData() {
+            console.log("Начало экспорта всех данных...");
+            showNotification("Подготовка данных для экспорта...", "info");
+
+            if (!db) {
+                console.error("Export failed: Database not initialized.");
+                showNotification("Ошибка экспорта: База данных не доступна", "error");
+                return;
+            }
+
+            const storesToRead = [
+                'algorithms', 'links', 'bookmarks', 'reglaments', 'clientData',
+                'preferences', 'bookmarkFolders', 'extLinks'
+            ];
+
+            const exportData = {
+                schemaVersion: "1.2",
+                exportDate: new Date().toISOString(),
+                data: {}
+            };
+
             try {
+                const transaction = db.transaction(storesToRead, 'readonly');
+                const promises = storesToRead.map(storeName => {
+                    return new Promise(async (resolve, reject) => {
+                        try {
+                            const store = transaction.objectStore(storeName);
+                            const request = store.getAll();
+                            request.onsuccess = (e) => {
+                                console.log(`Прочитано ${e.target.result?.length ?? 0} записей из ${storeName}`);
+                                resolve({ storeName, data: e.target.result });
+                            };
+                            request.onerror = (e) => {
+                                console.error(`Ошибка чтения из ${storeName}:`, e.target.error);
+                                reject(new Error(`Не удалось прочитать данные из ${storeName}`));
+                            };
+                        } catch (err) {
+                            console.error(`Ошибка доступа к хранилищу ${storeName}:`, err);
+                            reject(new Error(`Ошибка доступа к хранилищу ${storeName}`));
+                        }
+                    });
+                });
+
+                const results = await Promise.all(promises);
+
+                results.forEach(result => {
+                    exportData.data[result.storeName] = result.data;
+                });
+
+                console.log("Данные для экспорта собраны:", exportData);
+
                 const currentDate = new Date();
-                const exportData = {
-                    algorithms: algorithms,
-                    clientData: getClientData(),
-                    bookmarks: getAllBookmarks(),
-                    reglaments: getAllReglaments(),
-                    exportDate: currentDate.toISOString(),
-                    schemaVersion: "1.0"
-                };
+                const exportFileName = `1C_Support_Guide_Export.json`;
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: "application/json;charset=utf-8" });
 
-                const exportFileName = `1C_Support_Guide_Export_${currentDate.toISOString().slice(0, 10)}.json`;
-                const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportData, null, 2))}`;
-                const linkElement = document.createElement('a');
-                linkElement.href = dataUri;
-                linkElement.download = exportFileName;
-                linkElement.click();
+                if (window.showSaveFilePicker) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: exportFileName,
+                            types: [{
+                                description: 'JSON Files',
+                                accept: { 'application/json': ['.json'] },
+                            }],
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(dataBlob);
+                        await writable.close();
+                        showNotification("Данные успешно сохранены");
+                        console.log("Экспорт через File System Access API завершен успешно.");
+                    } catch (err) {
+                        if (err.name !== 'AbortError') {
+                            console.error('Ошибка сохранения через File System Access API, используем fallback:', err);
+                            const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`;
+                            const linkElement = document.createElement('a');
+                            linkElement.href = dataUri;
+                            linkElement.download = exportFileName;
+                            linkElement.click();
+                            linkElement.remove();
+                            showNotification("Данные успешно экспортированы (fallback)");
+                            console.log("Экспорт через data URI (fallback) завершен успешно.");
+                        } else {
+                            console.log("Экспорт отменен пользователем.");
+                            showNotification("Экспорт отменен", "info");
+                        }
+                    }
+                } else {
+                    const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`;
+                    const linkElement = document.createElement('a');
+                    linkElement.href = dataUri;
+                    linkElement.download = exportFileName;
+                    linkElement.click();
+                    linkElement.remove();
+                    showNotification("Данные успешно экспортированы");
+                    console.log("Экспорт через data URI завершен успешно.");
+                }
 
-                showNotification("Данные успешно экспортированы");
             } catch (error) {
-                console.error("Error exporting data:", error);
-                showNotification("Ошибка при экспорте данных", "error");
+                console.error("Полная ошибка при экспорте данных:", error);
+                showNotification(`Ошибка при экспорте: ${error.message || 'Неизвестная ошибка'}`, "error");
             }
         }
 
 
         async function importDataFromJSON(jsonString) {
+            console.log("Начало импорта данных...");
+
+            const confirmation = confirm(
+                "ВНИМАНИЕ!\n\n" +
+                "Импорт данных полностью ЗАМЕНИТ все текущие данные в приложении (алгоритмы, ссылки, закладки, регламенты, настройки и т.д.) данными из файла.\n\n" +
+                "РЕКОМЕНДУЕТСЯ СНАЧАЛА СДЕЛАТЬ ЭКСПОРТ (резервную копию) ваших текущих данных перед импортом.\n\n" +
+                "Продолжить импорт?"
+            );
+
+            if (!confirmation) {
+                showNotification("Импорт отменен пользователем.", "info");
+                console.log("Импорт отменен.");
+                const importFileInput = document.getElementById('importFileInput');
+                if (importFileInput) importFileInput.value = '';
+                return false;
+            }
+
+            showNotification("Импорт данных... Пожалуйста, подождите.", "info");
+
+            if (!db) {
+                console.error("Import failed: Database not initialized.");
+                showNotification("Ошибка импорта: База данных не доступна", "error");
+                return false;
+            }
+
+            let importData;
             try {
-                const importData = JSON.parse(jsonString);
+                importData = JSON.parse(jsonString);
+                console.log("JSON успешно распарсен.");
+            } catch (error) {
+                console.error("Error parsing JSON for import:", error);
+                showNotification("Ошибка импорта: Некорректный формат JSON файла.", "error");
+                const importFileInput = document.getElementById('importFileInput');
+                if (importFileInput) importFileInput.value = '';
+                return false;
+            }
 
-                if (!importData?.schemaVersion || !importData?.algorithms) {
-                    showNotification("Некорректный формат файла импорта", "error");
-                    return false;
+            if (!importData || typeof importData.data !== 'object' || !importData.schemaVersion) {
+                console.error("Invalid import file structure:", importData);
+                showNotification("Некорректный формат файла импорта (отсутствует data или schemaVersion)", "error");
+                const importFileInput = document.getElementById('importFileInput');
+                if (importFileInput) importFileInput.value = '';
+                return false;
+            }
+
+            console.log(`Импорт данных версии схемы: ${importData.schemaVersion}`);
+
+            const storesToImport = Object.keys(importData.data).filter(storeName =>
+                db.objectStoreNames.contains(storeName) && storeName !== 'searchIndex'
+            );
+
+            if (storesToImport.length === 0) {
+                console.warn("Нет данных для импорта или хранилища не совпадают с текущей структурой БД.");
+                showNotification("Нет данных для импорта в текущую структуру БД.", "warning");
+                const importFileInput = document.getElementById('importFileInput');
+                if (importFileInput) importFileInput.value = '';
+                return false;
+            }
+
+            console.log("Хранилища для импорта:", storesToImport);
+            let importSuccessful = true;
+            let errorsOccurred = [];
+
+            for (const storeName of storesToImport) {
+                const itemsToImport = importData.data[storeName];
+
+                if (!Array.isArray(itemsToImport)) {
+                    console.warn(`Данные для ${storeName} в файле импорта не являются массивом. Пропуск.`);
+                    continue;
                 }
 
-                algorithms = importData.algorithms;
-                await saveToIndexedDB('algorithms', { section: 'all', data: algorithms });
-                renderAllAlgorithms();
+                console.log(`Начало импорта для хранилища: ${storeName} (${itemsToImport.length} записей)`);
+                showNotification(`Импорт ${storeName}...`, "info");
 
-                const importTasks = [];
-                if (importData.bookmarks) {
-                    importTasks.push(importBookmarks(importData.bookmarks));
+                try {
+                    const transaction = db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+
+                    await new Promise((resolve, reject) => {
+                        const clearRequest = store.clear();
+                        clearRequest.onsuccess = resolve;
+                        clearRequest.onerror = (e) => {
+                            console.error(`Ошибка очистки ${storeName}:`, e.target.error);
+                            reject(new Error(`Ошибка очистки ${storeName}: ${e.target.error?.message}`));
+                        };
+                    });
+                    console.log(`Хранилище ${storeName} очищено.`);
+
+                    if (itemsToImport.length > 0) {
+                        let successfulPuts = 0;
+                        const keyPath = store.keyPath;
+                        const autoIncrement = store.autoIncrement;
+
+                        const putPromises = itemsToImport.map(item => {
+                            return new Promise(async (resolvePut, rejectPut) => {
+                                let hasKey = true;
+                                if (!autoIncrement && keyPath) {
+                                    if (typeof keyPath === 'string') {
+                                        hasKey = item && typeof item === 'object' && item.hasOwnProperty(keyPath) && item[keyPath] !== undefined && item[keyPath] !== null;
+                                    } else if (Array.isArray(keyPath)) {
+                                        hasKey = keyPath.every(kp => item && typeof item === 'object' && item.hasOwnProperty(kp) && item[kp] !== undefined && item[kp] !== null);
+                                    }
+                                }
+                                if (!autoIncrement && !hasKey) {
+                                    console.warn(`Пропуск элемента в ${storeName} (нет ключа [${keyPath}] и не автоинкремент):`, item);
+                                    resolvePut({ skipped: true });
+                                    return;
+                                }
+
+                                if (typeof item !== 'object' || item === null || Object.keys(item).length === 0) {
+                                    console.warn(`Пропуск пустого или некорректного элемента в ${storeName}:`, item);
+                                    resolvePut({ skipped: true });
+                                    return;
+                                }
+
+
+                                try {
+                                    const putRequest = store.put(item);
+                                    putRequest.onsuccess = () => resolvePut({ success: true });
+                                    putRequest.onerror = (e) => {
+                                        console.error(`Ошибка записи элемента в ${storeName}:`, e.target.error, item);
+                                        rejectPut(new Error(`Ошибка записи в ${storeName}: ${e.target.error?.message}`));
+                                    };
+                                } catch (putError) {
+                                    console.error(`Критическая ошибка при вызове put для ${storeName}:`, putError, item);
+                                    rejectPut(putError);
+                                }
+                            });
+                        });
+
+                        const putResults = await Promise.allSettled(putPromises);
+
+                        successfulPuts = putResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+                        const skippedPuts = putResults.filter(r => r.status === 'fulfilled' && r.value?.skipped).length;
+                        const failedPuts = putResults.filter(r => r.status === 'rejected').length;
+
+                        console.log(`Записано ${successfulPuts} элементов в ${storeName}. Пропущено: ${skippedPuts}. Ошибок записи: ${failedPuts}.`);
+
+                        if (failedPuts > 0) {
+                            await new Promise((resolve) => {
+                                transaction.oncomplete = () => {
+                                    console.warn(`Транзакция для ${storeName} завершилась успешно, несмотря на ошибки записи.`);
+                                    resolve();
+                                };
+                                transaction.onabort = (e) => {
+                                    console.error(`Транзакция для ${storeName} прервана из-за ошибок записи.`);
+                                    reject(e.target.error || new Error(`Транзакция прервана для ${storeName}`));
+                                };
+                                transaction.onerror = (e) => {
+                                    console.error(`Ошибка транзакции для ${storeName} после ошибок записи.`);
+                                    reject(e.target.error || new Error(`Ошибка транзакции для ${storeName}`));
+                                }
+                            });
+                            throw new Error(`Не удалось записать ${failedPuts} элемент(ов) в ${storeName}. Импорт для этого хранилища отменен.`);
+                        }
+                    } else {
+                        console.log(`Нет элементов для записи в ${storeName}.`);
+                    }
+
+
+                    await new Promise((resolve, reject) => {
+                        transaction.oncomplete = () => {
+                            console.log(`Транзакция для ${storeName} успешно завершена.`);
+                            resolve();
+                        };
+                        transaction.onerror = (e) => {
+                            console.error(`Ошибка транзакции ${storeName}:`, e.target.error);
+                            reject(new Error(`Ошибка транзакции ${storeName}: ${e.target.error?.message}`));
+                        };
+                        transaction.onabort = (e) => {
+                            console.error(`Транзакция ${storeName} прервана:`, e.target.error);
+                            reject(new Error(`Транзакция ${storeName} прервана: ${e.target.error?.message || 'Причина неизвестна'}`));
+                        };
+                    });
+
+                } catch (error) {
+                    console.error(`Критическая ошибка при импорте данных для хранилища ${storeName}:`, error);
+                    showNotification(`Ошибка импорта для раздела "${storeName}": ${error.message}`, "error");
+                    importSuccessful = false;
+                    errorsOccurred.push(storeName);
                 }
+            }
 
-                if (importData.reglaments) {
-                    importTasks.push(importReglaments(importData.reglaments));
+
+            if (!importSuccessful) {
+                showNotification(`Импорт завершен с ошибками в разделах: ${errorsOccurred.join(', ')}. Некоторые данные могут быть не импортированы или потеряны в этих разделах.`, "warning", 7000);
+            } else {
+                showNotification("Основной импорт данных успешно завершен.", "info");
+            }
+
+            console.log("Перезагрузка данных и UI после импорта...");
+            showNotification("Обновление интерфейса...", "info");
+
+            try {
+                await appInit();
+
+                await applyUISettings();
+
+                console.log("Перестроение поискового индекса после импорта...");
+                showNotification("Индексация данных для поиска...", "info");
+                await buildInitialSearchIndex();
+                console.log("Поисковый индекс перестроен.");
+
+                if (importSuccessful) {
+                    showNotification("Данные успешно импортированы и приложение обновлено!", "success");
+                } else {
+                    showNotification("Импорт завершен, но были ошибки. Приложение обновлено.", "warning");
                 }
-
-                if (importTasks.length > 0) {
-                    await Promise.all(importTasks);
-                }
-
-                showNotification("Данные успешно импортированы");
                 return true;
 
-            } catch (error) {
-                console.error("Error importing data:", error);
-                showNotification("Ошибка при импорте данных", "error");
+            } catch (postImportError) {
+                console.error("Критическая ошибка во время перезагрузки приложения после импорта:", postImportError);
+                showNotification(`Критическая ошибка после импорта: ${postImportError.message}. Пожалуйста, обновите страницу (F5).`, "error");
                 return false;
+            } finally {
+                const importFileInput = document.getElementById('importFileInput');
+                if (importFileInput) importFileInput.value = '';
             }
         }
 
@@ -882,7 +1088,7 @@
                 dateAdded: new Date().toISOString()
             },
             {
-                title: "Транспортные сообщения",
+                title: "Транспортные контейнеры",
                 link: "e1cib/list/РегистрСведений.ТранспортныеКонтейнеры",
                 description: "Органы Росстата в базе",
                 dateAdded: new Date().toISOString()
@@ -1071,25 +1277,62 @@
 
         function renderAlgorithmCards(section) {
             const sectionAlgorithms = algorithms[section];
-            if (!sectionAlgorithms) return;
+            if (!sectionAlgorithms || !Array.isArray(sectionAlgorithms)) {
+                console.warn(`[renderAlgorithmCards] No valid algorithms found for section: ${section}`);
+                const container = document.getElementById(section + 'Algorithms');
+                if (container) {
+                    container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full">Алгоритмы для этого раздела не найдены или не загружены.</p>';
+                }
+                return;
+            }
 
             const container = document.getElementById(section + 'Algorithms');
-            if (!container) return;
+            if (!container) {
+                console.error(`[renderAlgorithmCards] Container #${section}Algorithms not found.`);
+                return;
+            }
 
             container.innerHTML = '';
 
+            if (sectionAlgorithms.length === 0) {
+                container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full">В разделе "${getSectionName(section)}" пока нет алгоритмов.</p>`;
+                applyCurrentView(section + 'Algorithms');
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
             sectionAlgorithms.forEach(algorithm => {
+                if (!algorithm || typeof algorithm !== 'object' || !algorithm.id) {
+                    console.warn(`[renderAlgorithmCards] Skipping invalid algorithm object in section ${section}:`, algorithm);
+                    return;
+                }
+
                 const card = document.createElement('div');
+                card.dataset.id = algorithm.id;
                 card.className = 'algorithm-card view-item bg-white dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:shadow-md transition cursor-pointer';
                 card.innerHTML = `
-            <h3 class="font-bold">${algorithm.title}</h3>
-            <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">${algorithm.description}</p>
-        `;
-                card.addEventListener('click', () => showAlgorithmDetail(algorithm, section));
-                container.appendChild(card);
+                    <h3 class="font-bold">${algorithm.title || 'Без заголовка'}</h3>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">${algorithm.description || 'Нет описания'}</p>
+                `;
+                card.addEventListener('click', () => {
+                    if (typeof showAlgorithmDetail === 'function') {
+                        showAlgorithmDetail(algorithm, section);
+                    } else {
+                        console.error("showAlgorithmDetail function is not defined when clicking card.");
+                        showNotification("Ошибка: Невозможно открыть детали алгоритма.", "error");
+                    }
+                });
+                fragment.appendChild(card);
             });
 
-            applyCurrentView(section + 'Algorithms');
+            container.appendChild(fragment);
+
+            if (typeof applyCurrentView === 'function') {
+                applyCurrentView(section + 'Algorithms');
+            } else {
+                console.warn("applyCurrentView function is not defined after rendering cards.");
+            }
         }
 
 
@@ -1886,7 +2129,7 @@
         }
 
 
-        function saveNewAlgorithm() {
+        async function saveNewAlgorithm() {
             const section = addModal?.dataset.section;
             const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
             const newAlgorithmDesc = document.getElementById('newAlgorithmDesc');
@@ -1894,20 +2137,33 @@
 
             if (!addModal || !section || !newAlgorithmTitle || !newAlgorithmDesc || !newStepsContainer) {
                 console.error("Save New Algorithm failed: Missing required elements or data attributes.");
+                showNotification("Ошибка: Не удалось сохранить новый алгоритм.", "error");
                 return;
             }
 
             const title = newAlgorithmTitle.value.trim();
             const description = newAlgorithmDesc.value.trim();
-            if (!title) return alert('Пожалуйста, введите название алгоритма');
-            if (!description) return alert('Пожалуйста, введите краткое описание алгоритма');
+            if (!title) {
+                showNotification('Пожалуйста, введите название алгоритма', 'error');
+                return;
+            }
+            if (!description) {
+                showNotification('Пожалуйста, введите краткое описание алгоритма', 'error');
+                return;
+            }
 
             const { steps, isValid } = extractStepsData(newStepsContainer);
 
-            if (!isValid) return alert('Пожалуйста, заполните все обязательные поля (Заголовок и Описание) для каждого шага');
-            if (steps.length === 0) return alert('Пожалуйста, добавьте хотя бы один шаг');
+            if (!isValid) {
+                showNotification('Пожалуйста, заполните Заголовок и Описание для каждого шага', 'error');
+                return;
+            }
+            if (steps.length === 0) {
+                showNotification('Пожалуйста, добавьте хотя бы один шаг', 'error');
+                return;
+            }
 
-            const id = section + Date.now();
+            const id = `${section}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
             const newAlgorithm = { id, title, description, steps };
 
@@ -1916,11 +2172,27 @@
             }
             algorithms[section].push(newAlgorithm);
 
-            if (typeof renderAlgorithmCards === 'function') renderAlgorithmCards(section);
+            try {
+                const saved = await saveDataToIndexedDB();
+                if (saved) {
+                    if (typeof renderAlgorithmCards === 'function') {
+                        renderAlgorithmCards(section);
+                    }
+                    await updateSearchIndex('algorithms', 'all', { section: 'all', data: algorithms }, 'update');
 
-            if (typeof saveToLocalStorage === 'function') saveToLocalStorage();
-
-            addModal.classList.add('hidden');
+                    showNotification("Новый алгоритм успешно добавлен и сохранен.");
+                    addModal.classList.add('hidden');
+                } else {
+                    showNotification("Не удалось сохранить алгоритм в базе данных.", "error");
+                }
+            } catch (error) {
+                console.error("Error saving new algorithm to IndexedDB:", error);
+                showNotification("Ошибка при сохранении нового алгоритма.", "error");
+                const indexToRemove = algorithms[section].findIndex(algo => algo.id === id);
+                if (indexToRemove > -1) {
+                    algorithms[section].splice(indexToRemove, 1);
+                }
+            }
         }
 
 
@@ -2114,26 +2386,60 @@
 
         // СИСТЕМА ПОИСКА
         function initSearchSystem() {
+            const debounce = (func, delay) => {
+                let timeoutId;
+                return (...args) => {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => {
+                        func.apply(this, args);
+                    }, delay);
+                };
+            };
+
             const searchInput = document.getElementById('searchInput');
             const searchResults = document.getElementById('searchResults');
             const toggleAdvancedSearchBtn = document.getElementById('toggleAdvancedSearch');
             const advancedSearchOptions = document.getElementById('advancedSearchOptions');
 
+            if (!searchInput || !searchResults || !toggleAdvancedSearchBtn || !advancedSearchOptions) {
+                console.error('Search system initialization failed: one or more required elements not found.');
+                return;
+            }
+
             const toggleResultsVisibility = () => {
                 searchResults.classList.toggle('hidden', !searchInput.value);
             };
 
+            const executeSearch = async () => {
+                const query = searchInput.value;
+                if (!query) {
+                    searchResults.classList.add('hidden');
+                    return;
+                }
+
+                searchResults.classList.remove('hidden');
+
+                try {
+                    await performSearch(query);
+                } catch (error) {
+                    console.error('Search failed:', error);
+                } finally {
+                }
+            };
+
+            const debouncedSearch = debounce(executeSearch, 300);
+
+
             searchInput.addEventListener('focus', toggleResultsVisibility);
 
-            searchInput.addEventListener('input', async () => {
+            searchInput.addEventListener('input', () => {
                 toggleResultsVisibility();
-                if (searchInput.value) {
-                    await performSearch(searchInput.value);
-                }
+                debouncedSearch();
             });
 
             document.addEventListener('click', (event) => {
-                if (!searchInput.contains(event.target) && !searchResults.contains(event.target)) {
+                const isClickInsideSearch = searchInput.contains(event.target) || searchResults.contains(event.target);
+                if (!isClickInsideSearch) {
                     searchResults.classList.add('hidden');
                 }
             });
@@ -2145,18 +2451,21 @@
                     : '<i class="fas fa-times mr-1"></i>Скрыть параметры';
             });
 
-            document.querySelectorAll('.search-section, .search-field').forEach(checkbox => {
-                checkbox.addEventListener('change', async () => {
-                    if (searchInput.value) {
-                        await performSearch(searchInput.value);
-                    }
+            const advancedSearchControls = document.querySelectorAll('.search-section, .search-field');
+            advancedSearchControls.forEach(control => {
+                control.addEventListener('change', () => {
+                    debouncedSearch();
                 });
             });
         }
 
 
         async function performSearch(query) {
+            // Получаем элементы DOM
             const searchResults = document.getElementById('searchResults');
+            const searchInput = document.getElementById('searchInput');
+
+            // Нормализуем запрос
             const normalizedQuery = query.trim().toLowerCase();
             const results = [];
 
@@ -2167,28 +2476,21 @@
             }
 
             const fields = new Set([...document.querySelectorAll('.search-field:checked')].map(cb => cb.value));
-            console.log('[Search Debug] Active search fields:', fields); // Лог активных полей
 
             const includesIgnoreCase = (text, query) => text && text.toLowerCase().includes(query);
 
-            const addResult = (item, section, type, id, title, description = null) => {
-                // Проверяем, что такой результат еще не добавлен
+            const addResult = (section, type, id, title, description = null) => {
                 if (!results.some(r => r.id === id && r.section === section && r.type === type)) {
-                    console.log(`[Search Debug] Adding result:`, { title, section, type, id }); // Лог добавления результата
                     results.push({ title, description, section, type, id });
-                } else {
-                    // console.log(`[Search Debug] Skipping duplicate result:`, { title, section, type, id });
                 }
             };
 
-            // --- Источники данных для поиска ---
             const searchSources = [
-                // ... (источник для main) ...
                 {
                     section: 'main',
                     type: 'algorithm',
                     id: 'main',
-                    data: algorithms.main, // Данные уже в памяти
+                    data: algorithms.main,
                     check: (item) => {
                         if (!item) return false;
                         const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
@@ -2201,34 +2503,26 @@
                                 (step.example?.type === 'list' && step.example.items?.some(listItem => includesIgnoreCase(listItem, normalizedQuery)))
                             );
                         }
-                        // console.log(`[Search Debug] Checking main: Title Match: ${titleMatch}, Steps Match: ${stepsMatch}`);
                         return titleMatch || stepsMatch;
                     },
                     getResult: (item) => ({ title: item.title, id: 'main' })
                 },
-                // ... (источник для links) ...
                 {
                     section: 'links',
                     type: 'link',
-                    getData: getAllCibLinks, // Функция для получения данных из DB
+                    getData: getAllCibLinks,
                     check: (item) => {
                         if (!item) return false;
                         const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
                         const descMatch = fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.link, normalizedQuery));
-                        // console.log(`[Search Debug] Checking link ID ${item.id}: Title Match: ${titleMatch}, Desc/Link Match: ${descMatch}`);
                         return titleMatch || descMatch;
                     },
-                    getResult: (item) => ({
-                        title: item.title,
-                        description: item.link,
-                        id: item.id
-                    })
+                    getResult: (item) => ({ title: item.title, description: item.link, id: item.id })
                 },
-                // ... (источники для program, skzi, webReg) ...
                 ...['program', 'skzi', 'webReg'].map(section => ({
                     section: section,
                     type: 'algorithm',
-                    data: algorithms[section], // Данные уже в памяти
+                    data: algorithms[section],
                     check: (item) => {
                         if (!item) return false;
                         const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
@@ -2240,31 +2534,26 @@
                                 (step.description && includesIgnoreCase(step.description, normalizedQuery))
                             );
                         }
-                        // console.log(`[Search Debug] Checking ${section} algo ID ${item.id}: Title: ${titleMatch}, Desc: ${descMatch}, Steps: ${stepsMatch}`);
                         return titleMatch || descMatch || stepsMatch;
                     },
                     getResult: (item) => ({ title: item.title, description: item.description, id: item.id })
                 })),
-                // *** ИСТОЧНИК ДЛЯ РЕГЛАМЕНТОВ ***
                 {
                     section: 'reglaments',
                     type: 'reglament',
-                    getData: getAllReglaments, // Используем функцию для получения ВСЕХ регламентов
+                    getData: getAllReglaments,
                     check: (item) => {
                         if (!item) return false;
                         const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
-                        // Ищем в item.content, если включен чекбокс "Описание/Содержимое" (value="description")
                         const contentMatch = fields.has('description') && item.content && includesIgnoreCase(item.content, normalizedQuery);
-                        // console.log(`[Search Debug] Checking reglament ID ${item.id} ('${item.title}'): Title Match (${fields.has('title')}): ${titleMatch}, Content Match (${fields.has('description')} && content exists): ${contentMatch}`);
                         return titleMatch || contentMatch;
                     },
                     getResult: (item) => ({
                         title: item.title,
-                        description: categoryDisplayInfo[item.category]?.title || item.category || 'Без категории', // Показываем название категории
+                        description: categoryDisplayInfo[item.category]?.title || item.category || 'Без категории',
                         id: item.id
                     })
                 },
-                // ... (источник для bookmarks) ...
                 {
                     section: 'bookmarks',
                     type: 'bookmark',
@@ -2273,12 +2562,10 @@
                         if (!item) return false;
                         const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
                         const descMatch = fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.url, normalizedQuery));
-                        // console.log(`[Search Debug] Checking bookmark ID ${item.id}: Title Match: ${titleMatch}, Desc/URL Match: ${descMatch}`);
                         return titleMatch || descMatch;
                     },
                     getResult: (item) => ({ title: item.title, description: item.description || item.url, id: item.id })
                 },
-                // ... (источник для extLinks) ...
                 {
                     section: 'extLinks',
                     type: 'extLink',
@@ -2287,18 +2574,12 @@
                         if (!item) return false;
                         const titleMatch = fields.has('title') && includesIgnoreCase(item.title, normalizedQuery);
                         const descMatch = fields.has('description') && (includesIgnoreCase(item.description, normalizedQuery) || includesIgnoreCase(item.url, normalizedQuery));
-                        // console.log(`[Search Debug] Checking extLink ID ${item.id}: Title Match: ${titleMatch}, Desc/URL Match: ${descMatch}`);
                         return titleMatch || descMatch;
                     },
-                    getResult: (item) => ({
-                        title: item.title,
-                        description: item.description || item.url,
-                        id: item.id
-                    })
+                    getResult: (item) => ({ title: item.title, description: item.description || item.url, id: item.id })
                 }
             ];
 
-            // --- Выполнение поиска ---
             searchResults.innerHTML = '<div class="p-3 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Идет поиск...</div>';
             searchResults.classList.remove('hidden');
 
@@ -2308,41 +2589,30 @@
                     if (source.data) {
                         items = Array.isArray(source.data) ? source.data : [source.data];
                     } else if (source.getData) {
-                        items = await source.getData(); // Получаем данные асинхронно
-                        items = Array.isArray(items) ? items : (items ? [items] : []);
-                        // *** ДОБАВИТЬ ДЛЯ ДЕБАГА ***
-                        if (source.section === 'reglaments') {
-                            console.log(`[Search Debug] Reglaments fetched by getAllReglaments:`, items);
-                        }
-                        // *** КОНЕЦ ДЕБАГА ***
+                        const fetchedData = await source.getData();
+                        items = Array.isArray(fetchedData) ? fetchedData : (fetchedData ? [fetchedData] : []);
                     }
 
-                    // Проверяем каждый элемент из источника
                     items.forEach(item => {
-                        if (item && source.check(item)) { // Вызываем check для проверки совпадения
-                            const resultData = source.getResult(item); // Форматируем результат
-                            const finalId = resultData.id ?? item.id ?? source.id; // Определяем ID
+                        if (item && source.check(item)) {
+                            const resultData = source.getResult(item);
+                            const finalId = resultData.id ?? item.id ?? source.id;
                             if (finalId !== undefined) {
-                                addResult(item, source.section, source.type, finalId, resultData.title, resultData.description);
-                            } else {
-                                console.warn(`[Search Debug] Результат пропущен из-за отсутствия ID:`, { item, source });
+                                addResult(source.section, source.type, finalId, resultData.title, resultData.description);
                             }
                         }
                     });
                 } catch (error) {
-                    console.error(`[Search Error] Ошибка при поиске в разделе ${source.section}:`, error);
+                    console.error(`Ошибка при поиске в разделе ${source.section}:`, error);
                 }
             });
 
-            // Ждем завершения всех асинхронных операций поиска
             await Promise.all(searchPromises);
-            console.log(`[Search Debug] Total results found: ${results.length}`);
 
-            // --- Отображение результатов ---
             if (results.length === 0) {
                 searchResults.innerHTML = '<div class="p-3 text-center text-gray-500">Ничего не найдено</div>';
             } else {
-                searchResults.innerHTML = ''; // Очищаем предыдущие результаты
+                searchResults.innerHTML = '';
 
                 const sectionDetails = {
                     main: { icon: 'fa-sitemap text-primary', name: 'Главный алгоритм' },
@@ -2350,7 +2620,7 @@
                     skzi: { icon: 'fa-key text-yellow-500', name: 'СКЗИ' },
                     webReg: { icon: 'fa-globe text-blue-500', name: 'Веб-Регистратор' },
                     links: { icon: 'fa-link text-purple-500', name: 'Ссылки 1С' },
-                    reglaments: { icon: 'fa-file-alt text-red-500', name: 'Регламенты' }, // Добавлено для регламентов
+                    reglaments: { icon: 'fa-file-alt text-red-500', name: 'Регламенты' },
                     bookmarks: { icon: 'fa-bookmark text-orange-500', name: 'Закладки' },
                     extLinks: { icon: 'fa-external-link-alt text-teal-500', name: 'Внешние ресурсы' }
                 };
@@ -2360,124 +2630,190 @@
                     const resultElement = document.createElement('div');
                     resultElement.className = 'p-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-200 dark:border-gray-700 last:border-0';
 
-                    const details = sectionDetails[result.section] || { icon: 'fa-question-circle', name: result.section }; // Фоллбэк для неизвестных секций
+                    const details = sectionDetails[result.section] || { icon: 'fa-question-circle', name: result.section };
                     const sectionIcon = `<i class="fas ${details.icon} mr-2"></i>`;
                     const sectionName = details.name;
-                    // Отображаем description, если он есть (для регламентов это будет название категории)
                     const descriptionHtml = result.description ? `<div class="text-sm text-gray-600 dark:text-gray-400 truncate">${result.description}</div>` : '';
 
                     resultElement.innerHTML = `
-                        <div class="font-medium">${result.title || 'Без заголовка'}</div>
-                        ${descriptionHtml}
-                        <div class="text-xs text-gray-500 mt-1">${sectionIcon}${sectionName}</div>
-                    `;
+                <div class="font-medium">${result.title || 'Без заголовка'}</div>
+                ${descriptionHtml}
+                <div class="text-xs text-gray-500 mt-1">${sectionIcon}${sectionName}</div>
+            `;
 
-                    // Обработчик клика для перехода к результату
                     resultElement.addEventListener('click', () => {
                         navigateToResult(result);
-                        searchResults.classList.add('hidden'); // Скрываем результаты после клика
-                        document.getElementById('searchInput').value = ''; // Очищаем инпут поиска
+                        searchResults.classList.add('hidden');
+                        if (searchInput) {
+                            searchInput.value = '';
+                        }
                     });
                     fragment.appendChild(resultElement);
                 });
                 searchResults.appendChild(fragment);
             }
-            // Показываем/скрываем контейнер результатов в зависимости от их наличия
             searchResults.classList.toggle('hidden', results.length === 0);
         }
 
 
         function navigateToResult(result) {
-            if (!result || typeof result !== 'object' || !result.section || !result.type || result.id === undefined) {
-                console.error("navigateToResult: Invalid or incomplete result object provided.", result);
-                showNotification("Ошибка навигации: некорректные данные результата.", "error");
+            if (!result || typeof result !== 'object' || !result.section || !result.type || result.id == null) {
+                console.error("[navigateToResult] Invalid or incomplete result object provided:", result);
+                if (typeof showNotification === 'function') {
+                    showNotification("Ошибка навигации: некорректные данные результата.", "error");
+                }
                 return;
             }
 
-            console.log(`Navigating to result:`, result);
+            const { section, type, id, title } = result;
+            console.log(`[navigateToResult] Navigating to: section=${section}, type=${type}, id=${id}, title=${title}`);
 
-            setActiveTab(result.section);
+            try {
+                if (typeof setActiveTab === 'function') {
+                    setActiveTab(section);
+                } else {
+                    console.warn("[navigateToResult] 'setActiveTab' function not found. Using fallback visibility toggle.");
+                    const targetContentId = `${section}Content`;
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.toggle('hidden', content.id !== targetContentId);
+                    });
+                    const targetContent = document.getElementById(targetContentId);
+                    if (targetContent) {
+                        targetContent.classList.remove('hidden');
+                    } else {
+                        console.error(`[navigateToResult] Fallback failed: Content element #${targetContentId} not found.`);
+                        showNotification("Ошибка интерфейса: Не удалось найти вкладку.", "error");
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error(`[navigateToResult] Error switching tab to section '${section}':`, error);
+                if (typeof showNotification === 'function') {
+                    showNotification("Произошла ошибка при переключении вкладки.", "error");
+                }
+            }
 
-            const scrollToAndHighlight = (selector, id) => {
+            const scrollToAndHighlight = (selector, elementId, targetSection) => {
+                const SCROLL_DELAY_MS = 250;
+                const HIGHLIGHT_DURATION_MS = 2500;
+
+                const notify = typeof showNotification === 'function' ? showNotification : console.warn;
+
                 setTimeout(() => {
                     const activeContent = document.querySelector('.tab-content:not(.hidden)');
                     if (!activeContent) {
-                        console.warn(`[scrollToAndHighlight] Active tab content container not found for section ${result.section}.`);
-                        showNotification("Ошибка: Не найден активный контейнер вкладки.", "error");
+                        console.error(`[scrollToAndHighlight] Could not find active tab content container for section '${targetSection}' after delay.`);
+                        notify("Ошибка: Не найден активный контейнер вкладки для подсветки.", "error");
                         return;
                     }
 
-                    const element = activeContent.querySelector(`${selector}[data-id="${id}"]`);
+                    const fullSelector = `${selector}[data-id="${elementId}"]`;
+                    const element = activeContent.querySelector(fullSelector);
+
+                    console.log(`[scrollToAndHighlight] Searching for selector: "${fullSelector}" within active content for section "${targetSection}"`);
 
                     if (element) {
-                        console.log(`[scrollToAndHighlight] Element found:`, element);
+                        console.log(`[scrollToAndHighlight] Element found. Scrolling and highlighting.`);
                         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                        const highlightClasses = ['bg-yellow-100', 'dark:bg-yellow-800', 'ring-2', 'ring-yellow-400', 'transition-all', 'duration-300', 'rounded-md', 'shadow-lg', '-m-1', 'p-1'];
+                        const highlightClasses = [
+                            'outline', 'outline-2', 'outline-yellow-400', 'dark:outline-yellow-500',
+                            'outline-offset-2', 'bg-yellow-50', 'dark:bg-yellow-900/50',
+                            'transition-all', 'duration-300', 'rounded-md'
+                        ];
+
                         element.classList.add(...highlightClasses);
 
                         setTimeout(() => {
                             element.classList.remove(...highlightClasses);
-                        }, 2500);
+                        }, HIGHLIGHT_DURATION_MS);
+
                     } else {
-                        console.warn(`[scrollToAndHighlight] Element not found: selector='${selector}', id='${id}' within active tab ${activeContent.id}.`);
-                        showNotification(`Не удалось найти элемент ${result.title} на вкладке.`, "warning");
+                        console.warn(`[scrollToAndHighlight] Element with selector '${fullSelector}' not found in section '${targetSection}'. Scrolling to section container.`);
+                        const elementName = title || `элемент с ID ${elementId}`;
+                        notify(`Элемент "${elementName}" не найден на вкладке "${targetSection}". Прокрутка к началу раздела.`, "warning");
+
+                        const getSectionContainerSelector = (sec) => {
+                            switch (sec) {
+                                case 'main': return '#mainAlgorithm';
+                                case 'program': return '#programAlgorithms';
+                                case 'skzi': return '#skziAlgorithms';
+                                case 'webReg': return '#webRegAlgorithms';
+                                case 'links': return '#linksContainer';
+                                case 'extLinks': return '#extLinksContainer';
+                                case 'reglaments': return '#reglamentsContainer';
+                                case 'bookmarks': return '#bookmarksContainer';
+                                default: return `#${sec}Content`;
+                            }
+                        };
+                        const sectionContainer = activeContent.querySelector(getSectionContainerSelector(targetSection));
+                        if (sectionContainer) {
+                            sectionContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        } else {
+                            console.error(`[scrollToAndHighlight] Section container not found for section '${targetSection}' using selector '${getSectionContainerSelector(targetSection)}'. Cannot scroll.`);
+                            notify(`Не удалось найти контейнер для раздела "${targetSection}".`, "error");
+                        }
                     }
-                }, 250);
+                }, SCROLL_DELAY_MS);
             };
 
             try {
-                switch (result.type) {
-                    case 'algorithm':
-                        if (result.section !== 'main') {
-                            const algorithm = algorithms[result.section]?.find(a => String(a?.id) === String(result.id));
-                            if (algorithm) {
-                                showAlgorithmDetail(algorithm, result.section);
-                            } else {
-                                console.warn(`[navigateToResult] Algorithm data not found in memory for ID ${result.id} in section ${result.section}.`);
-                                showNotification(`Не найдены данные для алгоритма ID ${result.id}`, "warning");
-                                const container = document.getElementById(`${result.section}Algorithms`);
-                                container?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }
+                const simpleScrollTypes = {
+                    'link': '.cib-link-item',
+                    'extLink': '.ext-link-item',
+                    'bookmark': '.bookmark-item'
+                };
+
+                if (simpleScrollTypes[type]) {
+                    console.log(`[navigateToResult] Simple scroll type detected: ${type}. Scrolling to item.`);
+                    scrollToAndHighlight(simpleScrollTypes[type], id, section);
+
+                } else if (type === 'algorithm') {
+                    if (section === 'main') {
+                        console.log("[navigateToResult] Main algorithm detected. Scrolling to main content.");
+                        const mainContent = document.getElementById('mainContent');
+                        if (mainContent) {
+                            mainContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         } else {
-                            document.getElementById('mainContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            console.error("[navigateToResult] Main content container #mainContent not found.");
+                            showNotification("Ошибка: Не найден контейнер главного алгоритма.", "error");
                         }
-                        break;
+                    } else {
+                        console.log(`[navigateToResult] Algorithm type (non-main) detected for section ${section}. Scrolling to card.`);
+                        scrollToAndHighlight('.algorithm-card', id, section);
+                    }
 
-                    case 'link':
-                        scrollToAndHighlight('.cib-link-item', result.id);
-                        break;
-
-                    case 'extLink':
-                        scrollToAndHighlight('.ext-link-item', result.id);
-                        break;
-
-                    case 'reglament':
-                        if (typeof showReglamentDetail === 'function') {
-                            showReglamentDetail(result.id);
-                        } else {
-                            console.error("[navigateToResult] Function 'showReglamentDetail' is not defined. Cannot show reglament details.");
-                            showNotification("Ошибка: Функция отображения регламента не найдена.", "error");
-                            document.getElementById('reglamentsContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else if (type === 'reglament') {
+                    console.log("[navigateToResult] Reglament type detected. Showing detail modal.");
+                    if (typeof showReglamentDetail === 'function') {
+                        showReglamentDetail(id);
+                    } else {
+                        console.warn("[navigateToResult] 'showReglamentDetail' function not found. Scrolling to reglaments container.");
+                        if (typeof showNotification === 'function') {
+                            showNotification("Функция отображения регламента не найдена. Прокрутка к списку.", "warning");
                         }
-                        break;
+                        document.getElementById('reglamentsContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
 
-                    case 'bookmark':
-                        scrollToAndHighlight('.bookmark-item', result.id);
-                        break;
-
-                    default:
-                        console.warn(`[navigateToResult] Unknown result type encountered: ${result.type}`);
-                        showNotification(`Неизвестный тип результата: ${result.type}`, "warning");
-                        break;
+                } else {
+                    console.warn(`[navigateToResult] Unknown result type: '${type}'. Scrolling to top of current tab.`);
+                    if (typeof showNotification === 'function') {
+                        showNotification(`Неизвестный тип результата: ${type}. Прокрутка к текущей вкладке.`, "warning");
+                    }
+                    document.querySelector('.tab-content:not(.hidden)')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
-            } catch (error) {
-                console.error(`[navigateToResult] Error processing result type '${result.type}' for ID '${result.id}':`, error);
-                showNotification("Произошла ошибка при переходе к результату.", "error");
-            }
 
-            document.getElementById('searchResults')?.classList.add('hidden');
-            document.getElementById('searchInput')?.blur();
+            } catch (error) {
+                console.error(`[navigateToResult] Error processing result type '${type}' for ID '${id}' in section '${section}':`, error);
+                if (typeof showNotification === 'function') {
+                    showNotification("Произошла ошибка при переходе к результату.", "error");
+                }
+            } finally {
+                const searchResults = document.getElementById('searchResults');
+                const searchInput = document.getElementById('searchInput');
+                if (searchResults) searchResults.classList.add('hidden');
+                if (searchInput) searchInput.blur();
+            }
         }
 
 
@@ -2660,7 +2996,12 @@
 
 
         async function checkAndBuildIndex() {
-            if (!db) return;
+            if (!db) {
+                console.warn("checkAndBuildIndex called but DB is not available.");
+                return Promise.resolve();
+            }
+
+            console.log("Checking search index status...");
 
             try {
                 const transaction = db.transaction(['searchIndex'], 'readonly');
@@ -2670,31 +3011,46 @@
                 return new Promise((resolve, reject) => {
                     countRequest.onsuccess = async (e) => {
                         const count = e.target.result;
-                        if (count === 0 || transaction._rebuildIndexNeeded) {
-                            if (transaction._rebuildIndexNeeded) {
-                                console.warn("Database upgrade detected or index empty. Rebuilding search index...");
-                            } else {
-                                console.log("Search index is empty. Building initial index...");
-                            }
+                        console.log(`Search index count: ${count}`);
+
+                        if (count === 0) {
+                            console.warn("Search index is empty. Rebuilding...");
 
                             const loadingOverlay = document.getElementById('loadingOverlay');
-                            if (loadingOverlay) {
-                                const statusDiv = document.createElement('div');
+                            if (loadingOverlay && loadingOverlay.style.display !== 'none') {
+                                const statusDiv = document.getElementById('indexingStatus') || document.createElement('div');
                                 statusDiv.id = 'indexingStatus';
                                 statusDiv.className = 'text-sm text-gray-600 dark:text-gray-400 mt-2';
                                 statusDiv.textContent = 'Индексация данных для поиска...';
-                                loadingOverlay.querySelector('.text-center')?.appendChild(statusDiv);
+                                if (!document.getElementById('indexingStatus')) {
+                                    loadingOverlay.querySelector('.text-center')?.appendChild(statusDiv);
+                                }
                                 loadingOverlay.style.display = 'flex';
+                                console.log("Showing indexing status on loading overlay.");
+                            } else {
+                                console.log("Loading overlay not visible or not found, skipping status update.");
+                                showNotification("Индексация данных для поиска...", "info");
                             }
 
                             try {
+                                if (typeof buildInitialSearchIndex !== 'function') {
+                                    throw new Error("buildInitialSearchIndex function is not defined");
+                                }
                                 await buildInitialSearchIndex();
                                 console.log("Initial search index build complete.");
-                                if (loadingOverlay) loadingOverlay.style.display = 'none';
+                                if (loadingOverlay && document.getElementById('indexingStatus')) {
+                                    const statusDiv = document.getElementById('indexingStatus');
+                                    if (statusDiv) statusDiv.textContent = 'Индексация завершена.';
+                                }
                                 resolve();
                             } catch (buildError) {
                                 console.error("Error building initial search index:", buildError);
-                                if (loadingOverlay) loadingOverlay.innerHTML = '<div class="text-red-500">Ошибка индексации данных</div>';
+                                if (loadingOverlay && document.getElementById('indexingStatus')) {
+                                    const statusDiv = document.getElementById('indexingStatus');
+                                    if (statusDiv) statusDiv.textContent = 'Ошибка индексации!';
+                                } else {
+                                    showNotification("Ошибка индексации данных", "error");
+                                }
                                 reject(buildError);
                             }
                         } else {
@@ -2705,6 +3061,12 @@
                     countRequest.onerror = (e) => {
                         console.error("Error counting items in searchIndex:", e.target.error);
                         reject(e.target.error);
+                    };
+                    transaction.onerror = (e) => {
+                        console.error("Readonly transaction error on searchIndex for count:", e.target.error);
+                    };
+                    transaction.onabort = (e) => {
+                        console.warn("Readonly transaction aborted on searchIndex for count:", e.target.error);
                     };
                 });
             } catch (error) {
@@ -3065,12 +3427,12 @@
         function initExternalLinksSystem() {
             const addExtLinkBtn = document.getElementById('addExtLinkBtn');
             const extLinksContainer = document.getElementById('extLinksContainer');
-            const extLinkSearchInput = document.getElementById('extLinkSearchInput');
-            const extLinkCategoryFilter = document.getElementById('extLinkCategoryFilter');
-
-            if (!extLinksContainer) {
-                console.error("Ошибка инициализации: Контейнер #extLinksContainer не найден.");
-                return;
+            if (extLinksContainer) {
+                extLinksContainer.removeEventListener('click', handleExtLinkContainerClick);
+                extLinksContainer.addEventListener('click', handleExtLinkContainerClick);
+                console.log("Обработчик кликов по карточкам внешних ресурсов добавлен.");
+            } else {
+                console.error("Контейнер #extLinksContainer не найден, не удалось добавить обработчик кликов по карточкам.");
             }
             if (!addExtLinkBtn) {
                 console.warn("Кнопка добавления #addExtLinkBtn не найдена.");
@@ -4906,58 +5268,75 @@
 
         async function showAddReglamentModal(currentCategoryId = null) {
             const modalId = 'reglamentModal';
-            const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
+            const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
 
             const modalHTML = `
-                <div class="flex items-center justify-center min-h-full">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95%] h-[90vh] flex flex-col overflow-hidden">
+                                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95%] max-w-5xl h-[90vh] flex flex-col overflow-hidden p-2">
 
-                        <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <div class="flex justify-between items-center">
-                                <h2 class="text-xl font-bold" id="reglamentModalTitle">Добавить регламент</h2>
-                                <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Закрыть">
-                                    <i class="fas fa-times text-xl"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="flex-1 overflow-y-auto p-6">
-                            <form id="reglamentForm">
-                                <input type="hidden" id="reglamentId">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label class="block text-sm font-medium mb-1" for="reglamentTitle">Название</label>
-                                        <input type="text" id="reglamentTitle" name="reglamentTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                                    <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                                        <div class="flex justify-between items-center">
+                                            <h2 class="text-xl font-bold" id="reglamentModalTitle">Добавить регламент</h2>
+                                            <div>
+                                                <button id="toggleFullscreenReglamentBtn" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                                                    <i class="fas fa-expand"></i>
+                                                </button>
+                                                <button class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" aria-label="Закрыть">
+                                                    <i class="fas fa-times text-xl"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium mb-1" for="reglamentCategory">Категория</label>
-                                        <select id="reglamentCategory" name="reglamentCategory" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                            <option value="">Выберите категорию</option>
-                                        </select>
+
+                                    <div class="flex-1 overflow-y-auto p-6">
+                                        <form id="reglamentForm" class="h-full flex flex-col">
+                                            <input type="hidden" id="reglamentId" name="reglamentId">
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                <div>
+                                                    <label class="block text-sm font-medium mb-1" for="reglamentTitle">Название</label>
+                                                    <input type="text" id="reglamentTitle" name="reglamentTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium mb-1" for="reglamentCategory">Категория</label>
+                                                    <select id="reglamentCategory" name="reglamentCategory" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                                                        <option value="">Выберите категорию</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="mb-4 flex-1 flex flex-col">
+                                                <label class="block text-sm font-medium mb-1" for="reglamentContent">Содержание</label>
+                                                <textarea id="reglamentContent" name="reglamentContent" required class="w-full flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base resize-none"></textarea>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="flex-shrink-0 px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                                        <div class="flex justify-end">
+                                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
+                                                Отмена
+                                            </button>
+                                            <button type="submit" form="reglamentForm" id="saveReglamentBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                                <i class="fas fa-save mr-1"></i> Сохранить
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium mb-1" for="reglamentContent">Содержание</label>
-                                    <textarea id="reglamentContent" name="reglamentContent" rows="17" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base min-h-[300px]"></textarea>
-                                </div>
-                            </form>
-                        </div>
+                            `;
 
-                        <div class="flex-shrink-0 px-6 py-4 dark:bg-gray-750">
-                            <div class="flex justify-end">
-                                <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
-                                    Отмена
-                                </button>
-                                <button type="submit" form="reglamentForm" id="saveReglamentBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                                    <i class="mr-1"></i> Сохранить
-                                </button>
-                            </div>
-                        </div>
+            const reglamentModalConfig = {
+                modalId: 'reglamentModal',
+                buttonId: 'toggleFullscreenReglamentBtn',
+                classToggleConfig: {
+                    modal: ['p-4', 'flex', 'items-center', 'justify-center'],
+                    innerContainer: ['w-[95%]', 'max-w-5xl', 'h-[90vh]', 'rounded-lg', 'shadow-xl'],
+                    contentArea: []
+                },
+                innerContainerSelector: ':scope > .bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '.flex-1.overflow-y-auto.p-6'
+            };
 
-                    </div>
-                </div>`;
 
             const setupAddForm = (modalElement) => {
+
                 const form = modalElement.querySelector('#reglamentForm');
                 if (!form) {
                     console.error("Форма #reglamentForm не найдена в модальном окне регламента!");
@@ -4967,10 +5346,14 @@
                 const categorySelect = form.elements.reglamentCategory;
                 const contentTextarea = form.elements.reglamentContent;
                 const idInput = form.elements.reglamentId;
-                const saveButton = document.getElementById('saveReglamentBtn');
+                const saveButton = modalElement.querySelector('#saveReglamentBtn');
 
                 if (!saveButton) {
                     console.error("Кнопка сохранения #saveReglamentBtn не найдена!");
+                    return;
+                }
+                if (!contentTextarea) {
+                    console.error("Элемент <textarea> #reglamentContent не найден! Проверьте modalHTML.");
                     return;
                 }
 
@@ -4990,7 +5373,7 @@
                                 showNotification("Пожалуйста, заполните все обязательные поля (Название, Категория, Содержание)", "error");
                             }
                             saveButton.disabled = false;
-                            saveButton.innerHTML = '<i class="mr-1"></i> Сохранить';
+                            saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
                             return;
                         }
 
@@ -5000,6 +5383,18 @@
                             content,
                             dateAdded: new Date().toISOString(),
                         };
+                        let isEditing = false;
+                        if (reglamentId) {
+                            isEditing = true;
+                            reglamentData.id = parseInt(reglamentId, 10);
+                            reglamentData.dateUpdated = new Date().toISOString();
+                            try {
+                                const existing = await getFromIndexedDB('reglaments', reglamentData.id);
+                                reglamentData.dateAdded = existing?.dateAdded || reglamentData.dateAdded;
+                            } catch (err) {
+                                console.warn("Не удалось получить дату добавления для существующего регламента", err);
+                            }
+                        }
 
                         try {
                             if (typeof saveToIndexedDB !== 'function') {
@@ -5016,13 +5411,13 @@
                                 const displayedCategoryId = displayedCategoryInfo ? displayedCategoryInfo[0] : null;
 
                                 if (displayedCategoryId === category && typeof showReglamentsForCategory === 'function') {
-                                    console.log(`Reglament added to currently viewed category (${category}). Refreshing list.`);
+                                    console.log(`Reglament ${isEditing ? 'updated' : 'added'} in currently viewed category (${category}). Refreshing list.`);
                                     await showReglamentsForCategory(category);
                                 }
                             }
 
                             if (typeof showNotification === 'function') {
-                                showNotification("Регламент успешно добавлен");
+                                showNotification(isEditing ? "Регламент успешно обновлен" : "Регламент успешно добавлен");
                             }
                             modalElement.classList.add('hidden');
                             form.reset();
@@ -5034,11 +5429,33 @@
                             }
                         } finally {
                             saveButton.disabled = false;
-                            saveButton.innerHTML = '<i class="mr-1"></i> Сохранить';
+                            saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> ' + (isEditing ? 'Сохранить' : 'Добавить');
                             idInput.value = '';
                         }
                     });
                     form.dataset.submitHandlerAttached = 'true';
+                }
+
+
+                const fullscreenBtn = modalElement.querySelector('#toggleFullscreenReglamentBtn');
+                if (fullscreenBtn && !fullscreenBtn.dataset.listenerAttached) {
+                    fullscreenBtn.addEventListener('click', () => {
+                        if (typeof toggleModalFullscreen === 'function') {
+                            toggleModalFullscreen(
+                                reglamentModalConfig.modalId,
+                                reglamentModalConfig.buttonId,
+                                reglamentModalConfig.classToggleConfig,
+                                reglamentModalConfig.innerContainerSelector,
+                                reglamentModalConfig.contentAreaSelector
+                            );
+                        } else {
+                            console.error('Функция toggleModalFullscreen не найдена!');
+                        }
+                    });
+                    fullscreenBtn.dataset.listenerAttached = 'true';
+                    console.log('Fullscreen listener attached for reglamentModal via setupCallback');
+                } else if (!fullscreenBtn) {
+                    console.error('Кнопка #toggleFullscreenReglamentBtn не найдена в модальном окне регламента во время setupCallback.');
                 }
             };
 
@@ -5062,9 +5479,7 @@
                         const optionExists = categorySelect.querySelector(`option[value="${currentCategoryId}"]`);
                         if (optionExists) {
                             categorySelect.value = currentCategoryId;
-                            console.log(`Reglament category pre-selected in modal: ${currentCategoryId}`);
                         } else {
-                            console.warn(`Attempted to pre-select category ${currentCategoryId}, but option not found.`);
                             categorySelect.value = '';
                         }
                     }, 100);
@@ -5081,16 +5496,14 @@
                 const idInput = form.querySelector('#reglamentId');
                 if (idInput) idInput.value = '';
             }
-            const saveBtn = document.getElementById('saveReglamentBtn');
+            const saveBtn = modal.querySelector('#saveReglamentBtn');
             if (saveBtn) {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
                 saveBtn.setAttribute('form', 'reglamentForm');
             }
-
             const modalTitleEl = modal.querySelector('#reglamentModalTitle');
             if (modalTitleEl) modalTitleEl.textContent = 'Добавить регламент';
-
 
             modal.classList.remove('hidden');
 
@@ -5108,157 +5521,48 @@
                     return;
                 }
 
-                const modalId = 'editReglamentModal';
-                const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
-                const modalHTML = `
-                                    <div class="flex items-center justify-center min-h-full">
-                                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
-                                            <div class="p-6 flex flex-col h-full max-h-[90vh]">
-                                                <div class="flex justify-between items-center mb-4">
-                                                    <h2 class="text-xl font-bold">Редактировать регламент</h2>
-                                                    <button class="close-edit-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                        <i class="fas fa-times text-xl"></i>
-                                                    </button>
-                                                </div>
-                                                <form id="editReglamentForm" class="flex flex-col flex-1 overflow-hidden">
-                                                    <input type="hidden" id="editReglamentId">
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                        <div>
-                                                            <label class="block text-sm font-medium mb-1" for="editReglamentTitle">Название</label>
-                                                            <input type="text" id="editReglamentTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                        </div>
-                                                        <div>
-                                                            <label class="block text-sm font-medium mb-1" for="editReglamentCategory">Категория</label>
-                                                            <select id="editReglamentCategory" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                                <option value="">Выберите категорию</option>
-                                                                <option value="difficult-client">Работа с трудным клиентом</option>
-                                                                <option value="tech-support">Общий регламент</option>
-                                                                <option value="emergency">Чрезвычайные ситуации</option>
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                    <div class="mb-2 flex-1 flex flex-col overflow-hidden">
-                                                        <label class="block text-sm font-medium mb-1" for="editReglamentContent">Содержание</label>
-                                                        <div class="markdown-editor flex-1 flex flex-col overflow-hidden">
-                                                            <div class="editor-container flex-1 flex flex-col min-h-[200px] md:h-[400px] overflow-hidden">
-                                                                <div id="markdownEditorWrapper" class="flex-1 h-full overflow-hidden">
-                                                                    <textarea id="editReglamentContent" class="w-full h-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base resize-none"></textarea>
-                                                                </div>
-                                                            </div>
-                                                            <p class="text-sm text-gray-500 mt-2 flex items-center">
-                                                                <i class="fas fa-info-circle mr-1"></i>
-                                                                <span>Поддерживается синтаксис Markdown для форматирования текста</span>
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex justify-between mt-auto pt-4">
-                                                        <button type="button" id="deleteReglamentBtn" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition">
-                                                            <i class="fas fa-trash mr-1"></i>Удалить
-                                                        </button>
-                                                        <div>
-                                                            <button type="button" id="addSampleTextBtn" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition mr-2">
-                                                                <i class="fas fa-puzzle-piece mr-1"></i>Вставить шаблон
-                                                            </button>
-                                                            <button type="button" class="cancel-edit-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
-                                                                Отмена
-                                                            </button>
-                                                            <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                                                                <i class="fas fa-save mr-1"></i>Сохранить
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>`;
+                const modalId = 'reglamentModal';
+                const modal = document.getElementById(modalId);
 
+                if (!modal) {
+                    console.warn(`Modal #${modalId} not found for editing. Creating it first.`);
+                    await showAddReglamentModal();
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    return editReglament(id);
+                }
 
-                const setupEditForm = (modal) => {
-                    const form = modal.querySelector('#editReglamentForm');
-                    const idInput = modal.querySelector('#editReglamentId');
-                    const titleInput = modal.querySelector('#editReglamentTitle');
-                    const categorySelect = modal.querySelector('#editReglamentCategory');
-                    const contentTextarea = modal.querySelector('#editReglamentContent');
-                    const deleteButton = modal.querySelector('#deleteReglamentBtn');
+                const form = modal.querySelector('#reglamentForm');
+                const titleInput = modal.querySelector('#reglamentTitle');
+                const categorySelect = modal.querySelector('#reglamentCategory');
+                const contentTextarea = modal.querySelector('#reglamentContent');
+                const idInput = modal.querySelector('#reglamentId');
+                const saveButton = modal.querySelector('#saveReglamentBtn');
+                const modalTitle = modal.querySelector('#reglamentModalTitle');
 
-                    form.addEventListener('submit', async (e) => {
-                        e.preventDefault();
-                        const currentId = idInput.value;
-                        const title = titleInput.value.trim();
-                        const category = categorySelect.value;
-                        const content = contentTextarea.value.trim();
+                if (!form || !titleInput || !categorySelect || !contentTextarea || !idInput || !saveButton || !modalTitle) {
+                    console.error("Не все элементы найдены в модальном окне для редактирования регламента.");
+                    showNotification("Ошибка интерфейса: не найдены элементы окна редактирования.", "error");
+                    return;
+                }
 
-                        if (!title || !category || !content) {
-                            showNotification("Пожалуйста, заполните все обязательные поля", "error");
-                            return;
-                        }
+                modalTitle.textContent = 'Редактировать регламент';
+                saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
+                saveButton.disabled = false;
 
-                        try {
-                            const existingReglament = await getFromIndexedDB('reglaments', parseInt(currentId));
-                            if (!existingReglament) throw new Error("Original reglament not found for update.");
+                idInput.value = reglament.id;
+                titleInput.value = reglament.title || '';
+                contentTextarea.value = reglament.content || '';
 
-                            const updatedReglament = {
-                                ...existingReglament,
-                                id: parseInt(currentId),
-                                title,
-                                category,
-                                content,
-                                dateUpdated: new Date().toISOString()
-                            };
+                if (typeof populateReglamentCategoryDropdowns === 'function') {
+                    populateReglamentCategoryDropdowns();
+                }
+                setTimeout(() => {
+                    categorySelect.value = reglament.category || '';
+                }, 100);
 
-                            await saveToIndexedDB('reglaments', updatedReglament);
-
-                            const currentCategoryTitle = document.getElementById('currentCategoryTitle');
-                            if (currentCategoryTitle && !currentCategoryTitle.parentElement.classList.contains('hidden')) {
-                                const displayedCategory = document.querySelector('.reglament-category.active')?.dataset.category;
-                                if (displayedCategory && (displayedCategory === category || displayedCategory === existingReglament.category)) {
-                                    showReglamentsForCategory(displayedCategory);
-                                }
-                            }
-
-                            showNotification("Регламент обновлен");
-                            modal.classList.add('hidden');
-                        } catch (error) {
-                            console.error("Error updating reglament:", error);
-                            showNotification("Ошибка при обновлении регламента", "error");
-                        }
-                    });
-
-                    deleteButton.addEventListener('click', async () => {
-                        const currentId = parseInt(idInput.value);
-                        if (confirm("Вы уверены, что хотите удалить этот регламент?")) {
-                            try {
-                                const reglamentToDelete = await getFromIndexedDB('reglaments', currentId);
-                                const originalCategory = reglamentToDelete?.category;
-
-                                await deleteFromIndexedDB('reglaments', currentId);
-
-                                const currentCategoryTitle = document.getElementById('currentCategoryTitle');
-                                if (originalCategory && currentCategoryTitle && !currentCategoryTitle.parentElement.classList.contains('hidden')) {
-                                    const displayedCategory = document.querySelector('.reglament-category.active')?.dataset.category;
-                                    if (displayedCategory === originalCategory) {
-                                        showReglamentsForCategory(displayedCategory);
-                                    }
-                                }
-
-                                showNotification("Регламент удален");
-                                modal.classList.add('hidden');
-                            } catch (error) {
-                                console.error("Error deleting reglament:", error);
-                                showNotification("Ошибка при удалении регламента", "error");
-                            }
-                        }
-                    });
-                };
-
-                const modal = getOrCreateModal(modalId, modalClassName, modalHTML, setupEditForm);
-
-                modal.querySelector('#editReglamentId').value = reglament.id;
-                modal.querySelector('#editReglamentTitle').value = reglament.title;
-                modal.querySelector('#editReglamentCategory').value = reglament.category;
-                modal.querySelector('#editReglamentContent').value = reglament.content;
 
                 modal.classList.remove('hidden');
+                titleInput.focus();
 
             } catch (error) {
                 console.error("Error loading reglament for edit:", error);
@@ -5322,6 +5626,43 @@
                 console.error('Ошибка при загрузке внешних ресурсов:', error);
                 extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-red-500">Не удалось загрузить ресурсы.</div>';
                 applyCurrentView('extLinksContainer');
+            }
+        }
+
+
+        async function handleExtLinkContainerClick(event) {
+            const clickedCard = event.target.closest('.ext-link-item');
+
+            if (!clickedCard) {
+                return;
+            }
+
+            const isActionClick = event.target.closest('button.edit-ext-link, button.delete-ext-link, a.ext-link-url');
+
+            if (isActionClick) {
+                console.log("Клик по кнопке/иконке внутри карточки, пропускаем открытие ссылки с карточки.");
+                return;
+            }
+
+            const linkElement = clickedCard.querySelector('a.ext-link-url');
+            const url = linkElement?.href;
+
+            if (url) {
+                try {
+                    new URL(url);
+                    console.log(`Открытие URL по клику на карточку: ${url}`);
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                } catch (e) {
+                    console.error(`Некорректный URL у ресурса ${clickedCard.dataset.id}: ${url}`, e);
+                    if (typeof showNotification === 'function') {
+                        showNotification("Некорректный URL у этого ресурса.", "error");
+                    }
+                }
+            } else {
+                console.warn(`URL не найден для карточки ${clickedCard.dataset.id}`);
+                if (typeof showNotification === 'function') {
+                    showNotification("URL для этого ресурса не найден.", "warning");
+                }
             }
         }
 
@@ -5483,7 +5824,7 @@
                 console.log("Модальное окно #extLinkModal не найдено, создаем новое.");
                 modal = document.createElement('div');
                 modal.id = 'extLinkModal';
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center'; // Добавлены классы для центрирования
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
                 modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
                 <div class="p-6">
@@ -5696,147 +6037,202 @@
         }
 
 
+
         // СИСТЕМА КАСТОМИЗАЦИИ UI
         function initUICustomization() {
             const getElem = (id) => document.getElementById(id);
+            const querySelAll = (selector) => document.querySelectorAll(selector);
+
             const customizeUIBtn = getElem('customizeUIBtn');
             const customizeUIModal = getElem('customizeUIModal');
             const closeCustomizeUIModalBtn = getElem('closeCustomizeUIModalBtn');
             const saveUISettingsBtn = getElem('saveUISettingsBtn');
             const cancelUISettingsBtn = getElem('cancelUISettingsBtn');
             const resetUISettingsBtn = getElem('resetUISettingsBtn');
-            const panelSortContainer = getElem('panelSortContainer');
-            const decreaseFontBtn = getElem('decreaseFontBtn');
-            const increaseFontBtn = getElem('increaseFontBtn');
-            const resetFontBtn = getElem('resetFontBtn');
-            const fontSizeLabel = getElem('fontSizeLabel');
-            const borderRadiusSlider = getElem('borderRadiusSlider');
-            const densitySlider = getElem('densitySlider');
-            const querySel = (selector) => document.querySelector(selector);
-            const querySelAll = (selector) => document.querySelectorAll(selector);
-            const mainContentGrid = querySel('#mainContent > div');
 
-            if (!customizeUIBtn || !customizeUIModal) return;
+            if (!customizeUIBtn || !customizeUIModal) {
+                console.warn("UI Customization init failed: customizeUIBtn or customizeUIModal not found.");
+                return;
+            }
 
-            const closeModal = () => customizeUIModal.classList.add('hidden');
-            const openModal = () => {
-                loadUISettings();
-                customizeUIModal.classList.remove('hidden');
+            const closeModal = async (forceClose = false) => {
+                if (!customizeUIModal) return;
+
+                if (isUISettingsDirty && !forceClose) {
+                    if (!confirm("Изменения не сохранены. Вы уверены, что хотите выйти?")) {
+                        return;
+                    }
+                }
+
+                console.log("Closing customize UI modal. Reverting to original settings.");
+                await applyPreviewSettings(originalUISettings);
+                isUISettingsDirty = false;
+                customizeUIModal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
             };
-            const setFontSize = (size) => {
-                document.documentElement.style.fontSize = `${size}%`;
-                if (fontSizeLabel) fontSizeLabel.textContent = `${size}%`;
+
+            const openModal = async () => {
+                console.log("Opening customize UI modal...");
+                await loadUISettings();
+                if (customizeUIModal) {
+                    customizeUIModal.classList.remove('hidden');
+                }
+                document.body.classList.add('modal-open');
+                console.log("Customize UI modal opened.");
+                const panelSortContainer = getElem('panelSortContainer');
+                initSortableIfNeeded(panelSortContainer);
             };
+
             const initSortableIfNeeded = (container) => {
-                if (!container) return;
-                const sortableOptions = { animation: 150, handle: '.fa-grip-lines', ghostClass: 'my-sortable-ghost' };
-
-                if (window.Sortable) {
-                    new Sortable(container, sortableOptions);
-                } else if (!document.querySelector('script[src*="sortable"]')) {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js';
-                    script.onload = () => new Sortable(container, sortableOptions);
-                    script.onerror = () => console.error("Failed to load Sortable.js");
-                    document.head.appendChild(script);
+                if (!container) {
+                    console.error("Panel sort container not found for Sortable init.");
+                    return;
+                }
+                if (window.Sortable && !container.sortableInstance) {
+                    try {
+                        container.sortableInstance = new Sortable(container, {
+                            animation: 150,
+                            handle: '.fa-grip-lines',
+                            ghostClass: 'my-sortable-ghost',
+                            onEnd: function (/**Event*/evt) {
+                                console.log("SortableJS onEnd event triggered.");
+                                updatePreviewSettingsFromModal();
+                                isUISettingsDirty = true;
+                            },
+                        });
+                        console.log("Initialized SortableJS for panel sorting.");
+                    } catch (e) {
+                        console.error("Error initializing Sortable:", e);
+                    }
+                } else if (!window.Sortable) {
+                    console.warn("SortableJS library not loaded. Drag-and-drop for panels disabled.");
                 }
             };
 
             customizeUIBtn.addEventListener('click', openModal);
-            [closeCustomizeUIModalBtn, cancelUISettingsBtn].forEach(btn => btn?.addEventListener('click', closeModal));
+            [closeCustomizeUIModalBtn, cancelUISettingsBtn].forEach(btn => btn?.addEventListener('click', () => closeModal()));
 
-            saveUISettingsBtn?.addEventListener('click', () => {
-                saveUISettings();
-                closeModal();
-                showNotification("Настройки интерфейса сохранены");
-                applyUISettings();
-            });
-
-            resetUISettingsBtn?.addEventListener('click', () => {
-                if (confirm('Вы уверены, что хотите сбросить все настройки интерфейса?')) {
-                    resetUISettings();
-                    loadUISettings();
-                    showNotification("Настройки интерфейса сброшены");
+            saveUISettingsBtn?.addEventListener('click', async () => {
+                const saved = await saveUISettings();
+                if (saved) {
+                    closeModal(true);
+                    showNotification("Настройки интерфейса сохранены");
                 }
             });
 
-            initSortableIfNeeded(panelSortContainer);
-
-            customizeUIModal.addEventListener('click', (e) => {
-                const toggleBtn = e.target.closest('.toggle-visibility');
-                if (toggleBtn) {
-                    const icon = toggleBtn.querySelector('i');
-                    if (icon) {
-                        icon.classList.toggle('fa-eye');
-                        icon.classList.toggle('fa-eye-slash');
-                    }
-                    return;
+            resetUISettingsBtn?.addEventListener('click', async () => {
+                if (confirm('Вы уверены, что хотите сбросить все настройки интерфейса к значениям по умолчанию (в окне предпросмотра)? Это изменение нужно будет сохранить.')) {
+                    await resetUISettingsInModal();
                 }
-
-                const swatch = e.target.closest('.color-swatch');
-                if (swatch) {
-                    customizeUIModal.querySelectorAll('.color-swatch').forEach(s => {
-                        s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary', 'border-black', 'dark:border-white');
-                        s.classList.add('border-2', 'border-transparent');
-                    });
-                    swatch.classList.remove('border-transparent');
-                    swatch.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-
-                    const primaryColor = swatch.getAttribute('data-color');
-                    if (primaryColor) {
-                        const secondaryColor = calculateSecondaryColor(primaryColor);
-                        document.documentElement.style.setProperty('--color-primary', primaryColor);
-                        document.documentElement.style.setProperty('--color-secondary', secondaryColor);
-                        try {
-                            if (window.tailwind?.config?.theme?.extend?.colors) {
-                                window.tailwind.config.theme.extend.colors.primary = `var(--color-primary)`;
-                                window.tailwind.config.theme.extend.colors.secondary = `var(--color-secondary)`;
-                                window.tailwind.config.theme.extend.colors.blue.DEFAULT = `var(--color-primary)`;
-                            }
-                        } catch (err) {
-                            console.warn("Could not update live Tailwind config for preview:", err?.message);
-                        }
-                    }
-                    return;
-                }
-            });
-
-
-            if (decreaseFontBtn && increaseFontBtn && resetFontBtn) {
-                decreaseFontBtn.addEventListener('click', () => {
-                    const currentSize = parseInt(document.documentElement.style.fontSize || '100');
-                    if (currentSize > 70) setFontSize(currentSize - 10);
-                });
-                increaseFontBtn.addEventListener('click', () => {
-                    const currentSize = parseInt(document.documentElement.style.fontSize || '100');
-                    if (currentSize < 150) setFontSize(currentSize + 10);
-                });
-                resetFontBtn.addEventListener('click', () => setFontSize(100));
-            }
-
-            borderRadiusSlider?.addEventListener('input', () => {
-                document.documentElement.style.setProperty('--border-radius', `${borderRadiusSlider.value}px`);
-            });
-
-            densitySlider?.addEventListener('input', () => {
-                const spacing = 0.5 + (parseFloat(densitySlider.value) * 0.25);
-                document.documentElement.style.setProperty('--content-spacing', `${spacing}rem`);
             });
 
             querySelAll('input[name="mainLayout"]').forEach(radio => {
                 radio.addEventListener('change', () => {
-                    if (mainContentGrid) {
-                        const isVertical = radio.value === 'vertical';
-                        mainContentGrid.classList.toggle('grid-cols-1', isVertical);
-                        mainContentGrid.classList.toggle('md:grid-cols-2', !isVertical);
+                    if (currentPreviewSettings) {
+                        currentPreviewSettings.mainLayout = radio.value;
+                        applyPreviewSettings(currentPreviewSettings);
+                        isUISettingsDirty = true;
                     }
                 });
             });
 
             querySelAll('input[name="themeMode"]').forEach(radio => {
-                radio.addEventListener('change', () => setTheme(radio.value));
+                radio.addEventListener('change', () => {
+                    if (currentPreviewSettings) {
+                        currentPreviewSettings.themeMode = radio.value;
+                        applyPreviewSettings(currentPreviewSettings);
+                        isUISettingsDirty = true;
+                    }
+                });
+            });
+
+            customizeUIModal.addEventListener('click', (e) => {
+                const swatch = e.target.closest('.color-swatch');
+                if (swatch && currentPreviewSettings) {
+                    const newColor = swatch.getAttribute('data-color');
+                    if (newColor && newColor !== currentPreviewSettings.primaryColor) {
+                        customizeUIModal.querySelectorAll('.color-swatch').forEach(s => {
+                            s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
+                            s.classList.add('border-2', 'border-transparent');
+                        });
+                        swatch.classList.remove('border-transparent');
+                        swatch.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
+
+                        currentPreviewSettings.primaryColor = newColor;
+                        applyPreviewSettings(currentPreviewSettings);
+                        isUISettingsDirty = true;
+                    }
+                }
+                const toggleBtn = e.target.closest('.toggle-visibility');
+                if (toggleBtn) {
+                    handleModalVisibilityToggle(e);
+                }
+            });
+
+            const fontSizeSlider = getElem('fontSizeSlider');
+            const fontSizeLabel = getElem('fontSizeLabel');
+            if (fontSizeSlider && fontSizeLabel) {
+                fontSizeSlider.addEventListener('input', () => {
+                    const newSize = parseInt(fontSizeSlider.value);
+                    if (currentPreviewSettings && newSize !== currentPreviewSettings.fontSize) {
+                        fontSizeLabel.textContent = newSize + '%';
+                        currentPreviewSettings.fontSize = newSize;
+                        applyPreviewSettings(currentPreviewSettings);
+                        isUISettingsDirty = true;
+                    }
+                });
+            }
+
+            const borderRadiusSlider = getElem('borderRadiusSlider');
+            if (borderRadiusSlider) {
+                borderRadiusSlider.addEventListener('input', () => {
+                    const newValue = parseInt(borderRadiusSlider.value);
+                    if (currentPreviewSettings && newValue !== currentPreviewSettings.borderRadius) {
+                        currentPreviewSettings.borderRadius = newValue;
+                        applyPreviewSettings(currentPreviewSettings);
+                        isUISettingsDirty = true;
+                    }
+                });
+            }
+
+            const densitySlider = getElem('densitySlider');
+            if (densitySlider) {
+                densitySlider.addEventListener('input', () => {
+                    const newValue = parseInt(densitySlider.value);
+                    if (currentPreviewSettings && newValue !== currentPreviewSettings.contentDensity) {
+                        currentPreviewSettings.contentDensity = newValue;
+                        applyPreviewSettings(currentPreviewSettings);
+                        isUISettingsDirty = true;
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    const visibleModals = getVisibleModals();
+                    if (!visibleModals.length) return;
+                    const topmostModal = getTopmostModal(visibleModals);
+
+                    if (topmostModal && topmostModal.id === 'customizeUIModal') {
+                        closeModal();
+                    } else if (topmostModal) {
+                        topmostModal.classList.add('hidden');
+                    }
+                }
+            });
+
+            document.addEventListener('click', (event) => {
+                if (customizeUIModal && !customizeUIModal.classList.contains('hidden')) {
+                    const innerContainer = customizeUIModal.querySelector('.bg-white.dark\\:bg-gray-800');
+                    if (innerContainer && !innerContainer.contains(event.target)) {
+                        if (!customizeUIBtn.contains(event.target)) {
+                            closeModal();
+                        }
+                    }
+                }
             });
         }
+
 
         function calculateSecondaryColor(hex, percent = 15) {
             hex = hex.replace(/^#/, '');
@@ -5920,149 +6316,67 @@
         if (typeof setTheme === 'undefined') { window.setTheme = (theme) => console.log("setTheme called with:", theme); }
 
 
-        async function resetUISettings() {
-            console.log("Resetting UI settings...");
+        async function resetUISettingsInModal() {
+            console.log("Resetting UI settings in modal preview...");
+
+            currentPreviewSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
+            isUISettingsDirty = true;
+
             try {
-                if (db) {
-                    await deleteFromIndexedDB('preferences', 'uiSettings');
-                    console.log("Cleared UI settings from IndexedDB.");
-                } else {
-                    console.warn("DB not available, cannot clear stored UI settings.");
-                }
-
-                const { style } = document.documentElement;
-                const defaultPrimary = DEFAULT_UI_SETTINGS.primaryColor;
-                const defaultSecondary = calculateSecondaryColor(defaultPrimary);
-
-                style.setProperty('--color-primary', defaultPrimary);
-                style.setProperty('--color-secondary', defaultSecondary);
-                style.fontSize = `${DEFAULT_UI_SETTINGS.fontSize}%`;
-                style.setProperty('--border-radius', `${DEFAULT_UI_SETTINGS.borderRadius}px`);
-                const spacing = 0.5 + (DEFAULT_UI_SETTINGS.contentDensity * 0.25);
-                style.setProperty('--content-spacing', `${spacing.toFixed(3)}rem`);
-
-                setTheme(DEFAULT_UI_SETTINGS.themeMode);
-
-                applyPanelSettings(null, null);
-
-                const customizeUIModal = document.getElementById('customizeUIModal');
-                if (customizeUIModal && !customizeUIModal.classList.contains('hidden')) {
-                    console.log("Resetting controls inside the UI Customization modal to new defaults.");
-                    const defaultLayout = customizeUIModal.querySelector(`input[name="mainLayout"][value="${DEFAULT_UI_SETTINGS.mainLayout}"]`);
-                    if (defaultLayout) defaultLayout.checked = true;
-                    const defaultTheme = customizeUIModal.querySelector(`input[name="themeMode"][value="${DEFAULT_UI_SETTINGS.themeMode}"]`);
-                    if (defaultTheme) defaultTheme.checked = true;
-
-                    customizeUIModal.querySelectorAll('.color-swatch').forEach(s => {
-                        s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary', 'border-black', 'dark:border-white');
-                        s.classList.add('border-2', 'border-transparent');
-                    });
-                    const defaultColorSwatch = customizeUIModal.querySelector(`.color-swatch[data-color="${defaultPrimary}"]`);
-                    if (defaultColorSwatch) {
-                        defaultColorSwatch.classList.remove('border-transparent');
-                        defaultColorSwatch.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-                    }
-
-                    const fontSizeLabel = customizeUIModal.querySelector('#fontSizeLabel');
-                    if (fontSizeLabel) fontSizeLabel.textContent = `${DEFAULT_UI_SETTINGS.fontSize}%`;
-                    const borderRadiusSlider = customizeUIModal.querySelector('#borderRadiusSlider');
-                    if (borderRadiusSlider) borderRadiusSlider.value = DEFAULT_UI_SETTINGS.borderRadius;
-                    const densitySlider = customizeUIModal.querySelector('#densitySlider');
-                    if (densitySlider) densitySlider.value = DEFAULT_UI_SETTINGS.contentDensity;
-
-                    const panelSortContainer = customizeUIModal.querySelector('#panelSortContainer');
-                    if (panelSortContainer) {
-                    }
-                }
-                try {
-                    if (window.tailwind?.config?.theme?.extend?.colors) {
-                    }
-                } catch (e) {
-                    console.warn("Could not reset Tailwind config (might be normal):", e?.message);
-                }
-
-                console.log("UI settings reset complete.");
+                populateModalControls(currentPreviewSettings);
+                await applyPreviewSettings(currentPreviewSettings);
+                console.log("UI settings reset preview applied.");
+                showNotification("Настройки сброшены для предпросмотра. Нажмите 'Сохранить', чтобы применить.", "info");
                 return true;
             } catch (error) {
-                console.error("Error resetting UI settings:", error);
+                console.error("Error resetting UI settings preview:", error);
+                showNotification("Ошибка при сбросе настроек для предпросмотра", "error");
+                currentPreviewSettings = JSON.parse(JSON.stringify(originalUISettings));
+                isUISettingsDirty = false;
+                populateModalControls(currentPreviewSettings);
+                await applyPreviewSettings(currentPreviewSettings);
                 return false;
             }
         }
 
 
         async function applyUISettings() {
-            const { style } = document.documentElement;
-
-            const applyDefaults = () => {
-                const primary = DEFAULT_UI_SETTINGS.primaryColor;
-                const secondary = calculateSecondaryColor(primary);
-                style.setProperty('--color-primary', primary);
-                style.setProperty('--color-secondary', secondary);
-                style.fontSize = `${DEFAULT_UI_SETTINGS.fontSize}%`;
-                style.setProperty('--border-radius', `${DEFAULT_UI_SETTINGS.borderRadius}px`);
-                const spacing = 0.5 + (DEFAULT_UI_SETTINGS.contentDensity * 0.25);
-                style.setProperty('--content-spacing', `${spacing.toFixed(3)}rem`);
-                setTheme(DEFAULT_UI_SETTINGS.themeMode);
-                applyPanelSettings(null, null);
-            };
-
+            console.log("Applying UI settings globally (usually on app start)...");
+            let settingsToApply = {};
             if (!db) {
                 console.warn("DB not ready in applyUISettings. Applying defaults.");
-                applyDefaults();
-                return false;
-            }
-            try {
-                const uiSettings = await getFromIndexedDB('preferences', 'uiSettings');
-
-                style.removeProperty('--color-primary');
-                style.removeProperty('--color-secondary');
-                style.removeProperty('--border-radius');
-                style.removeProperty('--content-spacing');
-                style.fontSize = '';
-
-                const primaryColor = uiSettings?.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
-                const secondaryColor = calculateSecondaryColor(primaryColor);
-                style.setProperty('--color-primary', primaryColor);
-                style.setProperty('--color-secondary', secondaryColor);
-
-                const fontSize = uiSettings?.fontSize || DEFAULT_UI_SETTINGS.fontSize;
-                style.fontSize = `${fontSize}%`;
-
-                const borderRadius = uiSettings?.borderRadius ?? DEFAULT_UI_SETTINGS.borderRadius;
-                style.setProperty('--border-radius', `${borderRadius}px`);
-
-                const contentDensity = uiSettings?.contentDensity ?? DEFAULT_UI_SETTINGS.contentDensity;
-                const spacing = 0.5 + (contentDensity * 0.25);
-                style.setProperty('--content-spacing', `${spacing.toFixed(3)}rem`);
-
-                const mainLayout = uiSettings?.mainLayout || DEFAULT_UI_SETTINGS.mainLayout;
-                const mainLayoutDiv = document.querySelector('#mainContent > div.grid');
-                if (mainLayoutDiv) {
-                    const isVertical = mainLayout === 'vertical';
-                    mainLayoutDiv.classList.toggle('grid-cols-1', isVertical);
-                    mainLayoutDiv.classList.toggle('md:grid-cols-2', !isVertical);
-                } else {
-                    console.warn("Main layout div (#mainContent > div.grid) not found for applying layout settings.");
-                }
-
-                const themeMode = uiSettings?.themeMode || DEFAULT_UI_SETTINGS.themeMode;
-                setTheme(themeMode);
-
-                applyPanelSettings(uiSettings?.panelVisibility, uiSettings?.panelOrder);
-
+                settingsToApply = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
+            } else {
                 try {
-                    if (window.tailwind?.config?.theme?.extend?.colors) {
+                    const loadedSettings = await getFromIndexedDB('preferences', 'uiSettings');
+                    if (loadedSettings && typeof loadedSettings === 'object') {
+                        settingsToApply = {
+                            ...DEFAULT_UI_SETTINGS,
+                            ...loadedSettings,
+                            id: 'uiSettings'
+                        };
+                        if (!Array.isArray(settingsToApply.panelOrder) || settingsToApply.panelOrder.length === 0) {
+                            console.warn("Loaded panelOrder is invalid, using default.");
+                            settingsToApply.panelOrder = defaultPanelOrder;
+                        }
+                        if (!Array.isArray(settingsToApply.panelVisibility) || settingsToApply.panelVisibility.length !== settingsToApply.panelOrder.length) {
+                            console.warn("Loaded panelVisibility is invalid, using default.");
+                            settingsToApply.panelVisibility = defaultPanelVisibility;
+                        }
+                        console.log("Successfully loaded settings from DB for global application.");
+                    } else {
+                        console.log("No UI settings found in DB or invalid format for global application, using defaults.");
+                        settingsToApply = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
                     }
-                } catch (e) {
-                    console.warn("Could not update live Tailwind config:", e?.message);
+                } catch (error) {
+                    console.error("Error applying UI settings from DB, falling back to defaults:", error);
+                    settingsToApply = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
                 }
-
-                return true;
-            } catch (error) {
-                console.error("Error applying UI settings, falling back to defaults:", error);
-                applyDefaults();
-                return false;
             }
+
+            await applyPreviewSettings(settingsToApply);
+            console.log("Global UI settings applied.");
+            return true;
         }
 
 
@@ -6198,6 +6512,254 @@
                                     </button>
                                 </div>`;
             return item;
+        }
+
+
+        let originalUISettings = {};
+        let currentPreviewSettings = {};
+        let isUISettingsDirty = false;
+
+
+        async function applyPreviewSettings(settings) {
+            console.log("Applying preview settings:", settings);
+            const { style } = document.documentElement;
+
+            const primaryColor = settings?.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
+            const secondaryColor = calculateSecondaryColor(primaryColor);
+            style.setProperty('--color-primary', primaryColor);
+            style.setProperty('--color-secondary', secondaryColor);
+
+            const fontSize = settings?.fontSize || DEFAULT_UI_SETTINGS.fontSize;
+            style.fontSize = `${fontSize}%`;
+
+            const borderRadius = settings?.borderRadius ?? DEFAULT_UI_SETTINGS.borderRadius;
+            style.setProperty('--border-radius', `${borderRadius}px`);
+
+            const contentDensity = settings?.contentDensity ?? DEFAULT_UI_SETTINGS.contentDensity;
+            const spacing = 0.5 + (contentDensity * 0.25);
+            style.setProperty('--content-spacing', `${spacing.toFixed(3)}rem`);
+
+            const mainLayout = settings?.mainLayout || DEFAULT_UI_SETTINGS.mainLayout;
+            const mainLayoutDiv = document.querySelector('#mainContent > div.grid');
+            if (mainLayoutDiv) {
+                const isVertical = mainLayout === 'vertical';
+                mainLayoutDiv.classList.toggle('grid-cols-1', isVertical);
+                mainLayoutDiv.classList.toggle('md:grid-cols-2', !isVertical);
+            }
+
+            const themeMode = settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode;
+            if (typeof setTheme === 'function') {
+                setTheme(themeMode);
+            } else {
+                const isDark = themeMode === 'dark' || (themeMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.classList.toggle('dark', isDark);
+                console.warn("setTheme function was not available, used direct class toggle.");
+            }
+
+            const panelOrder = settings?.panelOrder || defaultPanelOrder;
+            const panelVisibility = settings?.panelVisibility || defaultPanelVisibility;
+            applyPanelOrderAndVisibility(panelOrder, panelVisibility);
+
+            console.log("Preview settings applied.");
+        }
+
+
+        function applyPanelOrderAndVisibility(order, visibility) {
+            const tabNav = document.querySelector('header + .border-b nav.flex');
+            if (!tabNav) {
+                console.warn("Tab navigation container not found for applying panel settings.");
+                return;
+            }
+
+            const moreTabsBtnParent = document.getElementById('moreTabsBtn')?.parentNode;
+            const allTabButtons = {};
+            tabsConfig.forEach(tab => {
+                const btn = document.getElementById(`${tab.id}Tab`);
+                if (btn) allTabButtons[tab.id] = btn;
+            });
+
+            order.forEach((panelId, index) => {
+                const tabBtn = allTabButtons[panelId];
+                const isVisible = visibility[index] ?? true;
+                if (tabBtn) {
+                    tabBtn.classList.toggle('hidden', !isVisible);
+                }
+            });
+
+            const fragment = document.createDocumentFragment();
+            order.forEach(panelId => {
+                const tabBtn = allTabButtons[panelId];
+                if (tabBtn && !tabBtn.classList.contains('hidden')) {
+                    fragment.appendChild(tabBtn);
+                }
+            });
+
+            if (moreTabsBtnParent) {
+                tabNav.insertBefore(fragment, moreTabsBtnParent);
+            } else {
+                tabNav.appendChild(fragment);
+            }
+
+            if (typeof setupTabsOverflow === 'function') {
+                setTimeout(setupTabsOverflow, 50);
+            }
+        }
+
+
+        function handleModalVisibilityToggle(event) {
+            const button = event.currentTarget;
+            const icon = button.querySelector('i');
+            if (!icon) return;
+
+            const isCurrentlyVisible = icon.classList.contains('fa-eye');
+            const shouldBeHidden = isCurrentlyVisible;
+
+            icon.classList.toggle('fa-eye', !shouldBeHidden);
+            icon.classList.toggle('fa-eye-slash', shouldBeHidden);
+            button.setAttribute('title', shouldBeHidden ? "Показать раздел" : "Скрыть раздел");
+
+            updatePreviewSettingsFromModal();
+            if (currentPreviewSettings) {
+                applyPreviewSettings(currentPreviewSettings);
+                isUISettingsDirty = true;
+            }
+        }
+
+
+        function getSettingsFromModal() {
+            const modal = document.getElementById('customizeUIModal');
+            if (!modal) return null;
+
+            const selectedColorSwatch = modal.querySelector('.color-swatch.ring-primary');
+            const primaryColor = selectedColorSwatch
+                ? selectedColorSwatch.getAttribute('data-color')
+                : DEFAULT_UI_SETTINGS.primaryColor;
+
+            const panelItems = Array.from(modal.querySelectorAll('#panelSortContainer .panel-item'));
+            const panelOrder = panelItems.map(item => item.getAttribute('data-section'));
+            const panelVisibility = panelItems.map(item =>
+                item.querySelector('.toggle-visibility i')?.classList.contains('fa-eye') ?? true
+            );
+
+
+            return {
+                id: 'uiSettings',
+                mainLayout: modal.querySelector('input[name="mainLayout"]:checked')?.value || DEFAULT_UI_SETTINGS.mainLayout,
+                themeMode: modal.querySelector('input[name="themeMode"]:checked')?.value || DEFAULT_UI_SETTINGS.themeMode,
+                primaryColor: primaryColor,
+                fontSize: parseInt(modal.querySelector('#fontSizeLabel')?.textContent) || DEFAULT_UI_SETTINGS.fontSize,
+                borderRadius: parseInt(modal.querySelector('#borderRadiusSlider')?.value) ?? DEFAULT_UI_SETTINGS.borderRadius,
+                contentDensity: parseInt(modal.querySelector('#densitySlider')?.value) ?? DEFAULT_UI_SETTINGS.contentDensity,
+                panelOrder: panelOrder,
+                panelVisibility: panelVisibility,
+            };
+        }
+
+
+        function updatePreviewSettingsFromModal() {
+            const settings = getSettingsFromModal();
+            if (settings) {
+                currentPreviewSettings = { ...settings };
+                console.log("Updated currentPreviewSettings from modal:", currentPreviewSettings);
+            }
+        }
+
+
+        function populateModalControls(settings) {
+            const modal = document.getElementById('customizeUIModal');
+            if (!modal) return;
+
+            console.log("Populating modal controls with:", settings);
+
+            const layoutRadio = modal.querySelector(`input[name="mainLayout"][value="${settings.mainLayout}"]`);
+            if (layoutRadio) layoutRadio.checked = true;
+            else {
+                const defaultLayoutRadio = modal.querySelector(`input[name="mainLayout"][value="${DEFAULT_UI_SETTINGS.mainLayout}"]`);
+                if (defaultLayoutRadio) defaultLayoutRadio.checked = true;
+            }
+
+            const themeRadio = modal.querySelector(`input[name="themeMode"][value="${settings.themeMode}"]`);
+            if (themeRadio) themeRadio.checked = true;
+            else {
+                const defaultThemeRadio = modal.querySelector(`input[name="themeMode"][value="${DEFAULT_UI_SETTINGS.themeMode}"]`);
+                if (defaultThemeRadio) defaultThemeRadio.checked = true;
+            }
+
+            modal.querySelectorAll('.color-swatch').forEach(s => {
+                s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
+                s.classList.add('border-2', 'border-transparent');
+                if (s.getAttribute('data-color') === settings.primaryColor) {
+                    s.classList.remove('border-transparent');
+                    s.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
+                }
+            });
+
+            const fontSizeLabel = modal.querySelector('#fontSizeLabel');
+            if (fontSizeLabel) fontSizeLabel.textContent = settings.fontSize + '%';
+            const fontSizeSlider = modal.querySelector('#fontSizeSlider');
+            if (fontSizeSlider) fontSizeSlider.value = settings.fontSize;
+
+            const borderRadiusSlider = modal.querySelector('#borderRadiusSlider');
+            if (borderRadiusSlider) borderRadiusSlider.value = settings.borderRadius;
+
+            const densitySlider = modal.querySelector('#densitySlider');
+            if (densitySlider) densitySlider.value = settings.contentDensity;
+
+            const panelSortContainer = document.getElementById('panelSortContainer');
+            if (panelSortContainer) {
+                panelSortContainer.innerHTML = '';
+
+                const idToConfigMap = tabsConfig.reduce((map, tab) => {
+                    map[tab.id] = tab; return map;
+                }, {});
+
+                const effectiveOrder = settings.panelOrder && settings.panelOrder.length === tabsConfig.length
+                    ? settings.panelOrder
+                    : defaultPanelOrder;
+                const effectiveVisibility = settings.panelVisibility && settings.panelVisibility.length === effectiveOrder.length
+                    ? settings.panelVisibility
+                    : defaultPanelVisibility;
+
+                const visibilityMap = effectiveOrder.reduce((map, panelId, index) => {
+                    map[panelId] = effectiveVisibility[index] ?? true;
+                    return map;
+                }, {});
+
+
+                effectiveOrder.forEach((panelId) => {
+                    const config = idToConfigMap[panelId];
+                    if (config) {
+                        const isVisible = visibilityMap[panelId];
+                        const panelItem = createPanelItemElement(config.id, config.name, isVisible);
+                        panelSortContainer.appendChild(panelItem);
+                    } else {
+                        console.warn(`Config not found for panel ID: ${panelId} during modal population.`);
+                    }
+                });
+
+                if (window.Sortable) {
+                    if (panelSortContainer.sortableInstance && typeof panelSortContainer.sortableInstance.destroy === 'function') {
+                        try {
+                            panelSortContainer.sortableInstance.destroy();
+                        } catch (e) { console.error("Error destroying Sortable instance:", e); }
+                    }
+                    try {
+                        panelSortContainer.sortableInstance = new Sortable(panelSortContainer, {
+                            animation: 150,
+                            handle: '.fa-grip-lines',
+                            ghostClass: 'my-sortable-ghost'
+                        });
+                    } catch (e) { console.error("Failed to initialize Sortable:", e); }
+                }
+
+                panelSortContainer.querySelectorAll('.toggle-visibility').forEach(button => {
+                    button.removeEventListener('click', handleModalVisibilityToggle);
+                    button.addEventListener('click', handleModalVisibilityToggle);
+                });
+
+            } else {
+                console.error("Panel sort container (#panelSortContainer) not found in populateModalControls.");
+            }
         }
 
 
@@ -6404,33 +6966,56 @@
         function toggleModalFullscreen(modalId, buttonId, classToggleConfig, innerContainerSelector, contentAreaSelector) {
             const modalElement = document.getElementById(modalId);
             const buttonElement = document.getElementById(buttonId);
-            const innerContainer = modalElement?.querySelector(innerContainerSelector);
-            const contentArea = modalElement?.querySelector(contentAreaSelector);
 
-            if (!modalElement || !buttonElement || !innerContainer || !contentArea) {
-                console.error(`[toggleModalFullscreen] Error: Elements not found for modalId: ${modalId}`);
+            if (!modalElement || !buttonElement) {
+                console.error(`[toggleModalFullscreen] Error: Elements not found for modalId: ${modalId} or buttonId: ${buttonId}`);
+                return;
+            }
+
+            const innerContainer = modalElement.querySelector(innerContainerSelector);
+            const contentArea = contentAreaSelector ? modalElement.querySelector(contentAreaSelector) : null;
+
+            if (!innerContainer) {
+                console.error(`[toggleModalFullscreen] Error: innerContainer not found using selector: "${innerContainerSelector}" within #${modalId}`);
                 return;
             }
 
             const icon = buttonElement.querySelector('i');
             const isCurrentlyFullscreen = modalElement.classList.contains('is-fullscreen');
+            const shouldBeFullscreen = !isCurrentlyFullscreen;
 
-            modalElement.classList.toggle('is-fullscreen', !isCurrentlyFullscreen);
-            classToggleConfig.modal.forEach(cls => modalElement.classList.toggle(cls));
+            console.log(`Toggling fullscreen for ${modalId}. Should be fullscreen: ${shouldBeFullscreen}`);
 
-            classToggleConfig.innerContainer.forEach(cls => innerContainer.classList.toggle(cls));
+            const fullscreenClasses = {
+                modal: ['p-0', 'bg-opacity-80'],
+                innerContainer: ['w-screen', 'h-screen', 'max-w-none', 'max-h-none', 'rounded-none', 'shadow-none'],
+                contentArea: ['p-6']
+            };
 
-            if (classToggleConfig.contentArea && classToggleConfig.contentArea.length > 0) {
-                classToggleConfig.contentArea.forEach(cls => contentArea.classList.toggle(cls));
-            }
+            modalElement.classList.toggle('is-fullscreen', shouldBeFullscreen);
+
+            Object.entries(classToggleConfig).forEach(([part, classes]) => {
+                const element = part === 'modal' ? modalElement : (part === 'innerContainer' ? innerContainer : contentArea);
+                if (element && classes && classes.length > 0) {
+                    classes.forEach(cls => element.classList.toggle(cls, !shouldBeFullscreen));
+                }
+            });
+
+            Object.entries(fullscreenClasses).forEach(([part, classes]) => {
+                const element = part === 'modal' ? modalElement : (part === 'innerContainer' ? innerContainer : contentArea);
+                if (element && classes && classes.length > 0) {
+                    classes.forEach(cls => element.classList.toggle(cls, shouldBeFullscreen));
+                }
+            });
+
 
             if (icon) {
-                icon.classList.toggle('fa-expand', isCurrentlyFullscreen);
-                icon.classList.toggle('fa-compress', !isCurrentlyFullscreen);
+                icon.classList.toggle('fa-expand', !shouldBeFullscreen);
+                icon.classList.toggle('fa-compress', shouldBeFullscreen);
             }
-            buttonElement.setAttribute('title', isCurrentlyFullscreen ? 'Развернуть на весь экран' : 'Свернуть');
+            buttonElement.setAttribute('title', shouldBeFullscreen ? 'Свернуть' : 'Развернуть на весь экран');
 
-            console.log(`Modal ${modalId} fullscreen toggled. New state: ${!isCurrentlyFullscreen}`);
+            console.log(`Fullscreen toggle complete for ${modalId}. Is fullscreen: ${shouldBeFullscreen}`);
         }
 
 
@@ -6439,52 +7024,88 @@
             const addBtn = document.getElementById('toggleFullscreenAddBtn');
             const editBtn = document.getElementById('toggleFullscreenEditBtn');
 
+            const reglamentModalConfig = {
+                modalId: 'reglamentModal',
+                buttonId: 'toggleFullscreenReglamentBtn',
+                classToggleConfig: {
+                    modal: ['p-4'],
+                    innerContainer: ['w-[95%]', 'max-w-5xl', 'h-[90vh]', 'rounded-lg', 'shadow-xl'],
+                    contentArea: []
+                },
+                innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '.flex-1.overflow-y-auto.p-6'
+            };
+
+            const algorithmModalConfig = {
+                modalId: 'algorithmModal',
+                buttonId: 'toggleFullscreenViewBtn',
+                classToggleConfig: {
+                    modal: ['p-4'],
+                    innerContainer: ['max-w-7xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'],
+                    contentArea: []
+                },
+                innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '#algorithmSteps'
+            };
+
+            const addModalConfig = {
+                modalId: 'addModal',
+                buttonId: 'toggleFullscreenAddBtn',
+                classToggleConfig: {
+                    modal: ['p-4'],
+                    innerContainer: ['max-w-4xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'],
+                    contentArea: []
+                },
+                innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '.p-content.overflow-y-auto.flex-1'
+            };
+
+            const editModalConfig = {
+                modalId: 'editModal',
+                buttonId: 'toggleFullscreenEditBtn',
+                classToggleConfig: {
+                    modal: ['p-4'],
+                    innerContainer: ['max-w-4xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'],
+                    contentArea: []
+                },
+                innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '.p-content.overflow-y-auto.flex-1'
+            };
+
             if (viewBtn) {
                 viewBtn.addEventListener('click', () => toggleModalFullscreen(
-                    'algorithmModal',
-                    'toggleFullscreenViewBtn',
-                    {
-                        modal: ['max-w-6xl', 'p-4'],
-                        innerContainer: ['h-full', 'flex', 'flex-col'],
-                        contentArea: ['flex-1']
-                    },
-                    '.bg-white',
-                    '#algorithmSteps'
+                    algorithmModalConfig.modalId,
+                    algorithmModalConfig.buttonId,
+                    algorithmModalConfig.classToggleConfig,
+                    algorithmModalConfig.innerContainerSelector,
+                    algorithmModalConfig.contentAreaSelector
                 ));
+                console.log("Fullscreen toggle initialized for algorithmModal.");
             } else {
-                console.warn("Fullscreen toggle button for View modal not found.");
             }
 
             if (addBtn) {
                 addBtn.addEventListener('click', () => toggleModalFullscreen(
-                    'addModal',
-                    'toggleFullscreenAddBtn',
-                    {
-                        modal: ['max-w-4xl', 'p-4'],
-                        innerContainer: ['h-full', 'flex', 'flex-col', 'max-h-[90vh]'],
-                        contentArea: []
-                    },
-                    '.bg-white',
-                    '.p-content.overflow-y-auto.flex-1'
+                    addModalConfig.modalId,
+                    addModalConfig.buttonId,
+                    addModalConfig.classToggleConfig,
+                    addModalConfig.innerContainerSelector,
+                    addModalConfig.contentAreaSelector
                 ));
+                console.log("Fullscreen toggle initialized for addModal.");
             } else {
-                console.warn("Fullscreen toggle button for Add modal not found.");
             }
 
             if (editBtn) {
                 editBtn.addEventListener('click', () => toggleModalFullscreen(
-                    'editModal',
-                    'toggleFullscreenEditBtn',
-                    {
-                        modal: ['max-w-4xl', 'p-4'],
-                        innerContainer: ['h-full', 'flex', 'flex-col', 'max-h-[90vh]'],
-                        contentArea: []
-                    },
-                    '.bg-white',
-                    '.p-content.overflow-y-auto.flex-1'
+                    editModalConfig.modalId,
+                    editModalConfig.buttonId,
+                    editModalConfig.classToggleConfig,
+                    editModalConfig.innerContainerSelector,
+                    editModalConfig.contentAreaSelector
                 ));
+                console.log("Fullscreen toggle initialized for editModal.");
             } else {
-                console.warn("Fullscreen toggle button for Edit modal not found.");
             }
         }
 
