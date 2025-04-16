@@ -136,6 +136,10 @@
                 display: none;
             }
         }
+
+        .reglament-item {
+            cursor: pointer !important;
+        }
     </style>
 </head>
 
@@ -145,8 +149,10 @@
         <header class="mb-4">
             <div class="flex flex-col md:flex-row justify-between items-center gap-3 mb-3">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-primary">1С-Отчетность: Интерактивное спасение</h1>
-                    <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Помощник для младших специалистов
+                    <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
+                    <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Помощник для технических
+                        специалистов любых
+                        калибров
                     </p>
                 </div>
                 <div class="flex items-center gap-3">
@@ -447,7 +453,7 @@
                     кнопку <i class="fas fa-copy"></i> для копирования.
                 </div>
                 <div class="mb-content flex flex-col md:flex-row gap-content-sm">
-                    <input type="text" id="linkSearchInput" placeholder="Поиск по названию или ссылке..."
+                    <input type="text" id="linkSearchInput" placeholder="Поиск по названию..."
                         class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
                 </div>
 
@@ -565,10 +571,6 @@
                     <select id="extLinkCategoryFilter"
                         class="px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 md:max-w-xs">
                         <option value="">Все категории</option>
-                        <option value="docs">Документация</option>
-                        <option value="gov">Государственные сайты</option>
-                        <option value="tools">Инструменты</option>
-                        <option value="other">Прочее</option>
                     </select>
                 </div>
                 <div id="extLinksContainer" class="grid gap-content" data-section-id="extLinksContainer"
@@ -846,7 +848,8 @@
                                 </div>
                                 <div class="mb-content">
                                     <label
-                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Масштаб</label>
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Размер
+                                        шрифта</label>
                                     <div class="flex items-center space-x-3 mt-2">
                                         <button id="decreaseFontBtn"
                                             class="p-1.5 rounded border border-gray-300 dark:border-gray-600 focus:outline-none text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -1026,6 +1029,7 @@
             <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
         </div>
     </div>
+
     <script defer src="./script.js"></script>
 </body>
 
