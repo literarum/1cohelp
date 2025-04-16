@@ -1236,31 +1236,55 @@
             button.addEventListener('click', () => setActiveTab(button.id.replace('Tab', '')));
         });
 
-        addClickListeners([
-            [closeModalBtn, () => document.getElementById('algorithmModal')?.classList.add('hidden')],
-            [closeEditModalBtn, () => document.getElementById('editModal')?.classList.add('hidden')],
-            [closeAddModalBtn, () => document.getElementById('addModal')?.classList.add('hidden')],
-            [cancelEditBtn, () => document.getElementById('editModal')?.classList.add('hidden')],
-            [cancelAddBtn, () => document.getElementById('addModal')?.classList.add('hidden')],
+        // addClickListeners([
+        //     [closeModalBtn, () => document.getElementById('algorithmModal')?.classList.add('hidden')],
+        //     [closeEditModalBtn, () => document.getElementById('editModal')?.classList.add('hidden')],
+        //     [closeAddModalBtn, () => document.getElementById('addModal')?.classList.add('hidden')],
+        //     [cancelEditBtn, () => document.getElementById('editModal')?.classList.add('hidden')],
+        //     [cancelAddBtn, () => document.getElementById('addModal')?.classList.add('hidden')],
 
-            [editMainBtn, () => editAlgorithm('main')],
-            [addStepBtn, addEditStep],
-            [saveAlgorithmBtn, saveAlgorithm],
-            [addNewStepBtn, addNewStep],
-            [saveNewAlgorithmBtn, saveNewAlgorithm],
+        //     [editMainBtn, () => editAlgorithm('main')],
+        //     [addStepBtn, addEditStep],
+        //     [saveAlgorithmBtn, saveAlgorithm],
+        //     [addNewStepBtn, addNewStep],
+        //     [saveNewAlgorithmBtn, saveNewAlgorithm],
 
-            [addProgramAlgorithmBtn, () => showAddModal('program')],
-            [addSkziAlgorithmBtn, () => showAddModal('skzi')],
-            [addWebRegAlgorithmBtn, () => showAddModal('webReg')],
+        //     [addProgramAlgorithmBtn, () => showAddModal('program')],
+        //     [addSkziAlgorithmBtn, () => showAddModal('skzi')],
+        //     [addWebRegAlgorithmBtn, () => showAddModal('webReg')],
 
-            [editAlgorithmBtn, () => {
-                if (!currentAlgorithm) {
-                    console.error('[editAlgorithmBtn Click] Cannot edit: currentAlgorithm ID is missing from state.');
-                    return;
-                }
-                editAlgorithm(currentAlgorithm, currentSection);
-            }]
-        ]);
+        //     [editAlgorithmBtn, () => {
+        //         if (!currentAlgorithm) {
+        //             console.error('[editAlgorithmBtn Click] Cannot edit: currentAlgorithm ID is missing from state.');
+        //             return;
+        //         }
+        //         editAlgorithm(currentAlgorithm, currentSection);
+        //     }]
+        // ]);
+
+
+        closeModalBtn?.addEventListener('click', () => algorithmModal?.classList.add('hidden'));
+        closeEditModalBtn?.addEventListener('click', () => requestCloseModal(editModal));
+        closeAddModalBtn?.addEventListener('click', () => requestCloseModal(addModal));
+        cancelEditBtn?.addEventListener('click', () => requestCloseModal(editModal));
+        cancelAddBtn?.addEventListener('click', () => requestCloseModal(addModal));
+
+        editMainBtn?.addEventListener('click', () => editAlgorithm('main'));
+        addStepBtn?.addEventListener('click', addEditStep);
+        saveAlgorithmBtn?.addEventListener('click', saveAlgorithm);
+        addNewStepBtn?.addEventListener('click', addNewStep);
+        saveNewAlgorithmBtn?.addEventListener('click', saveNewAlgorithm);
+        addProgramAlgorithmBtn?.addEventListener('click', () => showAddModal('program'));
+        addSkziAlgorithmBtn?.addEventListener('click', () => showAddModal('skzi'));
+        addWebRegAlgorithmBtn?.addEventListener('click', () => showAddModal('webReg'));
+
+        editAlgorithmBtn?.addEventListener('click', () => {
+            if (!currentAlgorithm) {
+                console.error('[editAlgorithmBtn Click] Cannot edit: currentAlgorithm ID is missing from state.');
+                return;
+            }
+            editAlgorithm(currentAlgorithm, currentSection);
+        });
 
 
         function initUI() {
@@ -1532,6 +1556,8 @@
         function editAlgorithm(algorithmId, section = 'main') {
             let algorithm = null;
 
+            initialEditState = null;
+
             try {
                 if (section === 'main') {
                     algorithm = algorithms.main;
@@ -1564,6 +1590,10 @@
 
 
             if (!algorithm) {
+                if (typeof algorithmId === 'object' && algorithmId !== null && algorithmId.id) {
+                    console.warn(`[editAlgorithm] Received object instead of ID. Trying with object's ID: ${algorithmId.id}`);
+                    return editAlgorithm(algorithmId.id, section);
+                }
                 console.warn(`[editAlgorithm] Algorithm with ID '${algorithmId}' not found in section '${section}'.`);
                 showNotification("Не удалось найти алгоритм для редактирования.", "error");
                 return;
@@ -1588,39 +1618,62 @@
                 editStepsContainer.innerHTML = '';
 
                 if (!Array.isArray(algorithm.steps)) {
-                    console.error(`[editAlgorithm] Algorithm (ID: ${algorithmId}, Section: ${section}) has invalid 'steps' data (not an array).`);
+                    console.error(`[editAlgorithm] Algorithm (ID: ${algorithm.id || algorithmId}, Section: ${section}) has invalid 'steps' data (not an array).`);
                     showNotification("Ошибка данных: Шаги алгоритма некорректны.", "error");
                     editStepsContainer.innerHTML = '<p class="text-red-500">Ошибка загрузки шагов: данные некорректны.</p>';
                 } else if (algorithm.steps.length === 0) {
-                    editStepsContainer.innerHTML = '<p class="text-gray-500">У этого алгоритма еще нет шагов. Добавьте первый шаг.</p>';
+                    editStepsContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400">У этого алгоритма еще нет шагов. Добавьте первый шаг.</p>';
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
+                    const showExampleField = section === 'main';
+                    stepDiv.innerHTML = createStepElementHTML(1, showExampleField);
+                    const deleteBtn = stepDiv.querySelector('.delete-step');
+                    if (deleteBtn) {
+                        attachDeleteListener(deleteBtn, editStepsContainer, 'editSteps');
+                    }
+                    editStepsContainer.appendChild(stepDiv);
+                    updateStepNumbers(editStepsContainer);
                 } else {
                     algorithm.steps.forEach((step, index) => {
                         const stepDiv = document.createElement('div');
-                        stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm';
+                        stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
 
-                        const showExampleField = ('example' in step) || section === 'main';
+                        const showExampleField = section === 'main';
+                        let exampleText = '';
+                        if (showExampleField) {
+                            if (typeof step.example === 'object' && step.example?.type === 'list') {
+                                exampleText = (step.example.intro ? step.example.intro + '\n' : '') +
+                                    (step.example.items ? step.example.items.map(item => `- ${item}`).join('\n') : '');
+                            } else {
+                                exampleText = step?.example ?? '';
+                            }
+                        }
+
+                        const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base';
+                        const backgroundClasses = 'bg-white dark:bg-gray-700';
+
                         const exampleInputHtml = showExampleField
                             ? `
                 <div class="mt-2">
-                    <label class="block text-sm font-medium mb-1">Пример (опционально)</label>
-                    <textarea class="step-example w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base" rows="3">${step?.example ?? ''}</textarea>
+                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример (опционально)</label>
+                    <textarea class="step-example ${commonInputClasses} ${backgroundClasses}" rows="3">${exampleText}</textarea>
                 </div>`
                             : '';
 
                         stepDiv.innerHTML = `
                 <div class="flex justify-between items-start mb-2">
-                    <label class="block text-sm font-medium step-number-label">Шаг ${index + 1}</label>
-                    <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150" aria-label="Удалить шаг ${index + 1}">
-                        <i class="fas fa-trash" aria-hidden="true"></i>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${index + 1}</label>
+                    <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1" aria-label="Удалить шаг ${index + 1}">
+                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="mb-2">
-                    <label class="block text-sm font-medium mb-1">Заголовок шага</label>
-                    <input type="text" class="step-title w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800" value="${step?.title ?? ''}">
+                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
+                    <input type="text" class="step-title ${commonInputClasses} ${backgroundClasses}" value="${step?.title ?? ''}">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Описание</label>
-                    <textarea class="step-desc w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800" rows="3">${step?.description ?? ''}</textarea>
+                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+                    <textarea class="step-desc ${commonInputClasses} ${backgroundClasses}" rows="3">${step?.description ?? ''}</textarea>
                 </div>
                 ${exampleInputHtml}
                 `;
@@ -1640,17 +1693,20 @@
                     updateStepNumbers(editStepsContainer);
                 }
 
+                captureInitialEditState(algorithm);
+
             } catch (error) {
-                console.error(`[editAlgorithm] Error populating edit modal for algorithm ID ${algorithmId}:`, error);
+                console.error(`[editAlgorithm] Error populating edit modal for algorithm ID ${algorithm.id || algorithmId}:`, error);
                 showNotification("Ошибка при заполнении формы редактирования.", "error");
                 editModalTitle.textContent = 'Ошибка редактирования';
                 algorithmTitleInput.value = '';
                 editStepsContainer.innerHTML = '<p class="text-red-500">Не удалось загрузить данные для редактирования.</p>';
+                initialEditState = null;
                 return;
             }
 
 
-            editModal.dataset.algorithmId = algorithmId;
+            editModal.dataset.algorithmId = String(algorithm.id || algorithmId);
             editModal.dataset.section = section;
 
             editModal.classList.remove('hidden');
@@ -1898,26 +1954,30 @@
 
 
         function createStepElementHTML(stepNumber, includeExampleField) {
+            const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base';
+            const backgroundClasses = 'bg-white dark:bg-gray-700';
+
             const exampleInputHTML = includeExampleField ? `
         <div class="mt-2">
-            <label class="block text-sm font-medium mb-1">Пример (опционально)</label>
-            <textarea class="step-example w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример (опционально)</label>
+            <textarea class="step-example ${commonInputClasses} ${backgroundClasses}" rows="3"></textarea>
         </div>
     ` : '';
+
             return `
         <div class="flex justify-between items-start mb-2">
-            <label class="block text-sm font-medium">Шаг ${stepNumber}</label>
-            <button type="button" class="delete-step text-red-500 hover:text-red-700">
-                <i class="fas fa-trash"></i>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Шаг ${stepNumber}</label>
+            <button type="button" class="delete-step text-red-500 hover:text-red-700 p-1">
+                <i class="fas fa-trash fa-fw"></i>
             </button>
         </div>
         <div class="mb-2">
-            <label class="block text-sm font-medium mb-1">Заголовок шага</label>
-            <input type="text" class="step-title w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800">
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
+            <input type="text" class="step-title ${commonInputClasses} ${backgroundClasses}">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">Описание</label>
-            <textarea class="step-desc w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-gray-50 dark:bg-gray-700 dark:bg-gray-800"></textarea>
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+            <textarea class="step-desc ${commonInputClasses} ${backgroundClasses}" rows="3"></textarea>
         </div>
         ${exampleInputHTML}
     `;
@@ -1948,15 +2008,15 @@
                 const title = titleInput?.value.trim();
                 const description = descInput?.value.trim();
 
-                if (!title || !description) {
-                    stepsData.isValid = false;
+                const step = { title: title || '', description: description || '' };
+
+                const exampleValue = exampleInput?.value.trim();
+                if (exampleInput && exampleValue) {
+                    step.example = exampleValue;
+                } else if (exampleInput) {
+                    delete step.example;
                 }
 
-                const step = { title: title || '', description: description || '' };
-                const exampleValue = exampleInput?.value.trim();
-                if (exampleValue) {
-                    step.example = exampleValue;
-                }
                 stepsData.steps.push(step);
             });
 
@@ -1986,6 +2046,7 @@
 
 
         async function saveAlgorithm() {
+            const editModal = document.getElementById('editModal');
             const algorithmId = editModal?.dataset.algorithmId;
             const section = editModal?.dataset.section;
             const algorithmTitleInput = document.getElementById('algorithmTitle');
@@ -1998,15 +2059,15 @@
             }
 
             const newTitle = algorithmTitleInput.value.trim();
-            if (!newTitle) {
+            if (!newTitle && section !== 'main') {
                 showNotification('Пожалуйста, введите название алгоритма', 'error');
                 return;
             }
 
-            const { steps: newSteps, isValid } = extractStepsData(editStepsContainer);
+            const { steps: newSteps } = extractStepsData(editStepsContainer);
 
-            if (!isValid) {
-                showNotification('Пожалуйста, заполните все обязательные поля (Заголовок и Описание) для каждого шага', 'error');
+            if (newSteps.length === 0) {
+                showNotification('Алгоритм должен содержать хотя бы один шаг', 'error');
                 return;
             }
 
@@ -2052,9 +2113,11 @@
                     if (saved) {
                         console.log("Algorithms successfully saved to IndexedDB.");
                         showNotification("Алгоритм успешно сохранен.");
+                        initialEditState = null;
+                        editModal.classList.add('hidden');
                     } else {
                         console.error("saveDataToIndexedDB returned false.");
-                        showNotification("Не удалось сохранить изменения.", "error");
+                        showNotification("Не удалось сохранить изменения в базе данных.", "error");
                     }
                 } catch (error) {
                     console.error("Error during saveDataToIndexedDB in saveAlgorithm:", error);
@@ -2062,18 +2125,6 @@
                 }
             } else {
                 showNotification("Не удалось обновить данные алгоритма в памяти.", "error");
-            }
-
-
-            editModal.classList.add('hidden');
-
-            if (typeof algorithmModal !== 'undefined' && !algorithmModal.classList.contains('hidden') && typeof showAlgorithmDetail === 'function') {
-                const algorithm = section === 'main'
-                    ? algorithms?.main
-                    : algorithms?.[section]?.find(a => String(a.id) === String(algorithmId));
-                if (algorithm) {
-                    showAlgorithmDetail(algorithm, section);
-                }
             }
         }
 
@@ -2089,7 +2140,13 @@
 
 
         function showAddModal(section) {
-            if (!addModal) return;
+            initialAddState = null;
+
+            const addModal = document.getElementById('addModal');
+            if (!addModal) {
+                console.error("Модальное окно добавления #addModal не найдено.");
+                return;
+            }
 
             const addModalTitle = document.getElementById('addModalTitle');
             const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
@@ -2109,10 +2166,10 @@
             newStepsContainer.className = 'space-y-4';
 
             newStepsContainer.innerHTML = `
-                                            <div class="edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4">
-                                                ${createStepElementHTML(1, false)}
-                                            </div>
-                                        `;
+        <div class="edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4">
+            ${createStepElementHTML(1, false)}
+        </div>
+    `;
 
             const firstDeleteBtn = newStepsContainer.querySelector('.delete-step');
             if (firstDeleteBtn) {
@@ -2120,6 +2177,9 @@
             }
 
             addModal.dataset.section = section;
+
+            captureInitialAddState();
+
             addModal.classList.remove('hidden');
         }
 
@@ -2145,6 +2205,7 @@
 
 
         async function saveNewAlgorithm() {
+            const addModal = document.getElementById('addModal');
             const section = addModal?.dataset.section;
             const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
             const newAlgorithmDesc = document.getElementById('newAlgorithmDesc');
@@ -2158,29 +2219,26 @@
 
             const title = newAlgorithmTitle.value.trim();
             const description = newAlgorithmDesc.value.trim();
+
             if (!title) {
                 showNotification('Пожалуйста, введите название алгоритма', 'error');
                 return;
             }
-            if (!description) {
-                showNotification('Пожалуйста, введите краткое описание алгоритма', 'error');
-                return;
-            }
 
-            const { steps, isValid } = extractStepsData(newStepsContainer);
+            const { steps } = extractStepsData(newStepsContainer);
 
-            if (!isValid) {
-                showNotification('Пожалуйста, заполните Заголовок и Описание для каждого шага', 'error');
-                return;
-            }
             if (steps.length === 0) {
                 showNotification('Пожалуйста, добавьте хотя бы один шаг', 'error');
                 return;
             }
 
             const id = `${section}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-            const newAlgorithm = { id, title, description, steps };
+            const newAlgorithm = {
+                id,
+                title,
+                description,
+                steps
+            };
 
             if (!algorithms[section]) {
                 algorithms[section] = [];
@@ -2193,12 +2251,19 @@
                     if (typeof renderAlgorithmCards === 'function') {
                         renderAlgorithmCards(section);
                     }
-                    await updateSearchIndex('algorithms', 'all', { section: 'all', data: algorithms }, 'update');
+                    if (typeof updateSearchIndex === 'function') {
+                        await updateSearchIndex('algorithms', 'all', { section: 'all', data: algorithms }, 'update');
+                    }
 
                     showNotification("Новый алгоритм успешно добавлен и сохранен.");
+                    initialAddState = null;
                     addModal.classList.add('hidden');
                 } else {
                     showNotification("Не удалось сохранить алгоритм в базе данных.", "error");
+                    const indexToRemove = algorithms[section].findIndex(algo => algo.id === id);
+                    if (indexToRemove > -1) {
+                        algorithms[section].splice(indexToRemove, 1);
+                    }
                 }
             } catch (error) {
                 console.error("Error saving new algorithm to IndexedDB:", error);
@@ -2477,11 +2542,9 @@
 
 
         async function performSearch(query) {
-            // Получаем элементы DOM
             const searchResults = document.getElementById('searchResults');
             const searchInput = document.getElementById('searchInput');
 
-            // Нормализуем запрос
             const normalizedQuery = query.trim().toLowerCase();
             const results = [];
 
@@ -3228,7 +3291,7 @@
         function exportClientDataToTxt() {
             const notes = document.getElementById('clientNotes')?.value ?? '';
             if (!notes.trim()) {
-                showNotification("Нет данных для экспорта", "error");
+                showNotification("Нет данных для сохранения", "error");
                 return;
             }
 
@@ -3443,36 +3506,34 @@
         function initExternalLinksSystem() {
             const addExtLinkBtn = document.getElementById('addExtLinkBtn');
             const extLinksContainer = document.getElementById('extLinksContainer');
-            if (extLinksContainer) {
-                extLinksContainer.removeEventListener('click', handleExtLinkContainerClick);
-                extLinksContainer.addEventListener('click', handleExtLinkContainerClick);
-                console.log("Обработчик кликов по карточкам внешних ресурсов добавлен.");
-            } else {
-                console.error("Контейнер #extLinksContainer не найден, не удалось добавить обработчик кликов по карточкам.");
-            }
-            if (!addExtLinkBtn) {
-                console.warn("Кнопка добавления #addExtLinkBtn не найдена.");
-            }
-            if (!extLinkSearchInput) {
-                console.warn("Поле поиска #extLinkSearchInput не найдено.");
-            }
-            if (!extLinkCategoryFilter) {
-                console.warn("Фильтр категорий #extLinkCategoryFilter не найден.");
+            const extLinkSearchInput = document.getElementById('extLinkSearchInput');
+            const extLinkCategoryFilter = document.getElementById('extLinkCategoryFilter');
+
+            if (!addExtLinkBtn || !extLinksContainer || !extLinkSearchInput || !extLinkCategoryFilter) {
+                console.error("Ошибка инициализации системы внешних ссылок: один или несколько элементов не найдены.");
+                return;
             }
 
 
             addExtLinkBtn?.addEventListener('click', showAddExtLinkModal);
 
-            if (extLinkSearchInput && typeof debounce === 'function') {
-                extLinkSearchInput.addEventListener('input', debounce(filterExtLinks, 250));
-            } else if (extLinkSearchInput) {
-                console.warn("Функция debounce не найдена, поиск будет срабатывать при каждом вводе.");
-                extLinkSearchInput.addEventListener('input', filterExtLinks);
+            const debouncedFilter = typeof debounce === 'function' ? debounce(filterExtLinks, 250) : filterExtLinks;
+            if (extLinkSearchInput) {
+                extLinkSearchInput.addEventListener('input', debouncedFilter);
             }
 
             extLinkCategoryFilter?.addEventListener('change', filterExtLinks);
 
             loadExtLinks();
+            populateExtLinkCategoryFilter();
+
+            if (extLinksContainer) {
+                extLinksContainer.removeEventListener('click', handleExtLinkContainerClick);
+                extLinksContainer.addEventListener('click', handleExtLinkContainerClick);
+                console.log("Обработчик кликов по карточкам внешних ресурсов добавлен/обновлен.");
+            } else {
+                console.error("Контейнер #extLinksContainer не найден, не удалось добавить обработчик кликов по карточкам.");
+            }
         }
 
 
@@ -3523,39 +3584,40 @@
 
                 if (folder) {
                     const color = folder.color || 'gray';
+                    const colorName = folder.color || 'gray';
                     folderBadgeHTML = `
-                <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${color}-100 text-${color}-700 dark:bg-${color}-900 dark:text-${color}-300">
-                    <i class="fas fa-folder mr-1"></i>${folder.name}
-                </span>`;
+            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-700 dark:bg-${colorName}-900 dark:text-${colorName}-300">
+                <i class="fas fa-folder mr-1"></i>${folder.name}
+            </span>`;
                 }
 
-                bookmarkElement.className = 'bookmark-item view-item group';
+                bookmarkElement.className = 'bookmark-item view-item group cursor-pointer';
                 bookmarkElement.dataset.id = bookmark.id;
                 if (bookmark.folder) bookmarkElement.dataset.folder = bookmark.folder;
 
                 bookmarkElement.innerHTML = `
-            <div class="flex-grow min-w-0 mr-3">
-                <h3 class="font-semibold text-base group-hover:text-primary dark:group-hover:text-primary truncate" title="${bookmark.title}">${bookmark.title}</h3>
-                <p class="bookmark-description text-gray-600 dark:text-gray-400 text-sm mt-1 mb-2 truncate">${bookmark.description || 'Нет описания'}</p>
-                <div class="bookmark-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                     ${folderBadgeHTML}
-                     <span class="text-gray-500"><i class="far fa-clock mr-1"></i>${new Date(bookmark.dateAdded).toLocaleDateString()}</span>
-                     <a href="${bookmark.url}" target="_blank" class="bookmark-url text-gray-500 hover:text-primary dark:hover:text-primary hidden" title="${bookmark.url}">
-                         <i class="fas fa-link mr-1"></i>${new URL(bookmark.url).hostname}
-                     </a>
-                </div>
+        <div class="flex-grow min-w-0 mr-3">
+            <h3 class="font-semibold text-base group-hover:text-primary dark:group-hover:text-primary truncate" title="${bookmark.title}">${bookmark.title}</h3>
+            <p class="bookmark-description text-gray-600 dark:text-gray-400 text-sm mt-1 mb-2 truncate">${bookmark.description || 'Нет описания'}</p>
+            <div class="bookmark-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                 ${folderBadgeHTML}
+                 <span class="text-gray-500"><i class="far fa-clock mr-1"></i>${new Date(bookmark.dateAdded).toLocaleDateString()}</span>
+                 <a href="${bookmark.url}" target="_blank" class="bookmark-url text-gray-500 hover:text-primary dark:hover:text-primary hidden" title="${bookmark.url}">
+                     <i class="fas fa-link mr-1"></i>${new URL(bookmark.url).hostname}
+                 </a>
             </div>
-            <div class="bookmark-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <a href="${bookmark.url}" target="_blank" class="p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Открыть ссылку">
-                    <i class="fas fa-external-link-alt"></i>
-                </a>
-                <button data-action="edit" class="edit-bookmark p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Редактировать">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>`;
+        </div>
+        <div class="bookmark-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <a href="${bookmark.url}" target="_blank" class="p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Открыть ссылку">
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+            <button data-action="edit" class="edit-bookmark p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Редактировать">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>`;
                 fragment.appendChild(bookmarkElement);
             });
 
@@ -3576,18 +3638,20 @@
             if (!bookmarkItem) return;
 
             const bookmarkId = parseInt(bookmarkItem.dataset.id, 10);
-            const action = button?.dataset.action;
 
-            if (action === 'edit') {
+            if (button) {
+                const action = button.dataset.action;
                 event.stopPropagation();
-                showEditBookmarkModal(bookmarkId);
-            } else if (action === 'delete') {
-                event.stopPropagation();
-                const title = bookmarkItem.querySelector('h3')?.title || `ID ${bookmarkId}`;
-                if (confirm(`Вы уверены, что хотите удалить закладку "${title}"?`)) {
-                    deleteBookmark(bookmarkId);
+
+                if (action === 'edit') {
+                    showEditBookmarkModal(bookmarkId);
+                } else if (action === 'delete') {
+                    const title = bookmarkItem.querySelector('h3')?.title || `ID ${bookmarkId}`;
+                    if (confirm(`Вы уверены, что хотите удалить закладку "${title}"?`)) {
+                        deleteBookmark(bookmarkId);
+                    }
                 }
-            } else if (!target.closest('a') && !button) {
+            } else if (!target.closest('a')) {
                 console.log("Клик по телу закладки, попытка открыть URL:", bookmarkId);
                 try {
                     const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
@@ -4281,32 +4345,40 @@
 
 
         function handleLinkActionClick(event) {
-            const button = event.target.closest('button');
-            if (!button) return;
+            const target = event.target;
+            const button = target.closest('button');
+            const linkItem = target.closest('.cib-link-item[data-id]');
 
-            const linkItem = button.closest('.cib-link-item[data-id]');
             if (!linkItem) return;
 
             const linkId = parseInt(linkItem.dataset.id, 10);
+            const codeElement = linkItem.querySelector('code');
 
-            if (button.classList.contains('copy-cib-link')) {
-                const codeElement = linkItem.querySelector('code');
+            if (button) {
+                event.stopPropagation();
+
+                if (button.classList.contains('copy-cib-link')) {
+                    if (codeElement) {
+                        copyToClipboard(codeElement.textContent, 'Ссылка 1С скопирована!');
+                    }
+                    return;
+                }
+
+                if (button.classList.contains('edit-cib-link')) {
+                    showAddEditCibLinkModal(linkId);
+                    return;
+                }
+
+                if (button.classList.contains('delete-cib-link')) {
+                    const titleElement = linkItem.querySelector('h3');
+                    const linkTitle = titleElement ? (titleElement.getAttribute('title') || titleElement.textContent) : `ID ${linkId}`;
+                    deleteCibLink(linkId, linkTitle);
+                    return;
+                }
+            } else {
                 if (codeElement) {
                     copyToClipboard(codeElement.textContent, 'Ссылка 1С скопирована!');
                 }
-                return;
-            }
-
-            if (button.classList.contains('edit-cib-link')) {
-                showAddEditCibLinkModal(linkId);
-                return;
-            }
-
-            if (button.classList.contains('delete-cib-link')) {
-                const titleElement = linkItem.querySelector('h3');
-                const linkTitle = titleElement ? titleElement.getAttribute('title') || titleElement.textContent : `ID ${linkId}`;
-                deleteCibLink(linkId, linkTitle);
-                return;
             }
         }
 
@@ -5111,22 +5183,22 @@
                 const fragment = document.createDocumentFragment();
                 reglaments.forEach(reglament => {
                     const reglamentElement = document.createElement('div');
-                    reglamentElement.className = 'reglament-item view-item group flex justify-between items-center';
+                    reglamentElement.className = 'reglament-item view-item group flex justify-between items-center cursor-pointer';
                     reglamentElement.dataset.id = reglament.id;
 
                     reglamentElement.innerHTML = `
-                <div class="flex-grow min-w-0 mr-3 cursor-pointer" data-action="view">
-                     <h4 class="font-semibold group-hover:text-primary dark:group-hover:text-primary truncate" title="${reglament.title}">${reglament.title}</h4>
-                </div>
-                 <div class="reglament-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
-                    <button data-action="edit" class="edit-reglament-inline p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Редактировать">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button data-action="delete" class="delete-reglament-inline p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `;
+            <div class="flex-grow min-w-0 mr-3" data-action="view">
+                 <h4 class="font-semibold group-hover:text-primary dark:group-hover:text-primary truncate" title="${reglament.title}">${reglament.title}</h4>
+            </div>
+             <div class="reglament-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+                <button data-action="edit" class="edit-reglament-inline p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button data-action="delete" class="delete-reglament-inline p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
                     fragment.appendChild(reglamentElement);
                 });
 
@@ -5150,17 +5222,18 @@
             const addTrigger = target.closest('button[data-action="add-reglament-from-empty"]');
             if (addTrigger) {
                 event.preventDefault();
-                showAddReglamentModal();
+                const reglamentsListDiv = document.getElementById('reglamentsList');
+                const currentCategoryId = reglamentsListDiv?.dataset.currentCategory;
+                showAddReglamentModal(currentCategoryId);
                 return;
             }
 
-            const actionButton = target.closest('button[data-action]');
-            const viewTrigger = target.closest('[data-action="view"]');
             const reglamentItem = target.closest('.reglament-item[data-id]');
-
             if (!reglamentItem) return;
 
             const reglamentId = parseInt(reglamentItem.dataset.id);
+
+            const actionButton = target.closest('button[data-action]');
 
             if (actionButton) {
                 const action = actionButton.dataset.action;
@@ -5174,7 +5247,7 @@
                         deleteReglamentFromList(reglamentId, reglamentItem);
                     }
                 }
-            } else if (viewTrigger) {
+            } else {
                 event.stopPropagation();
                 showReglamentDetail(reglamentId);
             }
@@ -5646,6 +5719,46 @@
         }
 
 
+        const extLinkCategoryInfo = {
+            docs: { name: 'Документация', color: 'blue', icon: 'fa-file-alt' },
+            gov: { name: 'Гос. сайты', color: 'red', icon: 'fa-landmark' },
+            tools: { name: 'Инструменты', color: 'green', icon: 'fa-tools' },
+            other: { name: 'Прочее', color: 'yellow', icon: 'fa-link' }
+        };
+
+
+        function populateExtLinkCategoryFilter() {
+            const filterSelect = document.getElementById('extLinkCategoryFilter');
+            if (!filterSelect) {
+                console.error("Не найден select для фильтра категорий внешних ссылок (#extLinkCategoryFilter)");
+                return;
+            }
+
+            const currentValue = filterSelect.value;
+
+            while (filterSelect.options.length > 1) {
+                filterSelect.remove(1);
+            }
+
+            const fragment = document.createDocumentFragment();
+            Object.entries(extLinkCategoryInfo).forEach(([key, info]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = info.name;
+                fragment.appendChild(option);
+            });
+
+            filterSelect.appendChild(fragment);
+
+            if (currentValue && filterSelect.querySelector(`option[value="${currentValue}"]`)) {
+                filterSelect.value = currentValue;
+            } else if (filterSelect.options.length > 0) {
+                filterSelect.value = "";
+            }
+            console.log("Фильтр категорий внешних ресурсов обновлен.");
+        }
+
+
         async function handleExtLinkContainerClick(event) {
             const clickedCard = event.target.closest('.ext-link-item');
 
@@ -5692,60 +5805,62 @@
 
             extLinksContainer.innerHTML = '';
 
-            if (!links?.length) {
-                extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500">Нет сохраненных внешних ресурсов</div>';
+            if (!links || links.length === 0) {
+                extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Нет сохраненных внешних ресурсов.</div>';
                 applyCurrentView('extLinksContainer');
                 return;
             }
 
             const categoryMap = {
-                docs: { name: 'Документация', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300', icon: 'fa-file-alt' },
-                gov: { name: 'Гос. сайты', color: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300', icon: 'fa-landmark' },
-                tools: { name: 'Инструменты', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300', icon: 'fa-tools' },
-                other: { name: 'Прочее', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300', icon: 'fa-link' },
-                default: { name: 'Без категории', color: 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300', icon: 'fa-question-circle' }
+                ...extLinkCategoryInfo,
+                default: { name: 'Без категории', color: 'gray', icon: 'fa-question-circle' }
             };
 
             const fragment = document.createDocumentFragment();
 
             links.forEach(link => {
-                if (!link || typeof link !== 'object') {
+                if (!link || typeof link !== 'object' || !link.id) {
                     console.warn("Пропущен невалидный элемент link при рендеринге:", link);
                     return;
                 }
 
                 const linkElement = document.createElement('div');
-                linkElement.className = 'ext-link-item view-item group flex justify-between items-start p-4 rounded-lg shadow-sm hover:shadow-md bg-white dark:bg-gray-700 transition';
+                linkElement.className = 'ext-link-item view-item group flex justify-between items-start p-4 rounded-lg shadow-sm hover:shadow-md bg-white dark:bg-gray-700 transition cursor-pointer';
                 linkElement.dataset.id = link.id;
+                linkElement.dataset.category = link.category || '';
 
                 const categoryKey = link.category && categoryMap[link.category] ? link.category : 'default';
                 const categoryData = categoryMap[categoryKey];
-                linkElement.dataset.category = link.category || '';
+
+                const badgeColorName = categoryData.color || 'gray';
+                const badgeColorClasses = `bg-${badgeColorName}-100 text-${badgeColorName}-800 dark:bg-${badgeColorName}-900 dark:text-${badgeColorName}-300`;
+
 
                 const categoryBadge = link.category
-                    ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${categoryData.color} whitespace-nowrap"><i class="fas ${categoryData.icon} mr-1"></i>${categoryData.name}</span>`
+                    ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeColorClasses} whitespace-nowrap"><i class="fas ${categoryData.icon || 'fa-tag'} mr-1.5"></i>${categoryData.name}</span>`
                     : '';
 
                 linkElement.innerHTML = `
-            <div class="flex-grow min-w-0 mr-3">
-                <h3 class="font-bold text-base group-hover:text-primary dark:group-hover:text-primary truncate" title="${link.title || ''}">${link.title || 'Без названия'}</h3>
-                <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mt-1 truncate">${link.description || 'Нет описания'}</p>
-                <div class="ext-link-meta mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    ${categoryBadge}
-                </div>
+        <div class="flex-grow min-w-0 mr-3">
+            <h3 class="font-semibold text-base group-hover:text-primary dark:group-hover:text-primary truncate" title="${link.title || ''}">${link.title || 'Без названия'}</h3>
+            <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mt-1 truncate">${link.description || 'Нет описания'}</p>
+            <div class="ext-link-meta mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                ${categoryBadge}
+                 <span class="text-gray-500 text-xs"><i class="far fa-clock mr-1"></i>${link.dateAdded ? new Date(link.dateAdded).toLocaleDateString() : 'Неизвестно'}</span>
             </div>
-            <div class="ext-link-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
-                 <a href="${link.url || '#'}" target="_blank" rel="noopener noreferrer" class="ext-link-url p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Открыть ${link.url || ''}">
-                    <i class="fas fa-external-link-alt"></i>
-                </a>
-                <button class="edit-ext-link p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Редактировать">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="delete-ext-link p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `;
+        </div>
+        <div class="ext-link-actions flex flex-shrink-0 items-center ml-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+             <a href="${link.url || '#'}" target="_blank" rel="noopener noreferrer" class="ext-link-url p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Открыть ${link.url || ''}">
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+            <button class="edit-ext-link p-1.5 text-gray-500 hover:text-primary rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Редактировать">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="delete-ext-link p-1.5 text-gray-500 hover:text-red-500 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ml-1" title="Удалить">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
 
                 linkElement.querySelector('.edit-ext-link')?.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -5759,13 +5874,6 @@
                     }
                 });
 
-                linkElement.addEventListener('click', (e) => {
-                    if (!e.target.closest('button, a')) {
-                        console.log("Клик по карточке внешнего ресурса (не по кнопке/ссылке):", link.id);
-                    }
-                });
-
-
                 fragment.appendChild(linkElement);
             });
 
@@ -5775,62 +5883,15 @@
 
 
         function filterExtLinks() {
-            const searchInput = document.getElementById('extLinkSearchInput');
-            const categoryFilter = document.getElementById('extLinkCategoryFilter');
-            const container = document.getElementById('extLinksContainer');
-
-            if (!container) {
-                console.error("Контейнер #extLinksContainer не найден для фильтрации.");
-                return
-            };
-            if (!searchInput) {
-                console.warn("Поле поиска #extLinkSearchInput не найдено для фильтрации.");
-            }
-            if (!categoryFilter) {
-                console.warn("Фильтр категорий #extLinkCategoryFilter не найден для фильтрации.");
-            }
-
-            const linkItems = container.querySelectorAll('.ext-link-item');
-
-            const searchValue = searchInput ? searchInput.value.trim().toLowerCase() : '';
-            const categoryValue = categoryFilter ? categoryFilter.value : '';
-
-            console.log(`Фильтрация внешних ресурсов: Поиск="${searchValue}", Категория="${categoryValue}"`);
-
-            let visibleCount = 0;
-            linkItems.forEach(item => {
-                const title = item.querySelector('h3')?.textContent.trim().toLowerCase() || '';
-                const description = item.querySelector('p.ext-link-description')?.textContent.trim().toLowerCase() || '';
-                const category = item.dataset.category || '';
-
-                const matchesSearch = !searchValue || title.includes(searchValue) || description.includes(searchValue);
-
-                const matchesCategory = !categoryValue || category === categoryValue;
-
-                const shouldBeVisible = matchesSearch && matchesCategory;
-
-                item.hidden = !shouldBeVisible;
-
-                if (shouldBeVisible) {
-                    visibleCount++;
-                }
+            console.log("Вызвана функция filterExtLinks (использует filterItems)");
+            filterItems({
+                containerSelector: '#extLinksContainer',
+                itemSelector: '.ext-link-item',
+                searchInputSelector: 'extLinkSearchInput',
+                filterSelectSelector: 'extLinkCategoryFilter',
+                dataAttribute: 'category',
+                textSelectors: ['h3', 'p.ext-link-description']
             });
-
-            console.log(`Фильтрация завершена. Видимых элементов: ${visibleCount}`);
-
-            const noResultsMessage = container.querySelector('.no-results-message');
-            if (visibleCount === 0 && linkItems.length > 0) {
-                if (!noResultsMessage) {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'no-results-message col-span-full text-center py-6 text-gray-500';
-                    msgDiv.textContent = 'По вашему запросу ничего не найдено.';
-                    container.appendChild(msgDiv);
-                }
-            } else {
-                if (noResultsMessage) {
-                    noResultsMessage.remove();
-                }
-            }
         }
 
 
@@ -5842,53 +5903,71 @@
                 modal.id = 'extLinkModal';
                 modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
                 modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold" id="extLinkModalTitle">Заголовок окна</h2>
-                        <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть">
-                            <i class="fas fa-times text-xl"></i>
-                        </button>
-                    </div>
-                    <form id="extLinkForm">
-                        <input type="hidden" id="extLinkId">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-1" for="extLinkTitle">Название</label>
-                            <input type="text" id="extLinkTitle" name="extLinkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                        </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-1" for="extLinkUrl">URL</label>
-                            <input type="url" id="extLinkUrl" name="extLinkUrl" required placeholder="https://example.com" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                        </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-1" for="extLinkDescription">Описание (опционально)</label>
-                            <textarea id="extLinkDescription" name="extLinkDescription" rows="3" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
-                        </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-1" for="extLinkCategory">Категория</label>
-                            <select id="extLinkCategory" name="extLinkCategory" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                <option value="">Без категории</option>
-                                <option value="docs">Документация</option>
-                                <option value="gov">Государственные сайты</option>
-                                <option value="tools">Инструменты</option>
-                                <option value="other">Прочее</option>
-                            </select>
-                        </div>
-                        <div class="flex justify-end mt-6">
-                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">Отмена</button>
-                            <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">Сохранить</button>
-                        </div>
-                    </form>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold" id="extLinkModalTitle">Заголовок окна</h2>
+                    <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
                 </div>
+                <form id="extLinkForm">
+                    <input type="hidden" id="extLinkId">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1" for="extLinkTitle">Название</label>
+                        <input type="text" id="extLinkTitle" name="extLinkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1" for="extLinkUrl">URL</label>
+                        <input type="url" id="extLinkUrl" name="extLinkUrl" required placeholder="https://example.com" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1" for="extLinkDescription">Описание (опционально)</label>
+                        <textarea id="extLinkDescription" name="extLinkDescription" rows="3" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1" for="extLinkCategory">Категория</label>
+                        <select id="extLinkCategory" name="extLinkCategory" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Без категории</option>
+                            <!-- Опции будут добавлены динамически -->
+                        </select>
+                    </div>
+                    <div class="flex justify-end mt-6">
+                        <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">Отмена</button>
+                        <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">Сохранить</button>
+                    </div>
+                </form>
             </div>
-        `;
+        </div>`;
                 document.body.appendChild(modal);
 
                 const closeModal = () => modal.classList.add('hidden');
                 modal.querySelectorAll('.close-modal, .cancel-modal').forEach(btn => btn.addEventListener('click', closeModal));
 
                 const form = modal.querySelector('#extLinkForm');
-                form?.addEventListener('submit', handleExtLinkFormSubmit);
+                if (form && !form.dataset.listenerAttached) {
+                    form.addEventListener('submit', handleExtLinkFormSubmit);
+                    form.dataset.listenerAttached = 'true';
+                }
+            }
+
+            const categorySelect = modal.querySelector('#extLinkCategory');
+            if (categorySelect && !categorySelect.dataset.populated) {
+                while (categorySelect.options.length > 1) {
+                    categorySelect.remove(1);
+                }
+                const fragment = document.createDocumentFragment();
+                Object.entries(extLinkCategoryInfo).forEach(([key, info]) => {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = info.name;
+                    fragment.appendChild(option);
+                });
+                categorySelect.appendChild(fragment);
+                categorySelect.dataset.populated = 'true';
+                console.log("Категории в модальном окне внешних ссылок обновлены.");
+            } else if (!categorySelect) {
+                console.error("Не найден select категорий #extLinkCategory в модальном окне!");
             }
 
             return {
@@ -5899,7 +5978,7 @@
                 titleInput: modal.querySelector('#extLinkTitle'),
                 urlInput: modal.querySelector('#extLinkUrl'),
                 descriptionInput: modal.querySelector('#extLinkDescription'),
-                categoryInput: modal.querySelector('#extLinkCategory')
+                categoryInput: categorySelect
             };
         }
 
@@ -6921,20 +7000,28 @@
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
                 const visibleModals = getVisibleModals();
-
                 if (!visibleModals.length) {
                     return;
                 }
 
                 const topmostModal = getTopmostModal(visibleModals);
 
-                if (topmostModal) {
-                    topmostModal.classList.add('hidden');
+                if (!topmostModal) {
+                    return;
                 }
-                console.log('Escape pressed. Visible modals:', visibleModals.length, 'Topmost:', topmostModal?.id);
-                if (topmostModal) {
-                    console.log('Hiding modal:', topmostModal.id);
+
+                if (topmostModal.id === 'editModal' || topmostModal.id === 'addModal') {
+                    requestCloseModal(topmostModal);
+                } else {
+                    console.log('Escape pressed. Hiding non-edit/add modal:', topmostModal.id);
                     topmostModal.classList.add('hidden');
+                    if (topmostModal.id === 'customizeUIModal' && isUISettingsDirty) {
+                        console.log("Closing customize UI modal via Escape with unsaved changes. Reverting preview.");
+                        if (typeof applyPreviewSettings === 'function' && originalUISettings) {
+                            applyPreviewSettings(originalUISettings);
+                            isUISettingsDirty = false;
+                        }
+                    }
                 }
             }
         });
@@ -7186,4 +7273,161 @@
             } else {
                 console.warn("Кнопка перезагрузки #forceReloadBtn не найдена.");
             }
+        }
+
+
+        let initialEditState = null;
+        let initialAddState = null;
+
+
+        function getCurrentEditState() {
+            const algorithmTitleInput = document.getElementById('algorithmTitle');
+            const editStepsContainer = document.getElementById('editSteps');
+
+            if (!algorithmTitleInput || !editStepsContainer) {
+                console.error("getCurrentEditState: Не найдены элементы формы редактирования.");
+                return null;
+            }
+
+            const currentTitle = algorithmTitleInput.value.trim();
+            const { steps: currentSteps, isValid } = extractStepsData(editStepsContainer);
+
+            return {
+                title: currentTitle,
+                steps: currentSteps
+            };
+        }
+
+
+        function getCurrentAddState() {
+            const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
+            const newAlgorithmDesc = document.getElementById('newAlgorithmDesc');
+            const newStepsContainer = document.getElementById('newSteps');
+
+            if (!newAlgorithmTitle || !newAlgorithmDesc || !newStepsContainer) {
+                console.error("getCurrentAddState: Не найдены элементы формы добавления.");
+                return null;
+            }
+
+            const currentTitle = newAlgorithmTitle.value.trim();
+            const currentDescription = newAlgorithmDesc.value.trim();
+            const { steps: currentSteps, isValid } = extractStepsData(newStepsContainer);
+
+            return {
+                title: currentTitle,
+                description: currentDescription,
+                steps: currentSteps
+            };
+        }
+
+
+        function hasChanges(modalType) {
+            let initialState;
+            let currentState;
+
+            if (modalType === 'edit') {
+                initialState = initialEditState;
+                currentState = getCurrentEditState();
+            } else if (modalType === 'add') {
+                initialState = initialAddState;
+                currentState = getCurrentAddState();
+            } else {
+                console.warn("hasChanges: Неизвестный тип модального окна:", modalType);
+                return false;
+            }
+
+            if (!initialState || !currentState) {
+                console.warn("hasChanges: Не удалось получить начальное или текущее состояние для", modalType);
+                return false;
+            }
+
+            try {
+                const initialJson = JSON.stringify(initialState);
+                const currentJson = JSON.stringify(currentState);
+                const changed = initialJson !== currentJson;
+                console.log(`hasChanges (${modalType}):`, changed);
+                return changed;
+            } catch (error) {
+                console.error("hasChanges: Ошибка при сравнении состояний:", error);
+                return false;
+            }
+        }
+
+
+        function requestCloseModal(modalElement) {
+            if (!modalElement) return false;
+
+            const modalId = modalElement.id;
+            let modalType = null;
+
+            if (modalId === 'editModal') {
+                modalType = 'edit';
+            } else if (modalId === 'addModal') {
+                modalType = 'add';
+            } else {
+                console.warn("requestCloseModal: Вызвано для неизвестного модального окна:", modalId);
+                modalElement.classList.add('hidden');
+                return true;
+            }
+
+            if (hasChanges(modalType)) {
+                if (!confirm("Вы не сохранили изменения. Закрыть без сохранения?")) {
+                    console.log(`Закрытие окна ${modalId} отменено пользователем.`);
+                    return false;
+                }
+                console.log(`Закрытие окна ${modalId} подтверждено пользователем (с изменениями).`);
+            } else {
+                console.log(`Закрытие окна ${modalId} (без изменений).`);
+            }
+
+            modalElement.classList.add('hidden');
+            if (modalType === 'edit') {
+                initialEditState = null;
+            } else if (modalType === 'add') {
+                initialAddState = null;
+            }
+            return true;
+        }
+
+
+        function captureInitialEditState(algorithm) {
+            if (!algorithm) {
+                initialEditState = null;
+                return;
+            }
+            try {
+                initialEditState = JSON.parse(JSON.stringify({
+                    title: algorithm.title || '',
+                    steps: algorithm.steps || []
+                }));
+                console.log("Захвачено начальное состояние для редактирования:", initialEditState);
+            } catch (error) {
+                console.error("Ошибка при захвате начального состояния редактирования:", error);
+                initialEditState = null;
+            }
+        }
+
+
+        function captureInitialAddState() {
+            const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
+            const newAlgorithmDesc = document.getElementById('newAlgorithmDesc');
+            const newStepsContainer = document.getElementById('newSteps');
+
+            const initialTitle = newAlgorithmTitle ? newAlgorithmTitle.value.trim() : '';
+            const initialDescription = newAlgorithmDesc ? newAlgorithmDesc.value.trim() : '';
+            let initialSteps = [];
+
+            if (newStepsContainer) {
+                const extracted = extractStepsData(newStepsContainer);
+                initialSteps = extracted.steps;
+            } else {
+                console.warn("captureInitialAddState: Контейнер newSteps не найден при захвате состояния.");
+            }
+
+            initialAddState = {
+                title: initialTitle,
+                description: initialDescription,
+                steps: initialSteps
+            };
+            console.log("Захвачено начальное состояние для добавления:", initialAddState);
         }
