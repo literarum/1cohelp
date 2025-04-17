@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1СО Copilot</title>
+    <title>Copilot 1СО</title>
     <link rel="icon"
         href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
@@ -149,7 +149,7 @@
         <header class="mb-4">
             <div class="flex flex-col md:flex-row justify-between items-center gap-3 mb-3">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-primary">1СО Copilot</h1>
+                    <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
                     <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Помощник для технических
                         специалистов любых
                         калибров
@@ -742,13 +742,24 @@
             <div class="flex items-center justify-center min-h-full py-content">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-screen flex flex-col">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center gap-4">
                             <h2 class="text-2xl font-bold">Настройка интерфейса</h2>
-                            <button id="closeCustomizeUIModalBtn"
-                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                title="Закрыть">
-                                <i class="fas fa-times text-xl"></i>
-                            </button>
+                            <div class="flex items-center gap-3">
+                                <div class="relative">
+                                    <span id="employeeExtensionDisplay"
+                                        class="inline-block px-4 py-2 text-base border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-w-[180px] text-center align-middle"
+                                        title="Клик для редактирования">
+                                    </span>
+                                    <input type="text" id="employeeExtensionInput"
+                                        class="inline-block px-4 py-2 text-base border-2 border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-900 hidden min-w-[180px] align-middle"
+                                        maxlength="4" pattern="\d*" title="Введите доб. номер">
+                                </div>
+                                <button id="closeCustomizeUIModalBtn"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Закрыть">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1029,8 +1040,7 @@
             <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
         </div>
     </div>
-
-    <script defer src="./script.js"></script>
+    <script defer src="./script.js">
 </body>
 
 </html>
