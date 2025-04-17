@@ -7614,12 +7614,12 @@
                         await saveEmployeeExtension(inputField.value);
                     }
                     closeModal(true);
-                    showNotification("Настройки интерфейса сохранены");
+                    showNotification("Настройки сохранены");
                 }
             });
 
             resetUISettingsBtn?.addEventListener('click', async () => {
-                if (confirm('Вы уверены, что хотите сбросить все настройки интерфейса к значениям по умолчанию (в окне предпросмотра)? Это изменение нужно будет сохранить.')) {
+                if (confirm('Вы уверены, что хотите сбросить все настройки к значениям по умолчанию (в окне предпросмотра)? Это изменение нужно будет сохранить.')) {
                     await resetUISettingsInModal();
                     updateExtensionDisplay('');
                     const inputField = getElem('employeeExtensionInput');
