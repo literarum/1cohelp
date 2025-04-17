@@ -227,8 +227,8 @@
                     title: "Главный алгоритм работы",
                     steps: [
                         { title: "Приветствие", description: "Обозначьте клиенту, куда он дозвонился, представьтесь, поприветствуйте клиента.", example: "Пример: Техническая поддержка сервиса 1С-Отчетность, меня зовут Сиреневый_Турбовыбулькиватель. Здравствуйте!" },
-                        { title: "Уточнение ИНН", description: "Запросите ИНН организации для идентификации клиента в системе и дальнейшей работы.", example: "Пример: Назовите, пожалуйста, ИНН организации.", innLink: true },
-                        { title: "Идентификация проблемы", description: "Выясните суть проблемы, задавая уточняющие вопросы. Важно выяснить как можно больше деталей для составления полной картины.", example: { type: 'list', intro: "Примеры вопросов:", items: ["Уточните, пожалуйста, полный текст ошибки?", "При каких действиях возникает ошибка?"] } },
+                        { title: "Уточнение ИНН", description: "Запросите ИНН организации для идентификации клиента в системе и дальнейшей работы.", example: "Пример: Назовите, пожалуйста, ИНН организации.", type: 'inn_step', },
+                        { title: "Идентификация проблемы", description: "Выясните суть проблемы, задавая уточняющие вопросы. Важно выяснить как можно больше деталей для составления полной картины.", example: { type: 'list', intro: "Примеры вопросов:", items: ["Уточните, пожалуйста, полный текст ошибки.", "При каких действиях возникает ошибка?"] } },
                         { title: "Решение проблемы", description: "Четко для себя определите категорию (направление) проблемы и перейдите к соответствующему разделу в помощнике (либо статье на track.astral.ru) с инструкциями по решению." }
                     ]
                 },
@@ -934,7 +934,7 @@
                         title: "Шаг 2: Уточнение ИНН",
                         description: "Запросите ИНН организации для идентификации клиента в системе.",
                         example: 'Пример: "Для начала работы, подскажите, пожалуйста, ИНН вашей организации."',
-                        innLink: true
+                        type: 'inn_step'
                     },
                     {
                         title: "Шаг 3: Идентификация проблемы",
@@ -1488,6 +1488,11 @@
 
             let htmlContent = '';
             algorithms.main.steps.forEach(step => {
+                if (!step || typeof step !== 'object') {
+                    console.warn("Skipping invalid step object:", step);
+                    return;
+                }
+
                 const descriptionHtml = linkify(step.description || 'Нет описания');
 
                 let exampleBlockHtml = '';
@@ -1499,30 +1504,34 @@
                         ).join('');
 
                         exampleBlockHtml = `
-                    ${introHtml}
-                    <ul class="list-disc list-inside pl-5 mt-1 text-gray-600 dark:text-gray-400 text-sm">
-                        ${listItemsHtml}
-                    </ul>
-                `;
+                            ${introHtml}
+                            <ul class="list-disc list-inside pl-5 mt-1 text-gray-600 dark:text-gray-400 text-sm">
+                                ${listItemsHtml}
+                            </ul>
+                        `;
                     } else if (typeof step.example === 'string') {
                         const exampleContentHtml = linkify(step.example);
                         exampleBlockHtml = `<p class="text-gray-600 dark:text-gray-400 mt-1 text-sm">${exampleContentHtml}</p>`;
+                    } else {
+                        try {
+                            exampleBlockHtml = `<pre class="text-xs bg-gray-100 dark:bg-gray-600 p-1 rounded mt-1 overflow-x-auto"><code>${escapeHtml(JSON.stringify(step.example))}</code></pre>`;
+                        } catch { }
                     }
                 }
 
                 htmlContent += `
-            <div class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary mb-content-sm">
-                <h3 class="font-bold text-base">${step.title || 'Без заголовка'}</h3>
-                <p class="text-sm mt-1">${descriptionHtml}</p>
-                ${exampleBlockHtml}
-        `;
+                    <div class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary mb-content-sm">
+                        <h3 class="font-bold text-base">${escapeHtml(step.title || 'Без заголовка')}</h3>
+                        <p class="text-sm mt-1">${descriptionHtml}</p>
+                        ${exampleBlockHtml}
+                `;
 
-                if (step.innLink === true) {
+                if (step.type === 'inn_step') {
                     htmlContent += `
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
-                    <a href="#" class="text-primary hover:underline" id="noInnLink">Что делать, если клиент не может назвать ИНН?</a>
-                </p>
-            `;
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
+                            <a href="#" class="text-primary hover:underline" id="noInnLink">Что делать, если клиент не может назвать ИНН?</a>
+                        </p>
+                    `;
                 }
 
                 htmlContent += `</div>`;
@@ -1534,9 +1543,25 @@
             if (noInnLinkElement) {
                 noInnLinkElement.addEventListener('click', (event) => {
                     event.preventDefault();
-                    showNoInnModal();
+                    if (typeof showNoInnModal === 'function') {
+                        showNoInnModal();
+                    } else {
+                        console.error("Функция showNoInnModal не определена");
+                        alert("Функция для отображения информации не найдена.");
+                    }
                 });
             }
+        }
+
+
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&")
+                .replace(/</g, "<")
+                .replace(/>/g, ">")
+                .replace(/"/g, "")
+                .replace(/'/g, "'");
         }
 
 
@@ -1632,12 +1657,16 @@
 
         function editAlgorithm(algorithmId, section = 'main') {
             let algorithm = null;
-
             initialEditState = null;
+
+            console.log(`[editAlgorithm] Trying to edit: ID=${algorithmId}, Section=${section}`);
 
             try {
                 if (section === 'main') {
                     algorithm = algorithms.main;
+                    if (algorithm && !algorithm.id) algorithm.id = 'main';
+                    if (algorithmId === 'main' && algorithm) algorithmId = algorithm.id;
+
                 } else {
                     const sourceMap = {
                         program: algorithms.program,
@@ -1656,8 +1685,7 @@
                         showNotification(`Ошибка данных: Источник для раздела '${section}' некорректен.`, "error");
                         return;
                     }
-
-                    algorithm = sourceArray.find(a => String(a?.id) === String(algorithmId));
+                    algorithm = sourceArray.find(a => a && String(a.id) === String(algorithmId));
                 }
             } catch (error) {
                 console.error(`[editAlgorithm] Error retrieving algorithm data for section '${section}', ID '${algorithmId}':`, error);
@@ -1665,13 +1693,12 @@
                 return;
             }
 
-
             if (!algorithm) {
-                if (typeof algorithmId === 'object' && algorithmId !== null && algorithmId.id) {
+                if (typeof algorithmId === 'object' && algorithmId !== null && algorithmId.id !== undefined) {
                     console.warn(`[editAlgorithm] Received object instead of ID. Trying with object's ID: ${algorithmId.id}`);
                     return editAlgorithm(algorithmId.id, section);
                 }
-                console.warn(`[editAlgorithm] Algorithm with ID '${algorithmId}' not found in section '${section}'.`);
+                console.warn(`[editAlgorithm] Algorithm with ID '${algorithmId}' not found in section '${section}'. Available IDs in section:`, algorithms[section]?.map(a => a.id));
                 showNotification("Не удалось найти алгоритм для редактирования.", "error");
                 return;
             }
@@ -1691,78 +1718,80 @@
             try {
                 editModalTitle.textContent = `Редактирование: ${algorithm.title ?? 'Без названия'}`;
                 algorithmTitleInput.value = algorithm.title ?? '';
-
                 editStepsContainer.innerHTML = '';
 
                 if (!Array.isArray(algorithm.steps)) {
-                    console.error(`[editAlgorithm] Algorithm (ID: ${algorithm.id || algorithmId}, Section: ${section}) has invalid 'steps' data (not an array).`);
+                    console.error(`[editAlgorithm] Algorithm (ID: ${algorithm.id}, Section: ${section}) has invalid 'steps' data (not an array).`);
                     showNotification("Ошибка данных: Шаги алгоритма некорректны.", "error");
                     editStepsContainer.innerHTML = '<p class="text-red-500">Ошибка загрузки шагов: данные некорректны.</p>';
-                } else if (algorithm.steps.length === 0) {
+                } else if (algorithm.steps.length === 0 && section !== 'main') {
                     editStepsContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400">У этого алгоритма еще нет шагов. Добавьте первый шаг.</p>';
-                    const stepDiv = document.createElement('div');
-                    stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
-                    const showExampleField = section === 'main';
-                    stepDiv.innerHTML = createStepElementHTML(1, showExampleField);
-                    const deleteBtn = stepDiv.querySelector('.delete-step');
-                    if (deleteBtn) {
-                        attachDeleteListener(deleteBtn, editStepsContainer, 'editSteps');
-                    }
-                    editStepsContainer.appendChild(stepDiv);
-                    updateStepNumbers(editStepsContainer);
                 } else {
                     algorithm.steps.forEach((step, index) => {
                         const stepDiv = document.createElement('div');
                         stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
 
+                        if (step.type === 'inn_step') {
+                            stepDiv.dataset.stepType = 'inn_step';
+                            console.log(`[editAlgorithm] Marking step ${index + 1} with data-step-type="inn_step"`);
+                        }
+
                         const showExampleField = section === 'main';
                         let exampleText = '';
+
                         if (showExampleField) {
                             if (typeof step.example === 'object' && step.example?.type === 'list') {
                                 exampleText = (step.example.intro ? step.example.intro + '\n' : '') +
-                                    (step.example.items ? step.example.items.map(item => `- ${item}`).join('\n') : '');
-                            } else {
-                                exampleText = step?.example ?? '';
+                                    (step.example.items ? step.example.items.map(item => `- ${item.replace(/<[^>]*>/g, '')}`).join('\n') : '');
+                            } else if (typeof step.example === 'string') {
+                                exampleText = step.example;
+                            } else if (step.example) {
+                                try { exampleText = JSON.stringify(step.example, null, 2); } catch { exampleText = '[Невалидный JSON]'; }
                             }
                         }
 
-                        const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base';
-                        const backgroundClasses = 'bg-white dark:bg-gray-700';
+                        const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100';
 
                         const exampleInputHtml = showExampleField
                             ? `
-                <div class="mt-2">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример (опционально)</label>
-                    <textarea class="step-example ${commonInputClasses} ${backgroundClasses}" rows="3">${exampleText}</textarea>
-                </div>`
+                                <div class="mt-2">
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (каждый элемент с новой строки, можно с тире)</label>
+                                    <textarea class="step-example ${commonInputClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2">${escapeHtml(exampleText)}</textarea>
+                                </div>`
                             : '';
 
                         stepDiv.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${index + 1}</label>
-                    <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1" aria-label="Удалить шаг ${index + 1}">
-                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div class="mb-2">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
-                    <input type="text" class="step-title ${commonInputClasses} ${backgroundClasses}" value="${step?.title ?? ''}">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
-                    <textarea class="step-desc ${commonInputClasses} ${backgroundClasses}" rows="3">${step?.description ?? ''}</textarea>
-                </div>
-                ${exampleInputHtml}
-                `;
+                            <div class="flex justify-between items-start mb-2">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${index + 1}</label>
+                                <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${index + 1}">
+                                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="mb-2">
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
+                                <input type="text" class="step-title ${commonInputClasses}" value="${escapeHtml(step?.title ?? '')}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+                                <textarea class="step-desc ${commonInputClasses}" rows="3">${escapeHtml(step?.description ?? '')}</textarea>
+                            </div>
+                            ${exampleInputHtml}
+                        `;
 
-                        stepDiv.querySelector('.delete-step')?.addEventListener('click', () => {
-                            if (editStepsContainer.children.length > 1) {
-                                stepDiv.remove();
-                                updateStepNumbers(editStepsContainer);
-                            } else {
-                                showNotification('Алгоритм должен содержать хотя бы один шаг.', 'warning');
-                            }
-                        });
+                        const deleteBtn = stepDiv.querySelector('.delete-step');
+                        if (deleteBtn) {
+                            deleteBtn.addEventListener('click', () => {
+                                if (editStepsContainer.children.length > 1) {
+                                    stepDiv.remove();
+                                    updateStepNumbers(editStepsContainer);
+                                    isUISettingsDirty = true;
+                                } else {
+                                    showNotification('Алгоритм должен содержать хотя бы один шаг.', 'warning');
+                                }
+                            });
+                        } else {
+                            console.warn(`Delete button not found for step ${index + 1}`);
+                        }
 
                         editStepsContainer.appendChild(stepDiv);
                     });
@@ -1773,7 +1802,7 @@
                 captureInitialEditState(algorithm);
 
             } catch (error) {
-                console.error(`[editAlgorithm] Error populating edit modal for algorithm ID ${algorithm.id || algorithmId}:`, error);
+                console.error(`[editAlgorithm] Error populating edit modal for algorithm ID ${algorithm.id}:`, error);
                 showNotification("Ошибка при заполнении формы редактирования.", "error");
                 editModalTitle.textContent = 'Ошибка редактирования';
                 algorithmTitleInput.value = '';
@@ -1782,8 +1811,7 @@
                 return;
             }
 
-
-            editModal.dataset.algorithmId = String(algorithm.id || algorithmId);
+            editModal.dataset.algorithmId = String(algorithm.id);
             editModal.dataset.section = section;
 
             editModal.classList.remove('hidden');
@@ -2154,6 +2182,59 @@
         }
 
 
+        function extractStepsDataFromEditForm(containerElement, isMainAlgorithm) {
+            const stepsData = { steps: [], isValid: true };
+            const stepDivs = containerElement.querySelectorAll('.edit-step');
+
+            stepDivs.forEach(stepDiv => {
+                const titleInput = stepDiv.querySelector('.step-title');
+                const descInput = stepDiv.querySelector('.step-desc');
+                const exampleTextarea = stepDiv.querySelector('.step-example');
+
+                const title = titleInput?.value.trim() ?? '';
+                const description = descInput?.value.trim() ?? '';
+
+                const step = { title, description };
+
+                if (stepDiv.dataset.stepType === 'inn_step') {
+                    step.type = 'inn_step';
+                    console.log(`[extractStepsData] Found stepType 'inn_step' for step:`, title);
+                }
+
+                if (isMainAlgorithm && exampleTextarea) {
+                    const exampleValue = exampleTextarea.value.trim();
+                    if (exampleValue) {
+                        const lines = exampleValue.split('\n').map(l => l.trim()).filter(l => l);
+                        const isList = lines.length > 1 && lines.every(l => /^\s*[-*]\s|\d+\.\s/.test(l));
+                        const potentialIntro = lines[0] && !/^\s*[-*]\s|\d+\.\s/.test(lines[0]) ? lines[0] : null;
+
+                        if (isList) {
+                            const items = potentialIntro
+                                ? lines.slice(1).map(l => l.replace(/^\s*[-*]\s*|\d+\.\s*/, '').trim())
+                                : lines.map(l => l.replace(/^\s*[-*]\s*|\d+\.\s*/, '').trim());
+                            step.example = { type: 'list', items: items };
+                            if (potentialIntro) {
+                                step.example.intro = potentialIntro;
+                            }
+                        } else {
+                            step.example = exampleValue;
+                        }
+                    } else {
+                        delete step.example;
+                    }
+                } else if (!isMainAlgorithm) {
+                    delete step.example;
+                }
+
+                stepsData.steps.push(step);
+            });
+
+            stepsData.isValid = stepsData.steps.every(s => s.title || s.description);
+
+            return stepsData;
+        }
+
+
         async function saveAlgorithm() {
             const editModal = document.getElementById('editModal');
             const algorithmId = editModal?.dataset.algorithmId;
@@ -2174,8 +2255,8 @@
             }
             const finalTitle = (section === 'main' && !newTitle) ? "Главный алгоритм работы" : newTitle;
 
-
-            const { steps: newSteps } = extractStepsData(editStepsContainer);
+            const isMainAlgo = section === 'main';
+            const { steps: newSteps } = extractStepsDataFromEditForm(editStepsContainer, isMainAlgo);
 
             if (newSteps.length === 0) {
                 showNotification('Алгоритм должен содержать хотя бы один шаг', 'error');
@@ -2207,13 +2288,10 @@
                         algorithms.main.steps = newSteps;
                         algorithms.main.id = 'main';
                         newAlgorithmData = algorithms.main;
-                        algorithmContainerToSave = { section: 'all', data: algorithms };
-                        const mainTitleElement = document.querySelector('#mainContent h2');
-                        if (mainTitleElement) {
-                            mainTitleElement.textContent = finalTitle;
-                        }
-                        if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
                         updateSuccessful = true;
+                        const mainTitleElement = document.querySelector('#mainContent h2');
+                        if (mainTitleElement) mainTitleElement.textContent = finalTitle;
+                        if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
                     } else {
                         console.error("Cannot update main algorithm: algorithms.main is not defined.");
                     }
@@ -2224,15 +2302,12 @@
                             algorithms[section][algorithmIndex] = {
                                 ...algorithms[section][algorithmIndex],
                                 title: finalTitle,
-                                steps: newSteps
+                                steps: newSteps,
+                                id: algorithmId
                             };
-                            if (!algorithms[section][algorithmIndex].id) {
-                                algorithms[section][algorithmIndex].id = algorithmId;
-                            }
                             newAlgorithmData = algorithms[section][algorithmIndex];
-                            algorithmContainerToSave = { section: 'all', data: algorithms };
-                            if (typeof renderAlgorithmCards === 'function') renderAlgorithmCards(section);
                             updateSuccessful = true;
+                            if (typeof renderAlgorithmCards === 'function') renderAlgorithmCards(section);
                         } else {
                             console.error(`Cannot find algorithm with ID ${algorithmId} in section ${section} to update.`);
                         }
@@ -2241,7 +2316,8 @@
                     }
                 }
 
-                if (updateSuccessful && algorithmContainerToSave) {
+                if (updateSuccessful) {
+                    algorithmContainerToSave = { section: 'all', data: algorithms };
                     const saved = await saveToIndexedDB('algorithms', algorithmContainerToSave);
 
                     if (saved) {
@@ -2267,7 +2343,7 @@
                     } else {
                         showNotification("Не удалось сохранить изменения в базе данных.", "error");
                     }
-                } else if (!updateSuccessful) {
+                } else {
                     showNotification("Не удалось обновить данные алгоритма в памяти.", "error");
                 }
 
