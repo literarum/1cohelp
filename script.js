@@ -1,4 +1,4 @@
-        // Initialize IndexedDB
+// Initialize IndexedDB
         let db;
         const DB_NAME = '1C_Support_Guide';
         const DB_VERSION = 3;
@@ -1337,6 +1337,10 @@
         const deleteAlgorithmBtn = document.getElementById('deleteAlgorithmBtn');
         const addStepBtn = document.getElementById('addStepBtn');
         const saveAlgorithmBtn = document.getElementById('saveAlgorithmBtn');
+        saveAlgorithmBtn?.addEventListener('click', async (event) => {
+            event.preventDefault();
+            await saveAlgorithm();
+        });
         const cancelEditBtn = document.getElementById('cancelEditBtn');
         const editMainBtn = document.getElementById('editMainBtn');
         const addNewStepBtn = document.getElementById('addNewStepBtn');
@@ -1555,7 +1559,9 @@
 
 
         function escapeHtml(unsafe) {
-            if (!unsafe) return '';
+            if (typeof unsafe !== 'string') {
+                return '';
+            }
             return unsafe
                 .replace(/&/g, "&")
                 .replace(/</g, "<")
@@ -1597,24 +1603,33 @@
                 let stepsHtml;
                 if (algorithm?.steps && Array.isArray(algorithm.steps)) {
                     stepsHtml = algorithm.steps.map((step, index) => {
+                        if (!step || typeof step !== 'object') {
+                            console.warn(`Skipping invalid step object at index ${index}:`, step);
+                            return `<div class="p-4 mb-3 text-red-600 dark:text-red-400">Ошибка: Некорректные данные для шага ${index + 1}.</div>`;
+                        }
+
                         const descriptionHtml = linkify(step?.description ?? 'Нет описания.');
                         let exampleHtml = '';
                         if (typeof step?.example === 'string') {
                             exampleHtml = linkify(step.example);
                         } else if (step?.example?.type === 'list' && Array.isArray(step.example.items)) {
-                            const introHtml = step.example.intro ? `<p class="text-sm italic mt-1">${linkify(step.example.intro)}</p>` : '';
+                            const introHtml = step.example.intro ? `<p class="italic mt-1">${linkify(step.example.intro)}</p>` : '';
                             const listItemsHtml = step.example.items.map(item => `<li>${linkify(item)}</li>`).join('');
                             exampleHtml = `${introHtml}<ul class="list-disc list-inside pl-4 mt-1">${listItemsHtml}</ul>`;
                         } else if (step?.example) {
-                            exampleHtml = linkify(JSON.stringify(step.example));
+                            try {
+                                exampleHtml = linkify(JSON.stringify(step.example));
+                            } catch {
+                                exampleHtml = '[Не удалось отобразить пример]';
+                            }
                         }
 
 
                         return `
             <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3">
                 <h3 class="font-bold text-lg">${step?.title ?? `Шаг ${index + 1}`}</h3>
-                <p class="mt-1">${descriptionHtml}</p>
-                ${exampleHtml ? `<div class="text-gray-600 dark:text-gray-400 mt-2 text-sm prose dark:prose-invert max-w-none">${exampleHtml}</div>` : ''}
+                <p class="mt-1 text-base">${descriptionHtml}</p>
+                ${exampleHtml ? `<div class="text-gray-600 dark:text-gray-400 mt-2 text-base prose dark:prose-invert max-w-none">${exampleHtml}</div>` : ''}
             </div>`;
                     }).join('');
                 } else {
@@ -1655,7 +1670,7 @@
         }
 
 
-        function editAlgorithm(algorithmId, section = 'main') {
+        async function editAlgorithm(algorithmId, section = 'main') {
             let algorithm = null;
             initialEditState = null;
 
@@ -1703,21 +1718,52 @@
                 return;
             }
 
+            const editModal = document.getElementById('editModal');
             const editModalTitle = document.getElementById('editModalTitle');
             const algorithmTitleInput = document.getElementById('algorithmTitle');
             const editStepsContainer = document.getElementById('editSteps');
-            const editModal = document.getElementById('editModal');
             const algorithmModal = document.getElementById('algorithmModal');
 
-            if (!editModalTitle || !algorithmTitleInput || !editStepsContainer || !editModal || !algorithmModal) {
-                console.error("[editAlgorithm] Critical UI Error: One or more edit modal elements are missing from the DOM.");
+            if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainer || !algorithmModal) {
+                console.error("[editAlgorithm] Critical UI Error: One or more edit modal elements are missing from the DOM (#editModal, #editModalTitle, #algorithmTitle, #editStepsContainer, #algorithmModal).");
                 showNotification("Ошибка интерфейса: не найдены элементы окна редактирования.", "error");
                 return;
             }
 
+            const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+            const commonTextareaClasses = `${commonInputClasses} resize-y`;
+
+            let descriptionContainer = editModal.querySelector('#algorithmDescriptionContainer');
+            if (!descriptionContainer) {
+                console.warn("[editAlgorithm] Description container '#algorithmDescriptionContainer' not found, creating dynamically.");
+                descriptionContainer = document.createElement('div');
+                descriptionContainer.id = 'algorithmDescriptionContainer';
+                descriptionContainer.className = 'mb-4';
+                const formElement = editModal.querySelector('#editAlgorithmForm');
+                if (formElement && editStepsContainer) {
+                    formElement.insertBefore(descriptionContainer, editStepsContainer);
+                } else if (editStepsContainer) {
+                    editStepsContainer.parentNode.insertBefore(descriptionContainer, editStepsContainer);
+                } else {
+                    console.error("[editAlgorithm] Cannot insert description container: neither form nor steps container parent found.");
+                }
+            }
+            descriptionContainer.innerHTML = '';
+
             try {
                 editModalTitle.textContent = `Редактирование: ${algorithm.title ?? 'Без названия'}`;
                 algorithmTitleInput.value = algorithm.title ?? '';
+                algorithmTitleInput.className = commonInputClasses;
+
+                if (section !== 'main') {
+                    descriptionContainer.innerHTML = `
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="algorithmDescription">Краткое описание</label>
+                <textarea id="algorithmDescription" name="algorithmDescription" rows="3" class="${commonTextareaClasses}">${escapeHtml(algorithm.description ?? '')}</textarea>
+            `;
+                } else {
+                    descriptionContainer.innerHTML = '';
+                }
+
                 editStepsContainer.innerHTML = '';
 
                 if (!Array.isArray(algorithm.steps)) {
@@ -1729,7 +1775,7 @@
                 } else {
                     algorithm.steps.forEach((step, index) => {
                         const stepDiv = document.createElement('div');
-                        stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
+                        stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 shadow-sm mb-4';
 
                         if (step.type === 'inn_step') {
                             stepDiv.dataset.stepType = 'inn_step';
@@ -1742,7 +1788,7 @@
                         if (showExampleField) {
                             if (typeof step.example === 'object' && step.example?.type === 'list') {
                                 exampleText = (step.example.intro ? step.example.intro + '\n' : '') +
-                                    (step.example.items ? step.example.items.map(item => `- ${item.replace(/<[^>]*>/g, '')}`).join('\n') : '');
+                                    (step.example.items ? step.example.items.map(item => `- ${String(item).replace(/<[^>]*>/g, '')}`).join('\n') : '');
                             } else if (typeof step.example === 'string') {
                                 exampleText = step.example;
                             } else if (step.example) {
@@ -1750,45 +1796,43 @@
                             }
                         }
 
-                        const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100';
-
                         const exampleInputHtml = showExampleField
                             ? `
-                                <div class="mt-2">
-                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (каждый элемент с новой строки, можно с тире)</label>
-                                    <textarea class="step-example ${commonInputClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2">${escapeHtml(exampleText)}</textarea>
-                                </div>`
+                        <div class="mt-2">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (каждый элемент с новой строки, можно с тире)</label>
+                            <textarea class="step-example ${commonTextareaClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2">${escapeHtml(exampleText)}</textarea>
+                        </div>`
                             : '';
 
                         stepDiv.innerHTML = `
-                            <div class="flex justify-between items-start mb-2">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${index + 1}</label>
-                                <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${index + 1}">
-                                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <div class="mb-2">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
-                                <input type="text" class="step-title ${commonInputClasses}" value="${escapeHtml(step?.title ?? '')}">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
-                                <textarea class="step-desc ${commonInputClasses}" rows="3">${escapeHtml(step?.description ?? '')}</textarea>
-                            </div>
-                            ${exampleInputHtml}
-                        `;
+                    <div class="flex justify-between items-start mb-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${index + 1}</label>
+                        <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${index + 1}">
+                            <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="mb-2">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
+                        <input type="text" class="step-title ${commonInputClasses}" value="${escapeHtml(step?.title ?? '')}">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+                        <textarea class="step-desc ${commonTextareaClasses}" rows="3">${escapeHtml(step?.description ?? '')}</textarea>
+                    </div>
+                    ${exampleInputHtml}
+                `;
 
                         const deleteBtn = stepDiv.querySelector('.delete-step');
                         if (deleteBtn) {
-                            deleteBtn.addEventListener('click', () => {
-                                if (editStepsContainer.children.length > 1) {
-                                    stepDiv.remove();
-                                    updateStepNumbers(editStepsContainer);
+                            deleteBtn.addEventListener('click', function (containerEl, stepDivEl) {
+                                if (containerEl.children.length > 1) {
+                                    stepDivEl.remove();
+                                    updateStepNumbers(containerEl);
                                     isUISettingsDirty = true;
                                 } else {
                                     showNotification('Алгоритм должен содержать хотя бы один шаг.', 'warning');
                                 }
-                            });
+                            }.bind(null, editStepsContainer, stepDiv));
                         } else {
                             console.warn(`Delete button not found for step ${index + 1}`);
                         }
@@ -1802,11 +1846,11 @@
                 captureInitialEditState(algorithm);
 
             } catch (error) {
-                console.error(`[editAlgorithm] Error populating edit modal for algorithm ID ${algorithm.id}:`, error);
+                console.error(`[editAlgorithm] Error populating edit modal for algorithm ID ${algorithm?.id}:`, error);
                 showNotification("Ошибка при заполнении формы редактирования.", "error");
-                editModalTitle.textContent = 'Ошибка редактирования';
-                algorithmTitleInput.value = '';
-                editStepsContainer.innerHTML = '<p class="text-red-500">Не удалось загрузить данные для редактирования.</p>';
+                if (editModalTitle) editModalTitle.textContent = 'Ошибка редактирования';
+                if (algorithmTitleInput) algorithmTitleInput.value = '';
+                if (editStepsContainer) editStepsContainer.innerHTML = '<p class="text-red-500">Не удалось загрузить данные для редактирования.</p>';
                 initialEditState = null;
                 return;
             }
@@ -1814,14 +1858,27 @@
             editModal.dataset.algorithmId = String(algorithm.id);
             editModal.dataset.section = section;
 
+            if (algorithmModal) {
+                algorithmModal.classList.add('hidden');
+            }
             editModal.classList.remove('hidden');
-            algorithmModal.classList.add('hidden');
+
+            algorithmTitleInput.focus();
+            console.log(`[editAlgorithm] Successfully opened edit modal for Algorithm ID: ${algorithm.id}, Section: ${section}`);
         }
 
 
-        function updateStepNumbers(container) {
-            container.querySelectorAll('.step-number-label').forEach((label, index) => {
-                label.textContent = `Шаг ${index + 1}`;
+        function updateStepNumbers(containerElement) {
+            if (!containerElement) return;
+            containerElement.querySelectorAll('.edit-step').forEach((step, index) => {
+                const stepLabel = step.querySelector('.step-number-label');
+                if (stepLabel) {
+                    stepLabel.textContent = `Шаг ${index + 1}`;
+                }
+                const deleteButton = step.querySelector('.delete-step');
+                if (deleteButton) {
+                    deleteButton.setAttribute('aria-label', `Удалить шаг ${index + 1}`);
+                }
             });
         }
 
@@ -1973,10 +2030,6 @@
             if (!container) return;
 
             const sectionId = container.dataset.sectionId;
-            let targetView = view;
-            if (sectionId === 'bookmarksContainer') {
-                targetView = 'cards';
-            }
             const viewControlAncestor = container.closest('.tab-content > div, #reglamentsList');
             if (!viewControlAncestor) {
                 console.warn(`View control ancestor not found for section ${sectionId}`);
@@ -2021,10 +2074,10 @@
                     ...LIST_ITEM_BASE_CLASSES, ...LIST_HOVER_TRANSITION_CLASSES,
                     'flex', 'justify-between', 'items-center', 'items-start', 'cursor-pointer',
                     'p-4', 'p-3',
-                    'border-b', 'border-gray-200', 'dark:border-gray-600'
+                    'border-b', 'border-gray-200', 'dark:border-gray-600',
+                    'bg-white', 'dark:bg-gray-700', 'hover:shadow-md', 'shadow-sm', 'rounded-lg',
+                    'hover:bg-gray-50', 'dark:hover:bg-gray-700'
                 );
-                item.classList.remove('bg-white', 'dark:bg-gray-700', 'hover:shadow-md', 'shadow-sm', 'rounded-lg');
-                item.classList.remove('hover:bg-gray-50', 'dark:hover:bg-gray-700');
 
                 if (view === 'cards') {
                     item.classList.add(...CARD_ITEM_BASE_CLASSES);
@@ -2036,33 +2089,32 @@
                     }
 
                     if (item.classList.contains('bookmark-item') || item.classList.contains('ext-link-item') || item.classList.contains('cib-link-item') || item.classList.contains('reglament-item')) {
-                        item.classList.add('flex', 'justify-between');
-                        if (isAlgoBookmarkExtLinkCard || isLinkReglamentCard || item.classList.contains('cib-link-item')) {
-                            item.classList.add('items-start');
-                        } else {
-                            item.classList.add('items-center');
-                        }
+                        item.classList.add('flex', 'flex-col', 'justify-between');
                     }
-                    item.classList.remove('hover:bg-gray-50', 'dark:hover:bg-gray-700');
-
+                    item.classList.remove('items-center');
 
                 } else {
-                    item.classList.add(...LIST_ITEM_BASE_CLASSES);
+                    const baseListClassesWithoutPadding = LIST_ITEM_BASE_CLASSES.filter(cls => cls !== 'p-3');
+                    item.classList.add(...baseListClassesWithoutPadding);
 
-                    if (isLinkReglamentCard || sectionId === 'extLinksContainer' || sectionId === 'linksContainer') {
+                    if (isLinkReglamentCard || sectionId === 'extLinksContainer' || sectionId === 'linksContainer' || sectionId === 'bookmarksContainer') {
                         item.classList.add(...LIST_HOVER_TRANSITION_CLASSES);
                     }
-                    item.classList.remove('p-4', 'rounded-lg', 'shadow-sm', 'hover:shadow-md');
-                    item.classList.remove('items-start', 'cursor-pointer');
-                    item.classList.add('items-center');
 
-                    if (sectionId === 'linksContainer') {
-                        item.classList.remove('items-center');
+                    item.classList.add('py-3', 'pl-5', 'pr-3');
+
+                    item.classList.remove('items-center');
+                    if (sectionId === 'linksContainer' || sectionId === 'bookmarksContainer') {
                         item.classList.add('items-start');
+                    } else {
+                        item.classList.add('items-center');
                     }
+
+                    item.classList.remove('p-4', 'rounded-lg', 'shadow-sm', 'hover:shadow-md', 'cursor-pointer');
                 }
             });
 
+            // Удаляем границу у последнего элемента в режиме списка
             if (view === 'list' && container.lastElementChild) {
                 container.lastElementChild.classList.remove('border-b', 'border-gray-200', 'dark:border-gray-600');
             }
@@ -2091,30 +2143,30 @@
 
 
         function createStepElementHTML(stepNumber, includeExampleField) {
-            const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base';
-            const backgroundClasses = 'bg-white dark:bg-gray-700';
+            const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+            const commonTextareaClasses = `${commonInputClasses} resize-y`;
 
             const exampleInputHTML = includeExampleField ? `
         <div class="mt-2">
-            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример (опционально)</label>
-            <textarea class="step-example ${commonInputClasses} ${backgroundClasses}" rows="3"></textarea>
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (опционально)</label>
+            <textarea class="step-example ${commonTextareaClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2"></textarea>
         </div>
     ` : '';
 
             return `
         <div class="flex justify-between items-start mb-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Шаг ${stepNumber}</label>
-            <button type="button" class="delete-step text-red-500 hover:text-red-700 p-1">
-                <i class="fas fa-trash fa-fw"></i>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${stepNumber}</label>
+            <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${stepNumber}">
+                <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
             </button>
         </div>
         <div class="mb-2">
             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
-            <input type="text" class="step-title ${commonInputClasses} ${backgroundClasses}">
+            <input type="text" class="step-title ${commonInputClasses}">
         </div>
         <div>
             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
-            <textarea class="step-desc ${commonInputClasses} ${backgroundClasses}" rows="3"></textarea>
+            <textarea class="step-desc ${commonTextareaClasses}" rows="3"></textarea>
         </div>
         ${exampleInputHTML}
     `;
@@ -2125,9 +2177,13 @@
             buttonElement.addEventListener('click', () => {
                 if (containerElement.children.length > 1) {
                     buttonElement.closest('.edit-step')?.remove();
-                    updateStepNumbers(containerId);
+                    updateStepNumbers(containerElement);
                 } else {
-                    alert('Алгоритм должен содержать хотя бы один шаг');
+                    if (typeof showNotification === 'function') {
+                        showNotification('Алгоритм должен содержать хотя бы один шаг.', 'warning');
+                    } else {
+                        alert('Алгоритм должен содержать хотя бы один шаг');
+                    }
                 }
             });
         }
@@ -2165,12 +2221,13 @@
             const containerId = 'editSteps';
             const editStepsContainer = document.getElementById(containerId);
             if (!editStepsContainer) return;
+            const editModal = document.getElementById('editModal');
 
             const stepCount = editStepsContainer.children.length;
             const isMainAlgorithm = editModal?.dataset.section === 'main';
 
             const stepDiv = document.createElement('div');
-            stepDiv.className = 'edit-step p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm';
+            stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 shadow-sm';
             stepDiv.innerHTML = createStepElementHTML(stepCount + 1, isMainAlgorithm);
 
             const deleteBtn = stepDiv.querySelector('.delete-step');
@@ -2179,6 +2236,7 @@
             }
 
             editStepsContainer.appendChild(stepDiv);
+            stepDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
 
@@ -2240,6 +2298,7 @@
             const algorithmId = editModal?.dataset.algorithmId;
             const section = editModal?.dataset.section;
             const algorithmTitleInput = document.getElementById('algorithmTitle');
+            const algorithmDescriptionInput = document.getElementById('algorithmDescription');
             const editStepsContainer = document.getElementById('editSteps');
 
             if (!editModal || algorithmId === undefined || !section || !algorithmTitleInput || !editStepsContainer) {
@@ -2247,21 +2306,33 @@
                 showNotification("Ошибка сохранения: Не найдены необходимые элементы или ID алгоритма.", "error");
                 return;
             }
+            if (section !== 'main' && !algorithmDescriptionInput) {
+                console.error("Save failed: Description input field (#algorithmDescription) not found for non-main algorithm.");
+                showNotification("Ошибка сохранения: Не найдено поле описания для алгоритма.", "error");
+                return;
+            }
 
             const newTitle = algorithmTitleInput.value.trim();
-            if (!newTitle && section !== 'main') {
+            const finalTitle = (section === 'main' && !newTitle) ? "Главный алгоритм работы" : newTitle;
+
+            if (!finalTitle && section !== 'main') {
                 showNotification('Пожалуйста, введите название алгоритма', 'error');
                 return;
             }
-            const finalTitle = (section === 'main' && !newTitle) ? "Главный алгоритм работы" : newTitle;
+
+            let newDescription = '';
+            if (section !== 'main' && algorithmDescriptionInput) {
+                newDescription = algorithmDescriptionInput.value.trim();
+            }
 
             const isMainAlgo = section === 'main';
-            const { steps: newSteps } = extractStepsDataFromEditForm(editStepsContainer, isMainAlgo);
+            const { steps: newSteps, isValid } = extractStepsDataFromEditForm(editStepsContainer, isMainAlgo);
 
-            if (newSteps.length === 0) {
-                showNotification('Алгоритм должен содержать хотя бы один шаг', 'error');
+            if (!isValid || newSteps.length === 0) {
+                showNotification('Алгоритм должен содержать хотя бы один шаг с заполненным заголовком или описанием.', 'error');
                 return;
             }
+
 
             let updateSuccessful = false;
             let algorithmContainerToSave = null;
@@ -2302,6 +2373,7 @@
                             algorithms[section][algorithmIndex] = {
                                 ...algorithms[section][algorithmIndex],
                                 title: finalTitle,
+                                description: newDescription,
                                 steps: newSteps,
                                 id: algorithmId
                             };
@@ -2413,12 +2485,13 @@
             const containerId = 'newSteps';
             const newStepsContainer = document.getElementById(containerId);
             if (!newStepsContainer) return;
+            const addModal = document.getElementById('addModal');
 
             const stepCount = newStepsContainer.children.length;
+            const isMainAlgorithm = false;
 
             const stepDiv = document.createElement('div');
-            stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm';
-            stepDiv.innerHTML = createStepElementHTML(stepCount + 1, false);
+            stepDiv.innerHTML = createStepElementHTML(stepCount + 1, isMainAlgorithm);
 
             const deleteBtn = stepDiv.querySelector('.delete-step');
             if (deleteBtn) {
@@ -2426,6 +2499,7 @@
             }
 
             newStepsContainer.appendChild(stepDiv);
+            stepDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
 
@@ -2676,45 +2750,61 @@
             const searchResults = document.getElementById('searchResults');
             const toggleAdvancedSearchBtn = document.getElementById('toggleAdvancedSearch');
             const advancedSearchOptions = document.getElementById('advancedSearchOptions');
+            const clearSearchInputBtn = document.getElementById('clearSearchInputBtn');
 
-            if (!searchInput || !searchResults || !toggleAdvancedSearchBtn || !advancedSearchOptions) {
+            if (!searchInput || !searchResults || !toggleAdvancedSearchBtn || !advancedSearchOptions || !clearSearchInputBtn) {
                 console.error('Search system initialization failed: one or more required elements not found.');
                 return;
             }
 
             const toggleResultsVisibility = () => {
-                searchResults.classList.toggle('hidden', !searchInput.value);
+                searchResults.classList.toggle('hidden', !searchInput.value && searchInput !== document.activeElement);
             };
 
             const executeSearch = async () => {
                 const query = searchInput.value;
-                if (!query) {
+                const MIN_SEARCH_LENGTH = 3;
+
+                if (!query && searchInput !== document.activeElement) {
                     searchResults.classList.add('hidden');
                     return;
                 }
 
+                if (!query || query.length < MIN_SEARCH_LENGTH) {
+                    if (searchInput === document.activeElement) {
+                        searchResults.innerHTML = `<div class="p-3 text-center text-gray-500">Введите минимум ${MIN_SEARCH_LENGTH} символа...</div>`;
+                        searchResults.classList.remove('hidden');
+                    } else {
+                        searchResults.classList.add('hidden');
+                    }
+                    return;
+                }
+
+
                 searchResults.classList.remove('hidden');
+                searchResults.innerHTML = '<div class="p-3 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Идет поиск...</div>';
 
                 try {
                     await performSearch(query);
                 } catch (error) {
                     console.error('Search failed:', error);
+                    searchResults.innerHTML = '<div class="p-3 text-center text-red-500">Ошибка во время поиска.</div>';
                 } finally {
                 }
             };
 
             const debouncedSearch = debounce(executeSearch, 300);
 
-
             searchInput.addEventListener('focus', toggleResultsVisibility);
 
             searchInput.addEventListener('input', () => {
-                toggleResultsVisibility();
                 debouncedSearch();
             });
 
             document.addEventListener('click', (event) => {
-                const isClickInsideSearch = searchInput.contains(event.target) || searchResults.contains(event.target);
+                const isClickInsideSearch = searchInput.contains(event.target)
+                    || searchResults.contains(event.target)
+                    || clearSearchInputBtn.contains(event.target);
                 if (!isClickInsideSearch) {
                     searchResults.classList.add('hidden');
                 }
@@ -2733,6 +2823,11 @@
                     debouncedSearch();
                 });
             });
+
+            setupClearButton('searchInput', 'clearSearchInputBtn', () => {
+                executeSearch();
+            });
+            console.log("Search system initialized.");
         }
 
 
@@ -3530,7 +3625,7 @@
                     if (tabIdLower === normalizedQuery || tabNameLower === normalizedQuery) {
                         sectionScore += 5000;
                     }
-                    console.log(`[DEBUG findSectionMatches] Section Match Found: ID='${tab.id}', Name='${tab.name}', Score=${sectionScore}`); // DEBUG
+                    console.log(`[DEBUG findSectionMatches] Section Match Found: ID='${tab.id}', Name='${tab.name}', Score=${sectionScore}`);
                     sectionMatches.push({
                         section: tab.id,
                         type: 'section_link',
@@ -4298,24 +4393,223 @@
 
 
         // СИСТЕМА ЗАКЛАДОК
+        async function ensureBookmarkModal() {
+            const modalId = 'bookmarkModal';
+            let modal = document.getElementById(modalId);
+
+            if (!modal) {
+                console.log("Модальное окно #bookmarkModal не найдено, создаем новое.");
+                modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
+                modal.innerHTML = `
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+<div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+<div class="flex justify-between items-center">
+<h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
+Заголовок окна
+</h2>
+<div class="flex items-center flex-shrink-0">
+<button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+<i class="fas fa-expand"></i>
+</button>
+<button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
+<i class="fas fa-times text-xl"></i>
+</button>
+</div>
+</div>
+</div>
+<div class="p-content overflow-y-auto flex-1">
+<form id="bookmarkForm">
+<input type="hidden" id="bookmarkId">
+<div class="mb-4">
+<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
+<input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+</div>
+<div class="mb-4">
+<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
+<input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+</div>
+<div class="mb-4">
+<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки <span class="text-red-500">*</span></label>
+<textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
+<p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (без URL).</p>
+</div>
+<div class="mb-4">
+<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
+<select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+<option value="">Выберите папку</option>
+</select>
+</div>
+</form>
+</div>
+<div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
+<div class="flex justify-end gap-2">
+<button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+Отмена
+</button>
+<button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+<i class="fas fa-save mr-1"></i> Сохранить
+</button>
+</div>
+</div>
+</div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', (e) => {
+                    if (e.target.closest('.close-modal, .cancel-modal')) {
+                        modal.classList.add('hidden');
+                    }
+                });
+
+                const form = modal.querySelector('#bookmarkForm');
+                if (form && !form.dataset.submitListenerAttached) {
+                    form.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const saveButton = form.querySelector('#saveBookmarkBtn');
+                        if (saveButton) saveButton.disabled = true;
+
+                        const title = form.elements.bookmarkTitle.value.trim();
+                        const url = form.elements.bookmarkUrl.value.trim();
+                        const description = form.elements.bookmarkDescription.value.trim();
+                        const folderValue = form.elements.bookmarkFolder.value;
+                        const folder = folderValue ? parseInt(folderValue) : null;
+                        const id = form.elements.bookmarkId.value;
+
+                        if (!title) {
+                            showNotification("Пожалуйста, заполните поле 'Название'", "error");
+                            if (saveButton) saveButton.disabled = false;
+                            return;
+                        }
+                        if (!url && !description) {
+                            showNotification("Пожалуйста, заполните 'Описание / Текст заметки', так как URL не указан", "error");
+                            if (saveButton) saveButton.disabled = false;
+                            return;
+                        }
+
+                        const newData = {
+                            title,
+                            url: url || null,
+                            description: description || null,
+                            folder: folder,
+                        };
+
+                        const isEditing = !!id;
+                        let oldData = null;
+                        let finalId = null;
+
+                        try {
+                            const timestamp = new Date().toISOString();
+                            if (isEditing) {
+                                newData.id = parseInt(id, 10);
+                                finalId = newData.id;
+
+                                try {
+                                    oldData = await getFromIndexedDB('bookmarks', newData.id);
+                                    newData.dateAdded = oldData?.dateAdded || timestamp;
+                                } catch (fetchError) {
+                                    console.warn(`Не удалось получить старые данные закладки (${newData.id}):`, fetchError);
+                                    newData.dateAdded = timestamp;
+                                }
+                                newData.dateUpdated = timestamp;
+                            } else {
+                                newData.dateAdded = timestamp;
+                            }
+
+                            const savedResult = await saveToIndexedDB('bookmarks', newData);
+                            if (!isEditing) {
+                                finalId = savedResult;
+                                newData.id = finalId;
+                            }
+
+                            if (typeof updateSearchIndex === 'function') {
+                                try {
+                                    await updateSearchIndex(
+                                        'bookmarks',
+                                        finalId,
+                                        newData,
+                                        isEditing ? 'update' : 'add',
+                                        oldData
+                                    );
+                                    const oldDataStatus = oldData ? 'со старыми данными' : '(без старых данных)';
+                                    console.log(`Обновление индекса для закладки (${finalId}) инициировано ${oldDataStatus}.`);
+                                } catch (indexError) {
+                                    console.error(`Ошибка обновления поискового индекса для закладки ${finalId}:`, indexError);
+                                    showNotification("Ошибка обновления поискового индекса для закладки.", "warning");
+                                }
+                            } else {
+                                console.warn("Функция updateSearchIndex недоступна.");
+                            }
+
+                            showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
+
+                            const bookmarkModal = document.getElementById('bookmarkModal');
+                            if (bookmarkModal) bookmarkModal.classList.add('hidden');
+                            form.reset();
+                            const bookmarkIdInput = form.querySelector('#bookmarkId');
+                            if (bookmarkIdInput) bookmarkIdInput.value = '';
+                            const modalTitleEl = form.closest('#bookmarkModal')?.querySelector('#bookmarkModalTitle');
+                            if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
+                            if (saveButton) saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
+
+
+                            try {
+                                const bookmarks = await getAllBookmarks();
+                                renderBookmarks(bookmarks);
+                            } catch (renderError) {
+                                console.error("Ошибка при обновлении списка закладок после сохранения:", renderError);
+                                showNotification("Не удалось обновить список закладок на экране.", "warning");
+                            }
+
+
+                        } catch (saveError) {
+                            console.error("Ошибка при сохранении закладки:", saveError);
+                            showNotification("Ошибка при сохранении закладки", "error");
+                        } finally {
+                            if (saveButton) saveButton.disabled = false;
+                        }
+                    });
+                    form.dataset.submitListenerAttached = 'true';
+                }
+
+                if (typeof initFullscreenToggles === 'function') {
+                    initFullscreenToggles();
+                } else {
+                    console.warn("Функция initFullscreenToggles не найдена при создании модального окна закладки.");
+                }
+            }
+
+            const elements = {
+                modal,
+                form: modal.querySelector('#bookmarkForm'),
+                modalTitle: modal.querySelector('#bookmarkModalTitle'),
+                submitButton: modal.querySelector('#saveBookmarkBtn'),
+                idInput: modal.querySelector('#bookmarkId'),
+                titleInput: modal.querySelector('#bookmarkTitle'),
+                urlInput: modal.querySelector('#bookmarkUrl'),
+                descriptionInput: modal.querySelector('#bookmarkDescription'),
+                folderSelect: modal.querySelector('#bookmarkFolder'),
+            };
+
+            if (!elements.form || !elements.modalTitle || !elements.submitButton || !elements.folderSelect) {
+                console.error("Не удалось найти все необходимые элементы внутри модального окна закладок.");
+                return null;
+            }
+
+            return elements;
+        }
+
+
         function initBookmarkSystem() {
             const addBookmarkBtn = document.getElementById('addBookmarkBtn');
             const organizeBookmarksBtn = document.getElementById('organizeBookmarksBtn');
             const bookmarkSearchInput = document.getElementById('bookmarkSearchInput');
             const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
             const bookmarksContainer = document.getElementById('bookmarksContainer');
-            const viewToggleContainer = bookmarksContainer?.closest('.bg-gray-100, .dark\\:bg-gray-800')?.querySelector('.flex.items-center.space-x-1.border');
 
             if (!addBookmarkBtn || !bookmarksContainer) {
                 console.error("Bookmark system init failed: addBookmarkBtn or bookmarksContainer not found.");
                 return;
-            }
-
-            if (viewToggleContainer) {
-                viewToggleContainer.remove();
-                console.log("View toggle buttons removed for bookmarks section.");
-            } else {
-                console.warn("View toggle container for bookmarks not found during init.");
             }
 
             addBookmarkBtn.addEventListener('click', showAddBookmarkModal);
@@ -4326,7 +4620,10 @@
             bookmarkFolderFilter?.addEventListener('change', filterBookmarks);
 
             loadBookmarks().then(success => {
-                if (success && bookmarksContainer) {
+                if (success && bookmarksContainer && typeof applyCurrentView === 'function') {
+                    applyCurrentView('bookmarksContainer');
+                } else if (success && bookmarksContainer) {
+                    console.warn("applyCurrentView function not found, defaulting bookmarks to cards view.");
                     applyView(bookmarksContainer, 'cards');
                 }
             });
@@ -4484,6 +4781,101 @@
                 fragment.appendChild(option);
             });
             bookmarkFolderFilter.appendChild(fragment);
+        }
+
+
+        async function loadFoldersList(foldersListElement) {
+            if (!foldersListElement) {
+                console.error("loadFoldersList: Контейнер для списка папок не передан.");
+                return;
+            }
+
+            foldersListElement.innerHTML = '<div class="text-center py-4 text-gray-500">Загрузка папок...</div>';
+
+            try {
+                const folders = await getAllFromIndexedDB('bookmarkFolders');
+
+                if (!folders || folders.length === 0) {
+                    foldersListElement.innerHTML = '<div class="text-center py-4 text-gray-500">Нет созданных папок</div>';
+                    return;
+                }
+
+                foldersListElement.innerHTML = '';
+                const fragment = document.createDocumentFragment();
+
+                folders.forEach(folder => {
+                    const folderItem = document.createElement('div');
+                    folderItem.className = 'folder-item flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
+                    folderItem.dataset.folderId = folder.id;
+
+                    const colorName = folder.color || 'gray';
+                    const colorClass = `bg-${colorName}-500`;
+
+                    folderItem.innerHTML = `
+                <div class="flex items-center flex-grow min-w-0 mr-2">
+                    <span class="w-4 h-4 rounded-full ${colorClass} mr-2 flex-shrink-0"></span>
+                    <span class="truncate" title="${folder.name}">${folder.name}</span>
+                </div>
+                <div class="flex-shrink-0">
+                    <button class="edit-folder-btn p-1 text-gray-500 hover:text-primary" title="Редактировать">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="delete-folder-btn p-1 text-gray-500 hover:text-red-500 ml-1" title="Удалить">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+
+                    const deleteBtn = folderItem.querySelector('.delete-folder-btn');
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Вы уверены, что хотите удалить папку "${folder.name}"? Закладки в ней не будут удалены, но потеряют привязку к папке.`)) {
+                                handleDeleteBookmarkFolderClick(folder.id, folderItem);
+                            }
+                        });
+                    }
+
+                    const editBtn = folderItem.querySelector('.edit-folder-btn');
+                    if (editBtn) {
+                        editBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            const modal = document.getElementById('foldersModal');
+                            if (!modal) return;
+
+                            const form = modal.querySelector('#folderForm');
+                            if (!form) return;
+
+                            try {
+                                const folderData = await getFromIndexedDB('bookmarkFolders', folder.id);
+                                if (folderData) {
+                                    form.elements.folderName.value = folderData.name;
+                                    const colorInput = form.querySelector(`input[name="folderColor"][value="${folderData.color || 'blue'}"]`);
+                                    if (colorInput) colorInput.checked = true;
+                                    form.dataset.editingId = folder.id;
+                                    const submitButton = form.querySelector('button[type="submit"]');
+                                    if (submitButton) submitButton.textContent = 'Сохранить изменения';
+                                    form.elements.folderName.focus();
+                                } else {
+                                    showNotification("Не удалось загрузить данные папки для редактирования", "error");
+                                }
+                            } catch (error) {
+                                console.error("Ошибка загрузки папки для редактирования:", error);
+                                showNotification("Ошибка загрузки папки", "error");
+                            }
+                        });
+                    }
+
+                    fragment.appendChild(folderItem);
+                });
+
+                foldersListElement.appendChild(fragment);
+
+            } catch (error) {
+                console.error("Ошибка при загрузке списка папок:", error);
+                foldersListElement.innerHTML = '<div class="text-center py-4 text-red-500">Не удалось загрузить папки</div>';
+                showNotification("Ошибка загрузки списка папок", "error");
+            }
         }
 
 
@@ -4729,47 +5121,49 @@
 
 
         async function showEditBookmarkModal(id) {
+            const modalElements = await ensureBookmarkModal();
+            if (!modalElements) {
+                showNotification("Ошибка инициализации окна редактирования закладки", "error");
+                return;
+            }
+            const { modal, form, modalTitle, submitButton, idInput, titleInput, urlInput, descriptionInput, folderSelect } = modalElements;
+
             try {
                 const bookmark = await getFromIndexedDB('bookmarks', id);
                 if (!bookmark) {
                     showNotification("Закладка не найдена", "error");
+                    modal.classList.add('hidden');
                     return;
                 }
 
-                const modal = document.getElementById('bookmarkModal');
-                if (!modal) {
-                    showAddBookmarkModal();
-                    setTimeout(() => showEditBookmarkModal(id), 150);
-                    return;
+                form.reset();
+                idInput.value = bookmark.id;
+                titleInput.value = bookmark.title || '';
+                urlInput.value = bookmark.url || '';
+                descriptionInput.value = bookmark.description || '';
+
+                try {
+                    await populateBookmarkFolders(folderSelect);
+                    setTimeout(() => {
+                        folderSelect.value = bookmark.folder || '';
+                    }, 50);
+                } catch (error) {
+                    console.error("Не удалось загрузить папки для формы редактирования закладки:", error);
                 }
-
-                const form = modal.querySelector('#bookmarkForm');
-                const modalTitle = modal.querySelector('h2');
-                const submitButton = form?.querySelector('button[type="submit"]');
-
-                if (!form || !modalTitle || !submitButton) {
-                    console.error("Edit modal elements not found.");
-                    return;
-                }
-
-                form.querySelector('#bookmarkTitle').value = bookmark.title;
-                form.querySelector('#bookmarkUrl').value = bookmark.url;
-                form.querySelector('#bookmarkDescription').value = bookmark.description || '';
-                form.querySelector('#bookmarkFolder').value = bookmark.folder || '';
-
-                let bookmarkIdInput = form.querySelector('#bookmarkId');
-                if (!bookmarkIdInput) {
-                    bookmarkIdInput = form.appendChild(Object.assign(document.createElement('input'), { type: 'hidden', id: 'bookmarkId' }));
-                }
-                bookmarkIdInput.value = bookmark.id;
 
                 modalTitle.textContent = 'Редактировать закладку';
                 submitButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
+                submitButton.disabled = false;
+
                 modal.classList.remove('hidden');
+                if (titleInput) {
+                    setTimeout(() => titleInput.focus(), 50);
+                }
 
             } catch (error) {
-                console.error("Error loading bookmark for edit:", error);
+                console.error("Ошибка при загрузке закладки для редактирования:", error);
                 showNotification("Ошибка загрузки закладки для редактирования", "error");
+                modal.classList.add('hidden');
             }
         }
 
@@ -4990,19 +5384,21 @@
                 modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
                 modal.innerHTML = `
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-        <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <div class="flex justify-between items-center">
-                <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100" id="bookmarkModalTitle">Добавить закладку</h2>
-                <div>
-                    <button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-                        <i class="fas fa-expand"></i>
-                    </button>
-                    <button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Закрыть">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-            </div>
+<div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="editModalTitle">
+            Редактирование: ...
+        </h2>
+        <div class="flex items-center flex-shrink-0">
+            <button id="toggleFullscreenEditBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                <i class="fas fa-expand"></i>
+            </button>
+            <button type="button" id="closeEditModalBtn" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
+                <i class="fas fa-times text-xl"></i>
+            </button>
         </div>
+    </div>
+</div>
         <div class="p-content overflow-y-auto flex-1">
             <form id="bookmarkForm">
                 <input type="hidden" id="bookmarkId">
@@ -5194,28 +5590,28 @@
                 modal.id = modalId;
                 modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
                 modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                    <div class="flex justify-between items-center">
-                        <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
-                        <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть">
-                            <i class="fas fa-times text-xl"></i>
-                        </button>
-                    </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
+                    <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
                 </div>
-                <div class="p-6 overflow-y-auto flex-1 prose dark:prose-invert max-w-none" id="bookmarkDetailContent">
-                    <p>Загрузка...</p>
-                </div>
-                 <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
-                     <button type="button" id="editBookmarkFromDetailBtn" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
-                         <i class="fas fa-edit mr-1"></i> Редактировать
-                     </button>
-                     <button type="button" class="cancel-modal px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                         Закрыть
-                     </button>
-                 </div>
             </div>
-        `;
+            <div class="p-6 overflow-y-auto flex-1 prose dark:prose-invert max-w-none" id="bookmarkDetailContent">
+                <p>Загрузка...</p>
+            </div>
+             <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
+                 <button type="button" id="editBookmarkFromDetailBtn" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
+                     <i class="fas fa-edit mr-1"></i> Редактировать
+                 </button>
+                 <button type="button" class="cancel-modal px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                     Закрыть
+                 </button>
+             </div>
+        </div>
+    `;
                 document.body.appendChild(modal);
                 modal.addEventListener('click', (e) => {
                     if (e.target.closest('.close-modal, .cancel-modal')) {
@@ -5225,23 +5621,54 @@
                         const currentId = parseInt(modal.dataset.currentBookmarkId, 10);
                         if (!isNaN(currentId)) {
                             modal.classList.add('hidden');
-                            showEditBookmarkModal(currentId);
+                            if (typeof showEditBookmarkModal === 'function') {
+                                showEditBookmarkModal(currentId);
+                            } else {
+                                console.error("Функция showEditBookmarkModal не определена!");
+                                showNotification("Ошибка: функция редактирования недоступна.", "error");
+                            }
                         } else {
                             console.error("Не удалось получить ID закладки для редактирования из dataset");
                             showNotification("Ошибка: не удалось определить ID для редактирования", "error");
                         }
                     }
                 });
+                const closeModalOnEscape = (e) => {
+                    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+                        modal.classList.add('hidden');
+                        document.removeEventListener('keydown', closeModalOnEscape);
+                    }
+                };
+                document.addEventListener('keydown', closeModalOnEscape);
+                modal._closeModalOnEscape = closeModalOnEscape;
+
+            } else {
+                if (modal._closeModalOnEscape) {
+                    document.removeEventListener('keydown', modal._closeModalOnEscape);
+                }
+                const closeModalOnEscape = (e) => {
+                    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+                        modal.classList.add('hidden');
+                        document.removeEventListener('keydown', closeModalOnEscape);
+                    }
+                };
+                document.addEventListener('keydown', closeModalOnEscape);
+                modal._closeModalOnEscape = closeModalOnEscape;
             }
 
             const titleEl = modal.querySelector('#bookmarkDetailTitle');
             const contentEl = modal.querySelector('#bookmarkDetailContent');
             const editButton = modal.querySelector('#editBookmarkFromDetailBtn');
 
+            if (!titleEl || !contentEl || !editButton) {
+                console.error("Не найдены необходимые элементы в модальном окне деталей закладки.");
+                return;
+            }
+
             modal.dataset.currentBookmarkId = bookmarkId;
             titleEl.textContent = 'Загрузка...';
             contentEl.innerHTML = '<p>Загрузка...</p>';
-            if (editButton) editButton.classList.add('hidden');
+            editButton.classList.add('hidden');
 
             modal.classList.remove('hidden');
 
@@ -5249,29 +5676,26 @@
                 const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
                 if (bookmark) {
                     titleEl.textContent = bookmark.title;
-                    const pre = document.createElement('pre');
-                    pre.className = 'whitespace-pre-wrap break-words text-sm font-sans';
-                    pre.textContent = bookmark.description || 'Нет описания.';
+                    const preElement = document.createElement('pre');
+                    preElement.className = 'whitespace-pre-wrap break-words text-sm font-sans';
+                    preElement.style.fontSize = '105%'; // Увеличиваем размер шрифта на 5%
+                    preElement.textContent = bookmark.description || 'Нет описания.';
                     contentEl.innerHTML = '';
-                    contentEl.appendChild(pre);
+                    contentEl.appendChild(preElement);
 
-                    if (editButton && !bookmark.url) {
+                    if (!bookmark.url) {
                         editButton.classList.remove('hidden');
-                    } else if (editButton) {
-                        editButton.classList.add('hidden');
                     }
 
                 } else {
                     titleEl.textContent = 'Ошибка';
                     contentEl.innerHTML = '<p class="text-red-500">Не удалось загрузить данные закладки.</p>';
-                    if (editButton) editButton.classList.add('hidden');
                     showNotification("Закладка не найдена", "error");
                 }
             } catch (error) {
                 console.error("Ошибка при загрузке деталей закладки:", error);
                 titleEl.textContent = 'Ошибка';
                 contentEl.innerHTML = '<p class="text-red-500">Ошибка при загрузке данных.</p>';
-                if (editButton) editButton.classList.add('hidden');
                 showNotification("Ошибка загрузки деталей закладки", "error");
             }
         }
@@ -5304,8 +5728,10 @@
 
         function showOrganizeFoldersModal() {
             let modal = document.getElementById('foldersModal');
+            let isNewModal = false;
 
             if (!modal) {
+                isNewModal = true;
                 modal = document.createElement('div');
                 modal.id = 'foldersModal';
                 modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
@@ -5325,37 +5751,62 @@
                         </div>
                         
                         <form id="folderForm" class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <input type="hidden" name="editingFolderId">
                             <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="folderName">Название новой папки</label>
+                                <label class="block text-sm font-medium mb-1" for="folderName">Название папки</label>
                                 <input type="text" id="folderName" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1">Цвет</label>
-                                <div class="flex gap-2">
+                                <div class="flex gap-2 flex-wrap">
                                     <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="blue" checked class="form-radio text-blue-600">
+                                        <input type="radio" name="folderColor" value="gray" class="form-radio text-gray-600 focus:ring-gray-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-gray-500 border border-gray-300"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="red" class="form-radio text-red-600 focus:ring-red-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-red-600"></span>
+                                    </label>
+                                     <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="orange" class="form-radio text-orange-600 focus:ring-orange-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-orange-500"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="yellow" class="form-radio text-yellow-500 focus:ring-yellow-400">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-yellow-400"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="green" class="form-radio text-green-600 focus:ring-green-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-green-500"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="teal" class="form-radio text-teal-600 focus:ring-teal-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-teal-500"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="blue" checked class="form-radio text-blue-600 focus:ring-blue-500">
                                         <span class="ml-2 w-5 h-5 rounded-full bg-blue-600"></span>
                                     </label>
                                     <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="red" class="form-radio text-red-600">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-red-600"></span>
+                                        <input type="radio" name="folderColor" value="indigo" class="form-radio text-indigo-600 focus:ring-indigo-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-indigo-600"></span>
                                     </label>
                                     <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="green" class="form-radio text-green-600">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-green-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="yellow" class="form-radio text-yellow-600">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-yellow-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="purple" class="form-radio text-purple-600">
+                                        <input type="radio" name="folderColor" value="purple" class="form-radio text-purple-600 focus:ring-purple-500">
                                         <span class="ml-2 w-5 h-5 rounded-full bg-purple-600"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="pink" class="form-radio text-pink-600 focus:ring-pink-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-pink-600"></span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" name="folderColor" value="rose" class="form-radio text-rose-600 focus:ring-rose-500">
+                                        <span class="ml-2 w-5 h-5 rounded-full bg-rose-500"></span>
                                     </label>
                                 </div>
                             </div>
                             <div class="flex justify-end">
-                                <button type="submit" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                <button type="submit" id="folderSubmitBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
                                     Добавить папку
                                 </button>
                             </div>
@@ -5369,55 +5820,48 @@
                 modal.addEventListener('click', (e) => {
                     if (e.target.closest('.close-modal')) {
                         modal.classList.add('hidden');
+                        const form = modal.querySelector('#folderForm');
+                        if (form && form.dataset.editingId) {
+                            form.reset();
+                            delete form.dataset.editingId;
+                            const submitButton = form.querySelector('#folderSubmitBtn');
+                            if (submitButton) submitButton.textContent = 'Добавить папку';
+                            const defaultColorInput = form.querySelector('input[name="folderColor"][value="blue"]');
+                            if (defaultColorInput) defaultColorInput.checked = true;
+                        }
                     }
                 });
 
                 const form = modal.querySelector('#folderForm');
-                form.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-
-                    const name = form.elements.folderName.value.trim();
-                    const colorInput = form.querySelector('input[name="folderColor"]:checked');
-                    const color = colorInput?.value ?? 'blue';
-
-                    if (!name) {
-                        showNotification("Пожалуйста, введите название папки", "error");
-                        return;
+                if (!form.dataset.submitListenerAttached) {
+                    if (typeof handleSaveFolderSubmit === 'function') {
+                        form.addEventListener('submit', handleSaveFolderSubmit);
+                        form.dataset.submitListenerAttached = 'true';
+                    } else {
+                        console.error("Функция handleSaveFolderSubmit не определена!");
+                        form.addEventListener('submit', (e) => {
+                            e.preventDefault();
+                            showNotification("Ошибка: функция сохранения не найдена.", "error");
+                        });
                     }
+                }
+            }
 
-                    const folder = {
-                        name,
-                        color,
-                        dateAdded: new Date().toISOString()
-                    };
-
-                    try {
-                        await saveToIndexedDB('bookmarkFolders', folder);
-
-                        loadFoldersList(modal.querySelector('#foldersList'));
-
-                        populateBookmarkFolders();
-
-                        const folders = await getAllFromIndexedDB('bookmarkFolders');
-                        renderBookmarkFolders(folders);
-
-                        showNotification("Папка добавлена");
-                        form.reset();
-
-                        const defaultColorInput = form.querySelector('input[name="folderColor"][value="blue"]');
-                        if (defaultColorInput) defaultColorInput.checked = true;
-                    } catch (error) {
-                        console.error("Error saving folder:", error);
-                        showNotification("Ошибка при сохранении папки", "error");
-                    }
-                });
+            const form = modal.querySelector('#folderForm');
+            if (form) {
+                form.reset();
+                delete form.dataset.editingId;
+                const submitButton = form.querySelector('#folderSubmitBtn');
+                if (submitButton) submitButton.textContent = 'Добавить папку';
+                const defaultColorInput = form.querySelector('input[name="folderColor"][value="blue"]');
+                if (defaultColorInput) defaultColorInput.checked = true;
             }
 
             const foldersListElement = modal.querySelector('#foldersList');
             if (foldersListElement) {
                 loadFoldersList(foldersListElement);
             } else {
-                loadFoldersList();
+                console.error("Не найден элемент #foldersList в модальном окне папок.");
             }
 
             modal.classList.remove('hidden');
@@ -5496,6 +5940,9 @@
             linksContainer.addEventListener('click', handleLinkActionClick);
 
             initCibLinkModal();
+
+            setupClearButton('linkSearchInput', 'clearLinkSearchInputBtn', filterLinks);
+            console.log("CIB Link system initialized.");
         }
 
 
@@ -6258,25 +6705,34 @@
         async function handleSaveFolderSubmit(event) {
             event.preventDefault();
             const folderForm = event.target;
+            const saveButton = folderForm.querySelector('#folderSubmitBtn');
+            if (saveButton) saveButton.disabled = true;
+
+            const nameInput = folderForm.elements.folderName;
+            const name = nameInput.value.trim();
+            const colorInput = folderForm.querySelector('input[name="folderColor"]:checked');
+            const color = colorInput?.value ?? 'blue';
 
             if (!name) {
                 showNotification("Пожалуйста, введите название папки", "error");
+                if (saveButton) saveButton.disabled = false;
+                nameInput.focus();
                 return;
             }
 
+            const isEditing = folderForm.dataset.editingId;
             const folderData = {
                 name,
                 color,
             };
 
-            const isEditing = folderForm.dataset.editingId;
             let oldData = null;
             let finalId = null;
             const timestamp = new Date().toISOString();
 
             try {
                 if (isEditing) {
-                    folderData.id = parseInt(folderForm.dataset.editingId);
+                    folderData.id = parseInt(isEditing);
                     finalId = folderData.id;
                     try {
                         oldData = await getFromIndexedDB('bookmarkFolders', finalId);
@@ -6286,8 +6742,10 @@
                         folderData.dateAdded = timestamp;
                     }
                     folderData.dateUpdated = timestamp;
+                    console.log("Редактирование папки:", folderData);
                 } else {
                     folderData.dateAdded = timestamp;
+                    console.log("Добавление новой папки:", folderData);
                 }
 
                 const savedResult = await saveToIndexedDB('bookmarkFolders', folderData);
@@ -6305,32 +6763,38 @@
                             isEditing ? 'update' : 'add',
                             oldData
                         );
-                        console.log(`Search index updated for bookmark folder ID: ${finalId}`);
+                        console.log(`Поисковый индекс обновлен для папки ID: ${finalId}`);
                     } catch (indexError) {
-                        console.error(`Error updating search index for bookmark folder ${finalId}:`, indexError);
+                        console.error(`Ошибка обновления поискового индекса для папки ${finalId}:`, indexError);
                         showNotification("Ошибка обновления поискового индекса для папки.", "warning");
                     }
                 } else {
-                    console.warn("updateSearchIndex function not available for bookmark folder.");
+                    console.warn("Функция updateSearchIndex недоступна для папки.");
                 }
 
-                loadFoldersList(document.getElementById('foldersList'));
+                const foldersList = document.getElementById('foldersList');
+                if (foldersList) {
+                    loadFoldersList(foldersList);
+                }
                 populateBookmarkFolders();
                 const folders = await getAllFromIndexedDB('bookmarkFolders');
                 renderBookmarkFolders(folders);
 
                 showNotification(isEditing ? "Папка обновлена" : "Папка добавлена");
+
                 folderForm.reset();
                 delete folderForm.dataset.editingId;
+                const submitButton = folderForm.querySelector('#folderSubmitBtn');
+                if (submitButton) submitButton.textContent = 'Добавить папку';
                 const defaultColorInput = folderForm.querySelector('input[name="folderColor"][value="blue"]');
                 if (defaultColorInput) defaultColorInput.checked = true;
-                const foldersModal = document.getElementById('foldersModal');
-                if (foldersModal) foldersModal.classList.add('hidden');
 
 
             } catch (error) {
-                console.error("Error saving bookmark folder:", error);
+                console.error("Ошибка при сохранении папки:", error);
                 showNotification("Ошибка при сохранении папки", "error");
+            } finally {
+                if (saveButton) saveButton.disabled = false;
             }
         }
 
@@ -6625,50 +7089,43 @@
         }
 
 
+        // (Уже существует в коде, можно доработать)
         const getOrCreateModal = (id, baseClassName, innerHTML, setupCallback) => {
             let modal = document.getElementById(id);
-            if (modal) {
-                if (typeof setupCallback === 'function' && !modal.dataset.setupComplete) {
+            let isNew = false;
+            if (!modal) {
+                isNew = true;
+                modal = document.createElement('div');
+                modal.id = id;
+                modal.className = baseClassName;
+                modal.classList.add('flex', 'items-center', 'justify-center');
+                modal.innerHTML = innerHTML;
+
+                if (!document.body) {
+                    console.error(`[getOrCreateModal] document.body не доступно при создании #${id}.`);
+                    throw new Error(`document.body не доступно`);
+                }
+                document.body.appendChild(modal);
+
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal || event.target.closest('.close-modal, .cancel-modal')) {
+                        modal.classList.add('hidden');
+                    }
+                });
+                document.addEventListener('keydown', escapeHandler);
+            }
+
+            if (typeof setupCallback === 'function') {
+                if (isNew || !modal.dataset.setupComplete) {
                     try {
                         setupCallback(modal);
                         modal.dataset.setupComplete = 'true';
                     } catch (error) {
-                        console.error(`[getOrCreateModal] Error re-executing setupCallback for existing modal #${id}:`, error);
+                        console.error(`[getOrCreateModal] Ошибка setupCallback для #${id} (isNew=${isNew}):`, error);
                     }
-                }
-                return modal;
-            }
-
-            modal = document.createElement('div');
-            modal.id = id;
-            modal.className = baseClassName;
-            modal.classList.add('flex', 'items-center', 'justify-center');
-            modal.innerHTML = innerHTML;
-
-            if (!document.body) {
-                console.error(`[getOrCreateModal] document.body not available when creating modal #${id}. Appending might fail.`);
-                throw new Error(`[getOrCreateModal] document.body not available when creating modal #${id}.`);
-            }
-            document.body.appendChild(modal);
-
-            modal.addEventListener('click', (event) => {
-                const target = event.target;
-                if (target.closest('.close-modal, .cancel-modal, .close-detail-modal, .cancel-edit-modal, .close-sample-modal, .cancel-add-modal, .closeConfirmClearModalBtns, .close-edit-modal')) {
-                    console.log(`[${id} Click Handler] Close button clicked. Hiding modal.`);
-                    modal.classList.add('hidden');
                 } else {
+                    setupCallback(modal, false);
                 }
-            });
-
-            if (typeof setupCallback === 'function') {
-                try {
-                    setupCallback(modal);
-                    modal.dataset.setupComplete = 'true';
-                } catch (error) {
-                    console.error(`[getOrCreateModal] Error executing setupCallback for modal #${id}:`, error);
-                }
-            } else {
-                modal.dataset.setupComplete = 'true';
             }
 
             return modal;
@@ -7614,12 +8071,12 @@
                         await saveEmployeeExtension(inputField.value);
                     }
                     closeModal(true);
-                    showNotification("Настройки сохранены");
+                    showNotification("Настройки интерфейса сохранены");
                 }
             });
 
             resetUISettingsBtn?.addEventListener('click', async () => {
-                if (confirm('Вы уверены, что хотите сбросить все настройки к значениям по умолчанию (в окне предпросмотра)? Это изменение нужно будет сохранить.')) {
+                if (confirm('Вы уверены, что хотите сбросить все настройки интерфейса к значениям по умолчанию (в окне предпросмотра)? Это изменение нужно будет сохранить.')) {
                     await resetUISettingsInModal();
                     updateExtensionDisplay('');
                     const inputField = getElem('employeeExtensionInput');
@@ -8386,15 +8843,15 @@
         function linkify(text) {
             if (!text) return '';
 
-            const escapeHtml = (unsafe) => {
-                if (!unsafe) return '';
+            const escapeHtmlLocal = (unsafe) => {
+                if (typeof unsafe !== 'string') return '';
                 return unsafe
                     .replace(/&/g, "&")
                     .replace(/</g, "<")
                     .replace(/>/g, ">")
                     .replace(/"/g, "")
                     .replace(/'/g, "'");
-            }
+            };
 
             const urlPattern = /(https?:\/\/[^\s<>"]+)/g;
 
@@ -8403,19 +8860,18 @@
 
             for (let i = 0; i < parts.length; i++) {
                 if (i % 2 === 0) {
-                    resultHTML += escapeHtml(parts[i]);
+                    resultHTML += escapeHtmlLocal(parts[i]).replace(/\n/g, '<br>');
                 } else {
                     let url = parts[i];
                     if (url.startsWith('http://') || url.startsWith('https://')) {
-                        let escapedUrl = escapeHtml(url);
-                        resultHTML += `<a href="${escapedUrl}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">${escapedUrl}</a>`;
+                        let escapedUrlForAttr = escapeHtmlLocal(url);
+                        let linkText = escapeHtmlLocal(url);
+                        resultHTML += `<a href="${escapedUrlForAttr}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">${linkText}</a>`;
                     } else {
-                        resultHTML += escapeHtml(parts[i]);
+                        resultHTML += escapeHtmlLocal(parts[i]).replace(/\n/g, '<br>');
                     }
                 }
             }
-
-            resultHTML = resultHTML.replace(/\n/g, '<br>');
 
             return resultHTML;
         }
@@ -8846,26 +9302,26 @@
                     const pref = await getFromIndexedDB('preferences', 'employeeExtension');
                     extension = pref?.value || '';
                 } else {
-                    extension = localStorage.getItem('employeeExtension') || ''; // Fallback
+                    extension = localStorage.getItem('employeeExtension') || '';
                     console.warn("Загрузка добавочного номера из localStorage (DB недоступна)");
                 }
             } catch (error) {
                 console.error("Ошибка при загрузке добавочного номера:", error);
-                extension = localStorage.getItem('employeeExtension') || ''; // Fallback on error
+                extension = localStorage.getItem('employeeExtension') || '';
             }
             updateExtensionDisplay(extension);
         }
 
 
         async function saveEmployeeExtension(extensionValue) {
-            const valueToSave = extensionValue.trim().replace(/\D/g, ''); // Удаляем нецифровые символы
+            const valueToSave = extensionValue.trim().replace(/\D/g, '');
 
             try {
                 if (db) {
                     await saveToIndexedDB('preferences', { id: 'employeeExtension', value: valueToSave });
                     console.log("Добавочный номер сохранен в IndexedDB:", valueToSave);
                 } else {
-                    localStorage.setItem('employeeExtension', valueToSave); // Fallback
+                    localStorage.setItem('employeeExtension', valueToSave);
                     console.warn("Сохранение добавочного номера в localStorage (DB недоступна)");
                 }
                 updateExtensionDisplay(valueToSave);
@@ -8973,4 +9429,39 @@
             });
 
             console.log("Обработчики событий для поля добавочного номера настроены.");
+        }
+
+
+        function setupClearButton(inputId, buttonId, actionCallback) {
+            const input = document.getElementById(inputId);
+            const button = document.getElementById(buttonId);
+
+            if (!input || !button) {
+                console.warn(`Не удалось настроить кнопку очистки: поле ввода (${inputId}) или кнопка (${buttonId}) не найдены.`);
+                return;
+            }
+
+            const toggleButtonVisibility = () => {
+                button.classList.toggle('hidden', input.value.length === 0);
+            };
+
+            input.addEventListener('input', toggleButtonVisibility);
+
+            toggleButtonVisibility();
+
+            button.addEventListener('click', () => {
+                input.value = '';
+                button.classList.add('hidden');
+                input.focus();
+                if (typeof actionCallback === 'function') {
+                    try {
+                        actionCallback();
+                    } catch (error) {
+                        console.error(`Ошибка при вызове actionCallback для ${inputId}:`, error);
+                    }
+                }
+                const event = new Event('input', { bubbles: true, cancelable: true });
+                input.dispatchEvent(event);
+            });
+            console.log(`Кнопка очистки настроена для поля ${inputId}`);
         }
