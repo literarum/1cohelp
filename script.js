@@ -1,4 +1,4 @@
-// Initialize IndexedDB
+        // Initialize IndexedDB
         let db;
         const DB_NAME = '1C_Support_Guide';
         const DB_VERSION = 3;
@@ -2125,7 +2125,6 @@
                 }
             });
 
-            // Удаляем границу у последнего элемента в режиме списка
             if (view === 'list' && container.lastElementChild) {
                 container.lastElementChild.classList.remove('border-b', 'border-gray-200', 'dark:border-gray-600');
             }
@@ -2645,100 +2644,6 @@
             console.log("UI Systems Initialized.");
             return dbInitialized;
         }
-
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const appContent = document.getElementById('appContent');
-
-            if (!loadingOverlay || !appContent) {
-                console.error("Критическая ошибка: Не найден оверлей загрузки (#loadingOverlay) или контейнер приложения (#appContent)!");
-                if (loadingOverlay) {
-                    loadingOverlay.innerHTML = '<div class="text-center text-red-500 p-4"><i class="fas fa-exclamation-triangle text-3xl mb-2"></i><p>Ошибка инициализации интерфейса.</p></div>';
-                    loadingOverlay.style.display = 'flex';
-                } else {
-                    alert("Критическая ошибка загрузки интерфейса приложения. Пожалуйста, обновите страницу.");
-                }
-                return;
-            }
-
-            try {
-                console.log("Инициализация приложения...");
-                const dbReady = await appInit();
-                console.log("Инициализация appInit завершена. Статус БД:", dbReady);
-
-                initClearDataFunctionality();
-                initFullscreenToggles();
-                initReloadButton();
-
-                if (dbReady) {
-                    if (typeof applyUISettings === 'function') {
-                        await applyUISettings();
-                    } else {
-                        console.error("Функция applyUISettings не определена!");
-                        setTheme('auto');
-                        document.documentElement.style.fontSize = '100%';
-                        document.documentElement.style.removeProperty('--color-primary');
-                        document.documentElement.style.removeProperty('--border-radius');
-                        document.documentElement.style.removeProperty('--content-spacing');
-                    }
-                } else {
-                    console.warn("База данных не готова. Пропуск применения настроек UI из БД. Применяются настройки по умолчанию.");
-                    setTheme('auto');
-                    document.documentElement.style.fontSize = '100%';
-                    document.documentElement.style.removeProperty('--color-primary');
-                    document.documentElement.style.removeProperty('--border-radius');
-                    document.documentElement.style.removeProperty('--content-spacing');
-                }
-
-                appContent.classList.remove('hidden');
-                loadingOverlay.style.display = 'none';
-
-                if (typeof setupTabsOverflow === 'function') {
-                    setupTabsOverflow();
-                } else {
-                    console.warn("Функция setupTabsOverflow не найдена");
-                }
-
-                const mainContentContainer = document.getElementById('mainContent');
-                if (mainContentContainer) {
-                    mainContentContainer.addEventListener('click', (event) => {
-                        const link = event.target.closest('#noInnLink');
-                        if (link) {
-                            event.preventDefault();
-                            if (typeof showNoInnModal === 'function') {
-                                showNoInnModal();
-                            } else {
-                                console.error("Функция showNoInnModal не определена");
-                            }
-                        }
-                    });
-                } else {
-                    console.error("Контейнер #mainContent не найден для делегирования событий '#noInnLink'.");
-                }
-
-            } catch (error) {
-                console.error("КРИТИЧЕСКАЯ ОШИБКА во время инициализации приложения:", error);
-
-                loadingOverlay.innerHTML = `
-            <div class="text-center text-red-600 dark:text-red-400 p-4">
-                <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
-                <p class="text-lg font-medium">Ошибка загрузки приложения!</p>
-                <p class="text-sm mt-2">Не удалось загрузить необходимые данные или настройки.</p>
-                <p class="text-xs mt-4">Детали ошибки: ${error.message || 'Неизвестная ошибка'}</p>
-                <p class="text-sm mt-2">Пожалуйста, попробуйте обновить страницу (F5) или проверьте консоль разработчика (F12) для получения дополнительной информации.</p>
-            </div>`;
-                loadingOverlay.style.display = 'flex';
-                if (appContent) {
-                    appContent.classList.add('hidden');
-                }
-                if (typeof showNotification === 'function') {
-                    showNotification("Критическая ошибка при инициализации приложения. Обновите страницу.", "error", 10000);
-                }
-            }
-        });
-
-
 
 
         // СИСТЕМА ПОИСКА
@@ -4302,7 +4207,7 @@
         }
 
 
-        function exportClientDataToTxt() {
+        async function exportClientDataToTxt() {
             const notes = document.getElementById('clientNotes')?.value ?? '';
             if (!notes.trim()) {
                 showNotification("Нет данных для сохранения", "error");
@@ -4314,9 +4219,39 @@
             const filename = `Обращение_1С_${timestamp}.txt`;
             const blob = new Blob([notes], { type: 'text/plain;charset=utf-8' });
 
-            if (window.navigator.msSaveOrOpenBlob) {
-                window.navigator.msSaveBlob(blob, filename);
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: filename,
+                        types: [{
+                            description: 'Текстовые файлы',
+                            accept: { 'text/plain': ['.txt'] },
+                        }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    showNotification("Файл успешно сохранен");
+                    console.log("Экспорт текста клиента через File System Access API завершен успешно.");
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        console.log("Сохранение файла отменено пользователем.");
+                        showNotification("Сохранение файла отменено", "info");
+                    } else {
+                        console.error('Ошибка сохранения через File System Access API, используем fallback:', err);
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
+                        showNotification("Файл успешно сохранен (fallback)");
+                        console.log("Экспорт текста клиента через data URI (fallback) завершен успешно.");
+                    }
+                }
             } else {
+                console.log("File System Access API не поддерживается, используем fallback.");
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = filename;
@@ -4324,9 +4259,9 @@
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
+                showNotification("Файл успешно сохранен");
+                console.log("Экспорт текста клиента через data URI завершен успешно.");
             }
-
-            showNotification("Файл успешно сохранен");
         }
 
 
@@ -4623,7 +4558,6 @@
                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
                 <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
                     <option value="">Выберите папку</option>
-                    <!-- Папки будут добавлены динамически -->
                 </select>
             </div>
         </form>
@@ -5612,7 +5546,7 @@
                     titleEl.textContent = bookmark.title;
                     const preElement = document.createElement('pre');
                     preElement.className = 'whitespace-pre-wrap break-words text-sm font-sans';
-                    preElement.style.fontSize = '105%'; // Увеличиваем размер шрифта на 5%
+                    preElement.style.fontSize = '102%'; // Увеличиваем размер шрифта на 5%
                     preElement.textContent = bookmark.description || 'Нет описания.';
                     contentEl.innerHTML = '';
                     contentEl.appendChild(preElement);
@@ -9162,8 +9096,6 @@
 
             if (changed) {
                 console.log(`hasChanges (${modalType}): Обнаружены изменения через deepEqual.`);
-                console.log("Initial:", JSON.stringify(initialState)); // Для отладки
-                console.log("Current:", JSON.stringify(currentState)); // Для отладки
             } else {
                 console.log(`hasChanges (${modalType}): Изменения НЕ обнаружены через deepEqual.`);
             }
@@ -9549,4 +9481,423 @@
             }
 
             return true;
+        }
+
+
+        function setupHotkeys() {
+            document.removeEventListener('keydown', handleGlobalHotkey, true);
+            document.removeEventListener('keydown', handleGlobalHotkey, false);
+
+            document.addEventListener('keydown', handleGlobalHotkey, true);
+            console.log("Глобальный обработчик горячих клавиш инициализирован (фаза перехвата).");
+        }
+
+
+        function toggleActiveSectionView() {
+            if (typeof currentSection === 'undefined' || !currentSection) {
+                console.warn("toggleActiveSectionView: Переменная currentSection не определена или пуста.");
+                showNotification("Не удалось определить активную секцию для переключения вида.", "warning");
+                return;
+            }
+
+            let containerId;
+            let sectionIdentifierForPrefs;
+
+            switch (currentSection) {
+                case 'main':
+                    showNotification("Главный алгоритм не имеет переключения вида.", "info");
+                    return;
+                case 'program': containerId = 'programAlgorithms'; break;
+                case 'skzi': containerId = 'skziAlgorithms'; break;
+                case 'webReg': containerId = 'webRegAlgorithms'; break;
+                case 'links': containerId = 'linksContainer'; break;
+                case 'extLinks': containerId = 'extLinksContainer'; break;
+                case 'reglaments':
+                    const reglamentsListDiv = document.getElementById('reglamentsList');
+                    if (!reglamentsListDiv || reglamentsListDiv.classList.contains('hidden')) {
+                        showNotification("Сначала выберите категорию регламентов.", "info");
+                        return;
+                    }
+                    containerId = 'reglamentsContainer';
+                    break;
+                case 'bookmarks': containerId = 'bookmarksContainer'; break;
+                default:
+                    console.warn(`toggleActiveSectionView: Неизвестная секция '${currentSection}'.`);
+                    showNotification("Переключение вида для текущей секции не поддерживается.", "warning");
+                    return;
+            }
+            sectionIdentifierForPrefs = containerId;
+
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.warn(`toggleActiveSectionView: Контейнер #${containerId} не найден для секции ${currentSection}.`);
+                showNotification("Не удалось найти контейнер для переключения вида.", "error");
+                return;
+            }
+
+            const currentView = viewPreferences[sectionIdentifierForPrefs] || container.dataset.defaultView || 'cards';
+            const nextView = currentView === 'cards' ? 'list' : 'cards';
+
+            console.log(`Переключение вида для ${sectionIdentifierForPrefs} с ${currentView} на ${nextView}`);
+
+            if (typeof applyView === 'function' && typeof saveViewPreference === 'function') {
+                applyView(container, nextView);
+                saveViewPreference(sectionIdentifierForPrefs, nextView);
+                showNotification(`Вид переключен на: ${nextView === 'list' ? 'Список' : 'Плитки'}`, "info", 1500);
+            } else {
+                console.error("toggleActiveSectionView: Функции applyView или saveViewPreference не найдены.");
+                showNotification("Ошибка: Функция переключения вида недоступна.", "error");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const appContent = document.getElementById('appContent');
+
+            if (!loadingOverlay || !appContent) {
+                console.error("Критическая ошибка: Не найден оверлей загрузки (#loadingOverlay) или контейнер приложения (#appContent)!");
+                if (loadingOverlay) {
+                    loadingOverlay.innerHTML = '<div class="text-center text-red-500 p-4"><i class="fas fa-exclamation-triangle text-3xl mb-2"></i><p>Ошибка инициализации интерфейса.</p></div>';
+                    loadingOverlay.style.display = 'flex';
+                } else {
+                    alert("Критическая ошибка загрузки интерфейса приложения. Пожалуйста, обновите страницу.");
+                }
+                return;
+            }
+
+            try {
+                console.log("Инициализация приложения...");
+                const dbReady = await appInit();
+                console.log("Инициализация appInit завершена. Статус БД:", dbReady);
+
+                // Инициализация дополнительных подсистем
+                initClearDataFunctionality();
+                initFullscreenToggles();
+                initReloadButton();
+                initHotkeysModal();
+                console.log("Инициализация горячих клавиш...");
+                setupHotkeys();
+
+                if (dbReady) {
+                    if (typeof applyUISettings === 'function') {
+                        await applyUISettings();
+                    } else {
+                        console.error("Функция applyUISettings не определена! Применяются стили по умолчанию.");
+                        setTheme('auto');
+                        document.documentElement.style.fontSize = '100%';
+                        document.documentElement.style.removeProperty('--color-primary');
+                        document.documentElement.style.removeProperty('--border-radius');
+                        document.documentElement.style.removeProperty('--content-spacing');
+                    }
+                } else {
+                    console.warn("База данных не готова. Пропуск применения настроек UI из БД. Применяются настройки по умолчанию.");
+                    setTheme('auto');
+                    document.documentElement.style.fontSize = '100%';
+                    document.documentElement.style.removeProperty('--color-primary');
+                    document.documentElement.style.removeProperty('--border-radius');
+                    document.documentElement.style.removeProperty('--content-spacing');
+                }
+
+                appContent.classList.remove('hidden');
+                loadingOverlay.style.display = 'none';
+
+                if (typeof setupTabsOverflow === 'function') {
+                    setupTabsOverflow();
+                } else {
+                    console.warn("Функция setupTabsOverflow не найдена");
+                }
+
+                const mainContentContainer = document.getElementById('mainContent');
+                if (mainContentContainer) {
+                    mainContentContainer.addEventListener('click', (event) => {
+                        const link = event.target.closest('#noInnLink');
+                        if (link) {
+                            event.preventDefault();
+                            if (typeof showNoInnModal === 'function') {
+                                showNoInnModal();
+                            } else {
+                                console.error("Функция showNoInnModal не определена");
+                            }
+                        }
+                    });
+                } else {
+                    console.error("Контейнер #mainContent не найден для делегирования событий '#noInnLink'.");
+                }
+
+            } catch (error) {
+                console.error("КРИТИЧЕСКАЯ ОШИБКА во время инициализации приложения:", error);
+
+                loadingOverlay.innerHTML = `
+            <div class="text-center text-red-600 dark:text-red-400 p-4">
+                <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                <p class="text-lg font-medium">Ошибка загрузки приложения!</p>
+                <p class="text-sm mt-2">Не удалось загрузить необходимые данные или настройки.</p>
+                <p class="text-xs mt-4">Детали ошибки: ${error.message || 'Неизвестная ошибка'}</p>
+                <p class="text-sm mt-2">Пожалуйста, попробуйте обновить страницу (F5) или проверьте консоль разработчика (F12) для получения дополнительной информации.</p>
+            </div>`;
+                loadingOverlay.style.display = 'flex';
+                if (appContent) {
+                    appContent.classList.add('hidden');
+                }
+                if (typeof showNotification === 'function') {
+                    showNotification("Критическая ошибка при инициализации приложения. Обновите страницу.", "error", 10000);
+                }
+            }
+        });
+
+
+        function navigateBackWithinApp() {
+            console.log("[App Navigate Back] Попытка навигации назад внутри приложения...");
+
+            const reglamentsListDiv = document.getElementById('reglamentsList');
+            const categoryGrid = document.getElementById('reglamentCategoryGrid');
+            const backToCategoriesBtn = document.getElementById('backToCategories');
+
+            if (reglamentsListDiv && !reglamentsListDiv.classList.contains('hidden') && backToCategoriesBtn) {
+                console.log("[App Navigate Back]   > Обнаружен активный список регламентов. Имитация клика 'Назад к категориям'.");
+                backToCategoriesBtn.click();
+                return true;
+            }
+
+            console.log("[App Navigate Back]   > Не найдено подходящего состояния для навигации назад.");
+            showNotification("Нет действия 'назад' для текущего экрана.", "info");
+            return false;
+        }
+
+        function handleGlobalHotkey(event) {
+            const code = event.code;
+            const ctrlOrMeta = event.ctrlKey || event.metaKey;
+            const shift = event.shiftKey;
+            const alt = event.altKey;
+
+            console.log(`[RAW KeyDown] code: ${code}, ctrl: ${ctrlOrMeta}, shift: ${shift}, alt: ${alt}`);
+
+            const activeElement = document.activeElement;
+            const isInputFocused = activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.isContentEditable
+            );
+
+            // --- Обработка Backspace БЕЗ ---
+            if (code === 'Backspace' && !ctrlOrMeta && !shift && !alt && !isInputFocused) {
+                console.log("[Hotkey] Обнаружен Backspace (вне поля ввода)");
+                console.log("[Hotkey]   > Предотвращение стандартного действия Backspace");
+                event.preventDefault();
+                event.stopPropagation();
+                console.log("[Hotkey]   > Вызов navigateBackWithinApp()");
+                navigateBackWithinApp();
+                return;
+            }
+
+            // --- Обработка комбинаций Alt ---
+            if (alt && !ctrlOrMeta && !isInputFocused) {
+                switch (code) {
+                    case 'KeyN': // Alt + N (Новый элемент)
+                        if (!shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Alt + KeyN");
+                            event.preventDefault(); event.stopPropagation();
+                            console.log("[Hotkey]   > Выполнение действия: добавить элемент");
+                            let addFunctionN = null, functionArgN = null, functionNameN = '';
+                            switch (currentSection) {
+                                case 'program': case 'skzi': case 'webReg': addFunctionN = showAddModal; functionArgN = currentSection; functionNameN = 'showAddModal'; break;
+                                case 'links': addFunctionN = showAddEditCibLinkModal; functionNameN = 'showAddEditCibLinkModal'; break;
+                                case 'extLinks': addFunctionN = showAddExtLinkModal; functionNameN = 'showAddExtLinkModal'; break;
+                                case 'reglaments': addFunctionN = showAddReglamentModal; functionNameN = 'showAddReglamentModal'; break;
+                                case 'bookmarks': addFunctionN = showAddBookmarkModal; functionNameN = 'showAddBookmarkModal'; break;
+                                case 'main': showNotification("Добавление элементов в главный алгоритм не предусмотрено.", "info"); break;
+                                default: console.warn(`Alt+N: Неизвестная секция '${currentSection}'.`); showNotification("Добавление для текущей секции не поддерживается.", "warning");
+                            }
+                            if (addFunctionN) {
+                                if (typeof addFunctionN === 'function') { addFunctionN(functionArgN); }
+                                else { console.error(`Alt+N: Функция ${functionNameN} не найдена!`); showNotification(`Ошибка: Функция добавления для секции ${currentSection} недоступна.`, "error"); }
+                            }
+                            return;
+                        }
+                        break;
+
+                    case 'KeyT': // Alt + T (Тема)
+                        if (!shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Alt + KeyT");
+                            event.preventDefault(); event.stopPropagation();
+                            console.log("[Hotkey]   > Выполнение действия: смена темы");
+                            const themeToggleBtn = document.getElementById('themeToggle');
+                            if (themeToggleBtn) { themeToggleBtn.click(); }
+                            else { console.warn("Alt+T: Кнопка темы не найдена."); showNotification("Кнопка темы не найдена", "error"); }
+                            return;
+                        }
+                        break;
+
+                    case 'KeyS': // Alt + Shift + S (Экспорт)
+                        if (shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Alt + Shift + KeyS (Экспорт)");
+                            event.preventDefault();
+                            event.stopPropagation();
+                            console.log("[Hotkey]   > Выполнение действия: экспорт данных (отложенный вызов)");
+                            if (typeof exportAllData === 'function') {
+                                console.log("[Hotkey]     -> Планирование вызова exportAllData() через setTimeout(0)...");
+                                setTimeout(() => {
+                                    console.log("[Hotkey]     -> Выполняется exportAllData() из setTimeout.");
+                                    try {
+                                        exportAllData();
+                                    } catch (exportError) {
+                                        console.error("!!! Ошибка ВНУТРИ exportAllData() при вызове из хоткея:", exportError);
+                                        showNotification("Произошла ошибка во время экспорта.", "error");
+                                    }
+                                }, 0);
+                            } else {
+                                console.warn("Alt+Shift+S: Функция exportAllData не найдена.");
+                                showNotification("Функция экспорта недоступна.", "error");
+                            }
+                            return;
+                        }
+                        break;
+
+                    case 'KeyO':
+                        if (shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Alt + Shift + KeyO (Импорт)");
+                            event.preventDefault(); event.stopPropagation();
+                            console.log("[Hotkey]   > Выполнение действия: импорт данных");
+                            const importFileInput = document.getElementById('importFileInput');
+                            if (importFileInput) { importFileInput.click(); }
+                            else { console.warn("Alt+Shift+O: Поле импорта не найдено."); showNotification("Функция импорта недоступна.", "error"); }
+                            return;
+                        }
+                        break;
+
+                }
+            }
+
+
+            if (ctrlOrMeta && !alt) {
+                switch (code) {
+                    // --- Комбинации БЕЗ Shift ---
+                    case 'KeyF': // F / А
+                        if (!shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + KeyF");
+                            event.preventDefault(); event.stopPropagation();
+                            if (!isInputFocused) {
+                                console.log("[Hotkey]   > Выполнение действия: фокус на поиск");
+                                const searchInput = document.getElementById('searchInput');
+                                if (searchInput) { searchInput.focus(); searchInput.select(); }
+                                else { console.warn("Ctrl+F: Поле поиска не найдено."); showNotification("Поле поиска не найдено", "warning"); }
+                            } else { console.log("[Hotkey]   > Действие пропущено (фокус в поле ввода)."); }
+                            return;
+                        }
+                        break;
+
+                    case 'KeyV': // V / М
+                        if (!shift) {
+                            if (!isInputFocused) {
+                                console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + KeyV (вне поля ввода)");
+                                event.preventDefault(); event.stopPropagation();
+                                console.log("[Hotkey]   > Выполнение действия: переключить вид");
+                                if (typeof toggleActiveSectionView === 'function') { toggleActiveSectionView(); }
+                                else { console.warn("Ctrl+V: Функция toggleActiveSectionView не найдена."); showNotification("Функция переключения вида недоступна.", "error"); }
+                                return;
+                            } else { console.log("[Hotkey] Ctrl/Meta + KeyV проигнорировано (стандартная вставка)."); }
+                        }
+                        break;
+                    case 'KeyI': // I / Ш
+                        if (!shift) {
+                            if (!isInputFocused) {
+                                console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + KeyI (вне поля ввода)");
+                                event.preventDefault(); event.stopPropagation();
+                                console.log("[Hotkey]   > Выполнение действия: открыть настройки");
+                                const customizeUIBtn = document.getElementById('customizeUIBtn');
+                                if (customizeUIBtn) {
+                                    const customizeUIModal = document.getElementById('customizeUIModal');
+                                    if (customizeUIModal && customizeUIModal.classList.contains('hidden')) { customizeUIBtn.click(); }
+                                    else if (!customizeUIModal) { console.warn("Ctrl+I: Модальное окно настроек не найдено."); showNotification("Окно настроек не найдено.", "error"); }
+                                    else { console.log("Ctrl+I: Окно настроек уже открыто."); }
+                                } else { console.warn("Ctrl+I: Кнопка настроек не найдена."); showNotification("Кнопка настроек не найдена.", "error"); }
+                                return;
+                            } else { console.log("[Hotkey] Ctrl/Meta + KeyI проигнорировано (фокус в поле ввода)."); }
+                        }
+                        break;
+
+                    // --- Комбинации С Shift (оставшиеся) ---
+                    case 'KeyD': // D / В
+                        if (shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + Shift + KeyD");
+                            event.preventDefault(); event.stopPropagation();
+                            console.log("[Hotkey]   > Выполнение действия: сохранить заметки в txt");
+                            if (typeof exportClientDataToTxt === 'function') { exportClientDataToTxt(); }
+                            else { console.warn("Ctrl+Shift+D: Функция exportClientDataToTxt не найдена."); showNotification("Функция сохранения заметок недоступна.", "error"); }
+                            return;
+                        }
+                        break;
+                    case 'Backspace':
+                        if (shift) {
+                            console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + Shift + Backspace");
+                            event.preventDefault(); event.stopPropagation();
+                            console.log("[Hotkey]   > Выполнение действия: очистка заметок клиента");
+                            const clientNotes = document.getElementById('clientNotes');
+                            if (clientNotes && clientNotes.value.trim() !== '') {
+                                if (confirm('Вы уверены, что хотите очистить поле данных по обращению?')) {
+                                    if (typeof clearClientData === 'function') { clearClientData(); }
+                                    else { console.warn("Ctrl+Shift+Backspace: Функция clearClientData не найдена."); clientNotes.value = ''; showNotification("Поле очищено, но не удалось вызвать стандартную функцию.", "warning"); }
+                                }
+                            } else if (clientNotes) { showNotification("Поле данных по обращению уже пусто.", "info"); }
+                            else { console.warn("Ctrl+Shift+Backspace: Поле #clientNotes не найдено."); }
+                            return;
+                        }
+                        break;
+                }
+            }
+            console.log(`[Hotkey] Комбинация (code: ${code}, ctrl=${ctrlOrMeta}, shift=${shift}, alt=${alt}) не обработана.`);
+        }
+
+
+        function initHotkeysModal() {
+            const showHotkeysBtn = document.getElementById('showHotkeysBtn');
+            const hotkeysModal = document.getElementById('hotkeysModal');
+            const closeHotkeysModalBtn = document.getElementById('closeHotkeysModalBtn');
+            const okHotkeysModalBtn = document.getElementById('okHotkeysModalBtn');
+
+            if (!showHotkeysBtn || !hotkeysModal || !closeHotkeysModalBtn || !okHotkeysModalBtn) {
+                console.warn(
+                    "Не найдены все элементы для модального окна горячих клавиш " +
+                    "(#showHotkeysBtn, #hotkeysModal, #closeHotkeysModalBtn, #okHotkeysModalBtn). " +
+                    "Функциональность может быть нарушена."
+                );
+                return;
+            }
+
+            const handleEscapeKey = (event) => {
+                if (event.key === 'Escape') {
+                    if (hotkeysModal && !hotkeysModal.classList.contains('hidden')) {
+                        closeModal();
+                    }
+                }
+            };
+
+            const openModal = () => {
+                if (!hotkeysModal) return;
+                hotkeysModal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.addEventListener('keydown', handleEscapeKey);
+                console.log("Hotkey modal opened, listener added.");
+            };
+
+            const closeModal = () => {
+                if (!hotkeysModal) return;
+                hotkeysModal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+                document.removeEventListener('keydown', handleEscapeKey);
+                console.log("Hotkey modal closed, listener removed.");
+            };
+
+            showHotkeysBtn.addEventListener('click', openModal);
+
+            closeHotkeysModalBtn.addEventListener('click', closeModal);
+
+            okHotkeysModalBtn.addEventListener('click', closeModal);
+
+            hotkeysModal.addEventListener('click', (event) => {
+                if (event.target === hotkeysModal) {
+                    closeModal();
+                }
+            });
+            console.log("Модальное окно горячих клавиш инициализировано.");
         }
