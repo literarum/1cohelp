@@ -240,6 +240,14 @@
             algorithms = JSON.parse(JSON.stringify(defaultAlgorithms));
             console.log("Установлены дефолтные значения algorithms перед загрузкой:", JSON.parse(JSON.stringify(algorithms)));
 
+            const mainTitleElement = document.querySelector('#mainContent h2');
+            if (mainTitleElement) {
+                mainTitleElement.textContent = algorithms.main.title;
+                console.log(`[loadFromIndexedDB] Установлен начальный/дефолтный заголовок: "${mainTitleElement.textContent}"`);
+            } else {
+                console.warn("[loadFromIndexedDB] Не найден элемент #mainContent h2 для установки начального заголовка.");
+            }
+
             if (!db) {
                 console.warn("База данных не инициализирована. Используются только дефолтные данные.");
                 if (typeof renderAllAlgorithms === 'function') {
@@ -269,12 +277,21 @@
                         if (!algorithms.main.id) algorithms.main.id = 'main';
                         console.log(`Данные 'main' из IndexedDB прошли проверку и загружены (${algorithms.main.steps.length} шагов).`);
                         loadedDataUsed = true;
-                    } else {
+                    } if (mainTitleElement) {
+                        mainTitleElement.textContent = algorithms.main.title || defaultAlgorithms.main.title;
+                        console.log(`[loadFromIndexedDB] Установлен заголовок главного алгоритма из DB: "${mainTitleElement.textContent}"`);
+                    }
+                    else {
                         let reason = "Причина неясна";
                         if (typeof loadedAlgoData.main !== 'object' || loadedAlgoData.main === null) reason = "'main' не объект или null.";
                         else if (!Array.isArray(loadedAlgoData.main.steps)) reason = "'main.steps' не массив.";
                         else if (loadedAlgoData.main.steps.length === 0) reason = "'main.steps' пустой массив.";
                         console.warn(`Загруженные данные 'main' некорректны или пусты (${reason}). Используются значения по умолчанию для 'main'. Загружено:`, loadedAlgoData.main);
+                        algorithms.main = JSON.parse(JSON.stringify(defaultAlgorithms.main));
+                        if (mainTitleElement) {
+                            mainTitleElement.textContent = algorithms.main.title;
+                            console.log(`[loadFromIndexedDB] Установлен дефолтный заголовок главного алгоритма (данные из DB некорректны): "${mainTitleElement.textContent}"`);
+                        }
                     }
 
                     ['program', 'skzi', 'webReg'].forEach(section => {
@@ -923,37 +940,9 @@
 
         let algorithms = {
             main: {
+                id: 'main',
                 title: "Главный алгоритм работы",
-                steps: [
-                    {
-                        title: "Шаг 1: Приветствие",
-                        description: "Поприветствуйте клиента, представьтесь, назовите компанию и спросите, чем можете помочь.",
-                        example: 'Пример: "Добрый день! Техническая поддержка 1С-Отчетность, меня зовут [ваше имя]. Чем могу помочь?"'
-                    },
-                    {
-                        title: "Шаг 2: Уточнение ИНН",
-                        description: "Запросите ИНН организации для идентификации клиента в системе.",
-                        example: 'Пример: "Для начала работы, подскажите, пожалуйста, ИНН вашей организации."',
-                        type: 'inn_step'
-                    },
-                    {
-                        title: "Шаг 3: Идентификация проблемы",
-                        description: "Выясните суть проблемы, задавая уточняющие вопросы.",
-                        example: {
-                            type: 'list',
-                            intro: "Примеры вопросов:",
-                            items: [
-                                "<strong>Назовите, пожалуйста, полный текст ошибки</strong> (записать точнее, в идеале, дословно)",
-                                "Когда впервые возникла проблема?"
-                            ]
-                        }
-                    },
-                    {
-                        title: "Шаг 4: Решение проблемы",
-                        description: "Определите категорию проблемы и перейдите к соответствующему разделу с инструкциями по решению.",
-                        example: null
-                    }
-                ]
+                steps: []
             },
             program: [
                 {
@@ -1558,6 +1547,28 @@
         }
 
 
+        function formatExampleForTextarea(exampleData) {
+            if (!exampleData) {
+                return '';
+            }
+            if (typeof exampleData === 'object' && exampleData !== null && exampleData.type === 'list') {
+                const intro = exampleData.intro ? String(exampleData.intro).trim() + '\n' : '';
+                const items = Array.isArray(exampleData.items)
+                    ? exampleData.items.map(item => `- ${String(item).replace(/<[^>]*>/g, '').trim()}`).join('\n')
+                    : '';
+                return (intro + items).trim();
+            }
+            if (typeof exampleData === 'string') {
+                return exampleData.trim();
+            }
+            try {
+                return JSON.stringify(exampleData, null, 2).trim();
+            } catch {
+                return '[Невалидные данные примера]';
+            }
+        }
+
+
         function escapeHtml(unsafe) {
             if (typeof unsafe !== 'string') {
                 return '';
@@ -2130,18 +2141,6 @@
         }
 
 
-        function updateStepNumbers(containerId) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            container.querySelectorAll('.edit-step').forEach((step, index) => {
-                const stepLabel = step.querySelector('label');
-                if (stepLabel) {
-                    stepLabel.textContent = `Шаг ${index + 1}`;
-                }
-            });
-        }
-
-
         function createStepElementHTML(stepNumber, includeExampleField) {
             const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
             const commonTextareaClasses = `${commonInputClasses} resize-y`;
@@ -2360,9 +2359,17 @@
                         algorithms.main.id = 'main';
                         newAlgorithmData = algorithms.main;
                         updateSuccessful = true;
+
                         const mainTitleElement = document.querySelector('#mainContent h2');
-                        if (mainTitleElement) mainTitleElement.textContent = finalTitle;
+                        if (mainTitleElement) {
+                            mainTitleElement.textContent = finalTitle;
+                            console.log(`[saveAlgorithm] Обновлен заголовок главного алгоритма на UI: "${finalTitle}"`);
+                        } else {
+                            console.warn("[saveAlgorithm] Не удалось найти элемент заголовка (#mainContent h2) для обновления.");
+                        }
+
                         if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
+
                     } else {
                         console.error("Cannot update main algorithm: algorithms.main is not defined.");
                     }
@@ -4166,6 +4173,51 @@
                 saveTimeout = setTimeout(saveClientData, 500);
             });
 
+            clientNotes.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && event.ctrlKey) {
+                    event.preventDefault();
+
+                    const textarea = event.target;
+                    const value = textarea.value;
+                    const start = textarea.selectionStart;
+                    const end = textarea.selectionEnd;
+
+                    const textBeforeCursor = value.substring(0, start);
+                    const regex = /(?:^|\n)\s*(\d+)([).])\s/g;
+                    let lastNum = 0;
+                    let delimiter = ')';
+                    let match;
+
+                    while ((match = regex.exec(textBeforeCursor)) !== null) {
+                        const currentNum = parseInt(match[1], 10);
+                        if (currentNum >= lastNum) {
+                            lastNum = currentNum;
+                            delimiter = match[2];
+                        }
+                    }
+                    const nextNum = lastNum + 1;
+
+                    let prefix = "";
+                    if (value === '') {
+                        prefix = "";
+                    } else if (start >= 2 && value.substring(start - 2, start) === '\n\n') {
+                        prefix = "";
+                    } else if (start >= 1 && value.substring(start - 1, start) === '\n') {
+                        prefix = "\n";
+                    } else {
+                        prefix = "\n\n";
+                    }
+
+                    const insertionText = prefix + nextNum + delimiter + " ";
+
+                    textarea.value = value.substring(0, start) + insertionText + value.substring(end);
+                    textarea.selectionStart = textarea.selectionEnd = start + insertionText.length;
+
+                    textarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                }
+            });
+
+
             clearClientDataBtn.addEventListener('click', () => {
                 if (confirm('Вы уверены, что хотите очистить все данные по обращению?')) {
                     clearClientData();
@@ -4396,203 +4448,244 @@
         async function ensureBookmarkModal() {
             const modalId = 'bookmarkModal';
             let modal = document.getElementById(modalId);
+            let mustRebuildContent = false;
 
-            if (!modal) {
-                console.log("Модальное окно #bookmarkModal не найдено, создаем новое.");
-                modal = document.createElement('div');
-                modal.id = modalId;
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
+            const handleBookmarkFormSubmit = async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const saveButton = form.querySelector('#saveBookmarkBtn');
+                if (saveButton) saveButton.disabled = true;
+
+                const title = form.elements.bookmarkTitle.value.trim();
+                const url = form.elements.bookmarkUrl.value.trim();
+                const description = form.elements.bookmarkDescription.value.trim();
+                const folderValue = form.elements.bookmarkFolder.value;
+                const folder = folderValue ? parseInt(folderValue) : null;
+                const id = form.elements.bookmarkId.value;
+
+                if (!title) {
+                    showNotification("Пожалуйста, заполните поле 'Название'", "error");
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
+                if (!url && !description) {
+                    showNotification("Пожалуйста, заполните 'Описание / Текст заметки', так как URL не указан", "error");
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
+
+                const newData = {
+                    title,
+                    url: url || null,
+                    description: description || null,
+                    folder: folder,
+                };
+
+                const isEditing = !!id;
+                let oldData = null;
+                let finalId = null;
+
+                try {
+                    const timestamp = new Date().toISOString();
+                    if (isEditing) {
+                        newData.id = parseInt(id, 10);
+                        finalId = newData.id;
+
+                        try {
+                            oldData = await getFromIndexedDB('bookmarks', newData.id);
+                            newData.dateAdded = oldData?.dateAdded || timestamp;
+                        } catch (fetchError) {
+                            console.warn(`Не удалось получить старые данные закладки (${newData.id}):`, fetchError);
+                            newData.dateAdded = timestamp;
+                        }
+                        newData.dateUpdated = timestamp;
+                    } else {
+                        newData.dateAdded = timestamp;
+                    }
+
+                    const savedResult = await saveToIndexedDB('bookmarks', newData);
+                    if (!isEditing) {
+                        finalId = savedResult;
+                        newData.id = finalId;
+                        console.log(`Новая закладка сохранена с ID: ${finalId}`);
+                    } else {
+                        console.log(`Закладка с ID: ${finalId} обновлена.`);
+                    }
+
+                    if (finalId === undefined || finalId === null) {
+                        throw new Error("Не удалось получить ID для новой или обновленной закладки.");
+                    }
+
+                    if (typeof updateSearchIndex === 'function') {
+                        try {
+                            await updateSearchIndex(
+                                'bookmarks',
+                                finalId,
+                                newData,
+                                isEditing ? 'update' : 'add',
+                                oldData
+                            );
+                            const oldDataStatus = oldData ? 'со старыми данными' : '(без старых данных)';
+                            console.log(`Обновление индекса для закладки (${finalId}) инициировано ${oldDataStatus}.`);
+                        } catch (indexError) {
+                            console.error(`Ошибка обновления поискового индекса для закладки ${finalId}:`, indexError);
+                            showNotification("Ошибка обновления поискового индекса для закладки.", "warning");
+                        }
+                    } else {
+                        console.warn("Функция updateSearchIndex недоступна.");
+                    }
+
+                    showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
+
+                    const bookmarkModal = document.getElementById('bookmarkModal');
+                    if (bookmarkModal) bookmarkModal.classList.add('hidden');
+                    form.reset();
+                    const bookmarkIdInput = form.querySelector('#bookmarkId');
+                    if (bookmarkIdInput) bookmarkIdInput.value = '';
+                    const modalTitleEl = form.closest('#bookmarkModal')?.querySelector('#bookmarkModalTitle');
+                    if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
+                    if (saveButton) saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
+
+                    try {
+                        const bookmarks = await getAllBookmarks();
+                        renderBookmarks(bookmarks);
+                        const bookmarksContainer = document.getElementById('bookmarksContainer');
+                        if (bookmarksContainer && typeof applyCurrentView === 'function') {
+                            applyCurrentView('bookmarksContainer');
+                        } else if (bookmarksContainer) {
+                            applyView(bookmarksContainer, 'cards');
+                        }
+                    } catch (renderError) {
+                        console.error("Ошибка при обновлении списка закладок после сохранения:", renderError);
+                        showNotification("Не удалось обновить список закладок на экране.", "warning");
+                    }
+
+                } catch (saveError) {
+                    console.error("Ошибка при сохранении закладки:", saveError);
+                    showNotification("Ошибка при сохранении закладки: " + (saveError.message || saveError), "error");
+                } finally {
+                    if (saveButton) saveButton.disabled = false;
+                }
+            };
+
+            if (modal && !modal.querySelector('#bookmarkForm')) {
+                console.warn(`Модальное окно #${modalId} найдено, но его содержимое некорректно. Пересоздание содержимого.`);
+                mustRebuildContent = true;
+                modal.innerHTML = '';
+            }
+
+            if (!modal || mustRebuildContent) {
+                if (!modal) {
+                    console.log("Модальное окно #bookmarkModal не найдено, создаем новое.");
+                    modal = document.createElement('div');
+                    modal.id = modalId;
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
+                    document.body.appendChild(modal);
+                }
+
                 modal.innerHTML = `
-
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-<div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-<div class="flex justify-between items-center">
-<h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
-Заголовок окна
-</h2>
-<div class="flex items-center flex-shrink-0">
-<button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-<i class="fas fa-expand"></i>
-</button>
-<button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
-<i class="fas fa-times text-xl"></i>
-</button>
-</div>
-</div>
-</div>
-<div class="p-content overflow-y-auto flex-1">
-<form id="bookmarkForm">
-<input type="hidden" id="bookmarkId">
-<div class="mb-4">
-<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
-<input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-</div>
-<div class="mb-4">
-<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
-<input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-</div>
-<div class="mb-4">
-<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки <span class="text-red-500">*</span></label>
-<textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
-<p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (без URL).</p>
-</div>
-<div class="mb-4">
-<label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
-<select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-<option value="">Выберите папку</option>
-</select>
-</div>
-</form>
-</div>
-<div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
-<div class="flex justify-end gap-2">
-<button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
-Отмена
-</button>
-<button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-<i class="fas fa-save mr-1"></i> Сохранить
-</button>
-</div>
-</div>
+    <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
+                Заголовок окна
+            </h2>
+            <div class="flex items-center flex-shrink-0">
+                <button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="p-content overflow-y-auto flex-1">
+        <form id="bookmarkForm">
+            <input type="hidden" id="bookmarkId">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
+                <input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
+                <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки</label>
+                <textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (если URL пуст).</p>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
+                <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                    <option value="">Выберите папку</option>
+                    <!-- Папки будут добавлены динамически -->
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
+        <div class="flex justify-end gap-2">
+            <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                Отмена
+            </button>
+            <button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                <i class="fas fa-save mr-1"></i> Сохранить
+            </button>
+        </div>
+    </div>
 </div>`;
-                document.body.appendChild(modal);
+
                 modal.addEventListener('click', (e) => {
                     if (e.target.closest('.close-modal, .cancel-modal')) {
                         modal.classList.add('hidden');
                     }
                 });
 
-                const form = modal.querySelector('#bookmarkForm');
-                if (form && !form.dataset.submitListenerAttached) {
-                    form.addEventListener('submit', async (e) => {
-                        e.preventDefault();
-                        const saveButton = form.querySelector('#saveBookmarkBtn');
-                        if (saveButton) saveButton.disabled = true;
-
-                        const title = form.elements.bookmarkTitle.value.trim();
-                        const url = form.elements.bookmarkUrl.value.trim();
-                        const description = form.elements.bookmarkDescription.value.trim();
-                        const folderValue = form.elements.bookmarkFolder.value;
-                        const folder = folderValue ? parseInt(folderValue) : null;
-                        const id = form.elements.bookmarkId.value;
-
-                        if (!title) {
-                            showNotification("Пожалуйста, заполните поле 'Название'", "error");
-                            if (saveButton) saveButton.disabled = false;
-                            return;
-                        }
-                        if (!url && !description) {
-                            showNotification("Пожалуйста, заполните 'Описание / Текст заметки', так как URL не указан", "error");
-                            if (saveButton) saveButton.disabled = false;
-                            return;
-                        }
-
-                        const newData = {
-                            title,
-                            url: url || null,
-                            description: description || null,
-                            folder: folder,
-                        };
-
-                        const isEditing = !!id;
-                        let oldData = null;
-                        let finalId = null;
-
-                        try {
-                            const timestamp = new Date().toISOString();
-                            if (isEditing) {
-                                newData.id = parseInt(id, 10);
-                                finalId = newData.id;
-
-                                try {
-                                    oldData = await getFromIndexedDB('bookmarks', newData.id);
-                                    newData.dateAdded = oldData?.dateAdded || timestamp;
-                                } catch (fetchError) {
-                                    console.warn(`Не удалось получить старые данные закладки (${newData.id}):`, fetchError);
-                                    newData.dateAdded = timestamp;
-                                }
-                                newData.dateUpdated = timestamp;
-                            } else {
-                                newData.dateAdded = timestamp;
-                            }
-
-                            const savedResult = await saveToIndexedDB('bookmarks', newData);
-                            if (!isEditing) {
-                                finalId = savedResult;
-                                newData.id = finalId;
-                            }
-
-                            if (typeof updateSearchIndex === 'function') {
-                                try {
-                                    await updateSearchIndex(
-                                        'bookmarks',
-                                        finalId,
-                                        newData,
-                                        isEditing ? 'update' : 'add',
-                                        oldData
-                                    );
-                                    const oldDataStatus = oldData ? 'со старыми данными' : '(без старых данных)';
-                                    console.log(`Обновление индекса для закладки (${finalId}) инициировано ${oldDataStatus}.`);
-                                } catch (indexError) {
-                                    console.error(`Ошибка обновления поискового индекса для закладки ${finalId}:`, indexError);
-                                    showNotification("Ошибка обновления поискового индекса для закладки.", "warning");
-                                }
-                            } else {
-                                console.warn("Функция updateSearchIndex недоступна.");
-                            }
-
-                            showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
-
-                            const bookmarkModal = document.getElementById('bookmarkModal');
-                            if (bookmarkModal) bookmarkModal.classList.add('hidden');
-                            form.reset();
-                            const bookmarkIdInput = form.querySelector('#bookmarkId');
-                            if (bookmarkIdInput) bookmarkIdInput.value = '';
-                            const modalTitleEl = form.closest('#bookmarkModal')?.querySelector('#bookmarkModalTitle');
-                            if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
-                            if (saveButton) saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
-
-
-                            try {
-                                const bookmarks = await getAllBookmarks();
-                                renderBookmarks(bookmarks);
-                            } catch (renderError) {
-                                console.error("Ошибка при обновлении списка закладок после сохранения:", renderError);
-                                showNotification("Не удалось обновить список закладок на экране.", "warning");
-                            }
-
-
-                        } catch (saveError) {
-                            console.error("Ошибка при сохранении закладки:", saveError);
-                            showNotification("Ошибка при сохранении закладки", "error");
-                        } finally {
-                            if (saveButton) saveButton.disabled = false;
-                        }
-                    });
-                    form.dataset.submitListenerAttached = 'true';
-                }
-
                 if (typeof initFullscreenToggles === 'function') {
-                    initFullscreenToggles();
+                    setTimeout(initFullscreenToggles, 0);
                 } else {
-                    console.warn("Функция initFullscreenToggles не найдена при создании модального окна закладки.");
+                    console.warn("Функция initFullscreenToggles не найдена при создании/пересоздании модального окна закладки.");
                 }
+            }
+
+            const form = modal.querySelector('#bookmarkForm');
+            const modalTitle = modal.querySelector('#bookmarkModalTitle');
+            const submitButton = modal.querySelector('#saveBookmarkBtn');
+            const idInput = modal.querySelector('#bookmarkId');
+            const titleInput = modal.querySelector('#bookmarkTitle');
+            const urlInput = modal.querySelector('#bookmarkUrl');
+            const descriptionInput = modal.querySelector('#bookmarkDescription');
+            const folderSelect = modal.querySelector('#bookmarkFolder');
+
+            if (form) {
+                if (form._submitHandler) {
+                    form.removeEventListener('submit', form._submitHandler);
+                    console.log("Старый обработчик submit удален с формы #bookmarkForm.");
+                }
+                form.addEventListener('submit', handleBookmarkFormSubmit);
+                form._submitHandler = handleBookmarkFormSubmit;
+                console.log("Новый обработчик submit добавлен к форме #bookmarkForm.");
+            } else {
+                console.error("Критическая ошибка: Не удалось найти форму #bookmarkForm даже после возможного пересоздания содержимого модального окна!");
+                return null;
             }
 
             const elements = {
                 modal,
-                form: modal.querySelector('#bookmarkForm'),
-                modalTitle: modal.querySelector('#bookmarkModalTitle'),
-                submitButton: modal.querySelector('#saveBookmarkBtn'),
-                idInput: modal.querySelector('#bookmarkId'),
-                titleInput: modal.querySelector('#bookmarkTitle'),
-                urlInput: modal.querySelector('#bookmarkUrl'),
-                descriptionInput: modal.querySelector('#bookmarkDescription'),
-                folderSelect: modal.querySelector('#bookmarkFolder'),
+                form,
+                modalTitle,
+                submitButton,
+                idInput,
+                titleInput,
+                urlInput,
+                descriptionInput,
+                folderSelect,
             };
 
-            if (!elements.form || !elements.modalTitle || !elements.submitButton || !elements.folderSelect) {
-                console.error("Не удалось найти все необходимые элементы внутри модального окна закладок.");
+            if (!elements.modalTitle || !elements.submitButton || !elements.folderSelect) {
+                console.error("Не удалось найти все необходимые элементы (#modalTitle, #saveBookmarkBtn, #bookmarkFolder) внутри модального окна закладок после его инициализации/проверки.");
                 return null;
             }
 
@@ -5374,209 +5467,47 @@
 
 
         async function showAddBookmarkModal(bookmarkToEdit = null) {
-            let modal = document.getElementById('bookmarkModal');
-            let isNewModal = false;
-
-            if (!modal) {
-                isNewModal = true;
-                modal = document.createElement('div');
-                modal.id = 'bookmarkModal';
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
-                modal.innerHTML = `
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-<div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-    <div class="flex justify-between items-center">
-        <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="editModalTitle">
-            Редактирование: ...
-        </h2>
-        <div class="flex items-center flex-shrink-0">
-            <button id="toggleFullscreenEditBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-                <i class="fas fa-expand"></i>
-            </button>
-            <button type="button" id="closeEditModalBtn" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-        </div>
-    </div>
-</div>
-        <div class="p-content overflow-y-auto flex-1">
-            <form id="bookmarkForm">
-                <input type="hidden" id="bookmarkId">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
-                    <input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
-                    <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки <span class="text-red-500">*</span></label>
-                    <textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
-                    <p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (без URL).</p>
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
-                    <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                        <option value="">Выберите папку</option>
-                    </select>
-                </div>
-            </form>
-        </div>
-        <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
-            <div class="flex justify-end gap-2">
-                <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
-                    Отмена
-                </button>
-                <button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                    <i class="fas fa-save mr-1"></i> Сохранить
-                </button>
-            </div>
-        </div>
-    </div>
-`;
-                document.body.appendChild(modal);
-
-                modal.addEventListener('click', (e) => {
-                    if (e.target.closest('.close-modal, .cancel-modal')) {
-                        modal.classList.add('hidden');
-                    }
-                });
-
-                const form = modal.querySelector('#bookmarkForm');
-                if (form && !form.dataset.submitListenerAttached) {
-                    form.addEventListener('submit', async (e) => {
-                        e.preventDefault();
-                        const saveButton = form.querySelector('#saveBookmarkBtn');
-                        if (saveButton) saveButton.disabled = true;
-
-                        const title = form.elements.bookmarkTitle.value.trim();
-                        const url = form.elements.bookmarkUrl.value.trim();
-                        const description = form.elements.bookmarkDescription.value.trim();
-                        const folderValue = form.elements.bookmarkFolder.value;
-                        const folder = folderValue ? parseInt(folderValue) : null;
-                        const id = form.elements.bookmarkId.value;
-
-                        if (!title) {
-                            showNotification("Пожалуйста, заполните поле 'Название'", "error");
-                            if (saveButton) saveButton.disabled = false;
-                            return;
-                        }
-                        if (!url && !description) {
-                            showNotification("Пожалуйста, заполните 'Описание / Текст заметки', так как URL не указан", "error");
-                            if (saveButton) saveButton.disabled = false;
-                            return;
-                        }
-
-                        const newData = {
-                            title,
-                            url: url || null,
-                            description: description || null,
-                            folder: folder,
-                        };
-
-                        const isEditing = !!id;
-                        let oldData = null;
-                        let finalId = null;
-
-                        try {
-                            const timestamp = new Date().toISOString();
-                            if (isEditing) {
-                                newData.id = parseInt(id, 10);
-                                finalId = newData.id;
-
-                                try {
-                                    oldData = await getFromIndexedDB('bookmarks', newData.id);
-                                    newData.dateAdded = oldData?.dateAdded || timestamp;
-                                } catch (fetchError) {
-                                    console.warn(`Не удалось получить старые данные закладки (${newData.id}):`, fetchError);
-                                    newData.dateAdded = timestamp;
-                                }
-                                newData.dateUpdated = timestamp;
-                            } else {
-                                newData.dateAdded = timestamp;
-                            }
-
-                            const savedResult = await saveToIndexedDB('bookmarks', newData);
-                            if (!isEditing) {
-                                finalId = savedResult;
-                                newData.id = finalId;
-                            }
-
-                            if (typeof updateSearchIndex === 'function') {
-                                try {
-                                    await updateSearchIndex(
-                                        'bookmarks',
-                                        finalId,
-                                        newData,
-                                        isEditing ? 'update' : 'add',
-                                        oldData
-                                    );
-                                    const oldDataStatus = oldData ? 'со старыми данными' : '(без старых данных)';
-                                    console.log(`Обновление индекса для закладки (${finalId}) инициировано ${oldDataStatus}.`);
-                                } catch (indexError) {
-                                    console.error(`Ошибка обновления поискового индекса для закладки ${finalId}:`, indexError);
-                                    showNotification("Ошибка обновления поискового индекса для закладки.", "warning");
-                                }
-                            } else {
-                                console.warn("Функция updateSearchIndex недоступна.");
-                            }
-
-                            showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
-
-                            const bookmarkModal = document.getElementById('bookmarkModal');
-                            if (bookmarkModal) bookmarkModal.classList.add('hidden');
-                            form.reset();
-                            const bookmarkIdInput = form.querySelector('#bookmarkId');
-                            if (bookmarkIdInput) bookmarkIdInput.value = '';
-                            const modalTitleEl = form.closest('#bookmarkModal')?.querySelector('#bookmarkModalTitle');
-                            if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
-                            if (saveButton) saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
-
-                            try {
-                                const bookmarks = await getAllBookmarks();
-                                renderBookmarks(bookmarks);
-                            } catch (renderError) {
-                                console.error("Ошибка при обновлении списка закладок после сохранения:", renderError);
-                                showNotification("Не удалось обновить список закладок на экране.", "warning");
-                            }
-
-                        } catch (saveError) {
-                            console.error("Ошибка при сохранении закладки:", saveError);
-                            showNotification("Ошибка при сохранении закладки", "error");
-                        } finally {
-                            if (saveButton) saveButton.disabled = false;
-                        }
-                    });
-                    form.dataset.submitListenerAttached = 'true';
-                }
-
-                if (typeof initFullscreenToggles === 'function') {
-                    initFullscreenToggles();
-                } else {
-                    console.warn("Функция initFullscreenToggles не найдена при создании модального окна закладки.");
-                }
-
-            } else {
-                const form = modal.querySelector('#bookmarkForm');
-                if (form) {
-                    form.reset();
-                    form.querySelector('#bookmarkId').value = '';
-                    modal.querySelector('#bookmarkModalTitle').textContent = 'Добавить закладку';
-                    const saveButton = modal.querySelector('#saveBookmarkBtn');
-                    if (saveButton) saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить';
-                }
+            const modalElements = await ensureBookmarkModal();
+            if (!modalElements) {
+                showNotification("Критическая ошибка: Не удалось инициализировать окно закладки", "error");
+                return;
             }
 
-            const folderSelect = modal.querySelector('#bookmarkFolder');
-            if (folderSelect) {
+            const { modal, form, modalTitle, submitButton, idInput, titleInput, urlInput, descriptionInput, folderSelect } = modalElements;
+
+            if (!modal || !form || !modalTitle || !submitButton || !idInput || !titleInput || !folderSelect) {
+                console.error("showAddBookmarkModal: Отсутствуют один или несколько ключевых элементов модального окна после ensureBookmarkModal.", modalElements);
+                showNotification("Ошибка интерфейса: не найдены элементы окна закладки.", "error");
+                return;
+            }
+
+            form.reset();
+            idInput.value = '';
+
+            modalTitle.textContent = 'Добавить закладку';
+            submitButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
+            submitButton.disabled = false;
+
+            try {
                 await populateBookmarkFolders(folderSelect);
-            } else {
-                console.error("Не найден select папок #bookmarkFolder в модальном окне.");
+            } catch (error) {
+                console.error("Ошибка при заполнении папок в showAddBookmarkModal:", error);
+                showNotification("Не удалось загрузить папки для формы.", "warning");
             }
 
             modal.classList.remove('hidden');
-            modal.querySelector('#bookmarkTitle')?.focus();
+
+            if (titleInput) {
+                setTimeout(() => {
+                    try {
+                        titleInput.focus();
+                    } catch (focusError) {
+                        console.warn("Не удалось установить фокус на поле заголовка:", focusError);
+                    }
+                }, 50);
+            } else {
+                console.warn("showAddBookmarkModal: Поле ввода заголовка не найдено для установки фокуса.");
+            }
         }
 
 
@@ -9092,21 +9023,52 @@
 
 
         function getCurrentEditState() {
+            const editModal = document.getElementById('editModal');
             const algorithmTitleInput = document.getElementById('algorithmTitle');
+            const algorithmDescriptionInput = document.getElementById('algorithmDescription');
             const editStepsContainer = document.getElementById('editSteps');
 
-            if (!algorithmTitleInput || !editStepsContainer) {
-                console.error("getCurrentEditState: Не найдены элементы формы редактирования.");
+            if (!editModal || !algorithmTitleInput || !editStepsContainer) {
+                console.error("getCurrentEditState: Не найдены элементы формы редактирования или модальное окно.");
                 return null;
             }
 
-            const currentTitle = algorithmTitleInput.value.trim();
-            const { steps: currentSteps, isValid } = extractStepsData(editStepsContainer);
+            const section = editModal.dataset.section;
+            const isMainAlgorithm = section === 'main';
 
-            return {
+            const currentTitle = algorithmTitleInput.value.trim();
+
+            const currentDescription = (!isMainAlgorithm && algorithmDescriptionInput)
+                ? algorithmDescriptionInput.value.trim()
+                : undefined;
+
+            const currentSteps = [];
+            const stepDivs = editStepsContainer.querySelectorAll('.edit-step');
+            stepDivs.forEach(stepDiv => {
+                const titleInput = stepDiv.querySelector('.step-title');
+                const descInput = stepDiv.querySelector('.step-desc');
+                const exampleInput = stepDiv.querySelector('.step-example');
+
+                const currentStepData = {
+                    title: titleInput?.value.trim() ?? '',
+                    description: descInput?.value.trim() ?? '',
+                    example: exampleInput ? exampleInput.value.trim() : ''
+                };
+                if (stepDiv.dataset.stepType) {
+                    currentStepData.type = stepDiv.dataset.stepType;
+                }
+
+                currentSteps.push(currentStepData);
+            });
+
+            const currentState = {
                 title: currentTitle,
+                ...(currentDescription !== undefined && { description: currentDescription }),
                 steps: currentSteps
             };
+
+            console.log("Получено ТЕКУЩЕЕ состояние для сравнения (нормализованное):", JSON.parse(JSON.stringify(currentState)));
+            return currentState;
         }
 
 
@@ -9147,21 +9109,25 @@
                 return false;
             }
 
-            if (!initialState || !currentState) {
-                console.warn("hasChanges: Не удалось получить начальное или текущее состояние для", modalType);
-                return false;
+            if (initialState === null || currentState === null) {
+                console.warn(`hasChanges (${modalType}): Не удалось получить начальное или текущее состояние. Предполагаем наличие изменений.`);
+                return true;
             }
 
-            try {
-                const initialJson = JSON.stringify(initialState);
-                const currentJson = JSON.stringify(currentState);
-                const changed = initialJson !== currentJson;
-                console.log(`hasChanges (${modalType}):`, changed);
-                return changed;
-            } catch (error) {
-                console.error("hasChanges: Ошибка при сравнении состояний:", error);
-                return false;
+            const areEquivalent = deepEqual(initialState, currentState);
+
+            const changed = !areEquivalent;
+
+            if (changed) {
+                console.log(`hasChanges (${modalType}): Обнаружены изменения через deepEqual.`);
+                console.log("Initial:", JSON.stringify(initialState)); // Для отладки
+                console.log("Current:", JSON.stringify(currentState)); // Для отладки
+            } else {
+                console.log(`hasChanges (${modalType}): Изменения НЕ обнаружены через deepEqual.`);
             }
+
+
+            return changed;
         }
 
 
@@ -9202,16 +9168,43 @@
 
 
         function captureInitialEditState(algorithm) {
-            if (!algorithm) {
+            const editModal = document.getElementById('editModal');
+            const section = editModal?.dataset.section;
+
+            if (!algorithm || !section) {
                 initialEditState = null;
+                console.warn("captureInitialEditState: Алгоритм или секция не предоставлены.");
                 return;
             }
+
             try {
-                initialEditState = JSON.parse(JSON.stringify({
+                const isMainAlgorithm = section === 'main';
+
+                const initialData = {
                     title: algorithm.title || '',
-                    steps: algorithm.steps || []
-                }));
-                console.log("Захвачено начальное состояние для редактирования:", initialEditState);
+                    ...(!isMainAlgorithm && { description: algorithm.description || '' }),
+                    steps: []
+                };
+
+                if (Array.isArray(algorithm.steps)) {
+                    initialData.steps = algorithm.steps.map(step => {
+                        if (!step) return null;
+
+                        const initialStep = {
+                            title: step.title || '',
+                            description: step.description || '',
+                            example: formatExampleForTextarea(step.example)
+                        };
+                        if (step.type) {
+                            initialStep.type = step.type;
+                        }
+                        return initialStep;
+                    }).filter(step => step !== null);
+                }
+
+                initialEditState = initialData;
+                console.log("Захвачено НАЧАЛЬНОЕ состояние для редактирования (нормализованное):", JSON.parse(JSON.stringify(initialEditState)));
+
             } catch (error) {
                 console.error("Ошибка при захвате начального состояния редактирования:", error);
                 initialEditState = null;
@@ -9464,4 +9457,54 @@
                 input.dispatchEvent(event);
             });
             console.log(`Кнопка очистки настроена для поля ${inputId}`);
+        }
+
+
+        function deepEqual(obj1, obj2) {
+            if (obj1 === obj2) {
+                return true;
+            }
+
+            const isEmpty1 = (obj1 === null || obj1 === undefined || obj1 === '');
+            const isEmpty2 = (obj2 === null || obj2 === undefined || obj2 === '');
+            if (isEmpty1 && isEmpty2) {
+                return true;
+            }
+
+            if (typeof obj1 !== typeof obj2) {
+                return false;
+            }
+
+            if (typeof obj1 !== 'object' || obj1 === null || obj2 === null) {
+                return false;
+            }
+
+            if (Array.isArray(obj1) && Array.isArray(obj2)) {
+                if (obj1.length !== obj2.length) {
+                    return false;
+                }
+                for (let i = 0; i < obj1.length; i++) {
+                    if (!deepEqual(obj1[i], obj2[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            if (Array.isArray(obj1) || Array.isArray(obj2)) {
+                return false;
+            }
+
+            const keys1 = Object.keys(obj1);
+            const keys2 = Object.keys(obj2);
+
+            const allKeys = new Set([...keys1, ...keys2]);
+
+            for (const key of allKeys) {
+                if (!deepEqual(obj1[key], obj2[key])) {
+                    return false;
+                }
+            }
+
+            return true;
         }
