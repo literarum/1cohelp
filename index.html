@@ -196,6 +196,11 @@
                             title="Обновить приложение (перезагрузка)">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                        <button id="showHotkeysBtn"
+                            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                            title="Горячие клавиши">
+                            <i class="fas fa-info-circle"></i>
+                        </button>
                         <input type="file" id="importFileInput" accept=".json" class="hidden">
                     </div>
                 </div>
@@ -753,7 +758,7 @@
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-screen flex flex-col">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center gap-4">
-                            <h2 class="text-2xl font-bold">Настройка интерфейса</h2>
+                            <h2 class="text-2xl font-bold">Настройки</h2>
                             <div class="flex items-center gap-3">
                                 <div class="relative">
                                     <span id="employeeExtensionDisplay"
@@ -1044,12 +1049,98 @@
         </div>
     </div>
 
+    <!-- ================= Модальное окно Горячие клавиши ================= -->
+    <div id="hotkeysModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-full py-content">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+                <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши
+                        </h2>
+                        <button id="closeHotkeysModalBtn" type="button"
+                            class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            title="Закрыть">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-6 overflow-y-auto flex-1 text-sm leading-relaxed space-y-5">
+                    <section>
+                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
+                            Навигация и Основные Действия:</h3>
+                        <ul class="space-y-2.5 list-inside">
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Backspace</code>
+                                (вне поля ввода): Вернуться на предыдущую страницу в приложении (например, из категории
+                                регламентов к списку категорий).</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + F</code>
+                                (вне поля ввода): Установить фокус на поле глобального поиска и выделить его содержимое.
+                            </li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + I</code>
+                                (вне поля ввода): Открыть окно настроек приложения.</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + V</code>
+                                (вне поля ввода): Переключить вид отображения элементов (список/плитки) в активной
+                                секции.</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">Работа
+                            с Данными:</h3>
+                        <ul class="space-y-2.5 list-inside">
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + N</code>
+                                (вне поля ввода): Открыть модальное окно добавления нового элемента для текущей секции.
+                            </li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + Shift + S</code>:
+                                Экспорт всех данных приложения в JSON.</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + Shift + O</code>:
+                                Открыть диалог выбора файла для импорта данных из JSON.</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + Backspace</code>:
+                                Очистить поле "Данные по обращению клиента" (с подтверждением).</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + D</code>:
+                                Сохранить поле "Данные по обращению клиента" в .txt файл.</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
+                            Интерфейс:</h3>
+                        <ul class="space-y-2.5 list-inside">
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + T</code>
+                                (вне поля ввода): Переключить цветовую тему приложения (Авто / Светлая / Темная).</li>
+                        </ul>
+                    </section>
+
+                </div>
+
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0 text-right">
+                    <button type="button" id="okHotkeysModalBtn"
+                        class="px-5 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="loadingOverlay" class="fixed inset-0 z-[9999] flex items-center justify-center bg-white dark:bg-gray-900">
         <div class="text-center">
             <i class="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
             <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
         </div>
     </div>
+
     <script defer src="./script.js"></script>
 </body>
 
