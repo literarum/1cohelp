@@ -4208,10 +4208,13 @@
                         prefix = "\n\n";
                     }
 
+
                     const insertionText = prefix + nextNum + delimiter + " ";
 
                     textarea.value = value.substring(0, start) + insertionText + value.substring(end);
                     textarea.selectionStart = textarea.selectionEnd = start + insertionText.length;
+
+                    textarea.scrollTop = textarea.scrollHeight;
 
                     textarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                 }
