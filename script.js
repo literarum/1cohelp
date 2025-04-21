@@ -7023,7 +7023,6 @@
         }
 
 
-        // (Уже существует в коде, можно доработать)
         const getOrCreateModal = (id, baseClassName, innerHTML, setupCallback) => {
             let modal = document.getElementById(id);
             let isNew = false;
@@ -7042,23 +7041,63 @@
                 document.body.appendChild(modal);
 
                 modal.addEventListener('click', (event) => {
-                    if (event.target === modal || event.target.closest('.close-modal, .cancel-modal')) {
-                        modal.classList.add('hidden');
+                    const currentModal = document.getElementById(id);
+                    if (!currentModal) return;
+
+                    if (event.target === currentModal || event.target.closest('.close-modal, .cancel-modal, .close-detail-modal')) {
+                        console.log(`[Click Close for ${id}] Closing modal.`);
+                        currentModal.classList.add('hidden');
+                        if (currentModal._escapeHandler) {
+                            document.removeEventListener('keydown', currentModal._escapeHandler);
+                            console.log(`[Click Close for ${id}] Removed escape handler.`);
+                            delete currentModal._escapeHandler;
+                        }
                     }
                 });
-                document.addEventListener('keydown', escapeHandler);
+
+            } else {
+                console.log(`[getOrCreateModal] Modal #${id} already exists.`);
             }
 
+            const escapeHandler = (event) => {
+                const currentModalInstance = document.getElementById(id);
+                if (event.key === 'Escape' && currentModalInstance && !currentModalInstance.classList.contains('hidden')) {
+                    console.log(`[Escape Handler for ${id}] Closing modal.`);
+                    currentModalInstance.classList.add('hidden');
+                    document.removeEventListener('keydown', escapeHandler);
+                    if (currentModalInstance._escapeHandler === escapeHandler) {
+                        delete currentModalInstance._escapeHandler;
+                    }
+                }
+            };
+
+            if (modal._escapeHandler) {
+                document.removeEventListener('keydown', modal._escapeHandler);
+                console.log(`[getOrCreateModal] Removed pre-existing escape handler for ${id}`);
+                delete modal._escapeHandler;
+            }
+
+            document.addEventListener('keydown', escapeHandler);
+            modal._escapeHandler = escapeHandler;
+
+
             if (typeof setupCallback === 'function') {
-                if (isNew || !modal.dataset.setupComplete) {
+                const modalForSetup = document.getElementById(id);
+                if (modalForSetup) {
                     try {
-                        setupCallback(modal);
-                        modal.dataset.setupComplete = 'true';
+                        setupCallback(modalForSetup, isNew);
+                        modalForSetup.dataset.setupComplete = 'true';
                     } catch (error) {
                         console.error(`[getOrCreateModal] Ошибка setupCallback для #${id} (isNew=${isNew}):`, error);
+                        modalForSetup.classList.add('hidden');
+                        if (modalForSetup._escapeHandler) {
+                            document.removeEventListener('keydown', modalForSetup._escapeHandler);
+                            delete modalForSetup._escapeHandler;
+                        }
+                        showNotification(`Ошибка настройки окна ${id}`, "error");
                     }
                 } else {
-                    setupCallback(modal, false);
+                    console.error(`[getOrCreateModal] Не удалось найти модальное окно #${id} перед вызовом setupCallback.`);
                 }
             }
 
