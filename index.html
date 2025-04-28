@@ -182,6 +182,86 @@
         .dark #clientNotes.custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background-color: #6b7280;
         }
+
+        #screenshotLightbox img {
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-transition {
+            transition-property: opacity, transform;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 200ms;
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        .modal-visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #algorithmModal,
+        #editModal,
+        #addModal,
+        #customizeUIModal,
+        #confirmClearDataModal,
+        #cibLinkModal,
+        #hotkeysModal,
+        #screenshotLightbox,
+        #screenshotViewerModal,
+        #noInnModal,
+        #addReglamentCategoryModal,
+        #foldersModal,
+        #reglamentModal,
+        #bookmarkModal,
+        #bookmarkDetailModal,
+        #extLinkModal {
+            pointer-events: none;
+        }
+
+        #algorithmModal:not(.hidden),
+        #editModal:not(.hidden),
+        #addModal:not(.hidden),
+        #customizeUIModal:not(.hidden),
+        #confirmClearDataModal:not(.hidden),
+        #cibLinkModal:not(.hidden),
+        #hotkeysModal:not(.hidden),
+        #screenshotLightbox:not(.hidden),
+        #screenshotViewerModal:not(.hidden),
+        #noInnModal:not(.hidden),
+        #addReglamentCategoryModal:not(.hidden),
+        #foldersModal:not(.hidden),
+        #reglamentModal:not(.hidden),
+        #bookmarkModal:not(.hidden),
+        #bookmarkDetailModal:not(.hidden),
+        #extLinkModal:not(.hidden) {
+            pointer-events: auto;
+        }
+
+        #searchResults {
+            transition: opacity 150ms ease-out, transform 150ms ease-out;
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none;
+        }
+
+        #searchResults:not(.hidden) {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .tab-content {
+            transition: opacity 150ms ease-in-out;
+        }
+
+        .tab-content.fade-out {
+            opacity: 0;
+        }
+
+        .tab-content.fade-in {
+            opacity: 1;
+        }
     </style>
 </head>
 
@@ -292,7 +372,7 @@
                 </button>
                 <button id="programTab"
                     class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
-                    <i class="fas fa-desktop mr-1"></i>Программа 1С
+                    <i class="fas fa-desktop mr-1"></i>Программа 1С/УП
                 </button>
                 <button id="linksTab"
                     class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
@@ -305,6 +385,10 @@
                 <button id="skziTab"
                     class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
                     <i class="fas fa-key mr-1"></i>СКЗИ
+                </button>
+                <button id="lk1cTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-user-circle mr-1"></i>1СО ЛК
                 </button>
                 <button id="webRegTab"
                     class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
@@ -405,11 +489,11 @@
             </div>
         </div>
 
-        <!-- Программа 1С -->
+        <!-- Программа 1С/УП -->
         <div id="programContent" class="tab-content hidden">
             <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
-                    <h2 class="text-2xl font-bold">Программа 1С</h2>
+                    <h2 class="text-2xl font-bold">Программа 1С/УП</h2>
                     <div class="flex items-center gap-2">
                         <div
                             class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
@@ -450,6 +534,31 @@
                     </div>
                 </div>
                 <div id="skziAlgorithms" class="grid gap-content" data-section-id="skziAlgorithms"
+                    data-default-view="cards">
+                </div>
+            </div>
+        </div>
+
+        <!-- 1СО ЛК -->
+        <div id="lk1cContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">1СО ЛК (Личный кабинет)</h2>
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
+                                    class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
+                                    class="fas fa-list"></i> </button>
+                        </div>
+                        <button id="addLk1cAlgorithmBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить
+                        </button>
+                    </div>
+                </div>
+                <div id="lk1cAlgorithms" class="grid gap-content" data-section-id="lk1cAlgorithms"
                     data-default-view="cards">
                 </div>
             </div>
@@ -590,8 +699,15 @@
                     </div>
                 </div>
                 <div class="mb-content flex flex-col md:flex-row gap-content-sm">
-                    <input type="text" id="bookmarkSearchInput" placeholder="Поиск по закладкам..."
-                        class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                    <div class="relative flex-grow">
+                        <input type="text" id="bookmarkSearchInput" placeholder="Поиск по закладкам..."
+                            class="w-full px-3 pr-10 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                        <button id="clearBookmarkSearchBtn" type="button"
+                            class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                            title="Очистить поиск по закладкам">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <select id="bookmarkFolderFilter"
                         class="px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 md:max-w-xs">
                         <option value="">Все папки</option>
@@ -673,10 +789,10 @@
             </div>
         </div>
 
-
+        <!-- Окно настроек -->
         <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
             <div class="flex items-center justify-center min-h-full py-content">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                         <div class="flex justify-between items-center">
                             <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate"
@@ -705,6 +821,13 @@
                                     for="algorithmTitle">Название алгоритма</label>
                                 <input type="text" id="algorithmTitle" name="algorithmTitle" required
                                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            </div>
+                            <div id="algorithmDescriptionContainer" class="mb-4">
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                    for="algorithmDescription">Описание</label>
+                                <textarea id="algorithmDescription" name="algorithmDescription" rows="3"
+                                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                    placeholder="Введите описание алгоритма..."></textarea>
                             </div>
                             <div id="algorithmDescriptionContainer" class="mb-4">
                             </div>
@@ -795,9 +918,10 @@
         </div>
 
         <!-- Модальное окно Настройки UI -->
-        <div id="customizeUIModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
+        <div id="customizeUIModal"
+            class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center hidden">
             <div class="flex items-center justify-center min-h-full py-content">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-screen flex flex-col">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-screen flex flex-col">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center gap-4">
                             <h2 class="text-2xl font-bold">Настройки</h2>
@@ -1118,14 +1242,14 @@
                                 (вне поля ввода): Вернуться на предыдущую страницу в приложении (например, из категории
                                 регламентов к списку категорий).</li>
                             <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + F</code>
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + F</code>
                                 (вне поля ввода): Установить фокус на поле глобального поиска и выделить его содержимое.
                             </li>
                             <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + I</code>
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + I</code>
                                 (вне поля ввода): Открыть окно настроек приложения.</li>
                             <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + V</code>
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + V</code>
                                 (вне поля ввода): Переключить вид отображения элементов (список/плитки) в активной
                                 секции.</li>
                         </ul>
@@ -1180,6 +1304,38 @@
         <div class="text-center">
             <i class="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
             <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
+        </div>
+    </div>
+
+    <div id="screenshotLightbox"
+        class="fixed inset-0 bg-black bg-opacity-80 hidden z-[90] p-4 flex items-center justify-center backdrop-blur-sm overflow-hidden">
+        <div class="relative w-full h-full flex items-center justify-center">
+            <div id="lightboxLoading" class="absolute text-white text-xl z-10">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка...
+            </div>
+            <img id="lightboxImage" src="" alt="Просмотр скриншота"
+                class="max-w-[95%] max-h-[95%] object-contain hidden cursor-grab active:cursor-grabbing"
+                style="transition: transform 0.1s ease-out; transform-origin: center center;">
+
+            <div id="lightboxCounter"
+                class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded z-20">
+                1 / 1
+            </div>
+            <button id="closeLightboxBtn"
+                class="absolute top-4 right-4 text-white text-3xl opacity-80 hover:opacity-100 transition-opacity focus:outline-none z-20"
+                title="Закрыть (Esc)">
+                ×
+            </button>
+            <button id="prevLightboxBtn"
+                class="absolute left-4 top-1/2 transform -translate-y-1/2 text-white text-3xl opacity-50 hover:opacity-100 transition-opacity focus:outline-none p-2 bg-black bg-opacity-30 rounded-full z-20 disabled:opacity-20 disabled:cursor-not-allowed"
+                title="Предыдущее (←)">
+                ‹
+            </button>
+            <button id="nextLightboxBtn"
+                class="absolute right-4 top-1/2 transform -translate-y-1/2 text-white text-3xl opacity-50 hover:opacity-100 transition-opacity focus:outline-none p-2 bg-black bg-opacity-30 rounded-full z-20 disabled:opacity-20 disabled:cursor-not-allowed"
+                title="Следующее (→)">
+                ›
+            </button>
         </div>
     </div>
 
