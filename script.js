@@ -4918,244 +4918,268 @@
             }
 
             const { section, type, id, title } = result;
-            console.log(`[navigateToResult] Attempting navigation: section=${section}, type=${type}, id=${id}, title=${title}`);
+            // Используем v5 для логов
+            console.log(`[navigateToResult v5] Attempting navigation: section=${section}, type=${type}, id=${id}, title=${title}`);
 
+            // Обработка клика по ссылке на раздел
             if (type === 'section_link') {
-                console.log(`[navigateToResult] Section link detected for section ID: ${section}`);
+                console.log(`[navigateToResult v5] Section link detected for section ID: ${section}`);
                 if (typeof setActiveTab === 'function') {
                     try {
                         setActiveTab(section);
                         const contentElement = document.getElementById(`${section}Content`);
+                        // Для разделов оставляем прокрутку к началу
                         contentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        console.log(`[navigateToResult] Switched to tab ${section} and scrolled.`);
+                        console.log(`[navigateToResult v5] Switched to tab ${section} and scrolled.`);
                     } catch (tabError) {
-                        console.error(`[navigateToResult] Error switching or scrolling to tab ${section}:`, tabError);
+                        console.error(`[navigateToResult v5] Error switching or scrolling to tab ${section}:`, tabError);
                         showNotification(`Ошибка при переходе в раздел "${title}"`, "error");
                     }
                 } else {
-                    console.error("[navigateToResult] 'setActiveTab' function not found for section link.");
+                    console.error("[navigateToResult v5] 'setActiveTab' function not found for section link.");
                     showNotification("Ошибка интерфейса: Не удалось переключить вкладку.", "error");
                 }
                 return;
             }
 
+            // Определение целевой вкладки для остальных типов
             let targetTabId = section;
             if (type === 'bookmarkFolder') targetTabId = 'bookmarks';
             if (type === 'clientNote') targetTabId = 'main';
 
             if (!tabsConfig.some(tab => tab.id === targetTabId)) {
-                console.error(`[navigateToResult] Invalid targetTabId determined: ${targetTabId} for result:`, result);
+                console.error(`[navigateToResult v5] Invalid targetTabId determined: ${targetTabId} for result:`, result);
                 showNotification(`Ошибка навигации: Неизвестный раздел "${targetTabId}"`, "error");
                 return;
             }
 
+            // Переключение на целевую вкладку
             try {
                 if (typeof setActiveTab === 'function') {
                     setActiveTab(targetTabId);
-                    console.log(`[navigateToResult] Switched to tab: ${targetTabId} for item type: ${type}`);
+                    console.log(`[navigateToResult v5] Switched to tab: ${targetTabId} for item type: ${type}`);
                 } else {
-                    console.error("[navigateToResult] 'setActiveTab' function not found.");
+                    console.error("[navigateToResult v5] 'setActiveTab' function not found.");
                     showNotification("Ошибка интерфейса: Не удалось переключить вкладку.", "error");
                     return;
                 }
             } catch (error) {
-                console.error(`[navigateToResult] Error switching tab to ${targetTabId}:`, error);
+                console.error(`[navigateToResult v5] Error switching tab to ${targetTabId}:`, error);
                 showNotification("Произошла ошибка при переключении вкладки.", "error");
             }
 
+            // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+            // Функция-помощник для прокрутки и подсветки (изменена опция block)
             function scrollToAndHighlight(selector, elementId, targetSectionId) {
-                const SCROLL_DELAY_MS = 150;
-                const HIGHLIGHT_DURATION_MS = 2500;
+                const SCROLL_DELAY_MS_HELPER = 150;
+                const HIGHLIGHT_DURATION_MS_HELPER = 2500;
                 const HIGHLIGHT_BASE_CLASSES = ['outline', 'outline-4', 'outline-offset-2', 'rounded-md', 'transition-all', 'duration-300'];
                 const HIGHLIGHT_COLOR_CLASSES = ['outline-yellow-400', 'dark:outline-yellow-300'];
                 const HIGHLIGHT_BG_CLASSES = ['bg-yellow-100/50', 'dark:bg-yellow-900/30'];
-
                 const notify = typeof showNotification === 'function' ? showNotification : console.warn;
-
                 setTimeout(() => {
                     const activeContent = document.querySelector(`.tab-content:not(.hidden)`);
-                    if (!activeContent) {
-                        console.error(`[scrollToAndHighlight] Could not find active tab content container after delay.`);
-                        notify("Ошибка: Не найден активный контейнер вкладки.", "error");
-                        return;
-                    }
-
-                    if (!activeContent.id || !activeContent.id.startsWith(targetSectionId)) {
-                        console.warn(`[scrollToAndHighlight] Active tab (${activeContent.id}) doesn't match target (${targetSectionId}). Skipping highlight/scroll.`);
-                        notify(`Вкладка была сменена до завершения прокрутки к элементу.`, "info");
-                        return;
-                    }
-
+                    if (!activeContent) { console.error(`[scrollToAndHighlight v5] Could not find active tab content container after delay.`); notify("Ошибка: Не найден активный контейнер вкладки.", "error"); return; }
+                    if (!activeContent.id || !activeContent.id.startsWith(targetSectionId)) { console.warn(`[scrollToAndHighlight v5] Active tab (${activeContent.id}) doesn't match target (${targetSectionId}). Skipping highlight/scroll.`); return; }
                     const fullSelector = `${selector}[data-id="${elementId}"]`;
                     let element = null;
-                    try {
-                        element = activeContent.querySelector(fullSelector);
-                        console.log(`[scrollToAndHighlight] Searching for selector: "${fullSelector}" within active content "${activeContent.id}"`);
-                    } catch (e) {
-                        console.error(`[scrollToAndHighlight] Invalid selector: "${fullSelector}". Error:`, e);
-                        notify("Ошибка: Не удалось найти элемент (некорректный селектор).", "error");
-                        return;
-                    }
-
-                    if (element) {
-                        console.log(`[scrollToAndHighlight] Element found. Scrolling and highlighting.`);
+                    try { element = activeContent.querySelector(fullSelector); console.log(`[scrollToAndHighlight v5] Searching for selector: "${fullSelector}" within active content "${activeContent.id}"`); }
+                    catch (e) { console.error(`[scrollToAndHighlight v5] Invalid selector: "${fullSelector}". Error:`, e); notify("Ошибка: Не удалось найти элемент (некорректный селектор).", "error"); return; }
+                    if (element && element.offsetParent !== null) {
+                        console.log(`[scrollToAndHighlight v5] Element found and visible. Scrolling to CENTER and highlighting.`);
+                        // --- ИЗМЕНЕНО ЗНАЧЕНИЕ block ---
                         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
                         element.classList.add(...HIGHLIGHT_BASE_CLASSES, ...HIGHLIGHT_COLOR_CLASSES, ...HIGHLIGHT_BG_CLASSES);
-
-                        setTimeout(() => {
-                            element.classList.remove(...HIGHLIGHT_BASE_CLASSES, ...HIGHLIGHT_COLOR_CLASSES, ...HIGHLIGHT_BG_CLASSES);
-                        }, HIGHLIGHT_DURATION_MS);
-
+                        setTimeout(() => { element.classList.remove(...HIGHLIGHT_BASE_CLASSES, ...HIGHLIGHT_COLOR_CLASSES, ...HIGHLIGHT_BG_CLASSES); }, HIGHLIGHT_DURATION_MS_HELPER);
+                    } else if (element) {
+                        console.warn(`[scrollToAndHighlight v5] Element '${fullSelector}' found but not visible (offsetParent is null) in section '${targetSectionId}'. Skipping.`);
+                        notify(`Элемент "${element.textContent?.trim() || elementId}" найден, но невидим.`, "warning");
                     } else {
-                        console.warn(`[scrollToAndHighlight] Element '${fullSelector}' not found in section '${targetSectionId}'. Scrolling to section container.`);
-                        const elementName = document.querySelector(`[data-id="${elementId}"] h3`)?.textContent || `элемент с ID ${elementId}`;
-                        notify(`Элемент "${elementName}" не найден. Прокрутка к началу раздела.`, "warning");
-
-                        const getSectionContainerSelector = (sec) => {
-                            switch (sec) {
-                                case 'main': return '#mainAlgorithm';
-                                case 'program': return '#programAlgorithms';
-                                case 'skzi': return '#skziAlgorithms';
-                                case 'webReg': return '#webRegAlgorithms';
-                                case 'lk1c': return '#lk1cAlgorithms';
-                                case 'links': return '#linksContainer';
-                                case 'extLinks': return '#extLinksContainer';
-                                case 'reglaments': return '#reglamentsList:not(.hidden) #reglamentsContainer';
-                                case 'bookmarks': return '#bookmarksContainer';
-                                default: return `#${sec}Content > div:first-child`;
-                            }
-                        };
-                        const sectionContainerSelector = getSectionContainerSelector(targetSectionId);
-                        const sectionContainer = activeContent.querySelector(sectionContainerSelector);
-                        if (sectionContainer) {
-                            sectionContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        } else {
-                            console.error(`[scrollToAndHighlight] Section container not found ('${sectionContainerSelector}'). Scrolling to top of tab.`);
-                            activeContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            notify(`Не удалось найти контейнер раздела "${targetSectionId}".`, "error");
-                        }
+                        console.warn(`[scrollToAndHighlight v5] Element '${fullSelector}' not found in section '${targetSectionId}'. Scrolling to section container (start).`); // Оставляем fallback на 'start'
+                        const elementName = `элемент с ID ${elementId}`; notify(`Элемент "${elementName}" не найден. Прокрутка к началу раздела.`, "warning");
+                        const getSectionContainerSelector = (sec) => { switch (sec) { case 'main': return '#mainAlgorithm'; case 'program': return '#programAlgorithms'; case 'skzi': return '#skziAlgorithms'; case 'webReg': return '#webRegAlgorithms'; case 'lk1c': return '#lk1cAlgorithms'; case 'links': return '#linksContainer'; case 'extLinks': return '#extLinksContainer'; case 'reglaments': return '#reglamentsList:not(.hidden) #reglamentsContainer'; case 'bookmarks': return '#bookmarksContainer'; default: return `#${sec}Content > div:first-child`; } };
+                        const sectionContainerSelector = getSectionContainerSelector(targetSectionId); const sectionContainer = activeContent.querySelector(sectionContainerSelector);
+                        if (sectionContainer) { sectionContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); } // Fallback остается 'start'
+                        else { console.error(`[scrollToAndHighlight v5] Section container not found ('${sectionContainerSelector}'). Scrolling to top of tab.`); activeContent.scrollIntoView({ behavior: 'smooth', block: 'start' }); notify(`Не удалось найти контейнер раздела "${targetSectionId}".`, "error"); }
                     }
-                }, SCROLL_DELAY_MS);
+                }, SCROLL_DELAY_MS_HELPER);
             }
 
+            // Обработка навигации для разных типов результатов
             try {
                 switch (type) {
                     case 'algorithm':
                         if (section === 'main' && id === 'main') {
-                            console.log("[navigateToResult] Main algorithm. Scrolling to main content.");
+                            console.log("[navigateToResult v5] Main algorithm. Scrolling to main content (start).");
                             document.getElementById('mainContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         } else {
-                            console.log(`[navigateToResult] Algorithm type. Opening detail modal for ID ${id} in section ${section}.`);
+                            console.log(`[navigateToResult v5] Algorithm type. Opening detail modal for ID ${id} in section ${section}.`);
+                            // Открытие модального окна само по себе центрируется, scrollToAndHighlight здесь не нужен.
                             if (typeof showAlgorithmDetail === 'function') {
                                 const algoDataInMemory = algorithms?.[section]?.find(a => String(a?.id) === String(id));
-
                                 if (algoDataInMemory) {
-                                    console.log(`[navigateToResult] Found algorithm data in memory for ${id}. Showing modal.`);
                                     showAlgorithmDetail(algoDataInMemory, section);
                                 } else {
-                                    console.warn(`[navigateToResult] Algo data for ${id} not in memory. Fetching from DB...`);
                                     getFromIndexedDB('algorithms', 'all')
                                         .then(container => {
                                             const dbAlgoData = container?.data?.[section]?.find(a => String(a?.id) === String(id));
-                                            if (dbAlgoData) {
-                                                console.log(`[navigateToResult] Found algo data in DB for ${id}. Showing modal.`);
-                                                showAlgorithmDetail(dbAlgoData, section);
-                                            } else {
-                                                console.error(`[navigateToResult] Could not find algo data for ${id} (section ${section}) even in DB.`);
-                                                showNotification(`Не удалось найти данные алгоритма ${id}.`, "error");
-                                                scrollToAndHighlight('.algorithm-card', id, section);
-                                            }
+                                            if (dbAlgoData) { showAlgorithmDetail(dbAlgoData, section); }
+                                            else { console.error(`[navigateToResult v5] Algo data not found ${id}`); showNotification(`Не удалось найти данные алгоритма ${id}.`, "error"); }
                                         })
-                                        .catch(err => {
-                                            console.error(`[navigateToResult] Error fetching algo data from DB for ${id}:`, err);
-                                            showNotification("Ошибка загрузки данных алгоритма.", "error");
-                                            scrollToAndHighlight('.algorithm-card', id, section);
-                                        });
+                                        .catch(err => { console.error(`[navigateToResult v5] Error fetching algo ${id}`, err); showNotification("Ошибка загрузки данных алгоритма.", "error"); });
                                 }
                             } else {
-                                console.error("[navigateToResult] 'showAlgorithmDetail' function not found. Scrolling to card.");
+                                console.error("[navigateToResult v5] 'showAlgorithmDetail' function not found.");
                                 showNotification("Функция деталей алгоритма не найдена.", "warning");
+                                // Как fallback, можно прокрутить к карточке, если модальное окно не открывается
                                 scrollToAndHighlight('.algorithm-card', id, section);
                             }
                         }
                         break;
 
                     case 'reglament':
-                        console.log("[navigateToResult] Reglament type. Showing detail modal for ID:", id);
+                        console.log("[navigateToResult v5] Reglament type. Showing detail modal for ID:", id);
+                        // Открытие модального окна само по себе центрируется
                         if (typeof showReglamentDetail === 'function') {
                             showReglamentDetail(id);
                         } else {
-                            console.warn("[navigateToResult] 'showReglamentDetail' function not found. Scrolling.");
+                            console.warn("[navigateToResult v5] 'showReglamentDetail' function not found. Scrolling to item.");
                             showNotification("Функция просмотра регламента не найдена.", "warning");
                             scrollToAndHighlight('.reglament-item', id, section);
                         }
                         break;
 
                     case 'link':
-                        console.log(`[navigateToResult] CIB Link type. Scrolling to item ${id}.`);
-                        scrollToAndHighlight('.cib-link-item', id, section);
+                        console.log(`[navigateToResult v5] CIB Link type. Scrolling to item ${id} (center).`);
+                        scrollToAndHighlight('.cib-link-item', id, section); // Использует 'center' измененной функции
                         break;
 
                     case 'extLink':
-                        console.log(`[navigateToResult] External Link type. Scrolling to item ${id}.`);
-                        scrollToAndHighlight('.ext-link-item', id, section);
+                        console.log(`[navigateToResult v5] External Link type. Scrolling to item ${id} (center).`);
+                        scrollToAndHighlight('.ext-link-item', id, section); // Использует 'center' измененной функции
                         break;
 
                     case 'bookmark':
-                        console.log(`[navigateToResult] Bookmark type. Scrolling to item ${id}.`);
-                        scrollToAndHighlight('.bookmark-item', id, section);
+                        console.log(`[navigateToResult v5] Bookmark type. Scrolling to item ${id} (center).`);
+                        scrollToAndHighlight('.bookmark-item', id, section); // Использует 'center' измененной функции
                         break;
                     case 'bookmark_note':
-                        console.log(`[navigateToResult] Bookmark note type. Showing detail modal for ID: ${id}.`);
+                        console.log(`[navigateToResult v5] Bookmark note type. Showing detail modal for ID: ${id}.`);
+                        // Открытие модального окна само по себе центрируется
                         if (typeof showBookmarkDetailModal === 'function') {
                             showBookmarkDetailModal(id);
                         } else {
                             console.error("Функция showBookmarkDetailModal не определена!");
                             showNotification("Невозможно отобразить детали заметки.", "error");
-                            scrollToAndHighlight('.bookmark-item', id, section);
+                            scrollToAndHighlight('.bookmark-item', id, section); // Fallback scroll
                         }
                         break;
 
-
                     case 'bookmarkFolder':
-                        console.log(`[navigateToResult] Bookmark folder type. Filtering by folder ${id}.`);
+                        console.log(`[navigateToResult v5] Bookmark folder type. Filtering by folder ${id}. Scrolling to container (start).`);
                         const folderFilterSelect = document.getElementById('bookmarkFolderFilter');
                         const bookmarksContainer = document.getElementById('bookmarksContainer');
                         if (folderFilterSelect && typeof filterBookmarks === 'function' && bookmarksContainer) {
                             folderFilterSelect.value = id;
                             filterBookmarks();
-                            bookmarksContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            bookmarksContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); // Оставляем 'start' для папки
                             showNotification(`Отфильтровано по папке: ${title.replace('Папка: ', '')}`, "info");
                         } else {
-                            console.error("[navigateToResult] Cannot filter by bookmark folder. Elements/function missing.");
+                            console.error("[navigateToResult v5] Cannot filter by bookmark folder. Elements/function missing.");
                             showNotification("Не удалось отфильтровать по папке.", "error");
-                            bookmarksContainer?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            bookmarksContainer?.scrollIntoView({ behavior: 'smooth', block: 'start' }); // Fallback scroll к началу
                         }
                         break;
 
                     case 'clientNote':
-                        console.log("[navigateToResult] Client Note type. Scrolling to notes field.");
-                        const clientNotesField = document.getElementById('clientNotes');
-                        if (clientNotesField) {
-                            clientNotesField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            clientNotesField.focus({ preventScroll: true });
-                            clientNotesField.classList.add('outline', 'outline-2', 'outline-yellow-400', 'transition-all', 'duration-300');
-                            setTimeout(() => clientNotesField.classList.remove('outline', 'outline-2', 'outline-yellow-400', 'transition-all', 'duration-300'), HIGHLIGHT_DURATION_MS);
-                        } else {
-                            console.error("[navigateToResult] Client notes field #clientNotes not found.");
-                            showNotification("Не удалось найти поле заметок.", "error");
-                        }
+                        console.log("[navigateToResult v5] Client Note type. Scrolling to notes field (center) and selecting text.");
+                        const SCROLL_DELAY_MS_CLIENT_NOTE_V5 = 500;
+                        const FOCUS_DELAY_MS_V5 = 50;
+
+                        setTimeout(() => {
+                            const clientNotesField = document.getElementById('clientNotes');
+                            if (clientNotesField && clientNotesField.offsetParent !== null) {
+                                console.log("  [v5] > Scrolling #clientNotes to center...");
+                                // Уже используется 'center' для этого элемента
+                                clientNotesField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                                setTimeout(() => {
+                                    const currentClientNotesField = document.getElementById('clientNotes');
+                                    if (currentClientNotesField && currentClientNotesField.offsetParent !== null) {
+                                        console.log("  [v5] > Focusing and selecting text in #clientNotes...");
+                                        currentClientNotesField.focus({ preventScroll: true });
+
+                                        const searchQueryInput = document.getElementById('searchInput');
+                                        const query = (searchQueryInput?.value || '').trim().toLowerCase().replace(/ё/g, 'е');
+                                        const text = currentClientNotesField.value;
+                                        const textLower = text.toLowerCase().replace(/ё/g, 'е');
+                                        let startIndex = -1;
+
+                                        console.log(`  [v5 DEBUG] > Search Query (normalized): "${query}"`);
+
+                                        if (query && text) {
+                                            startIndex = textLower.indexOf(query);
+                                            console.log(`  [v5] > Search Result: startIndex = ${startIndex}`);
+                                        } else {
+                                            console.log("  [v5] > Search query or notes text is empty, skipping selection.");
+                                        }
+
+                                        if (startIndex !== -1) {
+                                            const endIndex = startIndex + query.length;
+                                            try {
+                                                console.log(`  [v5 DEBUG] > Attempting setSelectionRange(${startIndex}, ${endIndex})`);
+                                                currentClientNotesField.setSelectionRange(startIndex, endIndex);
+                                                console.log(`  [v5 DEBUG] > Selection check - Start: ${currentClientNotesField.selectionStart}, End: ${currentClientNotesField.selectionEnd}`);
+
+                                                const linesBefore = text.substring(0, startIndex).split('\n').length;
+                                                const avgLineHeight = parseFloat(window.getComputedStyle(currentClientNotesField).lineHeight) || 18;
+                                                const scrollOffset = Math.max(0, (linesBefore - 1) * avgLineHeight - (currentClientNotesField.clientHeight * 0.2));
+                                                console.log(`  [v5 DEBUG] > Calculated scrollOffset: ${scrollOffset}`);
+
+                                                requestAnimationFrame(() => {
+                                                    console.log(`  [v5 DEBUG] > Applying scrollTop = ${scrollOffset} inside requestAnimationFrame`);
+                                                    currentClientNotesField.scrollTop = scrollOffset;
+                                                    console.log(`  [v5 DEBUG] > Actual scrollTop after setting: ${currentClientNotesField.scrollTop}`);
+                                                });
+
+                                            } catch (selectionError) {
+                                                console.error("  [v5] > Error setting selection range:", selectionError);
+                                            }
+                                        } else {
+                                            console.log("  [v5] > Text not found in notes, skipping selection and internal scroll. Scrolling to top.");
+                                            requestAnimationFrame(() => {
+                                                if (currentClientNotesField.scrollTop !== 0) {
+                                                    currentClientNotesField.scrollTop = 0;
+                                                    console.log("  [v5] > Scrolled to top because text not found.");
+                                                }
+                                            });
+                                        }
+                                        console.log("  [v5] > Highlight for the entire field is SKIPPED.");
+
+                                    } else {
+                                        console.warn("   [v5] >> #clientNotes became hidden or removed before focus/selection timeout.");
+                                    }
+                                }, FOCUS_DELAY_MS_V5);
+
+                            } else if (clientNotesField) {
+                                console.warn("[navigateToResult v5] Client notes field #clientNotes found but not visible (offsetParent is null). Skipping scroll/focus/highlight.");
+                                showNotification("Поле заметок найдено, но не видимо на экране.", "warning");
+                            } else {
+                                console.error("[navigateToResult v5] Client notes field #clientNotes not found.");
+                                showNotification("Не удалось найти поле заметок.", "error");
+                            }
+                        }, SCROLL_DELAY_MS_CLIENT_NOTE_V5);
                         break;
+                    // --- КОНЕЦ БЛОКА clientNote ---
 
                     default:
-                        console.warn(`[navigateToResult] Unknown result type: '${type}'. Scrolling to top of tab ${targetTabId}.`);
+                        console.warn(`[navigateToResult v5] Unknown result type: '${type}'. Scrolling to top of tab ${targetTabId}.`);
                         showNotification(`Неизвестный тип результата: ${type}.`, "warning");
                         document.querySelector(`#${targetTabId}Content`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         break;
                 }
             } catch (error) {
-                console.error(`[navigateToResult] Error processing result type '${type}' for ID '${id}' in section '${section}':`, error);
+                console.error(`[navigateToResult v5] Error processing result type '${type}' for ID '${id}' in section '${section}':`, error);
                 showNotification("Произошла ошибка при переходе к результату.", "error");
             }
         }
