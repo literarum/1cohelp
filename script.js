@@ -4918,17 +4918,14 @@
             }
 
             const { section, type, id, title } = result;
-            // Используем v5 для логов
             console.log(`[navigateToResult v5] Attempting navigation: section=${section}, type=${type}, id=${id}, title=${title}`);
 
-            // Обработка клика по ссылке на раздел
             if (type === 'section_link') {
                 console.log(`[navigateToResult v5] Section link detected for section ID: ${section}`);
                 if (typeof setActiveTab === 'function') {
                     try {
                         setActiveTab(section);
                         const contentElement = document.getElementById(`${section}Content`);
-                        // Для разделов оставляем прокрутку к началу
                         contentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         console.log(`[navigateToResult v5] Switched to tab ${section} and scrolled.`);
                     } catch (tabError) {
@@ -4942,7 +4939,6 @@
                 return;
             }
 
-            // Определение целевой вкладки для остальных типов
             let targetTabId = section;
             if (type === 'bookmarkFolder') targetTabId = 'bookmarks';
             if (type === 'clientNote') targetTabId = 'main';
@@ -4953,7 +4949,6 @@
                 return;
             }
 
-            // Переключение на целевую вкладку
             try {
                 if (typeof setActiveTab === 'function') {
                     setActiveTab(targetTabId);
@@ -4968,8 +4963,6 @@
                 showNotification("Произошла ошибка при переключении вкладки.", "error");
             }
 
-            // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-            // Функция-помощник для прокрутки и подсветки (изменена опция block)
             function scrollToAndHighlight(selector, elementId, targetSectionId) {
                 const SCROLL_DELAY_MS_HELPER = 150;
                 const HIGHLIGHT_DURATION_MS_HELPER = 2500;
@@ -4987,7 +4980,6 @@
                     catch (e) { console.error(`[scrollToAndHighlight v5] Invalid selector: "${fullSelector}". Error:`, e); notify("Ошибка: Не удалось найти элемент (некорректный селектор).", "error"); return; }
                     if (element && element.offsetParent !== null) {
                         console.log(`[scrollToAndHighlight v5] Element found and visible. Scrolling to CENTER and highlighting.`);
-                        // --- ИЗМЕНЕНО ЗНАЧЕНИЕ block ---
                         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         element.classList.add(...HIGHLIGHT_BASE_CLASSES, ...HIGHLIGHT_COLOR_CLASSES, ...HIGHLIGHT_BG_CLASSES);
                         setTimeout(() => { element.classList.remove(...HIGHLIGHT_BASE_CLASSES, ...HIGHLIGHT_COLOR_CLASSES, ...HIGHLIGHT_BG_CLASSES); }, HIGHLIGHT_DURATION_MS_HELPER);
@@ -4995,7 +4987,7 @@
                         console.warn(`[scrollToAndHighlight v5] Element '${fullSelector}' found but not visible (offsetParent is null) in section '${targetSectionId}'. Skipping.`);
                         notify(`Элемент "${element.textContent?.trim() || elementId}" найден, но невидим.`, "warning");
                     } else {
-                        console.warn(`[scrollToAndHighlight v5] Element '${fullSelector}' not found in section '${targetSectionId}'. Scrolling to section container (start).`); // Оставляем fallback на 'start'
+                        console.warn(`[scrollToAndHighlight v5] Element '${fullSelector}' not found in section '${targetSectionId}'. Scrolling to section container (start).`);
                         const elementName = `элемент с ID ${elementId}`; notify(`Элемент "${elementName}" не найден. Прокрутка к началу раздела.`, "warning");
                         const getSectionContainerSelector = (sec) => { switch (sec) { case 'main': return '#mainAlgorithm'; case 'program': return '#programAlgorithms'; case 'skzi': return '#skziAlgorithms'; case 'webReg': return '#webRegAlgorithms'; case 'lk1c': return '#lk1cAlgorithms'; case 'links': return '#linksContainer'; case 'extLinks': return '#extLinksContainer'; case 'reglaments': return '#reglamentsList:not(.hidden) #reglamentsContainer'; case 'bookmarks': return '#bookmarksContainer'; default: return `#${sec}Content > div:first-child`; } };
                         const sectionContainerSelector = getSectionContainerSelector(targetSectionId); const sectionContainer = activeContent.querySelector(sectionContainerSelector);
@@ -5005,7 +4997,6 @@
                 }, SCROLL_DELAY_MS_HELPER);
             }
 
-            // Обработка навигации для разных типов результатов
             try {
                 switch (type) {
                     case 'algorithm':
@@ -5014,7 +5005,6 @@
                             document.getElementById('mainContent')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         } else {
                             console.log(`[navigateToResult v5] Algorithm type. Opening detail modal for ID ${id} in section ${section}.`);
-                            // Открытие модального окна само по себе центрируется, scrollToAndHighlight здесь не нужен.
                             if (typeof showAlgorithmDetail === 'function') {
                                 const algoDataInMemory = algorithms?.[section]?.find(a => String(a?.id) === String(id));
                                 if (algoDataInMemory) {
@@ -5031,7 +5021,6 @@
                             } else {
                                 console.error("[navigateToResult v5] 'showAlgorithmDetail' function not found.");
                                 showNotification("Функция деталей алгоритма не найдена.", "warning");
-                                // Как fallback, можно прокрутить к карточке, если модальное окно не открывается
                                 scrollToAndHighlight('.algorithm-card', id, section);
                             }
                         }
@@ -5039,7 +5028,6 @@
 
                     case 'reglament':
                         console.log("[navigateToResult v5] Reglament type. Showing detail modal for ID:", id);
-                        // Открытие модального окна само по себе центрируется
                         if (typeof showReglamentDetail === 'function') {
                             showReglamentDetail(id);
                         } else {
@@ -5051,27 +5039,26 @@
 
                     case 'link':
                         console.log(`[navigateToResult v5] CIB Link type. Scrolling to item ${id} (center).`);
-                        scrollToAndHighlight('.cib-link-item', id, section); // Использует 'center' измененной функции
+                        scrollToAndHighlight('.cib-link-item', id, section);
                         break;
 
                     case 'extLink':
                         console.log(`[navigateToResult v5] External Link type. Scrolling to item ${id} (center).`);
-                        scrollToAndHighlight('.ext-link-item', id, section); // Использует 'center' измененной функции
+                        scrollToAndHighlight('.ext-link-item', id, section);
                         break;
 
                     case 'bookmark':
                         console.log(`[navigateToResult v5] Bookmark type. Scrolling to item ${id} (center).`);
-                        scrollToAndHighlight('.bookmark-item', id, section); // Использует 'center' измененной функции
+                        scrollToAndHighlight('.bookmark-item', id, section);
                         break;
                     case 'bookmark_note':
                         console.log(`[navigateToResult v5] Bookmark note type. Showing detail modal for ID: ${id}.`);
-                        // Открытие модального окна само по себе центрируется
                         if (typeof showBookmarkDetailModal === 'function') {
                             showBookmarkDetailModal(id);
                         } else {
                             console.error("Функция showBookmarkDetailModal не определена!");
                             showNotification("Невозможно отобразить детали заметки.", "error");
-                            scrollToAndHighlight('.bookmark-item', id, section); // Fallback scroll
+                            scrollToAndHighlight('.bookmark-item', id, section);
                         }
                         break;
 
@@ -5082,12 +5069,12 @@
                         if (folderFilterSelect && typeof filterBookmarks === 'function' && bookmarksContainer) {
                             folderFilterSelect.value = id;
                             filterBookmarks();
-                            bookmarksContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); // Оставляем 'start' для папки
+                            bookmarksContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             showNotification(`Отфильтровано по папке: ${title.replace('Папка: ', '')}`, "info");
                         } else {
                             console.error("[navigateToResult v5] Cannot filter by bookmark folder. Elements/function missing.");
                             showNotification("Не удалось отфильтровать по папке.", "error");
-                            bookmarksContainer?.scrollIntoView({ behavior: 'smooth', block: 'start' }); // Fallback scroll к началу
+                            bookmarksContainer?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                         break;
 
@@ -5100,7 +5087,6 @@
                             const clientNotesField = document.getElementById('clientNotes');
                             if (clientNotesField && clientNotesField.offsetParent !== null) {
                                 console.log("  [v5] > Scrolling #clientNotes to center...");
-                                // Уже используется 'center' для этого элемента
                                 clientNotesField.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
                                 setTimeout(() => {
@@ -5170,7 +5156,6 @@
                             }
                         }, SCROLL_DELAY_MS_CLIENT_NOTE_V5);
                         break;
-                    // --- КОНЕЦ БЛОКА clientNote ---
 
                     default:
                         console.warn(`[navigateToResult v5] Unknown result type: '${type}'. Scrolling to top of tab ${targetTabId}.`);
@@ -6571,7 +6556,7 @@
                 : (bookmark.url ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>' : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>');
 
             const mainContentHTML = `
-            <div class="flex-grow min-w-0 mb-3 pr-20"> {/* Добавлен pr-20 для отступа от кнопок */}
+            <div class="flex-grow min-w-0 mb-3 pr-20">
                 <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary transition-colors duration-200 truncate" title="${safeTitle}">
                     ${safeTitle}
                 </h3>
@@ -6581,7 +6566,6 @@
                     <span class="text-gray-500 dark:text-gray-400" title="Добавлено: ${new Date(bookmark.dateAdded || Date.now()).toLocaleString()}">
                         <i class="far fa-clock mr-1 opacity-75"></i>${new Date(bookmark.dateAdded || Date.now()).toLocaleDateString()}
                     </span>
-                    {/* URL убран отсюда */}
                 </div>
             </div>`;
 
@@ -6667,97 +6651,114 @@
                     console.log("Модальное окно #bookmarkModal не найдено, создаем новое.");
                     modal = document.createElement('div');
                     modal.id = modalId;
-                    modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[90] p-4 flex items-center justify-center';
                     document.body.appendChild(modal);
                 }
 
                 modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-                    <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                        <div class="flex justify-between items-center">
-                            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
-                                Заголовок окна
-                            </h2>
-                            <div class="flex items-center flex-shrink-0">
-                                <button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-                                    <i class="fas fa-expand"></i>
-                                </button>
-                                <button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
-                                    <i class="fas fa-times text-xl"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="p-content overflow-y-auto flex-1">
-                        <form id="bookmarkForm" novalidate>
-                            <input type="hidden" id="bookmarkId" name="bookmarkId">
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
-                                <input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
-                                <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки</label>
-                                <textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
-                                <p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (если URL пуст).</p>
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
-                                <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                                    <option value="">Выберите папку</option>
-                                </select>
-                            </div>
-
-                             <div class="mt-6 border-t border-gray-200 dark:border-gray-600 pt-4">
-                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
-                                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
-                                 <div id="bookmarkScreenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
-                                 </div>
-                                 <div class="flex items-center gap-3">
-                                     <button type="button" class="add-bookmark-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
-                                         <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
-                                     </button>
-                                 </div>
-                                 <input type="file" class="bookmark-screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
-                             </div>
-
-                        </form>
-                    </div>
-                    <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
-                        <div class="flex justify-end gap-2">
-                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
-                                Отмена
-                            </button>
-                            <button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                                <i class="fas fa-save mr-1"></i> Сохранить
-                            </button>
-                        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
+                        Заголовок окна
+                    </h2>
+                    <div class="flex items-center flex-shrink-0">
+                        <button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                        <button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
                     </div>
                 </div>
-            `;
+            </div>
+            <div class="p-content overflow-y-auto flex-1">
+                <form id="bookmarkForm" novalidate>
+                    <input type="hidden" id="bookmarkId" name="bookmarkId">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
+                        <input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
+                        <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки</label>
+                        <textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
+                        <p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (если URL пуст).</p>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
+                        <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                            <option value="">Выберите папку</option>
+                        </select>
+                    </div>
 
-                modal.addEventListener('click', (e) => {
+                     <div class="mt-6 border-t border-gray-200 dark:border-gray-600 pt-4">
+                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
+                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
+                         <div id="bookmarkScreenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
+                         </div>
+                         <div class="flex items-center gap-3">
+                             <button type="button" class="add-bookmark-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
+                                 <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
+                             </button>
+                         </div>
+                         <input type="file" class="bookmark-screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
+                     </div>
+
+                </form>
+            </div>
+            <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                        Отмена
+                    </button>
+                    <button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                        <i class="fas fa-save mr-1"></i> Сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+                const currentClickHandler = modal._clickHandler;
+                if (currentClickHandler) {
+                    modal.removeEventListener('click', currentClickHandler);
+                }
+
+                const newClickHandler = (e) => {
+                    const targetModal = document.getElementById(modalId);
+                    if (!targetModal) return;
+
                     if (e.target.closest('.close-modal, .cancel-modal')) {
-                        modal.classList.add('hidden');
-                        const form = modal.querySelector('#bookmarkForm');
+                        console.log(`[ensureBookmarkModal Handler] Closing modal #${modalId} via button click.`);
+                        targetModal.classList.add('hidden');
+                        const form = targetModal.querySelector('#bookmarkForm');
                         if (form) {
                             form.reset();
                             const idInput = form.querySelector('#bookmarkId');
                             if (idInput) idInput.value = '';
-                            const modalTitleEl = modal.querySelector('#bookmarkModalTitle');
+                            const modalTitleEl = targetModal.querySelector('#bookmarkModalTitle');
                             if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
-                            const saveButton = modal.querySelector('#saveBookmarkBtn');
+                            const saveButton = targetModal.querySelector('#saveBookmarkBtn');
                             if (saveButton) saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
                             delete form._tempScreenshotBlobs;
                             delete form.dataset.screenshotsToDelete;
                             const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
                             if (thumbsContainer) thumbsContainer.innerHTML = '';
                         }
+                        document.body.classList.remove('modal-open');
+                        if (typeof removeEscapeHandler === 'function') {
+                            removeEscapeHandler(targetModal);
+                        }
                     }
-                });
+                };
+
+                modal.addEventListener('click', newClickHandler);
+                modal._clickHandler = newClickHandler;
+
 
                 const fullscreenBtn = modal.querySelector('#toggleFullscreenBookmarkBtn');
                 if (fullscreenBtn && !fullscreenBtn.dataset.fullscreenListenerAttached) {
@@ -6822,7 +6823,7 @@
 
             delete form._tempScreenshotBlobs;
             delete form.dataset.screenshotsToDelete;
-            thumbsContainer.innerHTML = '';
+            if (thumbsContainer) thumbsContainer.innerHTML = '';
 
             return {
                 modal,
@@ -8346,44 +8347,44 @@
             if (isNewModal) {
                 modal = document.createElement('div');
                 modal.id = modalId;
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 flex items-center justify-center';
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center'; // Увеличил z-index
                 modal.innerHTML = `
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
-                    <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="p-6 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
-                 <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
-                     <p>Загрузка...</p>
-                 </div>
-                 <div id="bookmarkDetailScreenshotsContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
-                     <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
-                     <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                     </div>
-                 </div>
-            </div>
-             <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
-                 <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
-                     <i class="fas fa-edit mr-1"></i> Редактировать
-                 </button>
-                 <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
-                     Закрыть
-                 </button>
-             </div>
-        </div>
-    `;
+                                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+                                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                                            <div class="flex justify-between items-center">
+                                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
+                                                <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть (Esc)">
+                                                    <i class="fas fa-times text-xl"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="p-6 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
+                                            <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
+                                                <p>Загрузка...</p>
+                                            </div>
+                                            <div id="bookmarkDetailScreenshotsContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
+                                                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
+                                                <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
+                                            <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
+                                                <i class="fas fa-edit mr-1"></i> Редактировать
+                                            </button>
+                                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                                Закрыть
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
                 document.body.appendChild(modal);
 
                 modal.addEventListener('click', (e) => {
                     const currentModal = document.getElementById(modalId);
                     if (!currentModal) return;
 
-                    if (e.target === currentModal || e.target.closest('.close-modal, .cancel-modal')) {
+                    if (e.target.closest('.close-modal, .cancel-modal')) {
                         if (currentModal._escapeHandler) {
                             document.removeEventListener('keydown', currentModal._escapeHandler);
                             delete currentModal._escapeHandler;
@@ -8392,13 +8393,12 @@
                         const images = currentModal.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
                         images.forEach(img => {
                             if (img.dataset.objectUrl) {
-                                try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { }
+                                try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn("Error revoking URL on close:", revokeError); }
                                 delete img.dataset.objectUrl;
                             }
                         });
                     }
-
-                    if (e.target.closest('#editBookmarkFromDetailBtn')) {
+                    else if (e.target.closest('#editBookmarkFromDetailBtn')) {
                         const currentId = parseInt(currentModal.dataset.currentBookmarkId, 10);
                         if (!isNaN(currentId)) {
                             currentModal.classList.add('hidden');
@@ -8418,6 +8418,23 @@
                         }
                     }
                 });
+
+                const closeModalOnEscape = (e) => {
+                    const currentModalInstance = document.getElementById(modalId);
+                    if (e.key === 'Escape' && currentModalInstance && !currentModalInstance.classList.contains('hidden')) {
+                        currentModalInstance.classList.add('hidden');
+                        document.removeEventListener('keydown', closeModalOnEscape);
+                        delete currentModalInstance._escapeHandler;
+                        const images = currentModalInstance.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
+                        images.forEach(img => {
+                            if (img.dataset.objectUrl) {
+                                try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn("Error revoking URL on escape:", revokeError); }
+                                delete img.dataset.objectUrl;
+                            }
+                        });
+                    }
+                };
+                modal._closeModalOnEscape = closeModalOnEscape;
             }
 
             const titleEl = modal.querySelector('#bookmarkDetailTitle');
@@ -8436,23 +8453,10 @@
                 document.removeEventListener('keydown', modal._escapeHandler);
                 delete modal._escapeHandler;
             }
-            const closeModalOnEscape = (e) => {
-                const currentModalInstance = document.getElementById(modalId);
-                if (e.key === 'Escape' && currentModalInstance && !currentModalInstance.classList.contains('hidden')) {
-                    currentModalInstance.classList.add('hidden');
-                    document.removeEventListener('keydown', closeModalOnEscape);
-                    delete currentModalInstance._escapeHandler;
-                    const images = currentModalInstance.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
-                    images.forEach(img => {
-                        if (img.dataset.objectUrl) {
-                            try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { }
-                            delete img.dataset.objectUrl;
-                        }
-                    });
-                }
-            };
-            document.addEventListener('keydown', closeModalOnEscape);
-            modal._escapeHandler = closeModalOnEscape;
+            if (modal._closeModalOnEscape) {
+                document.addEventListener('keydown', modal._closeModalOnEscape);
+                modal._escapeHandler = modal._closeModalOnEscape;
+            }
 
             modal.dataset.currentBookmarkId = bookmarkId;
             titleEl.textContent = 'Загрузка...';
@@ -8488,7 +8492,7 @@
 
                             if (bookmarkScreenshots.length > 0) {
                                 if (typeof renderScreenshotThumbnails === 'function') {
-                                    renderScreenshotThumbnails(screenshotsGridEl, bookmarkScreenshots);
+                                    renderScreenshotThumbnails(screenshotsGridEl, bookmarkScreenshots, openLightbox);
                                     console.log(`Отрисовано ${bookmarkScreenshots.length} миниатюр в деталях закладки.`);
                                 } else {
                                     console.error("Функция renderScreenshotThumbnails не найдена!");
@@ -10107,20 +10111,45 @@
                 document.body.appendChild(modal);
                 console.log(`[getOrCreateModal] Created new modal #${id}.`);
 
-                modal.addEventListener('click', (event) => {
+                if (modal._overlayClickHandler) {
+                    modal.removeEventListener('click', modal._overlayClickHandler);
+                }
+
+                const overlayClickHandler = (event) => {
                     const currentModal = document.getElementById(id);
                     if (!currentModal || currentModal.classList.contains('hidden')) return;
 
-                    if (event.target === currentModal || event.target.closest('.close-modal, .cancel-modal, .close-detail-modal')) {
-                        console.log(`[Click Close for ${id}] Closing modal.`);
+                    if (event.target.closest('.close-modal, .cancel-modal, .close-detail-modal')) {
+                        console.log(`[Click Close for ${id}] Closing modal via button.`);
                         currentModal.classList.add('hidden');
                         removeEscapeHandler(currentModal);
                     }
-                });
+                };
+
+                modal.addEventListener('click', overlayClickHandler);
+                modal._overlayClickHandler = overlayClickHandler;
                 modal.dataset.baseListenersAdded = 'true';
+                console.log(`[getOrCreateModal] Attached NEW overlay click handler (buttons only) for #${id}.`);
 
             } else {
                 console.log(`[getOrCreateModal] Modal #${id} already exists.`);
+                if (!modal.dataset.baseListenersAdded) {
+                    if (modal._overlayClickHandler) {
+                        modal.removeEventListener('click', modal._overlayClickHandler);
+                    }
+                    const overlayClickHandler = (event) => {
+                        const currentModal = document.getElementById(id);
+                        if (!currentModal || currentModal.classList.contains('hidden')) return;
+                        if (event.target.closest('.close-modal, .cancel-modal, .close-detail-modal')) {
+                            currentModal.classList.add('hidden');
+                            removeEscapeHandler(currentModal);
+                        }
+                    };
+                    modal.addEventListener('click', overlayClickHandler);
+                    modal._overlayClickHandler = overlayClickHandler;
+                    modal.dataset.baseListenersAdded = 'true';
+                    console.log(`[getOrCreateModal] Attached NEW overlay click handler (buttons only) for EXISTING #${id}.`);
+                }
             }
 
             if (typeof setupCallback === 'function') {
@@ -12060,13 +12089,6 @@
                     renderAlgorithmCards(section);
                 } else { console.warn("Функция renderAlgorithmCards не найдена, UI может не обновиться."); }
 
-                const algorithmModal = document.getElementById('algorithmModal');
-                if (algorithmModal && !algorithmModal.classList.contains('hidden') && String(currentAlgorithm) === String(algorithmId)) {
-                    algorithmModal.classList.add('hidden');
-                    console.log("Окно деталей алгоритма скрыто после удаления.");
-                    currentAlgorithm = null;
-                }
-
                 showNotification("Алгоритм успешно удален.");
                 return Promise.resolve();
             } else {
@@ -12126,6 +12148,10 @@
             const algorithmTitle = modalTitleElement ? modalTitleElement.textContent : `алгоритм с ID ${algorithmIdToDelete}`;
 
             if (confirm(`Вы уверены, что хотите удалить алгоритм "${algorithmTitle}"? Это действие необратимо.`)) {
+
+                algorithmModal.classList.add('hidden');
+                console.log(`[newClickHandler] Modal #${algorithmModal.id} скрыто сразу после подтверждения.`);
+
                 console.log(`Запуск удаления алгоритма ID: ${algorithmIdToDelete} из секции: ${sectionToDelete}`);
                 try {
                     if (typeof deleteAlgorithm === 'function') {
@@ -12188,9 +12214,15 @@
             }
 
             if (event.target === topmostModal) {
+
+                if (topmostModal.id === 'bookmarkModal' || topmostModal.id === 'bookmarkDetailModal') {
+                    console.log(`[Global Click Handler] Click on overlay for modal "${topmostModal.id}" detected, but closing is prevented for bookmark modals.`);
+                    return;
+                }
+
                 const contentContainer = topmostModal.querySelector('.modal-content-container');
 
-                console.log(`Closing modal "${topmostModal.id}" due to click on overlay.`);
+                console.log(`[Global Click Handler] Closing modal "${topmostModal.id}" due to click on overlay.`);
 
                 if (topmostModal.id === 'editModal' || topmostModal.id === 'addModal') {
                     if (typeof requestCloseModal === 'function') {
@@ -12198,27 +12230,56 @@
                     } else {
                         console.warn('requestCloseModal function not found, hiding modal directly.');
                         topmostModal.classList.add('hidden');
+                        if (typeof removeEscapeHandler === 'function') {
+                            removeEscapeHandler(topmostModal);
+                        }
+                    }
+                } else if (topmostModal.id === 'reglamentDetailModal' || topmostModal.id === 'screenshotViewerModal' || topmostModal.id === 'noInnModal' || topmostModal.id === 'foldersModal' || topmostModal.id === 'hotkeysModal' || topmostModal.id === 'confirmClearDataModal' || topmostModal.id === 'cibLinkModal' || topmostModal.id === 'extLinkModal') {
+                    topmostModal.classList.add('hidden');
+                    if (typeof removeEscapeHandler === 'function') {
+                        removeEscapeHandler(topmostModal);
+                    }
+                    if (topmostModal.id === 'screenshotViewerModal') {
+                        const state = topmostModal._modalState || {};
+                        const images = state.contentArea?.querySelectorAll('img[data-object-url]');
+                        images?.forEach(img => {
+                            if (img.dataset.objectUrl) {
+                                try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn(`Error revoking URL on overlay close for ${topmostModal.id}:`, revokeError); }
+                                delete img.dataset.objectUrl;
+                            }
+                        });
+                    }
+                } else if (topmostModal.id === 'customizeUIModal') {
+                    topmostModal.classList.add('hidden');
+                    if (typeof removeEscapeHandler === 'function') {
+                        removeEscapeHandler(topmostModal);
+                    }
+                    if (window.isUISettingsDirty) {
+                        console.log("Closing customize UI modal via overlay click with unsaved changes. Reverting preview.");
+                        if (typeof applyPreviewSettings === 'function' && typeof window.originalUISettings !== 'undefined') {
+                            applyPreviewSettings(window.originalUISettings);
+                            window.isUISettingsDirty = false;
+                        } else {
+                            console.warn("Cannot revert preview settings: applyPreviewSettings function or originalUISettings missing.");
+                        }
+                    }
+                    const inputField = topmostModal.querySelector('#employeeExtensionInput');
+                    if (inputField && !inputField.classList.contains('hidden')) {
+                        const displaySpan = topmostModal.querySelector('#employeeExtensionDisplay');
+                        inputField.classList.add('hidden');
+                        if (displaySpan) displaySpan.classList.remove('hidden');
+                        if (typeof loadEmployeeExtension === 'function') loadEmployeeExtension();
                     }
                 } else {
+                    console.warn(`[Global Click Handler] Closing unhandled modal "${topmostModal.id}" on overlay click.`);
                     topmostModal.classList.add('hidden');
-                    if (topmostModal.id === 'customizeUIModal') {
-                        if (window.isUISettingsDirty) {
-                            console.log("Closing customize UI modal via overlay click with unsaved changes. Reverting preview.");
-                            if (typeof applyPreviewSettings === 'function' && typeof originalUISettings !== 'undefined') {
-                                applyPreviewSettings(window.originalUISettings);
-                                window.isUISettingsDirty = false;
-                            } else {
-                                console.warn("Cannot revert preview settings: applyPreviewSettings function or originalUISettings missing.");
-                            }
-                        }
-                        const inputField = topmostModal.querySelector('#employeeExtensionInput');
-                        if (inputField && !inputField.classList.contains('hidden')) {
-                            inputField.classList.add('hidden');
-                            const displaySpan = topmostModal.querySelector('#employeeExtensionDisplay');
-                            if (displaySpan) displaySpan.classList.remove('hidden');
-                            if (typeof loadEmployeeExtension === 'function') loadEmployeeExtension();
-                        }
+                    if (typeof removeEscapeHandler === 'function') {
+                        removeEscapeHandler(topmostModal);
                     }
+                }
+
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('modal-open');
                 }
             }
         });
