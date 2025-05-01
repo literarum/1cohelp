@@ -877,8 +877,16 @@
 
 
         function base64ToBlob(base64, mimeType = '') {
+            if (!base64 || typeof base64 !== 'string') {
+                console.error(`Ошибка конвертации Base64 в Blob: Передана невалидная строка Base64.`);
+                return null;
+            }
             try {
                 const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+                if (!base64Data) {
+                    console.error(`Ошибка конвертации Base64 в Blob: Строка Base64 пуста после удаления префикса.`);
+                    return null;
+                }
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) {
@@ -888,6 +896,9 @@
                 return new Blob([byteArray], { type: mimeType });
             } catch (error) {
                 console.error(`Ошибка конвертации Base64 в Blob (MIME: ${mimeType}, Base64 начало: ${base64.substring(0, 30)}...):`, error);
+                if (error instanceof DOMException && error.name === 'InvalidCharacterError') {
+                    console.error("   > Вероятно, строка Base64 содержит невалидные символы.");
+                }
                 return null;
             }
         }
@@ -961,7 +972,7 @@
             let finalOutcomeSuccess = false;
 
             try {
-                await new Promise((resolve, reject) => {
+                await new Promise(async (resolve, reject) => {
                     let transaction;
                     try {
                         transaction = db.transaction(storesToImport, 'readwrite');
@@ -972,6 +983,7 @@
                     }
 
                     const allRequests = [];
+                    let putPromises = [];
 
                     transaction.oncomplete = () => {
                         console.log("Транзакция импорта успешно завершена (oncomplete).");
@@ -1017,12 +1029,18 @@
                             errorsOccurred.push({ storeName, error: `Ошибка доступа к ${storeName} для очистки: ${storeError.message}`, item: null });
                         }
                     }
+                    await Promise.all(allRequests);
+                    console.log("Очистка хранилищ завершена (или получены ошибки).");
+                    const clearErrors = errorsOccurred.filter(e => e.operation === 'clear' && !e.success);
+                    if (clearErrors.length > 0) {
+                        throw new Error(`Не удалось очистить одно или несколько хранилищ: ${clearErrors.map(e => e.storeName).join(', ')}`);
+                    }
 
                     let totalPutsInitiated = 0;
                     let skippedPuts = 0;
 
                     for (const storeName of storesToImport) {
-                        const itemsToImport = importData.data[storeName];
+                        let itemsToImport = importData.data[storeName];
                         if (!Array.isArray(itemsToImport)) {
                             console.warn(`Данные для ${storeName} в файле импорта не являются массивом. Пропуск добавления.`);
                             errorsOccurred.push({ storeName, error: 'Данные не являются массивом', item: null });
@@ -1031,6 +1049,28 @@
 
                         console.log(`Начало подготовки добавления данных в хранилище: ${storeName} (${itemsToImport.length} записей)`);
                         showNotification(`Импорт ${storeName}...`, "info");
+
+                        if (storeName === 'screenshots') {
+                            console.log(`[Импорт] Обработка скриншотов для конвертации Base64 -> Blob...`);
+                            itemsToImport = itemsToImport.map((item, index) => {
+                                if (item && typeof item.blob === 'object' && item.blob !== null && typeof item.blob.base64 === 'string' && typeof item.blob.type === 'string') {
+                                    const convertedBlob = base64ToBlob(item.blob.base64, item.blob.type);
+                                    if (convertedBlob instanceof Blob) {
+                                        console.log(`[Импорт] Скриншот ID (если есть): ${item.id || index}, Blob сконвертирован успешно.`);
+                                        item.blob = convertedBlob;
+                                    } else {
+                                        console.error(`[Импорт] Ошибка конвертации Base64 в Blob для скриншота ID: ${item.id || index}. Свойство blob будет удалено.`);
+                                        errorsOccurred.push({ storeName, error: `Ошибка конвертации Base64->Blob`, item: JSON.stringify(item)?.substring(0, 100) });
+                                        delete item.blob;
+                                    }
+                                } else if (item && item.blob && !(item.blob instanceof Blob)) {
+                                    console.warn(`[Импорт] Неожиданный формат blob у скриншота ID: ${item.id || index}. Ожидался {base64, type} или Blob. Свойство blob будет удалено.`);
+                                    delete item.blob;
+                                }
+                                return item;
+                            });
+                            console.log(`[Импорт] Обработка скриншотов для конвертации завершена.`);
+                        }
 
                         if (itemsToImport.length > 0) {
                             let store = null;
@@ -1072,26 +1112,44 @@
                                     skippedPuts++; continue;
                                 }
 
-                                const putRequest = store.put(item);
-                                totalPutsInitiated++;
-                                allRequests.push(new Promise((resolveReq, rejectReq) => {
-                                    putRequest.onsuccess = () => resolveReq({ storeName, operation: 'put', success: true });
-                                    putRequest.onerror = (e) => {
-                                        const errorMsg = e.target.error?.message || 'Put request failed';
-                                        console.error(`Ошибка записи элемента в ${storeName}:`, errorMsg, item);
-                                        errorsOccurred.push({ storeName, error: `Ошибка записи: ${errorMsg}`, item: JSON.stringify(item)?.substring(0, 100) });
-                                        resolveReq({ storeName, operation: 'put', success: false, error: e.target.error });
-                                    };
+                                putPromises.push(new Promise((resolveReq) => {
+                                    try {
+                                        const putRequest = store.put(item);
+                                        totalPutsInitiated++;
+                                        putRequest.onsuccess = () => resolveReq({ storeName, operation: 'put', success: true });
+                                        putRequest.onerror = (e) => {
+                                            const errorMsg = e.target.error?.message || 'Put request failed';
+                                            console.error(`Ошибка записи элемента в ${storeName}:`, errorMsg, item);
+                                            errorsOccurred.push({ storeName, error: `Ошибка записи: ${errorMsg}`, item: JSON.stringify(item)?.substring(0, 100) });
+                                            resolveReq({ storeName, operation: 'put', success: false, error: e.target.error });
+                                        };
+                                    } catch (putError) {
+                                        console.error(`Исключение при вызове put для ${storeName}:`, putError, item);
+                                        errorsOccurred.push({ storeName, error: `Исключение при записи: ${putError.message}`, item: JSON.stringify(item)?.substring(0, 100) });
+                                        resolveReq({ storeName, operation: 'put', success: false, error: putError });
+                                    }
                                 }));
+
                             }
-                            console.log(`В ${storeName}: Подготовлено к записи: ${itemsToImport.length - skippedPuts}, Пропущено (из-за валидации): ${skippedPuts}. Ошибки отдельных put приведут к откату.`);
+                            console.log(`В ${storeName}: Подготовлено к записи: ${itemsToImport.length - skippedPuts}, Пропущено (из-за валидации): ${skippedPuts}.`);
                         } else {
                             console.log(`Нет элементов для импорта в ${storeName}.`);
                         }
                     }
 
-                    console.log(`Всего инициировано запросов на очистку и добавление: ${allRequests.length} (put запросов: ${totalPutsInitiated})`);
+                    console.log(`Всего инициировано put запросов: ${totalPutsInitiated}`);
+                    await Promise.all(putPromises);
+                    console.log("Все put операции завершены (или произошли ошибки).");
 
+                    const putErrors = errorsOccurred.filter(e => e.operation === 'put' && !e.success);
+                    if (putErrors.length > 0) {
+                        console.error(`Обнаружено ${putErrors.length} ошибок при записи данных. Прерывание транзакции...`);
+                        if (transaction.abort) {
+                            transaction.abort();
+                        } else {
+                            reject(new Error("Ошибки при записи данных, импорт невозможен."));
+                        }
+                    }
                 });
 
                 if (importTransactionSuccessful) {
@@ -1106,25 +1164,29 @@
                         }
                         console.log("Состояние приложения обновлено (appInit выполнен).");
 
-                        console.log("Попытка применить настройки UI после импорта...");
-                        await loadUISettings();
-                        console.log("Настройки UI применены после импорта.");
+                        if (storesToImport.includes('preferences') && importData.data.preferences?.find(p => p.id === 'uiSettings')) {
+                            console.log("Попытка применить настройки UI после импорта...");
+                            await loadUISettings();
+                            console.log("Настройки UI применены после импорта.");
+                        } else {
+                            console.log("Настройки UI не импортировались или отсутствуют, применение пропущено.");
+                        }
 
                         console.log("Перестроение поискового индекса после импорта...");
                         showNotification("Индексация данных для поиска...", "info");
                         await buildInitialSearchIndex();
                         console.log("Поисковый индекс перестроен.");
 
-                        if (errorsOccurred.length > 0) {
-                            finalOutcomeSuccess = !errorsOccurred.some(e => e.error.includes('Ошибка очистки') || e.error.includes('Ошибка записи'));
-                            let errorSummary = errorsOccurred.map(e =>
+                        const nonFatalErrors = errorsOccurred.filter(e => !e.error.includes('Критическая ошибка транзакции') && !e.error.includes('Транзакция прервана') && !e.error.includes('Ошибка очистки') && !e.error.includes('Ошибка записи') && e.error !== 'Данные не являются массивом');
+                        if (nonFatalErrors.length > 0) {
+                            let errorSummary = nonFatalErrors.map(e =>
                                 `  - ${e.storeName}: ${e.error}${e.item ? ` (Элемент: ${e.item})` : ''}`
                             ).join('\n');
                             if (errorSummary.length > 500) {
                                 errorSummary = errorSummary.substring(0, 500) + '...\n(Полный список ошибок в консоли)';
                             }
-                            showNotification(`Импорт завершен ${finalOutcomeSuccess ? 'с предупреждениями/пропусками' : 'с ошибками'}:\n${errorSummary}`, "warning", 15000);
-                            console.warn("Предупреждения/ошибки/пропуски при импорте:", errorsOccurred);
+                            showNotification(`Импорт завершен с предупреждениями/пропусками:\n${errorSummary}`, "warning", 15000);
+                            console.warn("Предупреждения/ошибки/пропуски при импорте:", nonFatalErrors);
                         } else {
                             showNotification("Импорт данных успешно завершен. Приложение обновлено!", "success");
                         }
@@ -1138,8 +1200,11 @@
                 } else {
                     console.error("Импорт НЕ удался из-за ошибки транзакции.");
                     finalOutcomeSuccess = false;
-                    if (!errorsOccurred.some(e => e.error.includes('Критическая ошибка') || e.error.includes('Транзакция прервана'))) {
-                        showNotification("Импорт данных не удался. Данные не были изменены.", "error", 10000);
+                    const criticalErrors = errorsOccurred.filter(e => e.error.includes('Критическая ошибка транзакции') || e.error.includes('Транзакция прервана') || e.error.includes('Ошибка очистки') || e.error.includes('Ошибка записи'));
+                    if (criticalErrors.length > 0) {
+                        showNotification(`Импорт данных не удался: ${criticalErrors[0].error}. Данные не были изменены.`, "error", 10000);
+                    } else {
+                        showNotification("Импорт данных не удался по неизвестной причине.", "error", 10000);
                     }
                 }
 
@@ -1425,7 +1490,7 @@
             if (tabsNav.dataset[initKey] === 'true') {
                 console.log("[setupTabsOverflow v10.1] Already initialized. Skipping setup, calling updateVisibleTabs.");
                 if (typeof updateVisibleTabs === 'function') {
-                    requestAnimationFrame(updateVisibleTabs);
+                    updateVisibleTabs();
                 }
                 return;
             }
@@ -1444,26 +1509,27 @@
             }
             console.log("[setupTabsOverflow v10.1] Performing INITIAL setup...");
 
+            moreTabsBtn.removeEventListener('click', handleMoreTabsBtnClick, true);
             moreTabsBtn.addEventListener('click', handleMoreTabsBtnClick, true);
             console.log("[setupTabsOverflow v10.1] Attached CAPTURING handleMoreTabsBtnClick listener to moreTabsBtn.");
 
+            document.removeEventListener('click', clickOutsideTabsHandler, true);
             document.addEventListener('click', clickOutsideTabsHandler, true);
             console.log("[setupTabsOverflow v10.1] Attached CAPTURING clickOutsideTabsHandler to document.");
 
+            window.removeEventListener('resize', handleTabsResize);
             window.addEventListener('resize', handleTabsResize);
             console.log("[setupTabsOverflow v10.1] Added resize listener.");
 
             tabsNav.dataset[initKey] = 'true';
             console.log("[setupTabsOverflow v10.1] Initialized flag set on tabsNav.");
 
-            requestAnimationFrame(() => {
-                console.log("[setupTabsOverflow v10.1] Initial call to updateVisibleTabs after setup.");
-                if (typeof updateVisibleTabs === 'function') {
-                    updateVisibleTabs();
-                } else {
-                    console.error("[setupTabsOverflow v10.1] ERROR: updateVisibleTabs function is not defined for initial call!");
-                }
-            });
+            console.log("[setupTabsOverflow v10.1] Initial call to updateVisibleTabs directly after setup.");
+            if (typeof updateVisibleTabs === 'function') {
+                updateVisibleTabs();
+            } else {
+                console.error("[setupTabsOverflow v10.1] ERROR: updateVisibleTabs function is not defined for initial call!");
+            }
             console.log("[setupTabsOverflow v10.1] Initial setup finished.");
         }
 
@@ -1936,17 +2002,23 @@
         }
 
 
-        function renderAlgorithmCards(section) {
-            const sectionAlgorithms = algorithms[section];
+        async function renderAlgorithmCards(section) {
+            const sectionAlgorithms = algorithms?.[section];
+
             if (!sectionAlgorithms || !Array.isArray(sectionAlgorithms)) {
-                console.warn(`[renderAlgorithmCards] No valid algorithms found for section: ${section}`);
+                console.warn(`[renderAlgorithmCards v5 Исправленная] Не найдены валидные алгоритмы для секции: ${section}`);
                 const container = document.getElementById(section + 'Algorithms');
                 if (container) {
                     container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full">Алгоритмы для этого раздела не найдены или не загружены.</p>';
                     if (typeof applyCurrentView === 'function') {
                         applyCurrentView(section + 'Algorithms');
                     } else {
-                        console.warn("[renderAlgorithmCards] applyCurrentView function is not defined when rendering empty container.");
+                        console.warn("[renderAlgorithmCards v5 Исправленная] Функция applyCurrentView не определена при рендеринге пустого контейнера.");
+                        if (typeof applyView === 'function') {
+                            applyView(container, container.dataset.defaultView || 'cards');
+                        } else {
+                            console.error("[renderAlgorithmCards v5 Исправленная] Функции applyCurrentView и applyView не найдены.");
+                        }
                     }
                 }
                 return;
@@ -1954,7 +2026,7 @@
 
             const container = document.getElementById(section + 'Algorithms');
             if (!container) {
-                console.error(`[renderAlgorithmCards] Container #${section}Algorithms not found.`);
+                console.error(`[renderAlgorithmCards v5 Исправленная] Контейнер #${section}Algorithms не найден.`);
                 return;
             }
 
@@ -1965,41 +2037,53 @@
                 if (typeof applyCurrentView === 'function') {
                     applyCurrentView(section + 'Algorithms');
                 } else {
-                    console.warn("[renderAlgorithmCards] applyCurrentView function is not defined when rendering empty container message.");
+                    console.warn("[renderAlgorithmCards v5 Исправленная] Функция applyCurrentView не определена при рендеринге сообщения об отсутствии алгоритмов.");
+                    if (typeof applyView === 'function') {
+                        applyView(container, container.dataset.defaultView || 'cards');
+                    } else {
+                        console.error("[renderAlgorithmCards v5 Исправленная] Функции applyCurrentView и applyView не найдены.");
+                    }
                 }
                 return;
             }
 
             const fragment = document.createDocumentFragment();
-
-            const safeEscapeHtml = escapeHtml;
+            const safeEscapeHtml = typeof escapeHtml === 'function' ? escapeHtml : (text) => {
+                if (typeof text !== 'string') return '';
+                return text.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">").replace(/"/g, "").replace(/'/g, "'");
+            };
 
             sectionAlgorithms.forEach(algorithm => {
                 if (!algorithm || typeof algorithm !== 'object' || !algorithm.id) {
-                    console.warn(`[renderAlgorithmCards] Skipping invalid algorithm object in section ${section}:`, algorithm);
+                    console.warn(`[renderAlgorithmCards v5 Исправленная] Пропуск невалидного объекта алгоритма в секции ${section}:`, algorithm);
                     return;
                 }
 
                 const card = document.createElement('div');
-                card.dataset.id = algorithm.id;
                 card.className = 'algorithm-card view-item transition cursor-pointer';
+                card.dataset.id = algorithm.id;
 
                 const titleText = algorithm.title || 'Без заголовка';
                 const descriptionText = algorithm.description || 'Нет описания';
 
                 card.innerHTML = `
-                    <div class="flex-grow min-w-0">
-                        <h3 class="font-bold truncate" title="${safeEscapeHtml(titleText)}">${safeEscapeHtml(titleText)}</h3>
-                        <p class="text-gray-600 dark:text-gray-400 text-sm mt-1 line-clamp-2" title="${safeEscapeHtml(descriptionText)}">${safeEscapeHtml(descriptionText)}</p>
-                    </div>
-                `;
+            <div class="flex-grow min-w-0">
+                <h3 class="font-bold" title="${safeEscapeHtml(titleText)}">${safeEscapeHtml(titleText)}</h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm mt-1"
+                   title="${safeEscapeHtml(descriptionText)}">
+                   ${safeEscapeHtml(descriptionText)}
+                </p>
+            </div>
+        `;
 
                 card.addEventListener('click', () => {
                     if (typeof showAlgorithmDetail === 'function') {
                         showAlgorithmDetail(algorithm, section);
                     } else {
-                        console.error("showAlgorithmDetail function is not defined when clicking card.");
-                        showNotification("Ошибка: Невозможно открыть детали алгоритма.", "error");
+                        console.error("[renderAlgorithmCards v5 Исправленная] Функция showAlgorithmDetail не определена при клике на карточку.");
+                        if (typeof showNotification === 'function') {
+                            showNotification("Ошибка: Невозможно открыть детали алгоритма.", "error");
+                        }
                     }
                 });
                 fragment.appendChild(card);
@@ -2009,14 +2093,16 @@
 
             if (typeof applyCurrentView === 'function') {
                 applyCurrentView(section + 'Algorithms');
+                console.log(`[renderAlgorithmCards v5 Исправленная] Вызвана applyCurrentView для ${section}Algorithms`);
             } else {
+                console.warn("[renderAlgorithmCards v5 Исправленная] Функция applyCurrentView не найдена. Стили вида могут быть некорректны.");
                 if (typeof applyView === 'function') {
                     applyView(container, container.dataset.defaultView || 'cards');
-                    console.warn("applyCurrentView function is not defined, applied default view via applyView.");
                 } else {
-                    console.warn("applyCurrentView and applyView functions are not defined after rendering cards.");
+                    console.error("[renderAlgorithmCards v5 Исправленная] Fallback невозможен: функции applyCurrentView и applyView не найдены.");
                 }
             }
+            console.log(`[renderAlgorithmCards v5 Исправленная] Рендеринг для секции ${section} завершен.`);
         }
 
 
@@ -3236,12 +3322,15 @@
 
 
         function applyView(container, view) {
-            if (!container) return;
+            if (!container) {
+                console.warn(`[applyView v3 Исправленная] Контейнер не предоставлен.`);
+                return;
+            }
 
             const sectionId = container.dataset.sectionId;
             const viewControlAncestor = container.closest('.tab-content > div, #reglamentsList');
             if (!viewControlAncestor) {
-                console.warn(`View control ancestor not found for section ${sectionId}`);
+                console.warn(`[applyView v3 Исправленная] Родительский элемент управления видом не найден для секции ${sectionId}`);
                 return;
             }
             const buttons = viewControlAncestor.querySelectorAll(`.view-toggle`);
@@ -3253,14 +3342,12 @@
                 if (isTarget) {
                     btn.classList.add('bg-primary', 'text-white');
                 } else {
-                    btn.classList.add(
-                        'text-gray-500',
-                        'dark:text-gray-400',
-                    );
+                    btn.classList.add('text-gray-500', 'dark:text-gray-400');
                 }
             });
 
             const gridColsClasses = SECTION_GRID_COLS[sectionId] || SECTION_GRID_COLS.default;
+
             container.classList.remove(
                 ...CARD_CONTAINER_CLASSES, ...gridColsClasses,
                 ...LIST_CONTAINER_CLASSES
@@ -3273,29 +3360,58 @@
 
             items.forEach(item => {
                 const isReglamentItem = item.classList.contains('reglament-item');
+                const isCibLinkItem = item.classList.contains('cib-link-item');
                 const actionsSelector = '.reglament-actions, .bookmark-actions, .ext-link-actions, .cib-link-item .flex-shrink-0, .algorithm-actions';
                 const actions = item.querySelector(actionsSelector);
                 const titleElement = item.querySelector('h3, h4');
+                let descriptionElement = null;
+                if (item.classList.contains('algorithm-card')) {
+                    descriptionElement = item.querySelector('div.flex-grow > p');
+                } else if (item.classList.contains('cib-link-item')) {
+                    descriptionElement = item.querySelector('p.link-description');
+                } else {
+                    descriptionElement = item.querySelector('p.bookmark-description, p.ext-link-description');
+                }
 
                 item.classList.remove(
                     'flex', 'flex-col', 'justify-between', 'items-center', 'items-start',
-                    'p-4', 'p-3', 'py-3', 'pl-5', 'pr-3',
+                    'p-4', 'p-3', 'py-3', 'pl-5', 'pr-3', 'pb-12',
                     'border-b', 'border-gray-200', 'dark:border-gray-600',
-                    'bg-white', 'dark:bg-gray-700', 'hover:shadow-md', 'shadow-sm', 'rounded-lg',
+                    'bg-white', 'dark:bg-gray-700', 'dark:bg-[#374151]',
+                    'hover:shadow-md', 'shadow-sm', 'shadow-md', 'hover:shadow-lg', 'rounded-lg',
                     'group',
                     'cursor-pointer',
-                    ...LIST_ITEM_BASE_CLASSES, ...CARD_ITEM_BASE_CLASSES, ...ALGO_BOOKMARK_CARD_CLASSES, ...LINK_REGLAMENT_CARD_CLASSES
+                    'overflow-hidden',
+                    ...LIST_ITEM_BASE_CLASSES,
+                    ...CARD_ITEM_BASE_CLASSES,
+                    ...ALGO_BOOKMARK_CARD_CLASSES,
+                    ...LINK_REGLAMENT_CARD_CLASSES,
+                    'mb-1',
+                    'h-full'
                 );
 
                 if (titleElement) {
-                    titleElement.classList.remove('group-hover:text-primary');
+                    titleElement.classList.remove(
+                        'group-hover:text-primary',
+                        'truncate', 'overflow-hidden', 'whitespace-nowrap', 'text-ellipsis',
+                        'min-w-0'
+                    );
+                }
+                if (descriptionElement) {
+                    descriptionElement.classList.remove(
+                        'line-clamp-2', 'overflow-hidden'
+                    );
+                    descriptionElement.style.display = '';
+                    descriptionElement.style.webkitBoxOrient = '';
+                    descriptionElement.style.webkitLineClamp = '';
                 }
 
                 if (actions) {
                     actions.classList.remove(
                         'opacity-0', 'opacity-100', 'group-hover:opacity-100', 'focus-within:opacity-100',
                         'transition-opacity', 'duration-200',
-                        'mt-auto', 'pt-2', 'border-t', '-mx-4', 'px-4', 'pb-1', 'justify-end',
+                        'mt-auto', 'pt-2', 'border-t', '-mx-4', 'px-4', 'pb-1', 'pb-2', 'justify-end',
+                        'absolute', 'top-2', 'right-2', 'z-10', 'space-x-1',
                         'ml-2', 'ml-auto'
                     );
                     actions.classList.add('flex', 'flex-shrink-0', 'items-center');
@@ -3303,37 +3419,68 @@
 
                 if (view === 'cards') {
                     item.classList.add(...CARD_ITEM_BASE_CLASSES);
-                    item.classList.add('flex', 'justify-between', 'items-center');
-                    item.classList.add('group', 'cursor-pointer');
+                    item.classList.add('flex', 'flex-col', 'justify-between');
+                    item.classList.add('group');
+                    item.classList.add('overflow-hidden');
 
-                    if (titleElement && isReglamentItem) {
-                        titleElement.classList.add('group-hover:text-primary');
+                    if (titleElement) {
+                        if (!isCibLinkItem) {
+                            titleElement.classList.add('group-hover:text-primary');
+                        }
                     }
 
-                    if (actions) {
-                        actions.classList.add('opacity-0', 'group-hover:opacity-100');
+                    if (descriptionElement) {
+                        descriptionElement.classList.add('line-clamp-2', 'overflow-hidden');
+                        descriptionElement.style.display = '-webkit-box';
+                        descriptionElement.style.webkitBoxOrient = 'vertical';
                     }
+
+                    if (item.classList.contains('bookmark-item')) {
+                        item.classList.add('pb-12', 'relative', 'h-full');
+                        if (actions) {
+                            actions.classList.add('absolute', 'bottom-0', 'left-0', 'right-0', 'border-t', 'border-gray-200', 'dark:border-gray-700', 'px-4', 'py-2', 'justify-end', 'bg-inherit', 'rounded-b-lg');
+                            actions.classList.add('opacity-0', 'group-hover:opacity-100', 'focus-within:opacity-100', 'transition-opacity', 'duration-200');
+                        }
+                    } else if (isCibLinkItem) {
+                        item.classList.add('relative', 'items-start');
+                        item.classList.remove('flex-col', 'justify-between');
+                        if (actions) {
+                            actions.classList.add('absolute', 'top-2', 'right-2', 'z-10', 'space-x-1');
+                            actions.classList.add('opacity-0', 'group-hover:opacity-100', 'focus-within:opacity-100', 'transition-opacity', 'duration-200');
+                        }
+                    } else {
+                        item.classList.add('items-start');
+                        if (item.classList.contains('algorithm-card') || item.classList.contains('ext-link-item')) {
+                            item.classList.add('cursor-pointer');
+                        }
+                        if (actions) {
+                            actions.classList.add('ml-auto');
+                            actions.classList.add('opacity-0', 'group-hover:opacity-100', 'focus-within:opacity-100', 'transition-opacity', 'duration-200');
+                        }
+                    }
+
                 } else {
-                    const baseListClasses = LIST_ITEM_BASE_CLASSES.filter(cls => !['p-3', 'flex', 'justify-between', 'items-center'].includes(cls));
-                    item.classList.add(...baseListClasses);
+                    // Вид "Список"
+                    const baseListClassesFiltered = LIST_ITEM_BASE_CLASSES.filter(cls => ![
+                        'p-3', 'border-b', 'border-gray-200', 'dark:border-gray-600'
+                    ].includes(cls));
+                    item.classList.add(...baseListClassesFiltered);
                     item.classList.add('py-3', 'pl-5', 'pr-3');
-                    item.classList.add('flex', 'justify-between', 'items-center');
-                    item.classList.add('group', 'cursor-pointer');
+                    item.classList.add('border-b', 'border-gray-200', 'dark:border-gray-600');
+                    item.classList.add('group');
+                    item.classList.add('mb-1');
 
                     if (actions) {
-                        actions.classList.add('opacity-0', 'group-hover:opacity-100');
+                        actions.classList.add('opacity-0', 'group-hover:opacity-100', 'focus-within:opacity-100', 'transition-opacity', 'duration-200');
                         actions.classList.add('ml-2');
                     }
 
                     if (container.lastElementChild === item) {
-                        item.classList.remove('border-b', 'border-gray-200', 'dark:border-gray-600');
+                        item.classList.remove('border-b', 'border-gray-200', 'dark:border-gray-600', 'mb-1');
                     }
                 }
             });
-
-            if (view === 'list' && container.lastElementChild) {
-                container.lastElementChild.classList.remove('border-b', 'border-gray-200', 'dark:border-gray-600');
-            }
+            console.log(`[applyView v3 Исправленная] Стили для вида '${view}' применены к ${items.length} элементам в контейнере ${sectionId || container.id}.`); // v3
         }
 
 
@@ -3482,344 +3629,252 @@
             const saveButton = document.getElementById('saveAlgorithmBtn');
 
             if (!editModal || !algorithmIdStr || !section || !algorithmTitleInput || !editStepsContainer || !saveButton) {
-                console.error("Save Algorithm failed: Missing required modal elements or data attributes.");
-                showNotification("Ошибка: Не удалось найти элементы формы для сохранения.", "error");
+                console.error("saveAlgorithm v6 (TX Fix): Missing required elements.");
+                showNotification("Ошибка: Не найдены элементы формы.", "error");
                 return;
             }
             const isMainAlgo = section === 'main';
             if (!isMainAlgo && !algorithmDescriptionInput) {
-                console.error(`Save Algorithm failed: Missing description input (#algorithmDescription) for non-main algorithm.`);
-                showNotification("Ошибка интерфейса: Не найдено поле описания.", "error");
+                console.error("saveAlgorithm v6 (TX Fix): Missing description input for non-main.");
+                showNotification("Ошибка: Не найдено поле описания.", "error");
                 return;
             }
-            console.log(`[Save Algorithm v3 Fixed] Начало сохранения. ID: ${algorithmIdStr}, Секция: ${section}, Главный: ${isMainAlgo}`);
+            console.log(`[Save Algorithm v6 (TX Fix)] Start. ID: ${algorithmIdStr}, Section: ${section}`);
 
-            const initialTitle = algorithmTitleInput.value.trim();
+            const finalTitle = algorithmTitleInput.value.trim();
             const newDescription = (!isMainAlgo && algorithmDescriptionInput) ? algorithmDescriptionInput.value.trim() : undefined;
-
-            if (!initialTitle) {
-                showNotification("Заголовок алгоритма не может быть пустым.", "warning");
+            if (!finalTitle) {
+                showNotification("Заголовок не может быть пустым.", "warning");
                 algorithmTitleInput.focus(); return;
             }
-            const finalTitle = initialTitle;
 
             saveButton.disabled = true;
             saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
 
             const { steps: newStepsBase, screenshotOps, isValid } = extractStepsDataFromEditForm(editStepsContainer, isMainAlgo);
-            console.log(`[Save Algorithm v3 Fixed] Извлечено из формы: ${newStepsBase.length} шагов, ${screenshotOps.length} операций со скриншотами. Валидно: ${isValid}`);
-
             if (!isValid && !isMainAlgo) {
                 showNotification("Алгоритм должен содержать хотя бы один шаг.", "warning");
                 saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения'; return;
             }
+            console.log(`[Save Algorithm v6] Извлечено: ${newStepsBase.length} шагов, ${screenshotOps.length} скриншот-операций.`);
 
-            let finalSteps = JSON.parse(JSON.stringify(newStepsBase));
-            const algorithmIdForScreenshotRef = isMainAlgo ? 'main' : algorithmIdStr;
-
+            let transaction;
             let updateSuccessful = false;
-            let algorithmContainerToSave = null;
             let oldAlgorithmData = null;
             let finalAlgorithmData = null;
+            const algorithmIdForRefs = isMainAlgo ? 'main' : algorithmIdStr;
             const screenshotOpResults = [];
+            let finalSteps = JSON.parse(JSON.stringify(newStepsBase));
 
             try {
-                if (typeof algorithms !== 'undefined') {
-                    if (isMainAlgo) { oldAlgorithmData = algorithms.main ? JSON.parse(JSON.stringify(algorithms.main)) : null; }
-                    else if (algorithms?.[section]) { const oldAlgo = algorithms[section].find(a => String(a?.id) === String(algorithmIdStr)); oldAlgorithmData = oldAlgo ? JSON.parse(JSON.stringify(oldAlgo)) : null; }
-                    if (oldAlgorithmData) console.log("[Save Algorithm v3 Fixed] Старые данные алгоритма получены для последующего обновления индекса.");
-                    else console.warn(`[Save Algorithm v3 Fixed] Не удалось найти старые данные для ${section}/${algorithmIdStr} в памяти.`);
-                } else console.warn("[Save Algorithm v3 Fixed] Глобальная переменная 'algorithms' не найдена.");
-            } catch (e) { console.error("[Save Algorithm v3 Fixed] Ошибка получения старых данных:", e); }
+                if (isMainAlgo) {
+                    oldAlgorithmData = algorithms?.main ? JSON.parse(JSON.stringify(algorithms.main)) : null;
+                } else if (algorithms?.[section]) {
+                    oldAlgorithmData = algorithms[section].find(a => String(a?.id) === String(algorithmIdStr)) || null;
+                    if (oldAlgorithmData) oldAlgorithmData = JSON.parse(JSON.stringify(oldAlgorithmData));
+                }
+                if (oldAlgorithmData) console.log("[Save Algorithm v6] Старые данные для индекса получены.");
+                else console.warn(`[Save Algorithm v6] Не найдены старые данные для ${section}/${algorithmIdStr}.`);
+            } catch (e) { console.error("[Save Algorithm v6] Ошибка получения старых данных:", e); }
 
             try {
-                await new Promise((resolve, reject) => {
-                    if (!db) { return reject(new Error("База данных недоступна")); }
-                    let transaction;
-                    try {
-                        transaction = db.transaction(['algorithms', 'screenshots'], 'readwrite');
-                        console.log("[Save Algorithm v3 Fixed TX] Транзакция ['algorithms', 'screenshots'] 'readwrite' начата.");
-                    } catch (txError) {
-                        console.error("[Save Algorithm v3 Fixed TX] Ошибка создания транзакции:", txError);
-                        return reject(new Error(`Ошибка создания транзакции: ${txError.message}`));
+                if (!db) throw new Error("База данных недоступна");
+                transaction = db.transaction(['algorithms', 'screenshots'], 'readwrite');
+                const screenshotsStore = transaction.objectStore('screenshots');
+                const algorithmsStore = transaction.objectStore('algorithms');
+                console.log("[Save Algorithm v6 TX] Транзакция начата.");
+
+                const deletePromises = [];
+                const addPromises = [];
+                const newScreenshotIdsMap = {};
+
+                if (!isMainAlgo) {
+                    screenshotOps.filter(op => op.action === 'delete').forEach(op => {
+                        const { stepIndex, oldScreenshotId } = op;
+                        if (oldScreenshotId === null || oldScreenshotId === undefined) return;
+                        deletePromises.push(new Promise((resolve) => {
+                            const request = screenshotsStore.delete(oldScreenshotId);
+                            request.onsuccess = () => {
+                                console.log(`[Save Algorithm v6 TX] Deleted screenshot ID: ${oldScreenshotId}`);
+                                screenshotOpResults.push({ success: true, action: 'delete', oldId: oldScreenshotId, stepIndex });
+                                resolve();
+                            };
+                            request.onerror = (e) => {
+                                console.error(`[Save Algorithm v6 TX] Error deleting screenshot ID ${oldScreenshotId}:`, e.target.error);
+                                screenshotOpResults.push({ success: false, action: 'delete', oldId: oldScreenshotId, stepIndex, error: e.target.error || new Error('Delete failed') });
+                                resolve();
+                            };
+                        }));
+                    });
+                    if (deletePromises.length > 0) {
+                        await Promise.all(deletePromises);
+                        console.log("[Save Algorithm v6 TX] Delete operations finished.");
+                        const deleteErrors = screenshotOpResults.filter(r => r.action === 'delete' && !r.success);
+                        if (deleteErrors.length > 0) {
+                            throw new Error(`Ошибка удаления скриншота: ${deleteErrors[0].error?.message || 'Unknown delete error'}`);
+                        }
                     }
 
-                    const allRequests = [];
+                    screenshotOps.filter(op => op.action === 'add').forEach(op => {
+                        const { stepIndex, blob } = op;
+                        if (!(blob instanceof Blob) || typeof stepIndex !== 'number' || stepIndex < 0 || !finalSteps[stepIndex]) return;
 
+                        addPromises.push(new Promise((resolve) => {
+                            const tempName = `${finalTitle}, изобр. ${Date.now() + Math.random()}`;
+                            const record = { blob, parentId: algorithmIdForRefs, parentType: 'algorithm', stepIndex, name: tempName, uploadedAt: new Date().toISOString() };
+                            const request = screenshotsStore.add(record);
+                            request.onsuccess = e => {
+                                const newId = e.target.result;
+                                console.log(`[Save Algorithm v6 TX] Added screenshot, new ID: ${newId} for step ${stepIndex}`);
+                                screenshotOpResults.push({ success: true, action: 'add', newId, stepIndex });
+                                if (!newScreenshotIdsMap[stepIndex]) newScreenshotIdsMap[stepIndex] = [];
+                                newScreenshotIdsMap[stepIndex].push(newId);
+                                resolve();
+                            };
+                            request.onerror = e => {
+                                console.error(`[Save Algorithm v6 TX] Error adding screenshot for step ${stepIndex}:`, e.target.error);
+                                screenshotOpResults.push({ success: false, action: 'add', stepIndex, error: e.target.error || new Error('Add failed') });
+                                resolve();
+                            };
+                        }));
+                    });
+                    if (addPromises.length > 0) {
+                        await Promise.all(addPromises);
+                        console.log("[Save Algorithm v6 TX] Add operations finished.");
+                        const addErrors = screenshotOpResults.filter(r => r.action === 'add' && !r.success);
+                        if (addErrors.length > 0) {
+                            throw new Error(`Ошибка добавления скриншота: ${addErrors[0].error?.message || 'Unknown add error'}`);
+                        }
+                    }
+                }
+
+                let existingIdsToKeepMap = {};
+                if (!isMainAlgo && oldAlgorithmData?.steps) {
+                    const deletedIdsSet = new Set(screenshotOpResults.filter(r => r.success && r.action === 'delete').map(r => r.oldId));
+                    oldAlgorithmData.steps.forEach((step, index) => {
+                        if (Array.isArray(step.screenshotIds)) {
+                            existingIdsToKeepMap[index] = step.screenshotIds.filter(id => !deletedIdsSet.has(id));
+                        }
+                    });
+                }
+
+                finalSteps = finalSteps.map((step, index) => {
+                    const existingKeptIds = existingIdsToKeepMap[index] || [];
+                    const newlyAddedIds = newScreenshotIdsMap[index] || [];
+                    const finalIds = [...new Set([...existingKeptIds, ...newlyAddedIds])];
+
+                    if (finalIds.length > 0) {
+                        step.screenshotIds = finalIds;
+                    } else {
+                        delete step.screenshotIds;
+                    }
+                    delete step._tempScreenshotBlobs; delete step._screenshotsToDelete; delete step.existingScreenshotIds;
+                    delete step.tempScreenshotsCount; delete step.deletedScreenshotIds;
+                    return step;
+                });
+                console.log("[Save Algorithm v6 TX] Финальный массив шагов подготовлен.");
+
+                let targetAlgorithmObject;
+                const timestamp = new Date().toISOString();
+                if (isMainAlgo) {
+                    if (!algorithms.main) algorithms.main = { id: 'main' };
+                    algorithms.main.title = finalTitle;
+                    algorithms.main.steps = finalSteps;
+                    algorithms.main.dateUpdated = timestamp;
+                    if (!algorithms.main.dateAdded) algorithms.main.dateAdded = timestamp;
+                    targetAlgorithmObject = algorithms.main;
+                    const mainTitleElement = document.querySelector('#mainContent h2');
+                    if (mainTitleElement) mainTitleElement.textContent = finalTitle;
+                } else {
+                    if (!algorithms[section]) algorithms[section] = [];
+                    const algorithmIndex = algorithms[section].findIndex(a => String(a?.id) === String(algorithmIdStr));
+                    const algoDataBase = {
+                        id: algorithmIdForRefs, title: finalTitle, description: newDescription, steps: finalSteps, dateUpdated: timestamp
+                    };
+                    if (algorithmIndex !== -1) {
+                        algorithms[section][algorithmIndex] = {
+                            ...(algorithms[section][algorithmIndex] || {}),
+                            ...algoDataBase,
+                            dateAdded: algorithms[section][algorithmIndex]?.dateAdded || oldAlgorithmData?.dateAdded || timestamp
+                        };
+                        targetAlgorithmObject = algorithms[section][algorithmIndex];
+                    } else {
+                        console.warn(`[Save Algorithm v6 TX] Алгоритм ${algorithmIdStr} не найден в памяти ${section}. Создание нового.`);
+                        targetAlgorithmObject = { ...algoDataBase, dateAdded: timestamp };
+                        algorithms[section].push(targetAlgorithmObject);
+                    }
+                }
+                finalAlgorithmData = JSON.parse(JSON.stringify(targetAlgorithmObject));
+                console.log(`[Save Algorithm v6 TX] Объект алгоритма ${algorithmIdStr} обновлен в памяти.`);
+
+                algorithmContainerToSave = { section: 'all', data: algorithms };
+                console.log("[Save Algorithm v6 TX] Запрос put для всего контейнера 'algorithms'...");
+                const putAlgoReq = algorithmsStore.put(algorithmContainerToSave);
+
+                await new Promise((resolve, reject) => {
+                    putAlgoReq.onerror = (e) => reject(e.target.error || new Error("Ошибка сохранения контейнера algorithms"));
                     transaction.oncomplete = () => {
-                        console.log("[Save Algorithm v3 Fixed TX] Транзакция завершена (oncomplete).");
+                        console.log("[Save Algorithm v6 TX] Транзакция успешно завершена (oncomplete).");
+                        updateSuccessful = true;
                         resolve();
                     };
                     transaction.onerror = (e) => {
-                        console.error("[Save Algorithm v3 Fixed TX] ОШИБКА ТРАНЗАКЦИИ (onerror):", e.target.error);
+                        console.error("[Save Algorithm v6 TX] ОШИБКА ТРАНЗАКЦИИ (onerror):", e.target.error);
                         updateSuccessful = false;
                         reject(e.target.error || new Error("Ошибка транзакции"));
                     };
                     transaction.onabort = (e) => {
-                        console.warn("[Save Algorithm v3 Fixed TX] Транзакция ПРЕРВАНА (onabort):", e.target.error);
+                        console.warn("[Save Algorithm v6 TX] Транзакция ПРЕРВАНА (onabort):", e.target.error);
                         updateSuccessful = false;
                         reject(e.target.error || new Error("Транзакция прервана"));
                     };
-
-                    try {
-                        const screenshotsStore = transaction.objectStore('screenshots');
-                        const algorithmsStore = transaction.objectStore('algorithms');
-                        console.log("[Save Algorithm v3 Fixed TX] Хранилища 'algorithms' и 'screenshots' получены.");
-
-                        if (!isMainAlgo && screenshotOps.length > 0) {
-                            console.log(`[Save Algorithm v3 Fixed TX] Инициация ${screenshotOps.length} операций со скриншотами для ID: ${algorithmIdForScreenshotRef}`);
-                            screenshotOps.forEach((op) => {
-                                const { stepIndex, action, blob, oldScreenshotId } = op;
-
-                                if (typeof stepIndex !== 'number' || stepIndex < 0) {
-                                    console.warn(`[Save Algorithm v3 Fixed TX] Пропуск операции из-за неверного stepIndex (${stepIndex}):`, op);
-                                    screenshotOpResults.push({ success: false, action: action, stepIndex: stepIndex, error: new Error('Неверный индекс шага') });
-                                    return;
-                                }
-
-                                const operationPromise = new Promise((resolveReq) => {
-                                    if (action === 'delete' && oldScreenshotId) {
-                                        console.log(`[Save Algorithm v3 Fixed TX] Запрос delete для screenshot ID ${oldScreenshotId}`);
-                                        const delReq = screenshotsStore.delete(oldScreenshotId);
-                                        delReq.onsuccess = () => {
-                                            console.log(`[Save Algorithm v3 Fixed TX] Успешно: delete screenshot ID ${oldScreenshotId}`);
-                                            screenshotOpResults.push({ success: true, action: 'delete', oldId: oldScreenshotId, stepIndex: stepIndex });
-                                            resolveReq();
-                                        };
-                                        delReq.onerror = e => {
-                                            console.error(`[Save Algorithm v3 Fixed TX] Ошибка delete для screenshot ID ${oldScreenshotId}: ${e.target.error?.message}`);
-                                            screenshotOpResults.push({ success: false, action: 'delete', oldId: oldScreenshotId, stepIndex: stepIndex, error: e.target.error });
-                                            resolveReq();
-                                        };
-                                    } else if (action === 'add' && blob instanceof Blob) {
-                                        console.log(`[Save Algorithm v3 Fixed TX] Запрос add для screenshot шага ${stepIndex}`);
-                                        try {
-                                            if (!algorithmIdForScreenshotRef) throw new Error("Не удалось определить algorithmIdForScreenshotRef для сохранения скриншота");
-
-                                            let parentIndex = screenshotsStore.index('parentId');
-                                            let countRequest = parentIndex.count(algorithmIdForScreenshotRef);
-
-                                            countRequest.onsuccess = (eCount) => {
-                                                const currentCount = eCount.target.result || 0;
-                                                const screenshotIndex = currentCount + 1;
-                                                const screenshotName = `${finalTitle}, изобр. ${screenshotIndex}`;
-                                                console.log(`[Save Algorithm v3 Fixed TX]   > Текущий счетчик для ${algorithmIdForScreenshotRef}: ${currentCount}. Новое имя: "${screenshotName}"`);
-
-                                                const screenshotRecord = {
-                                                    blob,
-                                                    parentId: algorithmIdForScreenshotRef,
-                                                    parentType: 'algorithm',
-                                                    stepIndex,
-                                                    name: screenshotName,
-                                                    uploadedAt: new Date().toISOString()
-                                                };
-                                                console.log(`[Save Algorithm v3 Fixed TX]   > Данные для add:`, { parentId: screenshotRecord.parentId, parentType: screenshotRecord.parentType, stepIndex: screenshotRecord.stepIndex, name: screenshotRecord.name, blobSize: blob.size });
-
-                                                const addReq = screenshotsStore.add(screenshotRecord);
-                                                addReq.onsuccess = e => {
-                                                    const newId = e.target.result;
-                                                    console.log(`[Save Algorithm v3 Fixed TX] Успешно: add screenshot, new ID: ${newId}`);
-                                                    screenshotOpResults.push({ success: true, action: 'add', newId: newId, stepIndex: stepIndex });
-                                                    resolveReq();
-                                                };
-                                                addReq.onerror = e => {
-                                                    console.error(`[Save Algorithm v3 Fixed TX] Ошибка add screenshot: ${e.target.error?.message}`);
-                                                    screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: e.target.error });
-                                                    resolveReq();
-                                                };
-                                            }
-                                            countRequest.onerror = (eCountErr) => {
-                                                console.error(`[Save Algorithm v3 Fixed TX] Ошибка запроса count для ${algorithmIdForScreenshotRef}: ${eCountErr.target.error?.message}`);
-                                                const screenshotName = `${finalTitle}, изобр. (ошибка)`;
-                                                const screenshotRecord = { blob, parentId: algorithmIdForScreenshotRef, parentType: 'algorithm', stepIndex, name: screenshotName, uploadedAt: new Date().toISOString() };
-                                                const addReq = screenshotsStore.add(screenshotRecord);
-                                                addReq.onsuccess = e => { const newId = e.target.result; screenshotOpResults.push({ success: true, action: 'add', newId: newId, stepIndex: stepIndex }); resolveReq(); };
-                                                addReq.onerror = e => { screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: e.target.error }); resolveReq(); };
-                                            }
-
-                                        } catch (addPrepError) {
-                                            console.error(`[Save Algorithm v3 Fixed TX] Ошибка подготовки add screenshot:`, addPrepError);
-                                            screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: addPrepError });
-                                            resolveReq();
-                                        }
-                                    } else {
-                                        console.warn(`[Save Algorithm v3 Fixed TX] Пропущена некорректная операция:`, op);
-                                        screenshotOpResults.push({ success: false, action: op.action || 'unknown', stepIndex: stepIndex, error: new Error('Некорректная операция') });
-                                        resolveReq();
-                                    }
-                                });
-                                allRequests.push(operationPromise);
-                            });
-                        } else {
-                            console.log("[Save Algorithm v3 Fixed TX] Операции со скриншотами пропущены (главный алгоритм или нет операций).");
-                        }
-
-                        Promise.all(allRequests)
-                            .then(() => {
-                                console.log("[Save Algorithm v3 Fixed TX] Все инициированные операции со скриншотами завершены (или отклонены).");
-
-                                const failedScreenshotOps = screenshotOpResults.filter(r => !r.success);
-                                if (failedScreenshotOps.length > 0) {
-                                    const firstError = failedScreenshotOps[0].error || new Error('Неизвестная ошибка скриншота');
-                                    console.error(`[Save Algorithm v3 Fixed TX] ${failedScreenshotOps.length} операций со скриншотами НЕ удались! Прерывание транзакции. Первая ошибка:`, firstError);
-                                    transaction.abort();
-                                    reject(new Error(`Ошибка при ${failedScreenshotOps[0].action === 'add' ? 'добавлении' : 'удалении'} скриншота: ${firstError.message}`));
-                                    return;
-                                }
-
-                                if (!isMainAlgo) {
-                                    const addedScreenshots = screenshotOpResults.filter(r => r.success && r.action === 'add');
-                                    if (addedScreenshots.length > 0) {
-                                        console.log(`[Save Algorithm v3 Fixed TX] Обновление finalSteps новыми ID скриншотов (${addedScreenshots.length} шт.)...`);
-                                        addedScreenshots.forEach(result => {
-                                            const stepIdx = result.stepIndex;
-                                            if (finalSteps[stepIdx]) {
-                                                if (!finalSteps[stepIdx].screenshotIds) {
-                                                    finalSteps[stepIdx].screenshotIds = [];
-                                                }
-                                                finalSteps[stepIdx].screenshotIds.push(result.newId);
-                                                console.log(`   > Добавлен newId ${result.newId} в screenshotIds шага ${stepIdx}`);
-                                            } else {
-                                                console.warn(`[Save Algorithm v3 Fixed TX] Не найден шаг с индексом ${stepIdx} в finalSteps для добавления newId ${result.newId}`);
-                                            }
-                                        });
-                                    }
-                                }
-
-                                finalSteps.forEach(step => {
-                                    delete step._tempScreenshotBlobs;
-                                    delete step._screenshotsToDelete;
-                                    delete step.existingScreenshotIds;
-                                    delete step.tempScreenshotsCount;
-                                    delete step.deletedScreenshotIds;
-                                });
-                                console.log("[Save Algorithm v3 Fixed TX] Временные поля и поля из формы удалены из шагов перед сохранением.");
-
-                                let targetAlgorithmObject;
-                                if (isMainAlgo) {
-                                    if (!algorithms.main) algorithms.main = { id: 'main' };
-                                    algorithms.main.title = finalTitle;
-                                    algorithms.main.steps = finalSteps;
-                                    targetAlgorithmObject = algorithms.main;
-                                    const mainTitleElement = document.querySelector('#mainContent h2');
-                                    if (mainTitleElement) mainTitleElement.textContent = finalTitle;
-                                } else {
-                                    if (!algorithms[section]) algorithms[section] = [];
-                                    const algorithmIndex = algorithms[section].findIndex(a => String(a?.id) === String(algorithmIdStr));
-                                    if (algorithmIndex !== -1) {
-                                        algorithms[section][algorithmIndex] = {
-                                            ...(algorithms[section][algorithmIndex] || {}),
-                                            id: algorithmIdForScreenshotRef,
-                                            title: finalTitle,
-                                            description: newDescription,
-                                            steps: finalSteps
-                                        };
-                                        targetAlgorithmObject = algorithms[section][algorithmIndex];
-                                    } else {
-                                        console.warn(`[Save Algorithm v3 Fixed TX] Алгоритм ${algorithmIdStr} не найден в памяти ${section} при редактировании. Создание нового (это неожиданно).`);
-                                        targetAlgorithmObject = { id: algorithmIdForScreenshotRef, title: finalTitle, description: newDescription, steps: finalSteps };
-                                        algorithms[section].push(targetAlgorithmObject);
-                                    }
-                                }
-                                finalAlgorithmData = JSON.parse(JSON.stringify(targetAlgorithmObject));
-                                console.log(`[Save Algorithm v3 Fixed TX] Объект алгоритма ${algorithmIdStr} обновлен в памяти.`);
-
-                                algorithmContainerToSave = { section: 'all', data: algorithms };
-                                console.log("[Save Algorithm v3 Fixed TX] Запрос put для всего контейнера 'algorithms'...");
-                                const putAlgoReq = algorithmsStore.put(algorithmContainerToSave);
-
-                                putAlgoReq.onsuccess = () => {
-                                    console.log("[Save Algorithm v3 Fixed TX] Успешно: put algorithms.");
-                                    updateSuccessful = true;
-                                };
-                                putAlgoReq.onerror = e => {
-                                    console.error("[Save Algorithm v3 Fixed TX] Ошибка put algorithms:", e.target.error);
-                                    updateSuccessful = false;
-                                    reject(e.target.error || new Error("Ошибка сохранения контейнера algorithms"));
-                                };
-
-                            })
-                            .catch(operationError => {
-                                console.error("[Save Algorithm v3 Fixed TX] Критическая ошибка при выполнении одной из операций со скриншотами:", operationError);
-                                updateSuccessful = false;
-                                if (transaction.abort) transaction.abort();
-                                reject(operationError);
-                            });
-
-                    } catch (innerError) {
-                        console.error("[Save Algorithm v3 Fixed TX] Внутренняя ошибка при подготовке запросов:", innerError);
-                        updateSuccessful = false;
-                        if (transaction.abort) transaction.abort();
-                        reject(innerError);
-                    }
                 });
 
-                if (updateSuccessful) {
-                    console.log(`[Save Algorithm v3 Fixed] Алгоритм ${algorithmIdStr} успешно сохранен (транзакция завершена успешно).`);
-
-                    console.log("[Save Algorithm v3 Fixed] Очистка временных данных из DOM формы...");
-                    editStepsContainer.querySelectorAll('.edit-step').forEach(stepDiv => {
-                        if (stepDiv._tempScreenshotBlobs) delete stepDiv._tempScreenshotBlobs;
-                        if (stepDiv.dataset.screenshotsToDelete) delete stepDiv.dataset.screenshotsToDelete;
-                        const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
-                        if (thumbsContainer) thumbsContainer.innerHTML = '';
-                    });
-
-                    if (typeof updateSearchIndex === 'function' && finalAlgorithmData?.id) {
-                        const indexId = isMainAlgo ? 'main' : finalAlgorithmData.id;
-                        console.log(`[Save Algorithm v3 Fixed] Запуск обновления поискового индекса для ID: ${indexId}`);
-                        updateSearchIndex('algorithms', indexId, finalAlgorithmData, 'update', oldAlgorithmData)
-                            .then(() => console.log(`[Save Algorithm v3 Fixed] Обновление поискового индекса для ${indexId} завершено.`))
-                            .catch(indexError => console.error(`[Save Algorithm v3 Fixed] Ошибка фонового обновления индекса для ${indexId}:`, indexError));
-                    } else { console.warn(`[Save Algorithm v3 Fixed] Не удалось обновить индекс для ${algorithmIdStr}: функция/ID отсутствуют.`); }
-
-                    try {
-                        if (isMainAlgo && typeof renderMainAlgorithm === 'function') { await renderMainAlgorithm(); }
-                        else if (!isMainAlgo && typeof renderAlgorithmCards === 'function') { renderAlgorithmCards(section); }
-                        else { console.warn("[Save Algorithm v3 Fixed] Не найдены функции рендеринга UI."); }
-                    } catch (renderError) { console.error("[Save Algorithm v3 Fixed] Ошибка обновления UI:", renderError); showNotification("Ошибка обновления интерфейса.", "warning"); }
-
-                    showNotification("Алгоритм успешно сохранен.");
-                    initialEditState = null;
-                    editModal.classList.add('hidden');
-
-                } else {
-                    console.error(`[Save Algorithm v3 Fixed] Сохранение алгоритма ${algorithmIdStr} НЕ УДАЛОСЬ.`);
-                    if (oldAlgorithmData) {
-                        console.warn("[Save Algorithm v3 Fixed] Восстановление состояния 'algorithms' в памяти из-за ошибки сохранения...");
-                        if (typeof algorithms !== 'undefined') {
-                            if (isMainAlgo) { algorithms.main = oldAlgorithmData; }
-                            else if (algorithms?.[section]) {
-                                const indexToRestore = algorithms[section].findIndex(a => String(a?.id) === String(algorithmIdStr));
-                                if (indexToRestore !== -1) { algorithms[section][indexToRestore] = oldAlgorithmData; }
-                                else { algorithms[section].push(oldAlgorithmData); console.warn(`[Save Algorithm v3 Fixed] Старый алгоритм ${algorithmIdStr} добавлен обратно, так как не найден для восстановления.`); }
-                            }
-                            console.log("[Save Algorithm v3 Fixed] Состояние 'algorithms' в памяти восстановлено (попытка).");
-                        } else { console.warn("[Save Algorithm v3 Fixed] Не удалось восстановить 'algorithms': переменная не найдена."); }
-                    }
-                    showNotification("Ошибка при сохранении алгоритма. Пожалуйста, проверьте данные и попробуйте снова.", "error");
-                }
-
             } catch (error) {
-                console.error(`[Save Algorithm v3 Fixed] КРИТИЧЕСКАЯ ОШИБКА сохранения для ${algorithmIdStr} (внешний catch):`, error);
-                showNotification(`Произошла критическая ошибка при сохранении: ${error.message || error}`, "error");
-                if (oldAlgorithmData && typeof algorithms !== 'undefined') {
+                console.error(`[Save Algorithm v6 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА сохранения для ${algorithmIdStr}:`, error);
+                if (transaction && transaction.readyState !== 'done' && transaction.abort && !transaction.error) {
+                    try { transaction.abort(); console.log("[Save Algorithm v6] Транзакция отменена в catch."); }
+                    catch (e) { console.error("[Save Algorithm v6] Ошибка при отмене транзакции в catch:", e); }
+                }
+                updateSuccessful = false;
+                if (oldAlgorithmData && typeof algorithms === 'object' && algorithms !== null) {
+                    console.warn("[Save Algorithm v6] Восстановление состояния 'algorithms' в памяти из-за ошибки...");
                     if (isMainAlgo) { algorithms.main = oldAlgorithmData; }
-                    else if (algorithms?.[section]) {
+                    else if (algorithms[section]) {
                         const indexToRestore = algorithms[section].findIndex(a => String(a?.id) === String(algorithmIdStr));
                         if (indexToRestore !== -1) { algorithms[section][indexToRestore] = oldAlgorithmData; }
+                        else if (oldAlgorithmData.id) {
+                            algorithms[section].push(oldAlgorithmData);
+                            console.warn(`[Save Algorithm v6] Старый алгоритм ${algorithmIdStr} добавлен обратно.`);
+                        }
                     }
-                    console.warn("[Save Algorithm v3 Fixed - catch] Состояние 'algorithms' в памяти восстановлено (попытка).");
+                    console.log("[Save Algorithm v6] Состояние 'algorithms' в памяти восстановлено (попытка).");
                 }
+                showNotification(`Произошла критическая ошибка при сохранении: ${error.message || error}`, "error");
+            } finally {
                 if (saveButton) {
                     saveButton.disabled = false;
                     saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
                 }
-            } finally {
-                if (saveButton && saveButton.disabled) {
-                    saveButton.disabled = false;
-                    saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
-                }
+            }
+
+            if (updateSuccessful) {
+                console.log(`[Save Algorithm v6 (Robust TX)] Алгоритм ${algorithmIdStr} успешно сохранен.`);
+                if (typeof updateSearchIndex === 'function' && finalAlgorithmData?.id) {
+                    const indexId = isMainAlgo ? 'main' : finalAlgorithmData.id;
+                    updateSearchIndex('algorithms', indexId, finalAlgorithmData, 'update', oldAlgorithmData)
+                        .then(() => console.log(`[Save Algorithm v6] Индекс обновлен для ${indexId}.`))
+                        .catch(indexError => console.error(`[Save Algorithm v6] Ошибка обновления индекса для ${indexId}:`, indexError));
+                } else { console.warn(`[Save Algorithm v6] Не удалось обновить индекс для ${algorithmIdStr}.`); }
+                try {
+                    if (isMainAlgo && typeof renderMainAlgorithm === 'function') { await renderMainAlgorithm(); }
+                    else if (!isMainAlgo && typeof renderAlgorithmCards === 'function') { renderAlgorithmCards(section); }
+                } catch (renderError) { console.error("[Save Algorithm v6] Ошибка обновления UI:", renderError); }
+                showNotification("Алгоритм успешно сохранен.");
+                initialEditState = null;
+                editModal.classList.add('hidden');
+            } else {
+                console.error(`[Save Algorithm v6 (Robust TX)] Сохранение алгоритма ${algorithmIdStr} НЕ УДАЛОСЬ.`);
             }
         }
 
@@ -4126,48 +4181,17 @@
                 stepElement.dataset.screenshotsToDelete = '';
             }
 
-            async function processImageForStep(fileOrBlob) {
-                return new Promise((resolve, reject) => {
-                    if (!(fileOrBlob instanceof Blob)) {
-                        return reject(new Error('Предоставленные данные не являются файлом или Blob.'));
-                    }
-                    const img = new Image();
-                    const reader = new FileReader();
-                    reader.onload = (e_reader) => {
-                        if (!e_reader.target || typeof e_reader.target.result !== 'string') { return reject(new Error('Не удалось прочитать данные файла изображения.')); }
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 1280, MAX_HEIGHT = 1024;
-                            let width = img.naturalWidth || img.width, height = img.naturalHeight || img.height;
-                            if (width === 0 || height === 0) { return reject(new Error('Не удалось определить размеры изображения.')); }
-                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                            canvas.width = Math.round(width); canvas.height = Math.round(height);
-                            const ctx = canvas.getContext('2d');
-                            if (!ctx) { return reject(new Error('Не удалось получить 2D контекст Canvas.')); }
-                            try { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); }
-                            catch (drawError) { console.error("Ошибка отрисовки на Canvas:", drawError); return reject(new Error('Ошибка отрисовки изображения.')); }
-                            canvas.toBlob(blob => {
-                                if (blob) { resolve(blob); }
-                                else { canvas.toBlob(jpegBlob => { if (jpegBlob) resolve(jpegBlob); else reject(new Error('Не удалось создать Blob из Canvas (ни WebP, ни JPEG)')); }, 'image/jpeg', 0.85); }
-                            }, 'image/webp', 0.8);
-                        };
-                        img.onerror = (err) => reject(new Error('Не удалось загрузить данные изображения в Image объект.'));
-                        img.src = e_reader.target.result;
-                    };
-                    reader.onerror = (err) => reject(new Error('Не удалось прочитать файл изображения.'));
-                    reader.readAsDataURL(fileOrBlob);
-                });
-            }
-
             const addBlobToStep = async (blob) => {
                 if (!Array.isArray(stepElement._tempScreenshotBlobs)) { stepElement._tempScreenshotBlobs = []; }
                 try {
-                    const processedBlob = await processImageForStep(blob);
+                    const processedBlob = await processImageFile(blob);
                     if (!processedBlob) throw new Error("Обработка изображения не удалась.");
+
                     const tempIndex = stepElement._tempScreenshotBlobs.length;
                     stepElement._tempScreenshotBlobs.push(processedBlob);
+
                     renderTemporaryThumbnail(processedBlob, tempIndex, thumbnailsContainer, stepElement);
+
                     console.log(`Временный Blob (индекс ${tempIndex}) добавлен и отрисована миниатюра.`);
                     if (typeof isUISettingsDirty !== 'undefined') { isUISettingsDirty = true; } else if (typeof isDirty !== 'undefined') { isDirty = true; }
                     else { console.warn("Не удалось установить флаг изменений (isUISettingsDirty/isDirty не найдены)."); }
@@ -4175,58 +4199,6 @@
                     console.error("Ошибка обработки или добавления Blob в addBlobToStep:", error);
                     showNotification(`Ошибка обработки изображения: ${error.message || 'Неизвестная ошибка'}`, "error");
                 }
-            };
-
-
-            const renderTemporaryThumbnail = (blob, tempIndex, container, stepEl) => {
-                if (!container) return;
-                const thumbDiv = document.createElement('div');
-                thumbDiv.className = 'relative w-16 h-12 group border-2 border-dashed border-green-500 dark:border-green-400 rounded overflow-hidden shadow-sm screenshot-thumbnail temporary';
-                thumbDiv.dataset.tempIndex = tempIndex;
-                const img = document.createElement('img');
-                img.className = 'w-full h-full object-contain bg-gray-200 dark:bg-gray-600';
-                img.alt = `Новый скриншот ${tempIndex + 1}`;
-                let objectURL = null;
-                try {
-                    objectURL = URL.createObjectURL(blob);
-                    img.src = objectURL;
-                    img.onload = () => {
-                        console.log(`[renderTemporaryThumbnail] Изображение (temp ${tempIndex}) загружено. Освобождаем URL: ${objectURL}`);
-                        URL.revokeObjectURL(objectURL);
-                        img.dataset.objectUrlRevoked = 'true';
-                    };
-                    img.onerror = () => {
-                        console.error(`[renderTemporaryThumbnail] Ошибка загрузки изображения (temp ${tempIndex}). Освобождаем URL: ${objectURL}`);
-                        URL.revokeObjectURL(objectURL);
-                        img.dataset.objectUrlRevoked = 'true';
-                        img.alt = "Ошибка";
-                    };
-                } catch (e) {
-                    console.error(`[renderTemporaryThumbnail] Ошибка создания Object URL для temp ${tempIndex}:`, e);
-                    img.alt = "Ошибка URL";
-                }
-                const deleteBtn = document.createElement('button');
-                deleteBtn.type = 'button';
-                deleteBtn.className = 'absolute top-0 right-0 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity -mt-1 -mr-1 z-10 focus:outline-none focus:ring-1 focus:ring-white delete-temp-screenshot-btn';
-                deleteBtn.title = 'Удалить этот новый скриншот';
-                deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    const indexToRemove = parseInt(thumbDiv.dataset.tempIndex, 10);
-                    if (!isNaN(indexToRemove) && stepEl._tempScreenshotBlobs && stepEl._tempScreenshotBlobs[indexToRemove] !== undefined) {
-                        stepEl._tempScreenshotBlobs.splice(indexToRemove, 1);
-                        thumbDiv.remove();
-                        console.log(`Удален временный скриншот с tempIndex ${indexToRemove}`);
-                        container.querySelectorAll('div[data-temp-index]').forEach((remainingThumb, newIndex) => {
-                            remainingThumb.dataset.tempIndex = newIndex;
-                        });
-                        if (typeof isUISettingsDirty !== 'undefined') { isUISettingsDirty = true; }
-                        else if (typeof isDirty !== 'undefined') { isDirty = true; }
-                    } else {
-                        console.warn(`Не удалось удалить временный скриншот, индекс ${indexToRemove} некорректен или элемент уже удален.`);
-                    }
-                };
-                thumbDiv.appendChild(img); thumbDiv.appendChild(deleteBtn); container.appendChild(thumbDiv);
             };
 
             if (!addBtn.dataset.listenerAttached) {
@@ -4255,6 +4227,99 @@
             }
 
             console.log(`Обработчики событий для *новых* скриншотов настроены для шага (контейнер: #${thumbnailsContainer?.id || '?'}). Drag&Drop отключен.`);
+        }
+
+
+        function renderTemporaryThumbnail(blob, tempIndex, container, stepEl) {
+            if (!container || !stepEl) {
+                console.error("[renderTemporaryThumbnail] Контейнер или родительский элемент (stepEl) не предоставлены.");
+                return;
+            }
+            const thumbDiv = document.createElement('div');
+            thumbDiv.className = 'relative w-16 h-12 group border-2 border-dashed border-green-500 dark:border-green-400 rounded overflow-hidden shadow-sm screenshot-thumbnail temporary';
+            thumbDiv.dataset.tempIndex = tempIndex;
+            const img = document.createElement('img');
+            img.className = 'w-full h-full object-contain bg-gray-200 dark:bg-gray-600';
+            img.alt = `Новый скриншот ${tempIndex + 1}`;
+            let objectURL = null;
+
+            try {
+                objectURL = URL.createObjectURL(blob);
+                img.dataset.objectUrl = objectURL;
+                console.log(`[renderTemporaryThumbnail] Создан Object URL для temp ${tempIndex}: ${objectURL}`);
+
+                img.onload = () => {
+                    console.log(`[renderTemporaryThumbnail] Изображение (temp ${tempIndex}) загружено.`);
+                    img.dataset.objectUrlRevoked = 'false';
+                };
+
+                img.onerror = () => {
+                    console.error(`[renderTemporaryThumbnail] Ошибка загрузки изображения (temp ${tempIndex}). URL: ${objectURL}`);
+                    img.alt = "Ошибка";
+                    if (img.dataset.objectUrl && img.dataset.objectUrlRevoked !== 'true') {
+                        try {
+                            URL.revokeObjectURL(img.dataset.objectUrl);
+                            console.log(`[renderTemporaryThumbnail] Освобожден URL из-за ошибки загрузки: ${img.dataset.objectUrl}`);
+                            img.dataset.objectUrlRevoked = 'true';
+                        } catch (e) {
+                            console.warn("Ошибка освобождения URL при onerror:", e);
+                        }
+                        delete img.dataset.objectUrl;
+                    }
+                };
+                img.src = objectURL;
+
+            } catch (e) {
+                console.error(`[renderTemporaryThumbnail] Ошибка создания Object URL для temp ${tempIndex}:`, e);
+                img.alt = "Ошибка URL";
+                if (objectURL) {
+                    try { URL.revokeObjectURL(objectURL); } catch (revokeError) { console.warn("Ошибка освобождения URL при catch:", revokeError); }
+                    objectURL = null;
+                }
+            }
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'absolute top-0 right-0 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity -mt-1 -mr-1 z-10 focus:outline-none focus:ring-1 focus:ring-white delete-temp-screenshot-btn';
+            deleteBtn.title = 'Удалить этот новый скриншот';
+            deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
+
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                const indexToRemove = parseInt(thumbDiv.dataset.tempIndex, 10);
+                if (!isNaN(indexToRemove) && stepEl._tempScreenshotBlobs && stepEl._tempScreenshotBlobs[indexToRemove] !== undefined) {
+                    stepEl._tempScreenshotBlobs.splice(indexToRemove, 1);
+                    console.log(`Удален временный скриншот с tempIndex ${indexToRemove} из массива.`);
+
+                    const urlToRevoke = img.dataset.objectUrl;
+                    if (urlToRevoke && img.dataset.objectUrlRevoked !== 'true') {
+                        try {
+                            URL.revokeObjectURL(urlToRevoke);
+                            console.log(`[renderTemporaryThumbnail - deleteBtn] Освобожден URL ${urlToRevoke}`);
+                        } catch (revokeError) {
+                            console.warn("Ошибка освобождения URL при удалении временной миниатюры:", revokeError);
+                        }
+                    }
+
+                    thumbDiv.remove();
+
+                    container.querySelectorAll('div.temporary[data-temp-index]').forEach((remainingThumb, newIndex) => {
+                        remainingThumb.dataset.tempIndex = newIndex;
+                    });
+
+                    if (typeof isUISettingsDirty !== 'undefined') { isUISettingsDirty = true; }
+                    else if (typeof isDirty !== 'undefined') { isDirty = true; }
+
+                } else {
+                    console.warn(`Не удалось удалить временный скриншот, индекс ${indexToRemove} некорректен или элемент уже удален.`);
+                    if (thumbDiv.parentNode === container) {
+                        thumbDiv.remove();
+                    }
+                }
+            };
+            thumbDiv.appendChild(img);
+            thumbDiv.appendChild(deleteBtn);
+            container.appendChild(thumbDiv);
         }
 
 
@@ -4356,257 +4421,171 @@
             const saveButton = document.getElementById('saveNewAlgorithmBtn');
 
             if (!addModal || !section || !newAlgorithmTitleInput || !newAlgorithmDescInput || !newStepsContainer || !saveButton) {
-                console.error("Save New Algorithm failed: Missing required elements.", {});
-                showNotification("Ошибка: Не удалось найти компоненты для сохранения алгоритма.", "error");
+                console.error("saveNewAlgorithm v4 (TX Fix): Missing required elements.");
+                showNotification("Ошибка: Не найдены компоненты формы.", "error");
                 if (saveButton) saveButton.disabled = false; return;
             }
-            if (section === 'main') { console.error("Попытка добавить 'main' алгоритм через saveNewAlgorithm."); showNotification("Нельзя добавить главный алгоритм.", "error"); if (saveButton) saveButton.disabled = false; return; }
+            if (section === 'main') { console.error("saveNewAlgorithm v4: Попытка добавить 'main'."); showNotification("Нельзя добавить главный алгоритм.", "error"); if (saveButton) saveButton.disabled = false; return; }
 
             const title = newAlgorithmTitleInput.value.trim();
             const description = newAlgorithmDescInput.value.trim();
-            if (!title) { showNotification('Пожалуйста, введите название алгоритма', 'error'); newAlgorithmTitleInput.focus(); if (saveButton) saveButton.disabled = false; return; }
+            if (!title) { showNotification('Введите название алгоритма', 'error'); newAlgorithmTitleInput.focus(); if (saveButton) saveButton.disabled = false; return; }
 
             saveButton.disabled = true;
             saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
 
             const { steps: newStepsBase, screenshotOps, isValid } = extractStepsDataFromEditForm(newStepsContainer, false);
-            if (!isValid) { showNotification('Алгоритм должен содержать хотя бы один валидный шаг.', 'error'); saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить'; return; }
+            if (!isValid) { showNotification('Алгоритм должен содержать хотя бы один шаг.', 'error'); saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить'; return; }
+            console.log(`[Save New Algorithm v4] Извлечено: ${newStepsBase.length} шагов, ${screenshotOps.length} скриншот-операций.`);
 
-            let finalSteps = JSON.parse(JSON.stringify(newStepsBase));
-            const newAlgorithmId = `${section}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-            console.log(`[Save New Algorithm v2 Fixed] Сохранение нового алгоритма ID: ${newAlgorithmId}, Секция: ${section}`);
-            console.log("[Save New Algorithm v2 Fixed] Операции со скриншотами при добавлении:", screenshotOps.length);
+            const newAlgorithmId = `${section}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            console.log(`[Save New Algorithm v4 (TX Fix)] Start. ID: ${newAlgorithmId}, Section: ${section}`);
 
+            let transaction;
             let saveSuccessful = false;
             let newAlgorithmData = null;
             const screenshotOpResults = [];
+            const newScreenshotIdsMap = {};
+            let finalSteps = JSON.parse(JSON.stringify(newStepsBase));
 
             try {
-                await new Promise(async (resolve, reject) => {
-                    if (!db) { return reject(new Error("База данных недоступна")); }
-                    let transaction;
-                    try {
-                        transaction = db.transaction(['algorithms', 'screenshots'], 'readwrite');
-                        console.log("[Save New Algorithm v2 Fixed TX] Транзакция ['algorithms', 'screenshots'] 'readwrite' начата.");
-                    } catch (txError) {
-                        console.error("[Save New Algorithm v2 Fixed TX] Ошибка создания транзакции:", txError);
-                        return reject(new Error(`Ошибка создания транзакции: ${txError.message}`));
+                if (!db) throw new Error("База данных недоступна");
+                transaction = db.transaction(['algorithms', 'screenshots'], 'readwrite');
+                const screenshotsStore = transaction.objectStore('screenshots');
+                const algorithmsStore = transaction.objectStore('algorithms');
+                console.log("[Save New Algorithm v4 TX] Транзакция начата.");
+
+                const addPromises = [];
+
+                if (screenshotOps.length > 0) {
+                    console.log(`[Save New Algorithm v4 TX] Обработка ${screenshotOps.length} операций добавления скриншотов для ID: ${newAlgorithmId}`);
+                    screenshotOps.forEach((op) => {
+                        if (op.action === 'add' && op.blob instanceof Blob) {
+                            const { stepIndex, blob } = op;
+                            if (typeof stepIndex !== 'number' || stepIndex < 0 || !finalSteps[stepIndex]) {
+                                console.warn(`[Save New Algorithm v4 TX] Пропуск add из-за неверного stepIndex (${stepIndex}):`, op);
+                                screenshotOpResults.push({ success: false, action: 'add', stepIndex, error: new Error('Invalid stepIndex') });
+                                return;
+                            }
+                            addPromises.push(new Promise((resolve) => {
+                                const tempName = `${title}, изобр. ${Date.now() + Math.random()}`;
+                                const record = { blob, parentId: newAlgorithmId, parentType: 'algorithm', stepIndex, name: tempName, uploadedAt: new Date().toISOString() };
+                                const request = screenshotsStore.add(record);
+                                request.onsuccess = e => {
+                                    const newId = e.target.result;
+                                    console.log(`[Save New Algorithm v4 TX] Added screenshot, new ID: ${newId} for step ${stepIndex}`);
+                                    screenshotOpResults.push({ success: true, action: 'add', newId, stepIndex });
+                                    if (!newScreenshotIdsMap[stepIndex]) newScreenshotIdsMap[stepIndex] = [];
+                                    newScreenshotIdsMap[stepIndex].push(newId);
+                                    resolve();
+                                };
+                                request.onerror = e => {
+                                    console.error(`[Save New Algorithm v4 TX] Error adding screenshot for step ${stepIndex}:`, e.target.error);
+                                    screenshotOpResults.push({ success: false, action: 'add', stepIndex, error: e.target.error || new Error('Add failed') });
+                                    resolve();
+                                };
+                            }));
+                        } else if (op.action !== 'add') {
+                            console.warn(`[Save New Algorithm v4 TX] Обнаружена неожиданная операция '${op.action}' при добавлении. Игнорируется.`);
+                            screenshotOpResults.push({ success: false, action: op.action || 'unknown', stepIndex: op.stepIndex, error: new Error('Unexpected operation') });
+                        }
+                    });
+
+                    if (addPromises.length > 0) {
+                        await Promise.all(addPromises);
+                        console.log("[Save New Algorithm v4 TX] Add screenshot operations finished.");
+                        const addErrors = screenshotOpResults.filter(r => r.action === 'add' && !r.success);
+                        if (addErrors.length > 0) {
+                            throw new Error(`Ошибка добавления скриншота: ${addErrors[0].error?.message || 'Unknown add error'}`);
+                        }
                     }
+                }
 
-                    const allRequests = [];
+                finalSteps = finalSteps.map((step, index) => {
+                    const addedIds = newScreenshotIdsMap[index];
+                    if (addedIds && addedIds.length > 0) {
+                        step.screenshotIds = [...new Set(addedIds)];
+                    } else {
+                        delete step.screenshotIds;
+                    }
+                    delete step._tempScreenshotBlobs; delete step._screenshotsToDelete; delete step.existingScreenshotIds;
+                    delete step.tempScreenshotsCount; delete step.deletedScreenshotIds;
+                    return step;
+                });
+                console.log("[Save New Algorithm v4 TX] Финальный массив шагов подготовлен.");
 
+                newAlgorithmData = { id: newAlgorithmId, title, description, steps: finalSteps, dateAdded: new Date().toISOString() };
+
+                if (!algorithms[section] || !Array.isArray(algorithms[section])) {
+                    algorithms[section] = [];
+                }
+                algorithms[section].push(JSON.parse(JSON.stringify(newAlgorithmData)));
+                console.log(`Новый алгоритм ${newAlgorithmId} добавлен в память [${section}].`);
+
+                const algorithmContainerToSave = { section: 'all', data: algorithms };
+                console.log("[Save New Algorithm v4 TX] Запрос put для всего контейнера 'algorithms'...");
+                const putAlgoReq = algorithmsStore.put(algorithmContainerToSave);
+
+                await new Promise((resolve, reject) => {
+                    putAlgoReq.onerror = (e) => reject(e.target.error || new Error("Ошибка сохранения контейнера algorithms"));
                     transaction.oncomplete = () => {
-                        console.log("[Save New Algorithm v2 Fixed TX] Транзакция успешно завершена (oncomplete).");
+                        console.log("[Save New Algorithm v4 TX] Транзакция успешно завершена (oncomplete).");
+                        saveSuccessful = true;
                         resolve();
                     };
                     transaction.onerror = (e) => {
-                        console.error("[Save New Algorithm v2 Fixed TX] ОШИБКА ТРАНЗАКЦИИ (onerror):", e.target.error);
+                        console.error("[Save New Algorithm v4 TX] ОШИБКА ТРАНЗАКЦИИ (onerror):", e.target.error);
                         saveSuccessful = false;
                         reject(e.target.error || new Error("Ошибка транзакции"));
                     };
                     transaction.onabort = (e) => {
-                        console.warn("[Save New Algorithm v2 Fixed TX] Транзакция ПРЕРВАНА (onabort):", e.target.error);
+                        console.warn("[Save New Algorithm v4 TX] Транзакция ПРЕРВАНА (onabort):", e.target.error);
                         saveSuccessful = false;
                         reject(e.target.error || new Error("Транзакция прервана"));
                     };
-
-                    try {
-                        const screenshotsStore = transaction.objectStore('screenshots');
-                        const algorithmsStore = transaction.objectStore('algorithms');
-                        console.log("[Save New Algorithm v2 Fixed TX] Хранилища 'algorithms' и 'screenshots' получены.");
-
-                        if (screenshotOps.length > 0) {
-                            screenshotOps.forEach((op) => {
-                                if (op.action === 'add' && op.blob instanceof Blob) {
-                                    const { stepIndex, blob } = op;
-
-                                    if (typeof stepIndex !== 'number' || stepIndex < 0) {
-                                        console.warn(`[Save New Algorithm v2 Fixed TX] Пропуск add скриншота из-за неверного stepIndex (${stepIndex}):`, op);
-                                        screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: new Error('Неверный индекс шага') });
-                                        return;
-                                    }
-
-                                    allRequests.push(new Promise((resolveReq) => {
-                                        try {
-                                            let parentIndex = screenshotsStore.index('parentId');
-                                            let countRequest = parentIndex.count(newAlgorithmId);
-
-                                            countRequest.onsuccess = (eCount) => {
-                                                const currentCount = eCount.target.result || 0;
-                                                const screenshotIndex = currentCount + 1;
-                                                const screenshotName = `${title}, изобр. ${screenshotIndex}`;
-                                                console.log(`[Save New Algorithm v2 Fixed TX]   > Текущий счетчик для ${newAlgorithmId}: ${currentCount}. Новое имя: "${screenshotName}"`);
-
-                                                const screenshotRecord = {
-                                                    blob,
-                                                    parentId: newAlgorithmId,
-                                                    parentType: 'algorithm',
-                                                    stepIndex,
-                                                    name: screenshotName,
-                                                    uploadedAt: new Date().toISOString()
-                                                };
-                                                console.log(`[Save New Algorithm v2 Fixed TX]   > Данные для add:`, { parentId: screenshotRecord.parentId, parentType: screenshotRecord.parentType, stepIndex: screenshotRecord.stepIndex, name: screenshotRecord.name, blobSize: blob.size });
-
-                                                const addReq = screenshotsStore.add(screenshotRecord);
-                                                addReq.onsuccess = e => {
-                                                    const newId = e.target.result;
-                                                    console.log(`[Save New Algorithm v2 Fixed TX] Успешно: add screenshot, new ID: ${newId}`);
-                                                    screenshotOpResults.push({ success: true, action: 'add', newId: newId, stepIndex: stepIndex });
-                                                    resolveReq();
-                                                };
-                                                addReq.onerror = e => {
-                                                    console.error(`[Save New Algorithm v2 Fixed TX] Ошибка add screenshot: ${e.target.error?.message}`);
-                                                    screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: e.target.error });
-                                                    resolveReq();
-                                                };
-                                            }
-                                            countRequest.onerror = (eCountErr) => {
-                                                console.error(`[Save New Algorithm v2 Fixed TX] Ошибка запроса count для ${newAlgorithmId}: ${eCountErr.target.error?.message}`);
-                                                const screenshotName = `${title}, изобр. (ошибка)`;
-                                                const screenshotRecord = { blob, parentId: newAlgorithmId, parentType: 'algorithm', stepIndex, name: screenshotName, uploadedAt: new Date().toISOString() };
-                                                const addReq = screenshotsStore.add(screenshotRecord);
-                                                addReq.onsuccess = e => { const newId = e.target.result; screenshotOpResults.push({ success: true, action: 'add', newId: newId, stepIndex: stepIndex }); resolveReq(); };
-                                                addReq.onerror = e => { screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: e.target.error }); resolveReq(); };
-                                            }
-                                        } catch (addPrepError) {
-                                            console.error(`[Save New Algorithm v2 Fixed TX] Ошибка подготовки add screenshot:`, addPrepError);
-                                            screenshotOpResults.push({ success: false, action: 'add', stepIndex: stepIndex, error: addPrepError });
-                                            resolveReq();
-                                        }
-                                    }));
-                                } else if (op.action !== 'add') {
-                                    console.warn(`[Save New Algorithm v2 Fixed TX] Обнаружена неожиданная операция '${op.action}' при добавлении. Игнорируется.`);
-                                    screenshotOpResults.push({ success: false, action: op.action || 'unknown', stepIndex: op.stepIndex, error: new Error('Неожиданная операция') });
-                                }
-                            });
-                            console.log(`[Save New Algorithm v2 Fixed TX] Инициировано ${allRequests.length} запросов на добавление скриншотов.`);
-                        } else {
-                            console.log("[Save New Algorithm v2 Fixed TX] Нет операций со скриншотами для нового алгоритма.");
-                        }
-
-                        await Promise.all(allRequests);
-                        console.log("[Save New Algorithm v2 Fixed TX] Все инициированные операции со скриншотами завершены (или отклонены).");
-
-                        const failedScreenshotOps = screenshotOpResults.filter(r => !r.success);
-                        if (failedScreenshotOps.length > 0) {
-                            const firstError = failedScreenshotOps[0].error || new Error('Неизвестная ошибка скриншота');
-                            console.error(`[Save New Algorithm v2 Fixed TX] ${failedScreenshotOps.length} операций со скриншотами НЕ удались! Прерывание транзакции. Первая ошибка:`, firstError);
-                            transaction.abort();
-                            reject(new Error(`Ошибка при добавлении скриншота: ${firstError.message}`));
-                            return;
-                        }
-
-                        const addedScreenshots = screenshotOpResults.filter(r => r.success && r.action === 'add');
-                        if (addedScreenshots.length > 0) {
-                            console.log(`[Save New Algorithm v2 Fixed TX] Обновление finalSteps новыми ID скриншотов (${addedScreenshots.length} шт.)...`);
-                            addedScreenshots.forEach(result => {
-                                const stepIdx = result.stepIndex;
-                                if (finalSteps[stepIdx]) {
-                                    if (!finalSteps[stepIdx].screenshotIds) {
-                                        finalSteps[stepIdx].screenshotIds = [];
-                                    }
-                                    finalSteps[stepIdx].screenshotIds.push(result.newId);
-                                    console.log(`   > Добавлен newId ${result.newId} в screenshotIds шага ${stepIdx}`);
-                                } else {
-                                    console.warn(`[Save New Algorithm v2 Fixed TX] Не найден шаг с индексом ${stepIdx} в finalSteps для добавления newId ${result.newId}`);
-                                }
-                            });
-                        }
-
-                        finalSteps.forEach(step => {
-                            delete step._tempScreenshotBlobs;
-                            delete step._screenshotsToDelete;
-                            delete step.existingScreenshotIds;
-                            delete step.tempScreenshotsCount;
-                            delete step.deletedScreenshotIds;
-                        });
-                        console.log("[Save New Algorithm v2 Fixed TX] Временные поля удалены из шагов.");
-
-                        newAlgorithmData = { id: newAlgorithmId, title, description, steps: finalSteps };
-
-                        if (!algorithms[section] || !Array.isArray(algorithms[section])) {
-                            console.warn(`Секция ${section} не существует в 'algorithms'. Создание.`);
-                            algorithms[section] = [];
-                        }
-                        algorithms[section].push(JSON.parse(JSON.stringify(newAlgorithmData)));
-                        console.log(`Новый алгоритм ${newAlgorithmId} добавлен в память [${section}].`);
-
-                        const algorithmContainerToSave = { section: 'all', data: algorithms };
-                        console.log("[Save New Algorithm v2 Fixed TX] Запрос put для всего контейнера 'algorithms'...");
-                        const putAlgoReq = algorithmsStore.put(algorithmContainerToSave);
-
-                        putAlgoReq.onsuccess = () => {
-                            console.log("[Save New Algorithm v2 Fixed TX] Успешно: put algorithms.");
-                            saveSuccessful = true;
-                        };
-                        putAlgoReq.onerror = e => {
-                            console.error("[Save New Algorithm v2 Fixed TX] Ошибка put algorithms:", e.target.error);
-                            saveSuccessful = false;
-                            reject(e.target.error || new Error("Ошибка сохранения контейнера algorithms"));
-                        };
-
-                    } catch (innerError) {
-                        console.error("[Save New Algorithm v2 Fixed TX] Внутренняя ошибка при подготовке запросов:", innerError);
-                        saveSuccessful = false;
-                        if (transaction.abort) transaction.abort();
-                        reject(innerError);
-                    }
                 });
 
-                if (saveSuccessful) {
-                    console.log(`[Save New Algorithm v2 Fixed] Алгоритм ${newAlgorithmId} успешно сохранен (транзакция завершена успешно).`);
-
-                    newStepsContainer.querySelectorAll('.edit-step').forEach(stepDiv => {
-                        if (stepDiv._tempScreenshotBlobs) delete stepDiv._tempScreenshotBlobs;
-                        const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
-                        if (thumbsContainer) thumbsContainer.innerHTML = '';
-                    });
-
-                    if (typeof updateSearchIndex === 'function' && newAlgorithmData?.id) {
-                        console.log(`[Save New Algorithm v2 Fixed] Запуск обновления поискового индекса (add) для ID: ${newAlgorithmData.id}`);
-                        updateSearchIndex('algorithms', newAlgorithmData.id, newAlgorithmData, 'add')
-                            .then(() => console.log(`[Save New Algorithm v2 Fixed] Обновление индекса для нового алгоритма ${newAlgorithmData.id} завершено.`))
-                            .catch(indexError => console.error(`[Save New Algorithm v2 Fixed] Ошибка фонового обновления индекса для ${newAlgorithmData.id}:`, indexError));
-                    } else { console.warn("[Save New Algorithm v2 Fixed] updateSearchIndex не найдена или ID нового алгоритма отсутствует."); }
-
-                    if (typeof renderAlgorithmCards === 'function') {
-                        console.log(`[Save New Algorithm v2 Fixed] Перерисовка карточек для секции ${section}...`);
-                        renderAlgorithmCards(section);
-                    } else { console.warn("[Save New Algorithm v2 Fixed] renderAlgorithmCards не найдена."); }
-
-                    showNotification("Новый алгоритм успешно добавлен и сохранен.");
-                    initialAddState = null;
-                    addModal.classList.add('hidden');
-                    const form = addModal.querySelector('#addAlgorithmForm');
-                    if (form) form.reset();
-                    if (newStepsContainer) newStepsContainer.innerHTML = '';
-
-                } else {
-                    console.error(`[Save New Algorithm v2 Fixed] Добавление нового алгоритма (${newAlgorithmId}) НЕ УДАЛОСЬ (транзакция не завершилась успехом).`);
-                    if (newAlgorithmId && algorithms?.[section]) {
-                        const addedIndex = algorithms[section].findIndex(a => a.id === newAlgorithmId);
-                        if (addedIndex > -1) { algorithms[section].splice(addedIndex, 1); console.log(`Алгоритм ${newAlgorithmId} удален из памяти из-за ошибки сохранения.`); }
-                    }
-                    showNotification("Ошибка при сохранении нового алгоритма. Пожалуйста, проверьте данные и попробуйте снова.", "error");
-                }
-
             } catch (error) {
-                console.error(`[Save New Algorithm v2 Fixed] КРИТИЧЕСКАЯ ОШИБКА при добавлении нового алгоритма ${newAlgorithmId} (внешний catch):`, error);
-                showNotification(`Произошла критическая ошибка при сохранении: ${error.message || error}`, "error");
+                console.error(`[Save New Algorithm v4 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при добавлении ${newAlgorithmId}:`, error);
+                if (transaction && transaction.abort && transaction.readyState !== 'done') {
+                    try { transaction.abort(); console.log("[Save New Algorithm v4] Транзакция отменена в catch."); }
+                    catch (e) { console.error("[Save New Algorithm v4] Ошибка при отмене транзакции в catch:", e); }
+                }
+                saveSuccessful = false;
                 if (newAlgorithmId && algorithms?.[section]) {
                     const addedIndex = algorithms[section].findIndex(a => a.id === newAlgorithmId);
-                    if (addedIndex > -1) { algorithms[section].splice(addedIndex, 1); }
-                    console.warn("[Save New Algorithm v2 Fixed - catch] Алгоритм удален из памяти из-за ошибки.");
+                    if (addedIndex > -1) {
+                        algorithms[section].splice(addedIndex, 1);
+                        console.log(`Алгоритм ${newAlgorithmId} удален из памяти из-за ошибки.`);
+                    }
                 }
-                if (saveButton) {
-                    saveButton.disabled = false;
-                    saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
-                }
+                showNotification(`Произошла критическая ошибка при сохранении: ${error.message || error}`, "error");
             } finally {
                 if (saveButton) {
                     saveButton.disabled = false;
                     saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
                 }
+            }
+
+            if (saveSuccessful) {
+                console.log(`[Save New Algorithm v4 (Robust TX)] Алгоритм ${newAlgorithmId} успешно сохранен.`);
+                if (typeof updateSearchIndex === 'function' && newAlgorithmData?.id) {
+                    updateSearchIndex('algorithms', newAlgorithmData.id, newAlgorithmData, 'add')
+                        .then(() => console.log(`[Save New Algorithm v4] Индекс обновлен для ${newAlgorithmData.id}.`))
+                        .catch(indexError => console.error(`[Save New Algorithm v4] Ошибка обновления индекса для ${newAlgorithmData.id}:`, indexError));
+                } else { console.warn("[Save New Algorithm v4] updateSearchIndex не найдена или ID нового алгоритма отсутствует."); }
+                if (typeof renderAlgorithmCards === 'function') { renderAlgorithmCards(section); }
+                else { console.warn("[Save New Algorithm v4] renderAlgorithmCards не найдена."); }
+
+                showNotification("Новый алгоритм успешно добавлен.");
+                initialAddState = null;
+                addModal.classList.add('hidden');
+                const form = addModal.querySelector('#addAlgorithmForm');
+                if (form) form.reset();
+                if (newStepsContainer) newStepsContainer.innerHTML = '';
+
+            } else {
+                console.error(`[Save New Algorithm v4 (Robust TX)] Добавление нового алгоритма (${newAlgorithmId}) НЕ УДАЛОСЬ.`);
             }
         }
 
@@ -4991,7 +4970,7 @@
                         const elementName = `элемент с ID ${elementId}`; notify(`Элемент "${elementName}" не найден. Прокрутка к началу раздела.`, "warning");
                         const getSectionContainerSelector = (sec) => { switch (sec) { case 'main': return '#mainAlgorithm'; case 'program': return '#programAlgorithms'; case 'skzi': return '#skziAlgorithms'; case 'webReg': return '#webRegAlgorithms'; case 'lk1c': return '#lk1cAlgorithms'; case 'links': return '#linksContainer'; case 'extLinks': return '#extLinksContainer'; case 'reglaments': return '#reglamentsList:not(.hidden) #reglamentsContainer'; case 'bookmarks': return '#bookmarksContainer'; default: return `#${sec}Content > div:first-child`; } };
                         const sectionContainerSelector = getSectionContainerSelector(targetSectionId); const sectionContainer = activeContent.querySelector(sectionContainerSelector);
-                        if (sectionContainer) { sectionContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); } // Fallback остается 'start'
+                        if (sectionContainer) { sectionContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                         else { console.error(`[scrollToAndHighlight v5] Section container not found ('${sectionContainerSelector}'). Scrolling to top of tab.`); activeContent.scrollIntoView({ behavior: 'smooth', block: 'start' }); notify(`Не удалось найти контейнер раздела "${targetSectionId}".`, "error"); }
                     }
                 }, SCROLL_DELAY_MS_HELPER);
@@ -6862,41 +6841,17 @@
                 formElement.dataset.screenshotsToDelete = '';
             }
 
-            async function processImageForBookmark(fileOrBlob) {
-                return new Promise((resolve, reject) => {
-                    if (!(fileOrBlob instanceof Blob)) { return reject(new Error('Предоставленные данные не являются файлом или Blob.')); }
-                    const img = new Image(); const reader = new FileReader();
-                    reader.onload = (e_reader) => {
-                        if (!e_reader.target || typeof e_reader.target.result !== 'string') { return reject(new Error('Не удалось прочитать данные файла изображения.')); }
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas'); const MAX_WIDTH = 1280; const MAX_HEIGHT = 1024;
-                            let width = img.naturalWidth || img.width, height = img.naturalHeight || img.height;
-                            if (width === 0 || height === 0) return reject(new Error('Не удалось определить размеры изображения.'));
-                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                            canvas.width = Math.round(width); canvas.height = Math.round(height);
-                            const ctx = canvas.getContext('2d'); if (!ctx) return reject(new Error('Не удалось получить 2D контекст Canvas.'));
-                            try { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); }
-                            catch (drawError) { console.error("Ошибка отрисовки на Canvas:", drawError); return reject(new Error('Ошибка отрисовки изображения.')); }
-                            canvas.toBlob(blob => {
-                                if (blob) { resolve(blob); }
-                                else { canvas.toBlob(jpegBlob => { if (jpegBlob) resolve(jpegBlob); else reject(new Error('Не удалось создать Blob из Canvas (ни WebP, ни JPEG)')); }, 'image/jpeg', 0.85); }
-                            }, 'image/webp', 0.8);
-                        };
-                        img.onerror = (err) => reject(new Error('Не удалось загрузить данные изображения в Image объект.')); img.src = e_reader.target.result;
-                    };
-                    reader.onerror = (err) => reject(new Error('Не удалось прочитать файл изображения.')); reader.readAsDataURL(fileOrBlob);
-                });
-            }
-
             const addBlobToBookmarkForm = async (blob) => {
                 if (!Array.isArray(formElement._tempScreenshotBlobs)) { formElement._tempScreenshotBlobs = []; }
                 try {
-                    const processedBlob = await processImageForBookmark(blob);
+                    const processedBlob = await processImageFile(blob);
                     if (!processedBlob) throw new Error("Обработка изображения не удалась.");
+
                     const tempIndex = formElement._tempScreenshotBlobs.length;
                     formElement._tempScreenshotBlobs.push(processedBlob);
+
                     renderTemporaryThumbnail(processedBlob, tempIndex, thumbnailsContainer, formElement);
+
                     console.log(`Временный Blob для закладки (индекс ${tempIndex}) добавлен и отрисована миниатюра.`);
                     if (typeof isUISettingsDirty !== 'undefined') { isUISettingsDirty = true; } else if (typeof isDirty !== 'undefined') { isDirty = true; }
                 } catch (error) {
@@ -6913,7 +6868,6 @@
                 catch (error) { console.error("Ошибка при вызове колбэка в handleImageFileForBookmarkProcessing:", error); }
                 finally { if (buttonElement) { buttonElement.disabled = wasButtonDisabled; buttonElement.innerHTML = originalButtonHTML; } }
             }
-            const renderTempThumbFunc = typeof renderTemporaryThumbnail === 'function' ? renderTemporaryThumbnail : (b, ti, c, fe) => console.error("renderTemporaryThumbnail not available");
 
             if (!addBtn.dataset.listenerAttached) { addBtn.addEventListener('click', () => { fileInput.click(); }); addBtn.dataset.listenerAttached = 'true'; }
             if (!fileInput.dataset.listenerAttached) {
@@ -7022,24 +6976,87 @@
             container.appendChild(thumbDiv);
         }
 
+        async function processImageFile(fileOrBlob) {
+            return new Promise((resolve, reject) => {
+                if (!(fileOrBlob instanceof Blob)) {
+                    return reject(new Error('Предоставленные данные не являются файлом или Blob.'));
+                }
+                const img = new Image();
+                const reader = new FileReader();
+                reader.onload = (e_reader) => {
+                    if (!e_reader.target || typeof e_reader.target.result !== 'string') { return reject(new Error('Не удалось прочитать данные файла изображения.')); }
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1280, MAX_HEIGHT = 1024;
+                        let width = img.naturalWidth || img.width, height = img.naturalHeight || img.height;
+                        if (width === 0 || height === 0) { return reject(new Error('Не удалось определить размеры изображения.')); }
+                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        canvas.width = Math.round(width); canvas.height = Math.round(height);
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) { return reject(new Error('Не удалось получить 2D контекст Canvas.')); }
+                        try {
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        } catch (drawError) {
+                            console.error("Ошибка отрисовки на Canvas:", drawError);
+                            return reject(new Error('Ошибка отрисовки изображения.'));
+                        }
+                        canvas.toBlob(blob => {
+                            if (blob) {
+                                console.log(`Изображение обработано и сжато в WebP. Размер: ${(blob.size / 1024).toFixed(1)} KB`);
+                                resolve(blob);
+                            } else {
+                                canvas.toBlob(jpegBlob => {
+                                    if (jpegBlob) {
+                                        console.log(`Изображение обработано и сжато в JPEG. Размер: ${(jpegBlob.size / 1024).toFixed(1)} KB`);
+                                        resolve(jpegBlob);
+                                    } else {
+                                        reject(new Error('Не удалось создать Blob из Canvas (ни WebP, ни JPEG)'));
+                                    }
+                                }, 'image/jpeg', 0.85);
+                            }
+                        }, 'image/webp', 0.8);
+                    };
+                    img.onerror = (err) => reject(new Error('Не удалось загрузить данные изображения в Image объект.'));
+                    img.src = e_reader.target.result;
+                };
+                reader.onerror = (err) => reject(new Error('Не удалось прочитать файл изображения.'));
+                reader.readAsDataURL(fileOrBlob);
+            });
+        }
 
         async function handleBookmarkFormSubmit(event) {
             event.preventDefault();
-
             const form = event.target;
             const modal = form.closest('#bookmarkModal');
-            const saveButton = form.querySelector('#saveBookmarkBtn');
+            const saveButton = modal?.querySelector('#saveBookmarkBtn');
 
+            console.log("[handleBookmarkFormSubmit v5] Function start.");
+
+            if (!form) {
+                console.error("handleBookmarkFormSubmit v5: CRITICAL - event.target is not the form!");
+                showNotification("Критическая ошибка: форма не найдена.", "error");
+                return;
+            }
             if (!modal) {
-                console.error("Не удалось найти родительское модальное окно для формы закладки.");
-                showNotification("Произошла ошибка интерфейса.", "error");
+                console.error("handleBookmarkFormSubmit v5: CRITICAL - Could not find parent modal #bookmarkModal.");
+                showNotification("Критическая ошибка интерфейса: не найдено модальное окно.", "error");
+                if (saveButton) saveButton.disabled = false;
+                return;
+            }
+            if (!saveButton) {
+                console.error("handleBookmarkFormSubmit v5: CRITICAL - Could not find save button #saveBookmarkBtn within modal.");
+                showNotification("Критическая ошибка интерфейса: не найдена кнопка сохранения.", "error");
+                const potentialSaveButton = document.getElementById('saveBookmarkBtn');
+                if (potentialSaveButton) potentialSaveButton.disabled = false;
                 return;
             }
 
-            if (saveButton) {
-                saveButton.disabled = true;
-                saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
-            }
+
+            console.log("[handleBookmarkFormSubmit v5] Modal, form, and save button found. Proceeding...");
+
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
 
             const id = form.elements.bookmarkId.value;
             const title = form.elements.bookmarkTitle.value.trim();
@@ -7049,232 +7066,138 @@
             const folder = folderValue ? parseInt(folderValue, 10) : null;
 
             if (!title) {
-                showNotification("Пожалуйста, заполните поле 'Название'", "error");
-                if (saveButton) { saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить'; }
-                form.elements.bookmarkTitle.focus();
-                return;
+                showNotification("Заполните поле 'Название'", "error");
+                saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
+                form.elements.bookmarkTitle.focus(); return;
             }
             if (!url && !description) {
-                showNotification("Пожалуйста, заполните 'Описание / Текст заметки', так как URL не указан", "error");
-                if (saveButton) { saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить'; }
-                form.elements.bookmarkDescription.focus();
-                return;
+                showNotification("Заполните 'Описание', т.к. URL не указан", "error");
+                saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
+                form.elements.bookmarkDescription.focus(); return;
             }
             if (url) {
-                try {
-                    const parsedUrl = new URL(url);
-                    if (!['http:', 'https:', 'ftp:', 'ftps:'].includes(parsedUrl.protocol)) {
-                        throw new Error('Недопустимый протокол URL');
-                    }
-                } catch (_) {
-                    showNotification("Пожалуйста, введите корректный URL (например, https://example.com)", "error");
-                    if (saveButton) { saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить'; }
-                    form.elements.bookmarkUrl.focus();
-                    return;
+                try { new URL(url); } catch (_) {
+                    showNotification("Введите корректный URL", "error");
+                    saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
+                    form.elements.bookmarkUrl.focus(); return;
                 }
             }
 
+            const screenshotOps = [];
+            const newScreenshotBlobs = form._tempScreenshotBlobs || [];
+            const idsToDeleteStr = form.dataset.screenshotsToDelete || '';
+
+            newScreenshotBlobs.forEach(blob => { if (blob instanceof Blob) screenshotOps.push({ action: 'add', blob }); });
+            idsToDeleteStr.split(',').map(idStr => parseInt(idStr.trim(), 10)).filter(idNum => !isNaN(idNum) && idNum > 0)
+                .forEach(idToDelete => screenshotOps.push({ action: 'delete', oldScreenshotId: idToDelete }));
+            console.log(`[Save Bookmark v5 TX] Запланировано ${screenshotOps.length} операций со скриншотами.`);
+
             const isEditing = !!id;
-            const timestamp = new Date().toISOString();
             let finalId = isEditing ? parseInt(id, 10) : null;
             let oldData = null;
             let existingIdsToKeep = [];
-            const screenshotOps = [];
-            const newScreenshotIds = [];
-            const screenshotOpResults = [];
-
-            if (form._tempScreenshotBlobs && Array.isArray(form._tempScreenshotBlobs)) {
-                form._tempScreenshotBlobs.forEach(blob => {
-                    if (blob instanceof Blob) {
-                        screenshotOps.push({ action: 'add', blob: blob, oldScreenshotId: null });
-                        console.log("[Save Bookmark] Запланирована операция 'add' для нового Blob.");
-                    }
-                });
-            }
-            const idsToDeleteStr = form.dataset.screenshotsToDelete;
-            if (idsToDeleteStr) {
-                const idsToDelete = idsToDeleteStr.split(',')
-                    .map(idStr => parseInt(idStr.trim(), 10))
-                    .filter(idNum => !isNaN(idNum) && idNum > 0);
-                idsToDelete.forEach(idToDelete => {
-                    screenshotOps.push({ action: 'delete', blob: null, oldScreenshotId: idToDelete });
-                    console.log(`[Save Bookmark] Запланирована операция 'delete' для скриншота ID ${idToDelete}.`);
-                });
-            }
-            console.log(`[Save Bookmark] Всего запланировано ${screenshotOps.length} операций со скриншотами.`);
-
-            const newData = {
-                title,
-                url: url || null,
-                description: description || null,
-                folder: folder,
-                dateAdded: timestamp,
-                dateUpdated: isEditing ? timestamp : null,
-            };
-            if (isEditing) {
-                newData.id = finalId;
-            }
-
+            const newDataBase = { title, url: url || null, description: description || null, folder };
 
             let transaction;
             let saveSuccessful = false;
 
             try {
                 if (!db) throw new Error("База данных недоступна");
-
-                if (isEditing) {
-                    try {
-                        oldData = await getFromIndexedDB('bookmarks', finalId);
-                        newData.dateAdded = oldData?.dateAdded || timestamp;
-                        existingIdsToKeep = (oldData?.screenshotIds || []).filter(existingId =>
-                            !screenshotOps.some(op => op.action === 'delete' && op.oldScreenshotId === existingId)
-                        );
-                        console.log(`[Save Bookmark Edit ${finalId}] Сохраняемые существующие ID скриншотов:`, existingIdsToKeep);
-                    } catch (fetchError) {
-                        console.warn(`[Save Bookmark Edit ${finalId}] Не удалось получить старые данные закладки:`, fetchError);
-                        newData.dateAdded = timestamp;
-                    }
-                } else {
-                    newData.dateAdded = timestamp;
-                }
-
                 transaction = db.transaction(['bookmarks', 'screenshots'], 'readwrite');
-                console.log("[Save Bookmark TX] Транзакция ['bookmarks', 'screenshots'] 'readwrite' начата.");
                 const bookmarksStore = transaction.objectStore('bookmarks');
                 const screenshotsStore = transaction.objectStore('screenshots');
+                console.log("[Save Bookmark v5 TX] Транзакция начата.");
 
-                transaction.oncomplete = () => {
-                    const failedScreenshotOps = screenshotOpResults.filter(r => !r.success);
-                    if (failedScreenshotOps.length > 0) {
-                        console.error(`[Save Bookmark TX] Транзакция завершена (oncomplete), НО ${failedScreenshotOps.length} операций со скриншотами НЕ удались! Ошибка:`, failedScreenshotOps[0]?.error);
-                        saveSuccessful = false;
-                    } else {
-                        console.log(`[Save Bookmark TX] Транзакция успешно завершена (oncomplete), все операции (${screenshotOpResults.length}) со скриншотами успешны.`);
-                        saveSuccessful = true;
-                    }
-                };
-                transaction.onerror = (e) => {
-                    console.error(`[Save Bookmark TX] ОШИБКА ТРАНЗАКЦИИ (onerror) для закладки ${finalId}:`, e.target.error);
-                    saveSuccessful = false;
-                };
-                transaction.onabort = (e) => {
-                    console.warn(`[Save Bookmark TX] Транзакция сохранения закладки ${finalId} ПРЕРВАНА (onabort):`, e.target.error);
-                    saveSuccessful = false;
-                };
+                const timestamp = new Date().toISOString();
+                let bookmarkReadyPromise;
 
-                let bookmarkRequestPromise;
-                if (!isEditing) {
-                    const { id, screenshotIds, ...dataToAdd } = newData;
-                    bookmarkRequestPromise = new Promise((resolve, reject) => {
-                        console.log("[Save Bookmark TX] Запрос add для новой закладки...");
-                        const request = bookmarksStore.add(dataToAdd);
-                        request.onsuccess = (e) => {
-                            finalId = e.target.result;
-                            newData.id = finalId;
-                            console.log(`[Save Bookmark TX] Новая закладка добавлена с ID: ${finalId}`);
-                            resolve();
-                        };
-                        request.onerror = (e) => {
-                            console.error(`[Save Bookmark TX] Ошибка добавления новой закладки:`, e.target.error);
-                            reject(new Error(`Ошибка добавления новой закладки: ${e.target.error?.message}`));
-                        };
+                if (isEditing) {
+                    newDataBase.id = finalId;
+                    console.log(`[Save Bookmark v5 TX] Редактирование закладки ID: ${finalId}`);
+                    bookmarkReadyPromise = new Promise(async (resolve, reject) => {
+                        try {
+                            const request = bookmarksStore.get(finalId);
+                            request.onsuccess = (e) => {
+                                oldData = e.target.result;
+                                if (oldData) {
+                                    newDataBase.dateAdded = oldData.dateAdded || timestamp;
+                                    const deletedIdsSet = new Set(screenshotOps.filter(op => op.action === 'delete').map(op => op.oldScreenshotId));
+                                    existingIdsToKeep = (oldData.screenshotIds || []).filter(existingId => !deletedIdsSet.has(existingId));
+                                } else { newDataBase.dateAdded = timestamp; }
+                                resolve();
+                            };
+                            request.onerror = (e) => reject(e.target.error || new Error(`Не удалось получить старые данные для ID ${finalId}`));
+                        } catch (fetchError) { reject(fetchError); }
                     });
-                    await bookmarkRequestPromise;
-                    console.log(`[Save Bookmark TX] ID для новой закладки получен: ${finalId}`);
+                    newDataBase.dateUpdated = timestamp;
                 } else {
-                    console.log(`[Save Bookmark TX] Редактирование закладки ID: ${finalId}`);
-                    bookmarkRequestPromise = Promise.resolve();
-                }
-
-
-                if (finalId === null || finalId === undefined) {
-                    throw new Error("Не удалось определить ID закладки для сохранения скриншотов.");
-                }
-
-                const screenshotRequestPromises = [];
-                screenshotOps.forEach((op) => {
-                    const { action, blob, oldScreenshotId } = op;
-
-                    const opPromise = new Promise((resolveOp) => {
-                        if (action === 'delete' && oldScreenshotId) {
-                            console.log(`[Save Bookmark TX ${finalId}] Запрос delete для screenshot ID: ${oldScreenshotId}`);
-                            const delReq = screenshotsStore.delete(oldScreenshotId);
-                            delReq.onsuccess = () => {
-                                console.log(`[Save Bookmark TX ${finalId}] Успешно: delete screenshot ID: ${oldScreenshotId}`);
-                                screenshotOpResults.push({ success: true, action: 'delete', id: oldScreenshotId });
-                                resolveOp();
-                            };
-                            delReq.onerror = e => {
-                                console.error(`[Save Bookmark TX ${finalId}] Ошибка delete скриншота ${oldScreenshotId}: ${e.target.error?.message}`);
-                                screenshotOpResults.push({ success: false, action: 'delete', id: oldScreenshotId, error: e.target.error });
-                                resolveOp();
-                            };
-                        } else if (action === 'add' && blob instanceof Blob) {
-                            console.log(`[Save Bookmark TX ${finalId}] Запрос add для screenshot`);
-                            const screenshotRecord = {
-                                blob: blob,
-                                parentId: finalId,
-                                parentType: 'bookmark',
-                                uploadedAt: new Date().toISOString()
-                            };
-                            console.log(`[Save Bookmark TX ${finalId}]   > Данные для add:`, { parentId: screenshotRecord.parentId, parentType: screenshotRecord.parentType, blobSize: blob.size });
-                            const addReq = screenshotsStore.add(screenshotRecord);
-                            addReq.onsuccess = e => {
-                                const newScreenshotId = e.target.result;
-                                console.log(`[Save Bookmark TX ${finalId}] Успешно: add screenshot, new ID: ${newScreenshotId}`);
-                                newScreenshotIds.push(newScreenshotId);
-                                screenshotOpResults.push({ success: true, action: 'add', newId: newScreenshotId });
-                                resolveOp();
-                            };
-                            addReq.onerror = e => {
-                                console.error(`[Save Bookmark TX ${finalId}] Ошибка add screenshot: ${e.target.error?.message}`);
-                                screenshotOpResults.push({ success: false, action: 'add', error: e.target.error });
-                                resolveOp();
-                            };
-                        } else {
-                            console.warn(`[Save Bookmark TX ${finalId}] Пропуск некорректной операции скриншота:`, op);
-                            screenshotOpResults.push({ success: false, action: op.action || 'unknown', error: new Error('Некорректная операция') });
-                            resolveOp();
-                        }
+                    newDataBase.dateAdded = timestamp;
+                    delete newDataBase.id;
+                    console.log("[Save Bookmark v5 TX] Добавление новой закладки...");
+                    bookmarkReadyPromise = new Promise((resolve, reject) => {
+                        const request = bookmarksStore.add(newDataBase);
+                        request.onsuccess = (e) => { finalId = e.target.result; newDataBase.id = finalId; resolve(); };
+                        request.onerror = (e) => reject(e.target.error || new Error('Ошибка добавления закладки'));
                     });
-                    screenshotRequestPromises.push(opPromise);
-                });
+                }
 
-                await Promise.all(screenshotRequestPromises);
-                console.log(`[Save Bookmark TX ${finalId}] Операции со скриншотами завершены. Новые ID:`, newScreenshotIds);
+                await bookmarkReadyPromise;
 
+                if (finalId === null || finalId === undefined) throw new Error("Не удалось определить ID закладки.");
+                console.log(`[Save Bookmark v5 TX] ID закладки определен: ${finalId}`);
 
-                newData.screenshotIds = [...existingIdsToKeep, ...newScreenshotIds];
-                console.log(`[Save Bookmark TX ${finalId}] Финальный массив screenshotIds для сохранения:`, newData.screenshotIds);
+                const screenshotOpResults = [];
+                const screenshotPromises = [];
+                const newScreenshotIds = [];
+
+                if (screenshotOps.length > 0) {
+                    console.log(`[Save Bookmark v5 TX ${finalId}] Обработка ${screenshotOps.length} операций со скриншотами...`);
+                    screenshotOps.forEach(op => {
+                        const { action, blob, oldScreenshotId } = op;
+                        screenshotPromises.push(new Promise(async (resolve) => {
+                            try {
+                                if (action === 'delete' && oldScreenshotId) {
+                                    const request = screenshotsStore.delete(oldScreenshotId);
+                                    request.onsuccess = () => { screenshotOpResults.push({ success: true, action: 'delete', oldId: oldScreenshotId }); resolve(); };
+                                    request.onerror = (e) => { screenshotOpResults.push({ success: false, action: 'delete', oldId: oldScreenshotId, error: e.target.error || new Error('Delete failed') }); resolve(); };
+                                } else if (action === 'add' && blob instanceof Blob) {
+                                    const tempName = `${newDataBase.title}, изобр. ${Date.now() + Math.random()}`;
+                                    const record = { blob, parentId: finalId, parentType: 'bookmark', name: tempName, uploadedAt: new Date().toISOString() };
+                                    const request = screenshotsStore.add(record);
+                                    request.onsuccess = e => { const newId = e.target.result; screenshotOpResults.push({ success: true, action: 'add', newId }); newScreenshotIds.push(newId); resolve(); };
+                                    request.onerror = e => { screenshotOpResults.push({ success: false, action: 'add', error: e.target.error || new Error('Add failed') }); resolve(); };
+                                } else { screenshotOpResults.push({ success: false, action: op.action || 'unknown', error: new Error('Invalid op') }); resolve(); }
+                            } catch (opError) { screenshotOpResults.push({ success: false, action: action, error: opError }); resolve(); }
+                        }));
+                    });
+                    await Promise.all(screenshotPromises);
+                    console.log(`[Save Bookmark v5 TX ${finalId}] Операции со скриншотами завершены.`);
+
+                    const failedOps = screenshotOpResults.filter(r => !r.success);
+                    if (failedOps.length > 0) throw new Error(`Ошибка операции со скриншотом: ${failedOps[0].error?.message || 'Unknown error'}`);
+                }
+
+                newDataBase.screenshotIds = [...new Set([...existingIdsToKeep, ...newScreenshotIds])];
+                if (newDataBase.screenshotIds.length === 0) delete newDataBase.screenshotIds;
+                console.log(`[Save Bookmark v5 TX ${finalId}] Финальный объект закладки для put:`, JSON.parse(JSON.stringify(newDataBase)));
+
+                const putBookmarkReq = bookmarksStore.put(newDataBase);
 
                 await new Promise((resolve, reject) => {
-                    console.log(`[Save Bookmark TX ${finalId}] Финальный запрос put для закладки...`);
-                    const putReq = bookmarksStore.put(newData);
-                    putReq.onsuccess = () => {
-                        console.log(`[Save Bookmark TX ${finalId}] Успешно: финальный put закладки.`);
-                        resolve();
-                    };
-                    putReq.onerror = (e) => {
-                        console.error(`[Save Bookmark TX ${finalId}] Ошибка финального put закладки:`, e.target.error);
-                        screenshotOpResults.push({ success: false, action: 'save_bookmark', error: e.target.error });
-                        reject(new Error(`Ошибка финального сохранения закладки ${finalId}: ${e.target.error?.message}`));
-                    };
+                    putBookmarkReq.onerror = (e) => reject(e.target.error || new Error(`Ошибка сохранения закладки ${finalId}`));
+                    transaction.oncomplete = () => { saveSuccessful = true; resolve(); };
+                    transaction.onerror = (e) => reject(e.target.error || new Error("Ошибка транзакции"));
+                    transaction.onabort = (e) => reject(e.target.error || new Error("Транзакция прервана"));
                 });
-
-                await new Promise((resolve, rejectTx) => {
-                    transaction.addEventListener('complete', resolve);
-                    transaction.addEventListener('error', (e) => rejectTx(e.target.error || new Error("Ошибка транзакции")));
-                    transaction.addEventListener('abort', (e) => rejectTx(e.target.error || new Error("Транзакция прервана")));
-                });
-
 
             } catch (saveError) {
-                console.error(`[Save Bookmark ${finalId}] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки или скриншотов:`, saveError);
-                showNotification("Ошибка при сохранении закладки: " + (saveError.message || saveError), "error");
-                if (transaction && transaction.readyState !== 'done' && transaction.abort) {
-                    try { transaction.abort(); console.log("[Save Bookmark - catch] Транзакция прервана из-за ошибки."); } catch (abortErr) { console.error("[Save Bookmark - catch] Ошибка при отмене транзакции:", abortErr); }
+                console.error(`[Save Bookmark v5 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${finalId}:`, saveError);
+                if (transaction && transaction.abort && transaction.readyState !== 'done') {
+                    try { transaction.abort(); console.log("[Save Bookmark v5] Транзакция отменена в catch."); }
+                    catch (e) { console.error("[Save Bookmark v5] Ошибка отмены транзакции:", e); }
                 }
                 saveSuccessful = false;
+                showNotification("Ошибка при сохранении закладки: " + (saveError.message || saveError), "error");
             } finally {
                 if (saveButton) {
                     saveButton.disabled = false;
@@ -7283,23 +7206,26 @@
             }
 
             if (saveSuccessful) {
-                console.log(`[Save Bookmark] Успешное завершение для закладки ID: ${finalId}`);
+                console.log(`[Save Bookmark v5 (Robust TX)] Успешно завершено для ID: ${finalId}`);
+                const finalDataForIndex = { ...newDataBase };
+
                 if (typeof updateSearchIndex === 'function') {
-                    updateSearchIndex('bookmarks', finalId, newData, isEditing ? 'update' : 'add', oldData)
+                    updateSearchIndex('bookmarks', finalId, finalDataForIndex, isEditing ? 'update' : 'add', oldData)
                         .then(() => console.log(`Индекс обновлен для закладки ${finalId}.`))
                         .catch(indexError => console.error(`Ошибка обновления индекса для закладки ${finalId}:`, indexError));
                 } else { console.warn("updateSearchIndex не найдена."); }
 
-                showNotification(isEditing ? "Закладка успешно обновлена" : "Закладка успешно добавлена");
+                showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
                 modal.classList.add('hidden');
                 form.reset();
                 const bookmarkIdInput = form.querySelector('#bookmarkId'); if (bookmarkIdInput) bookmarkIdInput.value = '';
                 const modalTitleEl = modal.querySelector('#bookmarkModalTitle'); if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
                 delete form._tempScreenshotBlobs; delete form.dataset.screenshotsToDelete;
                 const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer'); if (thumbsContainer) thumbsContainer.innerHTML = '';
+
                 loadBookmarks();
             } else {
-                console.error(`[Save Bookmark] Сохранение закладки ${finalId} НЕ удалось.`);
+                console.error(`[Save Bookmark v5 (Robust TX)] Сохранение закладки ${finalId} НЕ удалось.`);
             }
         }
 
@@ -7895,17 +7821,27 @@
             }
 
             let bookmarkToDelete = null;
+            let screenshotIdsToDelete = [];
+            let transaction;
 
             try {
                 try {
                     bookmarkToDelete = await getFromIndexedDB('bookmarks', numericId);
                     if (!bookmarkToDelete) {
                         console.warn(`Закладка с ID ${numericId} не найдена в базе данных. Возможно, уже удалена.`);
-                        showNotification("Закладка не найдена.", "warning");
+                        removeBookmarkFromDOM(numericId);
+                        showNotification("Закладка не найдена (возможно, уже удалена).", "warning");
                         return;
+                    }
+                    if (Array.isArray(bookmarkToDelete.screenshotIds) && bookmarkToDelete.screenshotIds.length > 0) {
+                        screenshotIdsToDelete = [...bookmarkToDelete.screenshotIds];
+                        console.log(`Найдены ID скриншотов [${screenshotIdsToDelete.join(',')}] для удаления вместе с закладкой ${numericId}.`);
+                    } else {
+                        console.log(`Скриншоты для закладки ${numericId} не найдены или отсутствуют.`);
                     }
                 } catch (fetchError) {
                     console.error(`Ошибка при получении данных закладки ${numericId} перед удалением:`, fetchError);
+                    showNotification("Не удалось получить данные скриншотов, но будет предпринята попытка удалить закладку.", "warning");
                 }
 
                 if (bookmarkToDelete && typeof updateSearchIndex === 'function') {
@@ -7916,27 +7852,64 @@
                         console.error(`Ошибка обновления поискового индекса при удалении закладки ${numericId}:`, indexError);
                         showNotification("Ошибка обновления поискового индекса.", "warning");
                     }
-                } else if (!bookmarkToDelete) {
-                    console.warn(`Данные для закладки ID ${numericId} не были получены, обновление индекса пропускается.`);
                 } else {
-                    console.warn("Функция updateSearchIndex недоступна. Поисковый индекс не обновлен при удалении.");
+                    console.warn(`Обновление индекса для закладки ${numericId} пропущено (данные не получены или функция недоступна).`);
                 }
 
-                await deleteFromIndexedDB('bookmarks', numericId);
-                console.log(`Закладка с ID: ${numericId} удалена из IndexedDB.`);
-
-                if (typeof removeBookmarkFromDOM === 'function') {
-                    removeBookmarkFromDOM(numericId);
-                } else {
-                    console.warn("Функция removeBookmarkFromDOM не найдена. DOM не обновлен после удаления.");
-                    await loadBookmarks();
+                const stores = ['bookmarks'];
+                if (screenshotIdsToDelete.length > 0) {
+                    stores.push('screenshots');
                 }
 
-                showNotification("Закладка успешно удалена");
+                transaction = db.transaction(stores, 'readwrite');
+                const bookmarkStore = transaction.objectStore('bookmarks');
+                const screenshotStore = stores.includes('screenshots') ? transaction.objectStore('screenshots') : null;
+
+                const deletePromises = [];
+
+                deletePromises.push(new Promise((resolve, reject) => {
+                    const req = bookmarkStore.delete(numericId);
+                    req.onsuccess = () => { console.log(`Запрос на удаление закладки ${numericId} успешен.`); resolve(); };
+                    req.onerror = (e) => { console.error(`Ошибка запроса на удаление закладки ${numericId}:`, e.target.error); reject(e.target.error); };
+                }));
+
+                if (screenshotStore && screenshotIdsToDelete.length > 0) {
+                    screenshotIdsToDelete.forEach(screenshotId => {
+                        deletePromises.push(new Promise((resolve, reject) => {
+                            const req = screenshotStore.delete(screenshotId);
+                            req.onsuccess = () => { console.log(`Запрос на удаление скриншота ${screenshotId} успешен.`); resolve(); };
+                            req.onerror = (e) => { console.error(`Ошибка запроса на удаление скриншота ${screenshotId}:`, e.target.error); reject(e.target.error); };
+                        }));
+                    });
+                }
+
+                await Promise.all(deletePromises);
+                console.log("Все запросы на удаление (закладка + скриншоты) успешно инициированы.");
+
+                await new Promise((resolve, reject) => {
+                    transaction.oncomplete = () => {
+                        console.log(`Транзакция удаления закладки ${numericId} и скриншотов успешно завершена.`);
+                        resolve();
+                    };
+                    transaction.onerror = (e) => {
+                        console.error(`Ошибка ТРАНЗАКЦИИ при удалении закладки ${numericId}:`, e.target.error);
+                        reject(e.target.error || new Error("Неизвестная ошибка транзакции"));
+                    };
+                    transaction.onabort = (e) => {
+                        console.warn(`Транзакция удаления закладки ${numericId} прервана:`, e.target.error);
+                        reject(e.target.error || new Error("Транзакция прервана"));
+                    };
+                });
+
+                removeBookmarkFromDOM(numericId);
+                showNotification("Закладка и связанные скриншоты удалены");
 
             } catch (error) {
-                console.error(`Ошибка при удалении закладки ID ${numericId}:`, error);
+                console.error(`Критическая ошибка при удалении закладки ID ${numericId}:`, error);
                 showNotification("Ошибка при удалении закладки: " + (error.message || error), "error");
+                if (transaction && transaction.abort && transaction.readyState !== 'done') {
+                    try { transaction.abort(); } catch (abortErr) { console.error("Ошибка отмены транзакции в catch:", abortErr); }
+                }
                 await loadBookmarks();
             }
         }
@@ -8347,7 +8320,7 @@
             if (isNewModal) {
                 modal = document.createElement('div');
                 modal.id = modalId;
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center'; // Увеличил z-index
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center';
                 modal.innerHTML = `
                                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
                                         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -8701,13 +8674,13 @@
 
         async function handleDeleteBookmarkFolderClick(folderId, folderItem) {
             try {
-                if (typeof getAllFromIndexedDBWhere !== 'function') {
-                    console.error("Функция getAllFromIndexedDBWhere не определена при попытке удаления папки!");
+                if (typeof getAllFromIndex !== 'function') {
+                    console.error("Функция getAllFromIndex не определена при попытке удаления папки!");
                     showNotification("Ошибка: Невозможно проверить содержимое папки.", "error");
                     return;
                 }
 
-                const bookmarksInFolder = await getAllFromIndexedDBWhere('bookmarks', 'folder', folderId);
+                const bookmarksInFolder = await getAllFromIndex('bookmarks', 'folder', folderId);
                 const folderToDelete = await getFromIndexedDB('bookmarkFolders', folderId);
 
                 let confirmationMessage = `Вы уверены, что хотите удалить папку "${folderToDelete?.name || 'ID ' + folderId}"?`;
@@ -8736,32 +8709,32 @@
                 const indexUpdatePromises = [];
                 if (folderToDelete && typeof updateSearchIndex === 'function') {
                     indexUpdatePromises.push(
-                        updateSearchIndex('bookmarkFolders', folderId, folderToDelete, 'delete', folderToDelete)
+                        updateSearchIndex('bookmarkFolders', folderId, folderToDelete, 'delete')
                             .catch(err => console.error(`Ошибка индексации (удаление папки ${folderId}):`, err))
                     );
                     if (shouldDeleteBookmarks) {
                         bookmarksInFolder.forEach(bm => {
                             indexUpdatePromises.push(
-                                updateSearchIndex('bookmarks', bm.id, bm, 'delete', bm)
+                                updateSearchIndex('bookmarks', bm.id, bm, 'delete')
                                     .catch(err => console.error(`Ошибка индексации (удаление закладки ${bm.id}):`, err))
                             );
                         });
                     }
                 } else {
-                    console.warn("Не удалось обновить поисковый индекс: папка не найдена или функция updateSearchIndex недоступна.");
+                    console.warn("Не удалось обновить поисковый индекс при удалении папки: папка не найдена или функция updateSearchIndex недоступна.");
                 }
                 await Promise.allSettled(indexUpdatePromises);
                 console.log("Обновление поискового индекса (удаление) завершено.");
 
                 let transaction;
                 try {
-                    const stores = ['bookmarkFolders', 'bookmarks'];
-                    if (screenshotIdsToDelete.length > 0) {
-                        stores.push('screenshots');
-                    }
+                    const stores = ['bookmarkFolders'];
+                    if (shouldDeleteBookmarks) stores.push('bookmarks');
+                    if (screenshotIdsToDelete.length > 0) stores.push('screenshots');
+
                     transaction = db.transaction(stores, 'readwrite');
                     const folderStore = transaction.objectStore('bookmarkFolders');
-                    const bookmarkStore = transaction.objectStore('bookmarks');
+                    const bookmarkStore = stores.includes('bookmarks') ? transaction.objectStore('bookmarks') : null;
                     const screenshotStore = stores.includes('screenshots') ? transaction.objectStore('screenshots') : null;
 
                     const deleteRequests = [];
@@ -8769,15 +8742,15 @@
                     deleteRequests.push(new Promise((resolve, reject) => {
                         const req = folderStore.delete(folderId);
                         req.onsuccess = resolve;
-                        req.onerror = reject;
+                        req.onerror = (e) => reject(e.target.error || new Error(`Ошибка удаления папки ${folderId}`));
                     }));
 
-                    if (shouldDeleteBookmarks) {
+                    if (bookmarkStore && shouldDeleteBookmarks) {
                         bookmarksInFolder.forEach(bm => {
                             deleteRequests.push(new Promise((resolve, reject) => {
                                 const req = bookmarkStore.delete(bm.id);
                                 req.onsuccess = resolve;
-                                req.onerror = reject;
+                                req.onerror = (e) => reject(e.target.error || new Error(`Ошибка удаления закладки ${bm.id}`));
                             }));
                         });
                     }
@@ -8787,7 +8760,7 @@
                             deleteRequests.push(new Promise((resolve, reject) => {
                                 const req = screenshotStore.delete(screenshotId);
                                 req.onsuccess = resolve;
-                                req.onerror = reject;
+                                req.onerror = (e) => reject(e.target.error || new Error(`Ошибка удаления скриншота ${screenshotId}`));
                             }));
                         });
                     }
@@ -8800,7 +8773,7 @@
                         transaction.onabort = (e) => reject(e.target.error || new Error("Транзакция удаления прервана"));
                     });
 
-                    console.log(`Папка ${folderId}, ${bookmarksInFolder.length} закладок и ${screenshotIdsToDelete.length} скриншотов успешно удалены.`);
+                    console.log(`Папка ${folderId}, ${bookmarksInFolder.length} закладок и ${screenshotIdsToDelete.length} скриншотов успешно удалены из БД.`);
 
                     if (folderItem && folderItem.parentNode) folderItem.remove();
                     else console.warn(`Элемент папки ${folderId} не найден или уже удален из DOM.`);
@@ -9300,13 +9273,11 @@
         // СИСТЕМА РЕГЛАМЕНТОВ
         function initReglamentsSystem() {
             const addReglamentBtn = document.getElementById('addReglamentBtn');
-            const addCategoryBtn = document.getElementById('addReglamentCategoryBtn');
             const categoryGrid = document.getElementById('reglamentCategoryGrid');
             const reglamentsListDiv = document.getElementById('reglamentsList');
             const backToCategoriesBtn = document.getElementById('backToCategories');
 
             if (!addReglamentBtn) console.error("Кнопка #addReglamentBtn не найдена!");
-            if (!addCategoryBtn) console.error("Кнопка #addReglamentCategoryBtn не найдена!");
             if (!categoryGrid) console.error("Сетка категорий #reglamentCategoryGrid не найдена!");
             if (!reglamentsListDiv) console.error("Контейнер списка #reglamentsList не найден!");
             if (!backToCategoriesBtn) console.error("Кнопка #backToCategories не найдена!");
@@ -9323,9 +9294,6 @@
                 showAddReglamentModal(currentCategoryId);
             });
 
-            addCategoryBtn?.addEventListener('click', () => showAddCategoryModal());
-
-
             renderReglamentCategories();
             populateReglamentCategoryDropdowns();
 
@@ -9336,15 +9304,20 @@
                 const categoryId = categoryElement.dataset.category;
 
                 if (event.target.closest('.delete-category-btn')) {
-                    handleDeleteCategoryClick(event);
+                    if (typeof handleDeleteCategoryClick === 'function') {
+                        handleDeleteCategoryClick(event);
+                    } else {
+                        console.error("Функция handleDeleteCategoryClick не найдена!");
+                    }
                 } else if (event.target.closest('.edit-category-btn')) {
                     event.stopPropagation();
-                    showAddCategoryModal(categoryId);
+                    if (typeof showAddCategoryModal === 'function') {
+                        showAddCategoryModal(categoryId);
+                    } else {
+                        console.error("Функция showAddCategoryModal (для редактирования) не найдена!");
+                    }
                 } else {
                     showReglamentsForCategory(categoryId);
-                    if (addCategoryBtn) {
-                        addCategoryBtn.classList.add('hidden');
-                    }
                     reglamentsListDiv.dataset.currentCategory = categoryId;
                 }
             });
@@ -9360,10 +9333,6 @@
                 if (reglamentsContainer) reglamentsContainer.innerHTML = '';
                 const currentCategoryTitle = document.getElementById('currentCategoryTitle');
                 if (currentCategoryTitle) currentCategoryTitle.textContent = '';
-
-                if (addCategoryBtn) {
-                    addCategoryBtn.classList.remove('hidden');
-                }
             });
         }
 
@@ -9525,10 +9494,6 @@
                 const categoryElement = createCategoryElement(categoryId, info.title, info.icon, info.color);
                 categoryGrid.appendChild(categoryElement);
             });
-
-            if (categoryGrid.innerHTML === '') {
-                categoryGrid.innerHTML = '<div class="text-center py-6 text-gray-500 md:col-span-3">Нет категорий. Нажмите "Добавить категорию".</div>';
-            }
         }
 
 
@@ -9553,102 +9518,6 @@
                                         <p class="text-sm text-gray-500 dark:text-gray-400">Нажмите, чтобы просмотреть регламенты</p>
     `;
             return categoryElement;
-        }
-
-
-        function showAddCategoryModal(editCategoryId = null) {
-            const modalId = 'addReglamentCategoryModal';
-            let modal = document.getElementById(modalId);
-            let isNewModal = false;
-
-            if (!modal) {
-                isNewModal = true;
-                modal = document.createElement('div');
-                modal.innerHTML = `
-                                    <div class="flex items-center justify-center min-h-full">
-                                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-                                            <form id="addCategoryForm">
-                                                <div class="p-6">
-                                                    <div class="flex justify-between items-center mb-4">
-                                                        <h2 class="text-xl font-bold" id="categoryModalTitle">Добавить категорию</h2>
-                                                        <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                            <i class="fas fa-times text-xl"></i>
-                                                        </button>
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="newCategoryTitle">Название категории</label>
-                                                        <input type="text" id="newCategoryTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="newCategoryId">ID категории (англ, без пробелов)</label>
-                                                        <input type="text" id="newCategoryId" required pattern="^[a-zA-Z0-9_-]+$" title="Используйте буквы, цифры, дефис, подчеркивание" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                        <p class="text-xs text-gray-500 mt-1">Например: 'general-questions', 'billing_issues'. <strong class="text-red-600">Нельзя изменить после создания.</strong></p>
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="newCategoryIcon">Иконка (Font Awesome класс)</label>
-                                                        <input type="text" id="newCategoryIcon" value="fa-folder-open" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                        <p class="text-xs text-gray-500 mt-1">Например: 'fa-book', 'fa-shield-alt'. <a href="https://fontawesome.com/search?m=free" target="_blank" class="text-primary hover:underline">Найти иконки</a></p>
-                                                    </div>
-                                                    <div class="mb-4">
-                                                        <label class="block text-sm font-medium mb-1" for="newCategoryColor">Цвет (Tailwind)</label>
-                                                        <select id="newCategoryColor" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
-                                                            <option value="gray">Серый</option>
-                                                            <option value="red">Красный</option>
-                                                            <option value="blue" selected>Синий</option>
-                                                            <option value="rose">Розовый (Rose)</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex justify-end">
-                                                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition mr-2 ">
-                                                        Отмена
-                                                    </button>
-                                                    <button type="submit" id="categorySubmitBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                                                        Добавить категорию
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                 `;
-                document.body.appendChild(modal);
-
-                modal.querySelector('#addCategoryForm').addEventListener('submit', handleAddCategorySubmit);
-                modal.querySelectorAll('.close-modal, .cancel-modal').forEach(btn => {
-                    btn.addEventListener('click', () => modal.classList.add('hidden'));
-                });
-            }
-
-            const form = modal.querySelector('#addCategoryForm');
-            const modalTitle = modal.querySelector('#categoryModalTitle');
-            const submitBtn = modal.querySelector('#categorySubmitBtn');
-            const categoryIdInput = modal.querySelector('#newCategoryId');
-
-            form.reset();
-
-            if (editCategoryId && categoryDisplayInfo[editCategoryId]) {
-                const categoryData = categoryDisplayInfo[editCategoryId];
-                modalTitle.textContent = 'Редактировать категорию';
-                submitBtn.textContent = 'Сохранить изменения';
-                form.dataset.editingId = editCategoryId;
-
-                modal.querySelector('#newCategoryTitle').value = categoryData.title;
-                categoryIdInput.value = editCategoryId;
-                categoryIdInput.readOnly = true;
-                categoryIdInput.classList.add('bg-gray-200', 'dark:bg-gray-600', 'cursor-not-allowed');
-                modal.querySelector('#newCategoryIcon').value = categoryData.icon || 'fa-folder-open';
-                modal.querySelector('#newCategoryColor').value = categoryData.color || 'gray';
-
-            } else {
-                modalTitle.textContent = 'Добавить категорию';
-                submitBtn.textContent = 'Добавить категорию';
-                delete form.dataset.editingId;
-                categoryIdInput.readOnly = false;
-                categoryIdInput.classList.remove('bg-gray-200', 'dark:bg-gray-600', 'cursor-not-allowed');
-            }
-
-            modal.classList.remove('hidden');
-            modal.querySelector('#newCategoryTitle').focus();
         }
 
 
@@ -11567,14 +11436,18 @@
 
             try {
                 console.log("Clearing LocalStorage...");
-                const localStorageKeys = ['algorithms1C', 'clientData',];
+                const localStorageKeys = ['clientData', 'employeeExtension', 'viewPreferences'];
                 localStorageKeys.forEach(key => {
-                    localStorage.removeItem(key);
-                    console.log(`Removed key from LocalStorage: ${key}`);
+                    if (localStorage.getItem(key) !== null) {
+                        localStorage.removeItem(key);
+                        console.log(`Removed key from LocalStorage: ${key}`);
+                    } else {
+                        console.log(`Key not found in LocalStorage, skipping removal: ${key}`);
+                    }
                 });
             } catch (error) {
                 console.error("Error clearing LocalStorage:", error);
-                showNotification("Ошибка при очистке LocalStorage.", "error");
+                showNotification("Ошибка при очистке LocalStorage.", "warning");
             }
 
             try {
@@ -11583,27 +11456,31 @@
                     db.close();
                     db = null;
                     console.log("IndexedDB connection closed.");
+                } else {
+                    console.log("IndexedDB connection was not open.");
                 }
 
                 console.log(`Deleting IndexedDB database: ${DB_NAME}...`);
                 await new Promise((resolve, reject) => {
                     const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+
                     deleteRequest.onsuccess = () => {
                         console.log(`IndexedDB database "${DB_NAME}" deleted successfully.`);
                         resolve();
                     };
                     deleteRequest.onerror = (event) => {
                         console.error(`Error deleting database "${DB_NAME}":`, event.target.error);
-                        reject(event.target.error);
+                        reject(event.target.error || new Error('Unknown DB deletion error'));
                     };
-                    deleteRequest.onblocked = () => {
-                        console.warn(`Database deletion blocked. Probably due to open connections. Page reload required.`);
+                    deleteRequest.onblocked = (event) => {
+                        console.warn(`Database deletion blocked for "${DB_NAME}". Open connections exist. Reload required.`, event);
+                        showNotification("База данных заблокирована другими вкладками. Пожалуйста, закройте их и перезагрузите страницу для завершения очистки.", "warning", 10000);
                         resolve();
                     };
                 });
             } catch (error) {
                 console.error("Error deleting IndexedDB database:", error);
-                showNotification("Ошибка при удалении базы данных.", "error");
+                showNotification("Ошибка при удалении базы данных: " + (error.message || "Неизвестная ошибка"), "error");
             }
 
             console.log("Data clearing process finished.");
@@ -12488,17 +12365,15 @@
         }
 
         async function getAllFromIndexedDBWhere(storeName, indexName, indexValue) {
-            console.log(`[getAllFromIndexedDBWhere] Запрос данных из ${storeName} по индексу ${indexName}=${indexValue}`);
+            console.log(`[getAllFromIndexedDBWhere] Вызов обертки для ${storeName} по индексу ${indexName} = ${indexValue}`);
             try {
                 if (typeof getAllFromIndex !== 'function') {
-                    console.error("Критическая ошибка: функция getAllFromIndex не определена!");
-                    throw new Error("Функция getAllFromIndex недоступна");
+                    console.error("getAllFromIndexedDBWhere: Базовая функция getAllFromIndex не найдена!");
+                    throw new Error("Зависимость getAllFromIndex отсутствует");
                 }
-                const results = await getAllFromIndex(storeName, indexName, indexValue);
-                console.log(`[getAllFromIndexedDBWhere] Найдено ${results?.length ?? 0} записей для ${storeName} по ${indexName}=${indexValue}.`);
-                return results || [];
+                return await getAllFromIndex(storeName, indexName, indexValue);
             } catch (error) {
-                console.error(`[getAllFromIndexedDBWhere] Ошибка при получении данных из ${storeName} по индексу ${indexName}=${indexValue}:`, error);
+                console.error(`[getAllFromIndexedDBWhere] Ошибка при вызове getAllFromIndex для ${storeName}/${indexName}/${indexValue}:`, error);
                 throw error;
             }
         }
