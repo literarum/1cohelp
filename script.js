@@ -4920,7 +4920,7 @@
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
 
-            showAppNotification("Время вышло!");
+            showAppNotification("ВЕРНИСЬ К КЛИЕНТУ!");
             if (originalDocumentTitle) {
                 document.title = "⏰ ВРЕМЯ! - " + originalDocumentTitle;
             } else {
@@ -5121,10 +5121,10 @@
             if (timeLeftInSeconds <= 0) {
                 isTimerRunning = false;
                 if (originalDocumentTitle) {
-                    document.title = "⏰ ВРЕМЯ ВЫШЛО! - " + originalDocumentTitle;
+                    document.title = "⏰ ВРЕМЯ! - " + originalDocumentTitle;
                 } else {
-                    const currentNonAlertTitle = document.title.startsWith("⏰") ? "" : document.title.replace(/^⏰ ВРЕМЯ ВЫШЛО! - /, "");
-                    document.title = "⏰ ВРЕМЯ ВЫШЛО! - " + currentNonAlertTitle;
+                    const currentNonAlertTitle = document.title.startsWith("⏰") ? "" : document.title.replace(/^⏰ ВРЕМЯ! - /, "");
+                    document.title = "⏰ ВРЕМЯ! - " + currentNonAlertTitle;
                 }
             } else if (isTimerRunning) {
                 startTimerInternal();
