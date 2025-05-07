@@ -278,6 +278,27 @@
                     </p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <div id="appTimer" class="flex items-center gap-1 text-sm mr-2">
+                        <button id="timerToggleButton" title="Старт/Пауза"
+                            class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button id="timerResetButton" title="Сброс"
+                            class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        <span id="timerDisplay"
+                            class="font-mono p-1.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 min-w-[50px] text-center tabular-nums">02:00</span>
+                        <button id="timerDecreaseButton" title="Уменьшить на 1 мин"
+                            class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button id="timerIncreaseButton" title="Увеличить на 1 мин"
+                            class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+
                     <button id="themeToggle"
                         class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                         title="Сменить тему">
@@ -1218,7 +1239,7 @@
                 <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
-                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши
+                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и управление
                         </h2>
                         <button id="closeHotkeysModalBtn" type="button"
                             class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -1284,6 +1305,52 @@
                         </ul>
                     </section>
 
+                    <section>
+                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
+                            Управление Таймером:
+                        </h3>
+                        <p class="mb-2.5 text-gray-700 dark:text-gray-300">
+                            Взаимодействие с кнопками управления таймером:
+                        </p>
+                        <ul class="space-y-2.5 list-inside">
+                            <li>
+                                Нажатие на кнопку <i class="fas fa-play inline-block w-4 text-center"></i> / <i
+                                    class="fas fa-pause inline-block w-4 text-center"></i> (Старт/Пауза): Запустить или
+                                приостановить таймер.
+                            </li>
+                            <li>
+                                Нажатие на кнопку <i class="fas fa-undo inline-block w-4 text-center"></i> (Сброс):
+                                Сбросить таймер на значение по умолчанию (01:50).
+                            </li>
+                            <li>
+                                <code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl</code>
+                                + Нажатие на кнопку <i class="fas fa-undo inline-block w-4 text-center"></i> (Сброс):
+                                Сбросить таймер на 00:00.
+                            </li>
+                            <li>
+                                Нажатие на кнопку <i class="fas fa-plus-circle inline-block w-4 text-center"></i>
+                                (Увеличить): Увеличить установленное/оставшееся время таймера на 30 секунд.
+                            </li>
+                            <li>
+                                <code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl</code>
+                                + Нажатие на кнопку <i class="fas fa-plus-circle inline-block w-4 text-center"></i>
+                                (Увеличить): Увеличить установленное/оставшееся время таймера на 5 секунд.
+                            </li>
+                            <li>
+                                Нажатие на кнопку <i class="fas fa-minus-circle inline-block w-4 text-center"></i>
+                                (Уменьшить): Уменьшить установленное/оставшееся время таймера на 30 секунд.
+                            </li>
+                            <li>
+                                <code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl</code>
+                                + Нажатие на кнопку <i class="fas fa-minus-circle inline-block w-4 text-center"></i>
+                                (Уменьшить): Уменьшить установленное/оставшееся время таймера на 5 секунд.
+                            </li>
+                        </ul>
+                    </section>
+
                 </div>
 
                 <div class="p-4 border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0 text-right">
@@ -1334,7 +1401,7 @@
             </button>
         </div>
     </div>
-    
+
     <script defer src="./script.js"></script>
 </body>
 
