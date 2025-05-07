@@ -4632,9 +4632,526 @@
             initClientDataSystem();
             initExternalLinksSystem();
             initUICustomization();
+            initTimerSystem();
             console.log("appInit: Подсистемы UI инициализированы.");
 
             return dbInitialized;
+        }
+
+
+        // СИСТЕМА ТАЙМЕРА
+        let notificationPermissionState = null; // null | 'granted' | 'denied' | 'default'
+        let timerInterval = null;
+        const timerDefaultDuration = 110; // 1:50 в секундах
+        let timerCurrentSetDuration = timerDefaultDuration;
+        let timeLeftInSeconds = timerCurrentSetDuration;
+        let isTimerRunning = false;
+        let originalDocumentTitle = "";
+        const TIMER_STATE_KEY = 'appTimerStateCopilot1CO';
+
+        let timerDisplayElement, timerToggleButton, timerResetButton, timerIncreaseButton, timerDecreaseButton;
+        let timerToggleIcon;
+
+        async function requestAppNotificationPermission() {
+            if (!("Notification" in window)) {
+                console.warn("Этот браузер не поддерживает десктопные уведомления.");
+                notificationPermissionState = 'denied';
+                return false;
+            }
+
+            const currentBrowserPermission = Notification.permission;
+            console.log(`requestAppNotificationPermission: Текущее Notification.permission = '${currentBrowserPermission}'`);
+
+            if (currentBrowserPermission === "granted") {
+                console.log("requestAppNotificationPermission: Разрешение на уведомления уже предоставлено.");
+                if (notificationPermissionState !== "granted") {
+                    notificationPermissionState = "granted";
+                }
+                return true;
+            }
+
+            if (currentBrowserPermission === "denied") {
+                console.log("requestAppNotificationPermission: Разрешение на уведомления было ранее отклонено браузером.");
+                if (notificationPermissionState !== "denied") {
+                    notificationPermissionState = "denied";
+                }
+                return false;
+            }
+
+            console.log("requestAppNotificationPermission: Запрашиваем разрешение у пользователя (Notification.requestPermission)...");
+            try {
+                const permissionResult = await Notification.requestPermission();
+                console.log(`requestAppNotificationPermission: Результат Notification.requestPermission() = '${permissionResult}'`);
+                notificationPermissionState = permissionResult;
+
+                if (permissionResult === "granted") {
+                    console.log("requestAppNotificationPermission: Пользователь предоставил разрешение.");
+                    return true;
+                } else if (permissionResult === "denied") {
+                    console.log("requestAppNotificationPermission: Пользователь отклонил запрос.");
+                    return false;
+                } else {
+                    console.log("requestAppNotificationPermission: Пользователь закрыл диалог запроса или статус остался 'default'.");
+                    return false;
+                }
+            } catch (error) {
+                console.error("requestAppNotificationPermission: Ошибка при вызове Notification.requestPermission():", error);
+                notificationPermissionState = 'denied';
+                return false;
+            }
+        }
+
+
+        function showAppNotification(title, body) {
+            if (!("Notification" in window)) {
+                console.warn("Попытка показать уведомление, но браузер их не поддерживает. Используется alert.");
+                const alertMessage = body ? `${title}\n${body}` : title;
+                alert(alertMessage);
+                return;
+            }
+
+            const currentBrowserPermission = Notification.permission;
+            if (notificationPermissionState !== currentBrowserPermission) {
+                console.log(`showAppNotification: Синхронизация notificationPermissionState. Старое: '${notificationPermissionState}', Новое (из Notification.permission): '${currentBrowserPermission}'.`);
+                notificationPermissionState = currentBrowserPermission;
+            }
+
+            if (notificationPermissionState === "granted") {
+                try {
+                    const iconLink = document.querySelector('link[rel="icon"]');
+                    const notificationOptions = {
+                        body: body || "",
+                        silent: true,
+                        requireInteraction: true
+                    };
+
+                    let iconUsedInThisAttempt = false;
+                    if (iconLink && iconLink.href) {
+                        try {
+                            const fullIconUrl = new URL(iconLink.href, window.location.origin).href;
+                            notificationOptions.icon = fullIconUrl;
+                            iconUsedInThisAttempt = true;
+                            console.log("Иконка для уведомления установлена:", fullIconUrl);
+                        } catch (e) {
+                            console.warn("Некорректный URL иконки, уведомление будет без иконки:", iconLink.href, e);
+                        }
+                    } else {
+                        console.log("Иконка для уведомлений не найдена или не указана, уведомление будет без иконки.");
+                    }
+
+                    console.log("showAppNotification: Попытка создать и показать уведомление с опциями:", JSON.stringify(notificationOptions));
+                    const notification = new Notification(title, notificationOptions);
+
+                    notification.onclick = () => {
+                        window.focus();
+                        notification.close();
+                        console.log("Уведомление нажато и закрыто, фокус на окне.");
+                    };
+
+                    notification.onshow = () => {
+                        console.log("Уведомление успешно ПОКАЗАНО системой:", title);
+                    };
+
+                    notification.onerror = (err) => {
+                        console.error("Ошибка при отображении уведомления системой (первичная попытка):", err);
+                        if (err && typeof err.message !== 'undefined') console.error("Сообщение об ошибке (первичная попытка): ", err.message);
+                        if (err && typeof err.name !== 'undefined') console.error("Имя ошибки (первичная попытка): ", err.name);
+                        console.log("Полный объект ошибки (первичная попытка):");
+                        console.dir(err);
+
+                        if (iconUsedInThisAttempt) {
+                            console.warn("Первичная ошибка была при показе уведомления с иконкой. Попытка показать уведомление БЕЗ ИКОНКИ...");
+                            const fallbackOptions = { ...notificationOptions };
+                            delete fallbackOptions.icon;
+                            console.log("showAppNotification: Попытка создать и показать резервное уведомление (без иконки) с опциями:", JSON.stringify(fallbackOptions));
+
+                            try {
+                                const fallbackNotification = new Notification(title, fallbackOptions);
+                                fallbackNotification.onclick = () => { window.focus(); fallbackNotification.close(); console.log("Резервное уведомление (без иконки) нажато и закрыто."); };
+                                fallbackNotification.onshow = () => { console.log("Резервное уведомление (без иконки) успешно ПОКАЗАНО системой:", title); };
+                                fallbackNotification.onerror = (e2) => {
+                                    console.error("Ошибка при отображении РЕЗЕРВНОГО уведомления (без иконки):", e2);
+                                    if (e2 && typeof e2.message !== 'undefined') console.error("Сообщение об ошибке (резервное): ", e2.message);
+                                    if (e2 && typeof e2.name !== 'undefined') console.error("Имя ошибки (резервное): ", e2.name);
+                                    console.log("Полный объект ошибки (резервное уведомление):");
+                                    console.dir(e2);
+
+                                    showNotification(
+                                        "Не удалось показать системное уведомление (даже резервное без иконки). Проверьте настройки браузера и ОС (например, 'Фокусировка внимания' в Windows).",
+                                        "error",
+                                        12000
+                                    );
+                                    const alertMessageError = body ? `${title}\n${body}\n(Ошибка системного уведомления)` : `${title}\n(Ошибка системного уведомления)`;
+                                    alert(alertMessageError);
+                                };
+                                console.log("Резервное уведомление (без иконки) создано. Ожидание onshow/onerror...");
+                                return;
+                            } catch (e2_create) {
+                                console.error("Критическая ошибка при СОЗДАНИИ РЕЗЕРВНОГО уведомления (без иконки):", e2_create);
+                            }
+                        }
+
+                        console.warn("Не удалось показать системное уведомление (либо первичная попытка без иконки, либо резервная попытка также не удалась). Используется кастомное уведомление на странице и alert.");
+                        showNotification(
+                            "Не удалось показать системное уведомление. Проверьте настройки браузера и операционной системы (например, 'Фокусировка внимания' в Windows или разрешения для браузера в центре уведомлений).",
+                            "error",
+                            10000
+                        );
+                        const alertMessageError = body ? `${title}\n${body}\n(Ошибка системного уведомления)` : `${title}\n(Ошибка системного уведомления)`;
+                        alert(alertMessageError);
+                    };
+
+                    console.log("Объект Notification успешно создан (основная попытка):", title);
+
+                } catch (e_create) {
+                    console.error("Критическая ошибка при СОЗДАНИИ объекта Notification (основная попытка):", e_create);
+                    showNotification(
+                        `Критическая ошибка при создании системного уведомления: ${e_create.message}. Проверьте консоль.`,
+                        "error",
+                        8000
+                    );
+                    const alertMessageCatch = body ? `${title}\n${body}` : title;
+                    alert(alertMessageCatch);
+                }
+            } else if (notificationPermissionState === "denied") {
+                const alertMessage = body ? `${title}\n${body}` : title;
+                console.warn(`Системные уведомления отклонены (статус: ${notificationPermissionState}). Используется alert: ${alertMessage}`);
+                alert(alertMessage);
+                showNotification(
+                    "Системные уведомления заблокированы. Чтобы их получать, измените настройки браузера (обычно, клик по замку в адресной строке) и проверьте системные настройки Windows (раздел 'Уведомления и действия', 'Фокусировка внимания').",
+                    "warning",
+                    10000
+                );
+            } else {
+                const alertMessage = body ? `${title}\n${body}` : title;
+                console.warn(`Разрешение на системные уведомления не определено (статус: ${notificationPermissionState}). Используется alert: ${alertMessage}`);
+                alert(alertMessage);
+                showNotification(
+                    "Для получения системных уведомлений, пожалуйста, разрешите их в появившемся запросе браузера. Если запрос не появляется, проверьте настройки разрешений для этого сайта в браузере и системные настройки Windows.",
+                    "info",
+                    10000
+                );
+            }
+        }
+
+
+        function updateTimerDisplay() {
+            if (!timerDisplayElement || !timerToggleIcon) return;
+
+            const minutes = Math.floor(timeLeftInSeconds / 60);
+            const seconds = timeLeftInSeconds % 60;
+            timerDisplayElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            if (isTimerRunning) {
+                timerToggleIcon.classList.remove('fa-play');
+                timerToggleIcon.classList.add('fa-pause');
+            } else {
+                timerToggleIcon.classList.remove('fa-pause');
+                timerToggleIcon.classList.add('fa-play');
+            }
+        }
+
+
+        function saveTimerState() {
+            try {
+                const timerState = {
+                    timeLeftInSeconds,
+                    timerCurrentSetDuration,
+                    isTimerRunning
+                };
+                localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(timerState));
+            } catch (error) {
+                console.error("Ошибка сохранения состояния таймера в localStorage:", error);
+            }
+        }
+
+
+        function loadTimerState() {
+            try {
+                const savedStateJSON = localStorage.getItem(TIMER_STATE_KEY);
+                if (savedStateJSON) {
+                    const savedState = JSON.parse(savedStateJSON);
+
+                    if (typeof savedState.timeLeftInSeconds === 'number' && savedState.timeLeftInSeconds >= 0) {
+                        timeLeftInSeconds = savedState.timeLeftInSeconds;
+                    } else {
+                        console.warn("Некорректное значение timeLeftInSeconds в localStorage, сброс к по умолчанию.");
+                        timeLeftInSeconds = timerDefaultDuration;
+                        timerCurrentSetDuration = timerDefaultDuration;
+                        isTimerRunning = false;
+                        updateTimerDisplay();
+                        saveTimerState();
+                        return;
+                    }
+
+                    if (typeof savedState.timerCurrentSetDuration === 'number' && savedState.timerCurrentSetDuration >= 0) {
+                        timerCurrentSetDuration = savedState.timerCurrentSetDuration;
+                    } else {
+                        timerCurrentSetDuration = (timeLeftInSeconds > 0) ? timeLeftInSeconds : timerDefaultDuration;
+                        console.warn("timerCurrentSetDuration не найдено или некорректно в localStorage, установлено на основе timeLeftInSeconds или по умолчанию.");
+                    }
+
+                    if (typeof savedState.isTimerRunning === 'boolean' && timeLeftInSeconds > 0) {
+                        isTimerRunning = savedState.isTimerRunning;
+                    } else {
+                        isTimerRunning = false;
+                    }
+
+                    console.log("Состояние таймера загружено:", { timeLeftInSeconds, timerCurrentSetDuration, isTimerRunning });
+
+                } else {
+                    console.log("Сохраненное состояние таймера не найдено, установка значений по умолчанию.");
+                    timeLeftInSeconds = timerDefaultDuration;
+                    timerCurrentSetDuration = timerDefaultDuration;
+                    isTimerRunning = false;
+                }
+            } catch (error) {
+                console.error("Ошибка загрузки состояния таймера из localStorage:", error);
+                timeLeftInSeconds = timerDefaultDuration;
+                timerCurrentSetDuration = timerDefaultDuration;
+                isTimerRunning = false;
+            }
+            updateTimerDisplay();
+        }
+
+
+        function handleTimerEnd() {
+            isTimerRunning = false;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+
+            showAppNotification("Время вышло!");
+            if (originalDocumentTitle) {
+                document.title = "⏰ ВРЕМЯ! - " + originalDocumentTitle;
+            } else {
+                document.title = "⏰ ВРЕМЯ! - " + document.title;
+            }
+            updateTimerDisplay();
+            saveTimerState();
+            console.log("Таймер завершен.");
+        }
+
+
+        function startTimerInternal() {
+            if (timerInterval) clearInterval(timerInterval);
+
+            timerInterval = setInterval(() => {
+                timeLeftInSeconds--;
+                updateTimerDisplay();
+                saveTimerState();
+
+                if (timeLeftInSeconds <= 0) {
+                    handleTimerEnd();
+                }
+            }, 1000);
+            console.log("Таймер запущен (внутренний интервал).");
+        }
+
+
+        function pauseTimer() {
+            if (!isTimerRunning) return;
+            isTimerRunning = false;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            updateTimerDisplay();
+            saveTimerState();
+            console.log("Таймер на паузе.");
+        }
+
+
+        async function toggleTimer() {
+            if (isTimerRunning) {
+                console.log("toggleTimer: Пауза таймера.");
+                pauseTimer();
+            } else {
+                console.log("toggleTimer: Попытка запуска таймера.");
+                if (timeLeftInSeconds <= 0) {
+                    if (timerCurrentSetDuration > 0) {
+                        timeLeftInSeconds = timerCurrentSetDuration;
+                    } else {
+                        timerCurrentSetDuration = timerDefaultDuration;
+                        timeLeftInSeconds = timerDefaultDuration;
+                    }
+                    console.log(`toggleTimer: Время было <= 0, установлено в ${timeLeftInSeconds}с.`);
+                }
+
+                let permissionObtainedForNotifications = (notificationPermissionState === 'granted');
+
+                if (!permissionObtainedForNotifications) {
+                    const currentGlobalPermission = Notification.permission;
+                    console.log(`toggleTimer: notificationPermissionState='${notificationPermissionState}', Notification.permission='${currentGlobalPermission}'.`);
+
+                    if (currentGlobalPermission === 'granted') {
+                        notificationPermissionState = 'granted';
+                        permissionObtainedForNotifications = true;
+                        console.log("toggleTimer: Разрешение 'granted' обнаружено (синхронизировано с Notification.permission).");
+                        showNotification("Системные уведомления уже разрешены.", "info");
+                    } else if (currentGlobalPermission === 'denied') {
+                        notificationPermissionState = 'denied';
+                        permissionObtainedForNotifications = false;
+                        console.log("toggleTimer: Разрешение 'denied' обнаружено (синхронизировано с Notification.permission).");
+                        showNotification(
+                            "Уведомления заблокированы. Проверьте настройки браузера и системные настройки Windows.",
+                            "info",
+                            10000
+                        );
+                    } else {
+                        console.log("toggleTimer: Вызов requestAppNotificationPermission()...");
+                        permissionObtainedForNotifications = await requestAppNotificationPermission();
+                        console.log(`toggleTimer: Результат requestAppNotificationPermission() = ${permissionObtainedForNotifications}. Глобальное состояние notificationPermissionState = '${notificationPermissionState}'.`);
+
+                        if (permissionObtainedForNotifications) {
+                            showNotification("Системные уведомления успешно разрешены!", "success");
+                        } else {
+                            if (notificationPermissionState === 'denied') {
+                                showNotification(
+                                    "Вы отклонили показ уведомлений. Если передумаете, измените настройки браузера и проверьте системные настройки Windows.",
+                                    "info",
+                                    10000
+                                );
+                            } else {
+                                showNotification(
+                                    "Запрос на уведомления закрыт без выбора или не был успешно обработан. Уведомления таймера могут не работать. Проверьте настройки браузера и системные настройки Windows.",
+                                    "warning",
+                                    10000
+                                );
+                            }
+                        }
+                    }
+                }
+
+                console.log("toggleTimer: Установка isTimerRunning = true и запуск таймера...");
+                isTimerRunning = true;
+                if (originalDocumentTitle && document.title.startsWith("⏰")) {
+                    document.title = originalDocumentTitle;
+                }
+                startTimerInternal();
+                updateTimerDisplay();
+                saveTimerState();
+                console.log("toggleTimer: Таймер запущен.");
+            }
+        }
+
+
+        function resetTimer(event) {
+            pauseTimer();
+            isTimerRunning = false;
+
+            if (event && event.ctrlKey) {
+                timeLeftInSeconds = 0;
+                timerCurrentSetDuration = 0;
+                console.log("Таймер сброшен в 00:00 (Ctrl+Click).");
+            } else {
+                timeLeftInSeconds = timerDefaultDuration;
+                timerCurrentSetDuration = timerDefaultDuration;
+                console.log(`Таймер сброшен на значение по умолчанию: ${timerDefaultDuration} сек.`);
+            }
+
+            if (originalDocumentTitle && document.title !== originalDocumentTitle) {
+                document.title = originalDocumentTitle;
+            }
+            updateTimerDisplay();
+            saveTimerState();
+        }
+
+
+        function adjustTimerDuration(secondsToAdd) {
+            const newSetDuration = timerCurrentSetDuration + secondsToAdd;
+            const minDuration = 10; // Минимальное время таймера, которое можно установить
+            const maxDuration = 3600; // 1 час
+
+            timerCurrentSetDuration = Math.max(minDuration, Math.min(maxDuration, newSetDuration));
+
+            if (!isTimerRunning) {
+                timeLeftInSeconds = timerCurrentSetDuration;
+            } else {
+                timeLeftInSeconds += secondsToAdd;
+                timeLeftInSeconds = Math.max(0, Math.min(maxDuration, timeLeftInSeconds));
+
+                if (timeLeftInSeconds <= 0) {
+                    handleTimerEnd();
+                    return;
+                }
+            }
+
+            updateTimerDisplay();
+            saveTimerState();
+            console.log(`Длительность таймера изменена. Новая установленная: ${timerCurrentSetDuration} сек. Оставшееся время: ${timeLeftInSeconds} сек.`);
+        }
+
+
+        function initTimerSystem() {
+            originalDocumentTitle = document.title;
+
+            timerDisplayElement = document.getElementById('timerDisplay');
+            timerToggleButton = document.getElementById('timerToggleButton');
+            timerResetButton = document.getElementById('timerResetButton');
+            timerIncreaseButton = document.getElementById('timerIncreaseButton');
+            timerDecreaseButton = document.getElementById('timerDecreaseButton');
+
+            if (!timerDisplayElement || !timerToggleButton || !timerResetButton || !timerIncreaseButton || !timerDecreaseButton) {
+                console.error("Ошибка инициализации таймера: не найдены все DOM-элементы.");
+                return;
+            }
+            timerToggleIcon = timerToggleButton.querySelector('i');
+            if (!timerToggleIcon) {
+                console.error("Ошибка инициализации таймера: не найдена иконка для кнопки play/pause.");
+                return;
+            }
+
+            const currentPermission = Notification.permission;
+            if (currentPermission === "granted") {
+                notificationPermissionState = "granted";
+                console.log("Инициализация таймера: системные уведомления уже разрешены.");
+            } else if (currentPermission === "denied") {
+                notificationPermissionState = "denied";
+                console.log("Инициализация таймера: системные уведомления были ранее отклонены.");
+                showNotification(
+                    "Системные уведомления таймера заблокированы. Вы можете не увидеть оповещение о завершении. Проверьте настройки браузера и Windows ('Уведомления и действия', 'Фокусировка внимания').",
+                    "warning",
+                    10000
+                );
+            } else {
+                notificationPermissionState = 'default';
+                console.log("Инициализация таймера: статус разрешений на уведомления - " + notificationPermissionState + ". Запрос будет при первом запуске таймера.");
+            }
+
+            loadTimerState();
+
+            if (timeLeftInSeconds <= 0) {
+                isTimerRunning = false;
+                if (originalDocumentTitle) {
+                    document.title = "⏰ ВРЕМЯ ВЫШЛО! - " + originalDocumentTitle;
+                } else {
+                    const currentNonAlertTitle = document.title.startsWith("⏰") ? "" : document.title.replace(/^⏰ ВРЕМЯ ВЫШЛО! - /, "");
+                    document.title = "⏰ ВРЕМЯ ВЫШЛО! - " + currentNonAlertTitle;
+                }
+            } else if (isTimerRunning) {
+                startTimerInternal();
+                if (originalDocumentTitle && document.title.startsWith("⏰")) {
+                    document.title = originalDocumentTitle;
+                }
+            } else {
+                if (originalDocumentTitle && document.title.startsWith("⏰")) {
+                    document.title = originalDocumentTitle;
+                }
+            }
+
+            updateTimerDisplay();
+
+            timerToggleButton.addEventListener('click', toggleTimer);
+            timerResetButton.addEventListener('click', (event) => resetTimer(event));
+
+            timerIncreaseButton.addEventListener('click', (event) => {
+                const amount = event.ctrlKey ? 5 : 30; // Ctrl+Click: +/- 5 секунд
+                adjustTimerDuration(amount);
+            });
+            timerDecreaseButton.addEventListener('click', (event) => {
+                const amount = event.ctrlKey ? -5 : -30; // Ctrl+Click: +/- 5 секунд
+                adjustTimerDuration(amount);
+            });
+
+            console.log("Система таймера инициализирована.");
         }
 
 
@@ -7136,7 +7653,11 @@
                     console.log("[Save Bookmark v5 TX] Добавление новой закладки...");
                     bookmarkReadyPromise = new Promise((resolve, reject) => {
                         const request = bookmarksStore.add(newDataBase);
-                        request.onsuccess = (e) => { finalId = e.target.result; newDataBase.id = finalId; resolve(); };
+                        request.onsuccess = (e) => {
+                            finalId = e.target.result;
+                            newDataBase.id = finalId;
+                            resolve();
+                        };
                         request.onerror = (e) => reject(e.target.error || new Error('Ошибка добавления закладки'));
                     });
                 }
@@ -7161,7 +7682,7 @@
                                     request.onsuccess = () => { screenshotOpResults.push({ success: true, action: 'delete', oldId: oldScreenshotId }); resolve(); };
                                     request.onerror = (e) => { screenshotOpResults.push({ success: false, action: 'delete', oldId: oldScreenshotId, error: e.target.error || new Error('Delete failed') }); resolve(); };
                                 } else if (action === 'add' && blob instanceof Blob) {
-                                    const tempName = `${newDataBase.title}, изобр. ${Date.now() + Math.random()}`;
+                                    const tempName = `${newDataBase.title || 'Закладка'}-${Date.now()}`;
                                     const record = { blob, parentId: finalId, parentType: 'bookmark', name: tempName, uploadedAt: new Date().toISOString() };
                                     const request = screenshotsStore.add(record);
                                     request.onsuccess = e => { const newId = e.target.result; screenshotOpResults.push({ success: true, action: 'add', newId }); newScreenshotIds.push(newId); resolve(); };
@@ -7179,6 +7700,9 @@
 
                 newDataBase.screenshotIds = [...new Set([...existingIdsToKeep, ...newScreenshotIds])];
                 if (newDataBase.screenshotIds.length === 0) delete newDataBase.screenshotIds;
+
+                newDataBase.folder = folder;
+
                 console.log(`[Save Bookmark v5 TX ${finalId}] Финальный объект закладки для put:`, JSON.parse(JSON.stringify(newDataBase)));
 
                 const putBookmarkReq = bookmarksStore.put(newDataBase);
@@ -7191,7 +7715,7 @@
                 });
 
             } catch (saveError) {
-                console.error(`[Save Bookmark v5 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${finalId}:`, saveError);
+                console.error(`[Save Bookmark v5 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${finalId || '(новый)'}:`, saveError);
                 if (transaction && transaction.abort && transaction.readyState !== 'done') {
                     try { transaction.abort(); console.log("[Save Bookmark v5] Транзакция отменена в catch."); }
                     catch (e) { console.error("[Save Bookmark v5] Ошибка отмены транзакции:", e); }
@@ -7220,12 +7744,15 @@
                 form.reset();
                 const bookmarkIdInput = form.querySelector('#bookmarkId'); if (bookmarkIdInput) bookmarkIdInput.value = '';
                 const modalTitleEl = modal.querySelector('#bookmarkModalTitle'); if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
-                delete form._tempScreenshotBlobs; delete form.dataset.screenshotsToDelete;
-                const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer'); if (thumbsContainer) thumbsContainer.innerHTML = '';
+                delete form._tempScreenshotBlobs;
+                delete form.dataset.screenshotsToDelete;
+                const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
+                if (thumbsContainer) thumbsContainer.innerHTML = '';
 
                 loadBookmarks();
+
             } else {
-                console.error(`[Save Bookmark v5 (Robust TX)] Сохранение закладки ${finalId} НЕ удалось.`);
+                console.error(`[Save Bookmark v5 (Robust TX)] Сохранение закладки ${finalId || '(новый)'} НЕ удалось.`);
             }
         }
 
