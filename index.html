@@ -99,12 +99,16 @@
             width: 100%;
             max-width: none !important;
             max-height: none !important;
+            display: flex;
+            flex-direction: column;
         }
 
         .is-fullscreen .p-content.overflow-y-auto.flex-1,
-        .is-fullscreen #algorithmSteps.flex-1 {
+        .is-fullscreen #algorithmSteps.flex-1,
+        .is-fullscreen #hotkeysModal .p-6.overflow-y-auto.flex-1 {
             flex-grow: 1;
             height: auto;
+            min-height: 0;
             overflow-y: auto;
         }
 
@@ -236,6 +240,11 @@
         #bookmarkDetailModal:not(.hidden),
         #extLinkModal:not(.hidden) {
             pointer-events: auto;
+        }
+
+        #hotkeysModal.is-fullscreen>.flex.items-center.justify-center {
+            padding: 0 !important;
+            height: 100%;
         }
 
         #searchResults {
@@ -1241,11 +1250,18 @@
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
                             <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и управление
                         </h2>
-                        <button id="closeHotkeysModalBtn" type="button"
-                            class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            title="Закрыть">
-                            <i class="fas fa-times text-xl"></i>
-                        </button>
+                        <div class="flex items-center flex-shrink-0">
+                            <button id="toggleFullscreenHotkeysBtn" type="button"
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Развернуть на весь экран">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <button id="closeHotkeysModalBtn" type="button"
+                                class="p-2 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть (Esc)">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1256,8 +1272,8 @@
                         <ul class="space-y-2.5 list-inside">
                             <li><code
                                     class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Backspace</code>
-                                (вне поля ввода): Вернуться на предыдущую страницу в приложении (например, из категории
-                                регламентов к списку категорий).</li>
+                                (вне поля ввода и активных окон деталей/просмотра): Вернуться на предыдущую страницу в
+                                приложении (например, из списка регламентов категории к списку категорий).</li>
                             <li><code
                                     class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + F</code>
                                 (вне поля ввода): Установить фокус на поле глобального поиска и выделить его содержимое.
@@ -1267,8 +1283,46 @@
                                 (вне поля ввода): Открыть окно настроек приложения.</li>
                             <li><code
                                     class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + V</code>
-                                (вне поля ввода): Переключить вид отображения элементов (список/плитки) в активной
-                                секции.</li>
+                                (вне поля ввода): Переключить вид отображения элементов (список/плитки) в текущей
+                                активной секции (например, для закладок, ссылок и т.д.).</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + H</code>
+                                (вне поля ввода): Открыть/закрыть это окно "Горячие клавиши и управление".</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
+                            Работа с окнами деталей и просмотра:</h3>
+                        <p class="mb-2 text-gray-700 dark:text-gray-300">
+                            Действия при открытой карточке элемента (алгоритма, регламента, заметки), списке скриншотов
+                            или полноэкранном просмотре изображения:
+                        </p>
+                        <ul class="space-y-2.5 list-inside">
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Esc</code>:
+                                <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                    <li>В окне деталей элемента (например, карточка алгоритма): Закрыть окно деталей,
+                                        вернуться к списку или предыдущему экрану.</li>
+                                    <li>В окне просмотра списка скриншотов элемента (вьювер): Закрыть список скриншотов,
+                                        а затем и окно деталей элемента.</li>
+                                    <li>При полноэкранном просмотре изображения (лайтбокс): Закрыть изображение, список
+                                        скриншотов (если был) и окно деталей элемента.</li>
+                                    <li>В других модальных окнах (редактирование, настройки и т.д.): Закрыть текущее
+                                        активное модальное окно.</li>
+                                </ul>
+                            </li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Backspace</code>:
+                                <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                    <li>В окне деталей элемента (например, карточка алгоритма): Закрыть окно деталей,
+                                        вернуться к списку или предыдущему экрану.</li>
+                                    <li>В окне просмотра списка скриншотов (вьювер): Закрыть список скриншотов,
+                                        вернуться к окну деталей элемента.</li>
+                                    <li>При полноэкранном просмотре изображения (лайтбокс): Закрыть изображение,
+                                        вернуться к списку скриншотов (если он был открыт).</li>
+                                </ul>
+                            </li>
                         </ul>
                     </section>
 
@@ -1286,12 +1340,19 @@
                             <li><code
                                     class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + Shift + O</code>:
                                 Открыть диалог выбора файла для импорта данных из JSON.</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + Backspace</code>:
-                                Очистить поле "Данные по обращению клиента" (с подтверждением).</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + D</code>:
-                                Сохранить поле "Данные по обращению клиента" в .txt файл.</li>
+                            <li>Поле "Данные по обращению клиента":
+                                <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                    <li><code
+                                            class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Enter</code>
+                                        (внутри поля): Вставить следующий пункт нумерованного списка.</li>
+                                    <li><code
+                                            class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + Backspace</code>
+                                        (вне поля ввода): Очистить поле (с подтверждением).</li>
+                                    <li><code
+                                            class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + D</code>
+                                        (вне поля ввода): Сохранить содержимое поля в .txt файл.</li>
+                                </ul>
+                            </li>
                         </ul>
                     </section>
 
@@ -1351,6 +1412,37 @@
                         </ul>
                     </section>
 
+                    <section>
+                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
+                            Просмотр изображений (Лайтбокс и Вьювер):
+                        </h3>
+                        <p class="mb-1 text-gray-700 dark:text-gray-300">
+                            При полноэкранном просмотре одного изображения (Лайтбокс):
+                        </p>
+                        <ul class="space-y-2.5 list-inside mb-3">
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono"><i class="fas fa-arrow-left inline-block w-3 text-center"></i></code>
+                                / <code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono"><i class="fas fa-arrow-right inline-block w-3 text-center"></i></code>
+                                (клавиши со стрелками): Предыдущее / следующее изображение.</li>
+                            <li>Колесо мыши (или жесты touchpad): Масштабирование изображения.</li>
+                            <li>Перетаскивание мышью (при увеличенном масштабе): Панорамирование изображения.</li>
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Tab</code>
+                                / <code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Shift + Tab</code>:
+                                Переключение между кнопками управления в полноэкранном режиме.</li>
+                        </ul>
+                        <p class="mb-1 text-gray-700 dark:text-gray-300">
+                            В окне просмотра списка скриншотов элемента (Вьювер):
+                        </p>
+                        <ul class="space-y-2.5 list-inside">
+                            <li><code
+                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + V</code>:
+                                Переключить вид отображения скриншотов (сетка/список).</li>
+                        </ul>
+                    </section>
+
                 </div>
 
                 <div class="p-4 border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0 text-right">
@@ -1401,8 +1493,8 @@
             </button>
         </div>
     </div>
-
-    <script defer src="./script.js"></script>
+    
+<script defer src="./script.js"></script>
 </body>
 
 </html>
