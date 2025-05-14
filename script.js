@@ -288,26 +288,10 @@
             if (typeof algorithms === 'undefined' || algorithms === null) {
                 algorithms = {};
             }
-            const defaultMainAlgorithm = {
-                id: "main",
-                title: "Главный алгоритм работы",
-                steps: [
-                    { title: "Приветствие", description: "Обозначьте клиенту, куда он дозвонился, представьтесь, поприветствуйте клиента.", example: "Пример: Техническая поддержка сервиса 1С-Отчетность, меня зовут Сиреневый_Турбовыбулькиватель. Здравствуйте!" },
-                    { title: "Уточнение ИНН", description: "Запросите ИНН организации для идентификации клиента в системе и дальнейшей работы.", example: "Пример: Назовите, пожалуйста, ИНН организации.", type: 'inn_step', },
-                    { title: "Идентификация проблемы", description: "Выясните суть проблемы, задавая уточняющие вопросы. Важно выяснить как можно больше деталей для составления полной картины.", example: { type: 'list', intro: "Примеры вопросов:", items: ["Уточните, пожалуйста, полный текст ошибки.", "При каких действиях возникает ошибка?"] } },
-                    { title: "Решение проблемы", description: "Четко для себя определите категорию (направление) проблемы и перейдите к соответствующему разделу в помощнике (либо статье на track.astral.ru) с инструкциями по решению." }
-                ]
-            };
-            const defaultOtherSections = {
-                program: [],
-                skzi: [],
-                lk1c: [],
-                webReg: []
-            };
 
             const mainTitleElement = document.querySelector('#mainContent h2');
             if (mainTitleElement) {
-                mainTitleElement.textContent = algorithms.main?.title || defaultMainAlgorithm.title;
+                mainTitleElement.textContent = algorithms.main?.title || DEFAULT_MAIN_ALGORITHM.title;
                 console.log(`[loadFromIndexedDB] Установлен начальный заголовок: "${mainTitleElement.textContent}"`);
             } else {
                 console.warn("[loadFromIndexedDB] Не найден элемент #mainContent h2 для установки начального заголовка.");
@@ -315,8 +299,8 @@
 
             if (!db) {
                 console.warn("База данных не инициализирована. Используются только дефолтные данные.");
-                algorithms.main = JSON.parse(JSON.stringify(defaultMainAlgorithm));
-                Object.assign(algorithms, JSON.parse(JSON.stringify(defaultOtherSections)));
+                algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
+                Object.assign(algorithms, JSON.parse(JSON.stringify(DEFAULT_OTHER_SECTIONS)));
 
                 if (mainTitleElement) {
                     mainTitleElement.textContent = algorithms.main.title;
@@ -362,9 +346,16 @@
                 ) {
                     algorithms.main = loadedAlgoData.main;
                     if (!algorithms.main.id) algorithms.main.id = 'main';
+                    algorithms.main.steps = algorithms.main.steps.map(step => ({
+                        ...step,
+                        additionalInfoText: step.additionalInfoText || '',
+                        additionalInfoShowTop: typeof step.additionalInfoShowTop === 'boolean' ? step.additionalInfoShowTop : false,
+                        additionalInfoShowBottom: typeof step.additionalInfoShowBottom === 'boolean' ? step.additionalInfoShowBottom : false,
+                        isCopyable: typeof step.isCopyable === 'boolean' ? step.isCopyable : false,
+                    }));
                     console.log(`Данные 'main' из IndexedDB прошли проверку и загружены (${algorithms.main.steps.length} шагов).`);
                     if (mainTitleElement) {
-                        mainTitleElement.textContent = algorithms.main.title || defaultMainAlgorithm.title;
+                        mainTitleElement.textContent = algorithms.main.title || DEFAULT_MAIN_ALGORITHM.title;
                         console.log(`[loadFromIndexedDB] Установлен заголовок главного алгоритма из DB: "${mainTitleElement.textContent}"`);
                     }
                 } else {
@@ -374,20 +365,30 @@
                     else if (!Array.isArray(loadedAlgoData.main.steps)) reason = "'main.steps' не массив.";
                     else if (loadedAlgoData.main.steps.length === 0) reason = "'main.steps' пустой массив.";
                     console.warn(`Загруженные данные 'main' некорректны или пусты (${reason}). Используются значения по умолчанию для 'main'. Загружено:`, loadedAlgoData?.main);
-                    algorithms.main = JSON.parse(JSON.stringify(defaultMainAlgorithm));
+                    algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
                     if (mainTitleElement) {
                         mainTitleElement.textContent = algorithms.main.title;
                         console.log(`[loadFromIndexedDB] Установлен дефолтный заголовок главного алгоритма (данные из DB некорректны или отсутствуют): "${mainTitleElement.textContent}"`);
                     }
                 }
 
-                Object.keys(defaultOtherSections).forEach(section => {
+                Object.keys(DEFAULT_OTHER_SECTIONS).forEach(section => {
                     if (loadedAlgoData && loadedAlgoData.hasOwnProperty(section) && Array.isArray(loadedAlgoData[section])) {
                         algorithms[section] = loadedAlgoData[section].map(item => {
                             if (item && typeof item === 'object') {
                                 if (typeof item.id === 'undefined' && item.title) {
                                     console.warn(`Алгоритм в секции '${section}' без ID, генерируем временный:`, item.title);
                                     item.id = `${section}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+                                }
+                                if (item.steps && Array.isArray(item.steps)) {
+                                    item.steps = item.steps.map(step => ({
+                                        ...step,
+                                        additionalInfoText: step.additionalInfoText || '',
+                                        additionalInfoShowTop: typeof step.additionalInfoShowTop === 'boolean' ? step.additionalInfoShowTop : false,
+                                        additionalInfoShowBottom: typeof step.additionalInfoShowBottom === 'boolean' ? step.additionalInfoShowBottom : false,
+                                    }));
+                                } else if (item.steps === undefined) {
+                                    item.steps = [];
                                 }
                                 return item;
                             }
@@ -409,7 +410,7 @@
                     console.error("Функция renderAllAlgorithms НЕ ОПРЕДЕЛЕНА на момент вызова в loadFromIndexedDB!");
                     if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
                     if (typeof renderAlgorithmCards === 'function') {
-                        Object.keys(defaultOtherSections).forEach(section => renderAlgorithmCards(section));
+                        Object.keys(DEFAULT_OTHER_SECTIONS).forEach(section => renderAlgorithmCards(section));
                     }
                 }
 
@@ -442,7 +443,7 @@
                 console.log("Загрузка данных из IndexedDB (loadFromIndexedDB) полностью завершена.");
                 if (!algorithms.main || !algorithms.main.steps || !Array.isArray(algorithms.main.steps) || algorithms.main.steps.length === 0) {
                     console.error("!!! ПРОВЕРКА В КОНЦЕ loadFromIndexedDB: Main algorithm steps ПУСТЫ или отсутствуют ПОСЛЕ загрузки! Восстанавливаем из дефолта.");
-                    algorithms.main = JSON.parse(JSON.stringify(defaultMainAlgorithm));
+                    algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
                     if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
                 }
 
@@ -451,12 +452,12 @@
             } catch (error) {
                 console.error("КРИТИЧЕСКАЯ ОШИБКА в loadFromIndexedDB:", error);
                 algorithms = algorithms || {};
-                algorithms.main = algorithms.main || JSON.parse(JSON.stringify(defaultMainAlgorithm));
+                algorithms.main = algorithms.main || JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
                 if (!Array.isArray(algorithms.main?.steps) || algorithms.main.steps.length === 0) {
                     console.error("Критическая ошибка привела к ПУСТОМУ/НЕ МАССИВУ в main.steps! Восстанавливаем из дефолта.");
-                    algorithms.main = JSON.parse(JSON.stringify(defaultMainAlgorithm));
+                    algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
                 }
-                Object.keys(defaultOtherSections).forEach(section => {
+                Object.keys(DEFAULT_OTHER_SECTIONS).forEach(section => {
                     algorithms[section] = algorithms[section] || [];
                 });
 
@@ -472,7 +473,7 @@
                     console.error("Функция renderAllAlgorithms НЕ ОПРЕДЕЛЕНА на момент вызова в catch блоке loadFromIndexedDB!");
                     if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
                     if (typeof renderAlgorithmCards === 'function') {
-                        Object.keys(defaultOtherSections).forEach(section => renderAlgorithmCards(section));
+                        Object.keys(DEFAULT_OTHER_SECTIONS).forEach(section => renderAlgorithmCards(section));
                     }
                 }
                 return false;
@@ -561,8 +562,7 @@
             console.log("Loading UI settings for modal...");
             let loadedSettings = {};
             const currentPanelIds = tabsConfig.map(t => t.id);
-            const defaultPanelOrder = tabsConfig.map(t => t.id);
-            const defaultPanelVisibility = tabsConfig.map(() => true);
+
 
             try {
                 const settingsFromDB = await getFromIndexedDB('preferences', 'uiSettings');
@@ -846,7 +846,7 @@
                             linkElement.click();
                             document.body.removeChild(linkElement);
                             URL.revokeObjectURL(dataUri);
-                            showNotification("Данные успешно экспортированы (fallback)");
+                            showNotification("Данные успешно экспортированы");
                             console.log("Экспорт через data URI (fallback) завершен успешно.");
                         } else {
                             console.log("Экспорт отменен пользователем.");
@@ -873,6 +873,30 @@
                     try { transaction.abort(); } catch (e) { console.error("Ошибка при отмене транзакции в catch:", e); }
                 }
             }
+        }
+
+
+        function clearTemporaryThumbnailsFromContainer(container) {
+            if (!container) return;
+            const tempThumbs = container.querySelectorAll('.screenshot-thumbnail.temporary img[data-object-url]');
+            tempThumbs.forEach(img => {
+                if (img.dataset.objectUrl && img.dataset.objectUrlRevoked !== 'true') {
+                    try {
+                        URL.revokeObjectURL(img.dataset.objectUrl);
+                        console.log(`[clearTemporaryThumbnails] Освобожден временный URL: ${img.dataset.objectUrl}`);
+                        img.dataset.objectUrlRevoked = 'true';
+                    } catch (e) {
+                        console.warn("Ошибка освобождения временного URL при очистке:", e);
+                    }
+                    delete img.dataset.objectUrl;
+                }
+            });
+            const stepOrFormElement = container.closest('.edit-step, form');
+            if (stepOrFormElement && stepOrFormElement._tempScreenshotBlobs) {
+                delete stepOrFormElement._tempScreenshotBlobs;
+                console.log("[clearTemporaryThumbnails] Очищен массив _tempScreenshotBlobs.");
+            }
+            container.innerHTML = '';
         }
 
 
@@ -927,6 +951,14 @@
             if (!db) {
                 console.error("Import failed: Database not initialized.");
                 showNotification("Ошибка импорта: База данных не доступна", "error");
+                const importFileInput = document.getElementById('importFileInput');
+                if (importFileInput) importFileInput.value = '';
+                return false;
+            }
+
+            if (typeof jsonString !== 'string' || jsonString.trim() === '') {
+                console.error("Error parsing JSON for import: Input string is empty or not a string.");
+                showNotification("Ошибка импорта: Файл пуст или не содержит текстовых данных.", "error");
                 const importFileInput = document.getElementById('importFileInput');
                 if (importFileInput) importFileInput.value = '';
                 return false;
@@ -1221,6 +1253,7 @@
         }
 
 
+
         function showNotification(message, type = "success", duration = 3000) {
             let notificationElement = document.getElementById('notification');
             const container = document.body;
@@ -1362,6 +1395,16 @@
                 }
             ]
         };
+
+
+        const DEFAULT_MAIN_ALGORITHM = JSON.parse(JSON.stringify(algorithms.main));
+
+        const DEFAULT_OTHER_SECTIONS = {};
+        for (const sectionKey in algorithms) {
+            if (sectionKey !== 'main' && Object.prototype.hasOwnProperty.call(algorithms, sectionKey)) {
+                DEFAULT_OTHER_SECTIONS[sectionKey] = JSON.parse(JSON.stringify(algorithms[sectionKey]));
+            }
+        }
 
 
         function updateVisibleTabs() {
@@ -1905,8 +1948,6 @@
 
         function initUI() {
             setActiveTab('main');
-            renderMainAlgorithm();
-            ['program', 'skzi', 'lk1c', 'webReg'].forEach(renderAlgorithmCards);
         }
 
 
@@ -1932,6 +1973,17 @@
                 console.log(`[setActiveTab] Клик по уже активной вкладке: ${tabId}. Анимация не требуется.`);
                 if (typeof setupTabsOverflow === 'function') {
                     setupTabsOverflow();
+                }
+                if (tabId === 'bookmarks') {
+                    if (document.body.classList.contains('overflow-hidden')) {
+                        console.warn("[setActiveTab - Bookmarks Active] Body имеет overflow-hidden. Принудительно снимаем.");
+                        document.body.classList.remove('overflow-hidden');
+                    }
+                    if (document.body.classList.contains('modal-open')) {
+                        console.warn("[setActiveTab - Bookmarks Active] Body имеет modal-open. Принудительно снимаем.");
+                        document.body.classList.remove('modal-open');
+                    }
+                    ensureBookmarksScroll();
                 }
                 return;
             }
@@ -1961,6 +2013,17 @@
                         targetContent.classList.add('fade-in');
                     });
                     console.log(`[setActiveTab] Content shown: ${targetContentId}`);
+                    if (tabId === 'bookmarks') {
+                        if (document.body.classList.contains('overflow-hidden')) {
+                            console.warn("[setActiveTab - Bookmarks New] Body имеет overflow-hidden. Принудительно снимаем.");
+                            document.body.classList.remove('overflow-hidden');
+                        }
+                        if (document.body.classList.contains('modal-open')) {
+                            console.warn("[setActiveTab - Bookmarks New] Body имеет modal-open. Принудительно снимаем.");
+                            document.body.classList.remove('modal-open');
+                        }
+                        ensureBookmarksScroll();
+                    }
                 } else {
                     console.warn(`[setActiveTab] Target content not found: ${targetContentId}`);
                 }
@@ -1998,6 +2061,80 @@
                 setupTabsOverflow();
             } else {
                 console.warn("[setActiveTab] setupTabsOverflow function not found.");
+            }
+        }
+
+
+        function getStepContentAsText(step) {
+            let textParts = [];
+
+            if (step.description) {
+                let descriptionText = '';
+                if (typeof step.description === 'string') {
+                    descriptionText = step.description;
+                } else if (typeof step.description === 'object' && step.description.type === 'list') {
+                    let descListText = step.description.intro || '';
+                    if (Array.isArray(step.description.items)) {
+                        step.description.items.forEach(item => {
+                            descListText += (descListText ? "\n" : "") + "- " + (typeof item === 'string' ? item : JSON.stringify(item));
+                        });
+                    }
+                    descriptionText = descListText;
+                } else if (typeof step.description === 'object') {
+                    try {
+                        descriptionText = JSON.stringify(step.description);
+                    } catch (e) {
+                        descriptionText = "[не удалось преобразовать описание в текст]";
+                    }
+                }
+                if (descriptionText.trim()) {
+                    textParts.push(descriptionText.trim());
+                }
+            }
+
+            if (step.example) {
+                let examplePrefix = "Пример:";
+                let exampleContent = "";
+                if (typeof step.example === 'string') {
+                    exampleContent = step.example;
+                } else if (typeof step.example === 'object' && step.example.type === 'list') {
+                    if (step.example.intro) {
+                        exampleContent = step.example.intro.trim();
+                    }
+                    if (Array.isArray(step.example.items)) {
+                        step.example.items.forEach(item => {
+                            const itemText = (typeof item === 'string' ? item : JSON.stringify(item));
+                            exampleContent += (exampleContent ? "\n" : "") + "- " + itemText;
+                        });
+                    }
+                    if (step.example.intro) {
+                        examplePrefix = "";
+                    }
+
+                } else if (typeof step.example === 'object') {
+                    try {
+                        examplePrefix = "Пример (данные):";
+                        exampleContent = JSON.stringify(step.example, null, 2);
+                    } catch (e) {
+                        exampleContent = "[не удалось преобразовать пример в текст]";
+                    }
+                }
+
+                if (exampleContent.trim()) {
+                    if (examplePrefix) {
+                        textParts.push(examplePrefix + "\n" + exampleContent.trim());
+                    } else {
+                        textParts.push(exampleContent.trim());
+                    }
+                }
+            }
+
+            if (textParts.length > 1) {
+                return textParts.join("\n\n").trim();
+            } else if (textParts.length === 1) {
+                return textParts[0].trim();
+            } else {
+                return "";
             }
         }
 
@@ -2106,18 +2243,31 @@
         }
 
 
+        function handleNoInnLinkClick(event) {
+            event.preventDefault();
+            if (typeof showNoInnModal === 'function') {
+                showNoInnModal();
+            } else {
+                console.error("Функция showNoInnModal не определена!");
+                if (typeof showNotification === 'function') {
+                    showNotification("Функция для обработки этого действия не найдена.", "error");
+                }
+            }
+        }
+
+
         async function renderMainAlgorithm() {
-            console.log('[renderMainAlgorithm v5 async] Вызвана (скриншоты для main отключены).');
+            console.log('[renderMainAlgorithm v7 - Checkbox Fix] Вызвана.');
             const mainAlgorithmContainer = document.getElementById('mainAlgorithm');
             if (!mainAlgorithmContainer) {
-                console.error("[renderMainAlgorithm v5 async] Контейнер #mainAlgorithm не найден.");
+                console.error("[renderMainAlgorithm v7 - Checkbox Fix] Контейнер #mainAlgorithm не найден.");
                 return;
             }
 
             mainAlgorithmContainer.innerHTML = '';
 
             if (!algorithms || typeof algorithms !== 'object' || !algorithms.main || typeof algorithms.main !== 'object' || !Array.isArray(algorithms.main.steps)) {
-                console.error("[renderMainAlgorithm v5 async] Данные главного алгоритма (algorithms.main.steps) отсутствуют или невалидны:", algorithms?.main);
+                console.error("[renderMainAlgorithm v7 - Checkbox Fix] Данные главного алгоритма (algorithms.main.steps) отсутствуют или невалидны:", algorithms?.main);
                 const errorP = document.createElement('p');
                 errorP.className = 'text-red-500 dark:text-red-400 p-4 text-center font-medium';
                 errorP.textContent = 'Ошибка: Не удалось загрузить шаги главного алгоритма. Данные повреждены или отсутствуют.';
@@ -2128,11 +2278,25 @@
             }
 
             const mainSteps = algorithms.main.steps;
+
+            if (mainSteps.length === 0) {
+                const emptyP = document.createElement('p');
+                emptyP.className = 'text-gray-500 dark:text-gray-400 p-4 text-center';
+                emptyP.textContent = 'В главном алгоритме пока нет шагов. Вы можете добавить их в режиме редактирования.';
+                mainAlgorithmContainer.appendChild(emptyP);
+                console.log('[renderMainAlgorithm v7 - Checkbox Fix] Главный алгоритм не содержит шагов. Отображено сообщение.');
+                const mainTitleElement = document.querySelector('#mainContent h2');
+                if (mainTitleElement) {
+                    mainTitleElement.textContent = algorithms.main.title || DEFAULT_MAIN_ALGORITHM.title;
+                }
+                return;
+            }
+
             const fragment = document.createDocumentFragment();
 
             mainSteps.forEach((step, index) => {
                 if (!step || typeof step !== 'object') {
-                    console.warn("[renderMainAlgorithm v5 async] Пропуск невалидного объекта шага:", step);
+                    console.warn("[renderMainAlgorithm v7 - Checkbox Fix] Пропуск невалидного объекта шага:", step);
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'algorithm-step bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 p-3 mb-3 rounded-lg shadow-sm text-red-700 dark:text-red-300';
                     errorDiv.textContent = `Ошибка: Некорректные данные для шага ${index + 1}.`;
@@ -2141,13 +2305,39 @@
                 }
 
                 const stepDiv = document.createElement('div');
-                stepDiv.className = 'algorithm-step bg-gray-100 dark:bg-gray-700 p-3 rounded-lg shadow-sm mb-3 relative';
+                stepDiv.className = 'algorithm-step bg-gray-100 dark:bg-gray-700 p-3 rounded-lg shadow-sm mb-3';
+
+                if (step.isCopyable) {
+                    stepDiv.classList.add('copyable-step-active');
+                    stepDiv.title = "Нажмите, чтобы скопировать содержимое шага";
+                    stepDiv.style.cursor = 'pointer';
+                } else {
+                    stepDiv.classList.remove('copyable-step-active');
+                    stepDiv.title = "";
+                    stepDiv.style.cursor = 'default';
+                }
+
+                stepDiv.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'A' || e.target.closest('A')) {
+                        return;
+                    }
+                    if (algorithms.main.steps[index].isCopyable) {
+                        const textToCopy = getStepContentAsText(algorithms.main.steps[index]);
+                        copyToClipboard(textToCopy, 'Содержимое шага скопировано!');
+                    }
+                });
+
+                if (step.additionalInfoText && step.additionalInfoShowTop) {
+                    const additionalInfoTopDiv = document.createElement('div');
+                    additionalInfoTopDiv.className = 'additional-info-top mb-2 p-2 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-sm text-gray-700 dark:text-gray-300 rounded break-words';
+                    additionalInfoTopDiv.innerHTML = linkify(step.additionalInfoText);
+                    stepDiv.appendChild(additionalInfoTopDiv);
+                }
 
                 const titleH3 = document.createElement('h3');
                 titleH3.className = 'font-bold text-base mb-1 text-gray-900 dark:text-gray-100';
                 titleH3.textContent = step.title || 'Без заголовка';
                 stepDiv.appendChild(titleH3);
-
 
                 const descriptionP = document.createElement('p');
                 descriptionP.className = 'text-sm text-gray-700 dark:text-gray-300 mt-1 break-words';
@@ -2192,7 +2382,7 @@
                             pre.appendChild(code);
                             exampleContainer.appendChild(pre);
                         } catch (e) {
-                            console.warn("[renderMainAlgorithm v5 async] Не удалось сериализовать 'example' для шага:", step, e);
+                            console.warn("[renderMainAlgorithm v7 - Checkbox Fix] Не удалось сериализовать 'example' для шага:", step, e);
                             const errorP = document.createElement('p');
                             errorP.className = 'text-xs text-red-500 mt-1';
                             errorP.textContent = '[Неподдерживаемый формат примера]';
@@ -2210,27 +2400,34 @@
                     innLink.id = `noInnLink_${index}`;
                     innLink.className = 'text-primary hover:underline';
                     innLink.textContent = 'Что делать, если клиент не может назвать ИНН?';
-                    innLink.removeEventListener('click', handleNoInnLinkClick);
+
+                    const existingLink = document.getElementById(`noInnLink_${index}`);
+                    if (existingLink && existingLink._clickHandler) {
+                        innLink.removeEventListener('click', existingLink._clickHandler);
+                    }
                     innLink.addEventListener('click', handleNoInnLinkClick);
+                    innLink._clickHandler = handleNoInnLinkClick;
+
                     innP.appendChild(innLink);
                     stepDiv.appendChild(innP);
                 }
 
+                if (step.additionalInfoText && step.additionalInfoShowBottom) {
+                    const additionalInfoBottomDiv = document.createElement('div');
+                    additionalInfoBottomDiv.className = 'additional-info-bottom mt-3 p-2 border-t border-gray-200 dark:border-gray-600 pt-3 text-sm text-gray-700 dark:text-gray-300 rounded bg-gray-50 dark:bg-gray-700/50 break-words';
+                    additionalInfoBottomDiv.innerHTML = linkify(step.additionalInfoText);
+                    stepDiv.appendChild(additionalInfoBottomDiv);
+                }
                 fragment.appendChild(stepDiv);
             });
 
             mainAlgorithmContainer.appendChild(fragment);
-            console.log(`[renderMainAlgorithm v5 async] Рендеринг ${mainSteps.length} шагов завершен (скриншоты отключены).`);
-        }
+            console.log(`[renderMainAlgorithm v7 - Checkbox Fix] Рендеринг ${mainSteps.length} шагов завершен.`);
 
-
-        function handleNoInnLinkClick(event) {
-            event.preventDefault();
-            if (typeof showNoInnModal === 'function') {
-                showNoInnModal();
-            } else {
-                console.error("Функция showNoInnModal не определена");
-                alert("Функция для отображения информации не найдена.");
+            const mainTitleElement = document.querySelector('#mainContent h2');
+            if (mainTitleElement) {
+                mainTitleElement.textContent = algorithms.main.title || DEFAULT_MAIN_ALGORITHM.title;
+                console.log(`[renderMainAlgorithm v7 - Checkbox Fix] Установлен заголовок главного алгоритма: "${mainTitleElement.textContent}"`);
             }
         }
 
@@ -2327,49 +2524,41 @@
 
             const cleanupModalState = (state) => {
                 console.log(`[Cleanup for ${modalId}] Cleaning up state and listeners.`);
-                if (state.escapeHandler) {
-                    document.removeEventListener('keydown', state.escapeHandler);
-                    console.log(`[Cleanup ${modalId}] Removed escape handler.`);
-                }
+
                 if (state.gridBtnClickHandler) {
                     state.gridBtn?.removeEventListener('click', state.gridBtnClickHandler);
-                    console.log(`[Cleanup ${modalId}] Removed gridBtn handler.`);
                 }
                 if (state.listBtnClickHandler) {
                     state.listBtn?.removeEventListener('click', state.listBtnClickHandler);
-                    console.log(`[Cleanup ${modalId}] Removed listBtn handler.`);
                 }
                 if (state.closeButtonXClickHandler) {
                     state.closeButtonX?.removeEventListener('click', state.closeButtonXClickHandler);
-                    console.log(`[Cleanup ${modalId}] Removed closeButtonX handler.`);
                 }
                 if (state.closeButtonCancelClickHandler) {
                     state.closeButtonCancel?.removeEventListener('click', state.closeButtonCancelClickHandler);
-                    console.log(`[Cleanup ${modalId}] Removed closeButtonCancel handler.`);
                 }
                 if (state.overlayClickHandler) {
                     state.overlayElement?.removeEventListener('click', state.overlayClickHandler);
-                    console.log(`[Cleanup ${modalId}] Removed overlay handler.`);
                 }
 
                 const images = state.contentArea?.querySelectorAll('img[data-object-url]');
                 images?.forEach(img => {
                     if (img.dataset.objectUrl) {
-                        console.log(`[Cleanup ${modalId}] Revoking Object URL:`, img.dataset.objectUrl);
                         try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn(`Error revoking URL ${img.dataset.objectUrl}:`, revokeError); }
                         delete img.dataset.objectUrl;
                     }
                 });
-
                 Object.keys(state).forEach(key => delete state[key]);
             };
 
-            const closeModal = () => {
+            const closeModalFunction = () => {
                 const currentModal = document.getElementById(modalId);
                 if (currentModal && !currentModal.classList.contains('hidden')) {
-                    console.log(`[showScreenshotViewerModal] Closing modal #${modalId}`);
                     currentModal.classList.add('hidden');
-                    document.body.classList.remove('overflow-hidden');
+
+                    if (getVisibleModals().length === 0) {
+                        document.body.classList.remove('overflow-hidden');
+                    }
 
                     const state = currentModal._modalState || {};
                     cleanupModalState(state);
@@ -2378,16 +2567,12 @@
                     const contentAreaForClearOnClose = currentModal.querySelector('#screenshotContentArea');
                     if (contentAreaForClearOnClose) {
                         contentAreaForClearOnClose.innerHTML = '';
-                        console.log(`[showScreenshotViewerModal] Content area cleared on close for #${modalId}.`);
                     }
-
-                } else {
-                    console.log(`[showScreenshotViewerModal] Attempt to close already closed or non-existent modal #${modalId}`);
+                    removeEscapeHandler(currentModal);
                 }
             };
 
             if (modal && modal._modalState) {
-                console.log(`[showScreenshotViewerModal] Reusing modal #${modalId}. Cleaning up previous state...`);
                 cleanupModalState(modal._modalState);
                 const contentAreaForClear = modal.querySelector('#screenshotContentArea');
                 if (contentAreaForClear) contentAreaForClear.innerHTML = '';
@@ -2395,11 +2580,9 @@
 
             if (!modal) {
                 isNewModal = true;
-                console.log(`[showScreenshotViewerModal] Creating new modal #${modalId}`);
                 modal = document.createElement('div');
                 modal.id = modalId;
                 modal.className = 'fixed inset-0 bg-black bg-opacity-75 hidden z-[80] p-4 flex items-center justify-center';
-
                 modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -2428,13 +2611,13 @@
                         Закрыть
                     </button>
                 </div>
-            </div>
-        `;
+            </div>`;
                 document.body.appendChild(modal);
             }
 
             modalState = {};
             modal._modalState = modalState;
+            modalState.closeModalFunction = closeModalFunction;
 
             modalState.titleEl = modal.querySelector('#screenshotViewerTitle');
             modalState.contentArea = modal.querySelector('#screenshotContentArea');
@@ -2445,38 +2628,21 @@
             modalState.overlayElement = modal;
 
             if (!modalState.titleEl || !modalState.contentArea || !modalState.gridBtn || !modalState.listBtn || !modalState.closeButtonX || !modalState.closeButtonCancel) {
-                console.error("[showScreenshotViewerModal] CRITICAL ERROR: Not all required inner elements found! Check IDs/classes in modal.innerHTML.", {
-                    title: !!modalState.titleEl,
-                    content: !!modalState.contentArea,
-                    gridBtn: !!modalState.gridBtn,
-                    listBtn: !!modalState.listBtn,
-                    closeX: !!modalState.closeButtonX,
-                    closeCancel: !!modalState.closeButtonCancel
-                });
-                showNotification("Критическая ошибка интерфейса окна просмотра скриншотов.", "error");
-                if (modal && !modal.classList.contains('hidden')) { modal.classList.add('hidden'); }
-                if (modal._modalState) delete modal._modalState;
                 return;
             }
-            console.log("[showScreenshotViewerModal] All required inner elements found successfully.");
-
-            modalState.closeButtonXClickHandler = closeModal;
-            modalState.closeButtonCancelClickHandler = closeModal;
-            modalState.overlayClickHandler = (e) => { if (e.target === modalState.overlayElement) { closeModal(); } };
-            modalState.escapeHandler = (event) => { if (event.key === 'Escape') { closeModal(); } };
 
             if (!isNewModal) {
                 modalState.closeButtonX?.removeEventListener('click', modalState.closeButtonXClickHandler);
                 modalState.closeButtonCancel?.removeEventListener('click', modalState.closeButtonCancelClickHandler);
                 modalState.overlayElement?.removeEventListener('click', modalState.overlayClickHandler);
-                document.removeEventListener('keydown', modalState.escapeHandler);
             }
+            modalState.closeButtonXClickHandler = closeModalFunction;
+            modalState.closeButtonCancelClickHandler = closeModalFunction;
+            modalState.overlayClickHandler = (e) => { if (e.target === modalState.overlayElement) { closeModalFunction(); } };
 
             modalState.closeButtonX.addEventListener('click', modalState.closeButtonXClickHandler);
             modalState.closeButtonCancel.addEventListener('click', modalState.closeButtonCancelClickHandler);
             modalState.overlayElement.addEventListener('click', modalState.overlayClickHandler);
-            document.addEventListener('keydown', modalState.escapeHandler);
-            console.log(`[showScreenshotViewerModal] Attached event handlers for #${modalId}.`);
 
             const defaultTitle = `Скриншоты для ${algorithmId}`;
             modalState.titleEl.textContent = `${algorithmTitle || defaultTitle}`;
@@ -2506,16 +2672,12 @@
             };
 
             const renderContent = () => {
-                console.log(`[renderContent for ${modalId}] Rendering for view: ${currentView}`);
                 if (!modalState.contentArea) {
-                    console.error(`[renderContent for ${modalId}] Ошибка: contentArea не найден в modalState!`);
                     return;
                 }
-
                 const existingImages = modalState.contentArea.querySelectorAll('img[data-object-url]');
                 existingImages.forEach(img => {
                     if (img.dataset.objectUrl) {
-                        console.log(`[renderContent for ${modalId}] Revoking Object URL before re-render:`, img.dataset.objectUrl);
                         try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (e) { console.warn("Error revoking URL in renderContent", e); }
                         delete img.dataset.objectUrl;
                     }
@@ -2527,40 +2689,33 @@
                     return;
                 }
                 const sortedScreenshots = [...screenshots].sort((a, b) => (a.id || 0) - (b.id || 0));
-
                 const openLightboxHandler = (blobs, index) => {
                     if (typeof openLightbox === 'function') {
                         openLightbox(blobs, index);
                     } else {
-                        console.error("Функция openLightbox не найдена!");
                         showNotification("Ошибка: Функция просмотра изображений (лайтбокс) недоступна.", "error");
                     }
                 };
-
                 if (currentView === 'grid') {
                     if (typeof renderScreenshotThumbnails === 'function') {
                         renderScreenshotThumbnails(modalState.contentArea, sortedScreenshots, openLightboxHandler, modalState);
-                    }
-                    else {
+                    } else {
                         modalState.contentArea.innerHTML = '<p class="text-center text-red-500 dark:text-red-400 p-6">Ошибка: Функция отображения миниатюр недоступна.</p>';
-                        console.error("Функция renderScreenshotThumbnails не найдена!");
                     }
                 } else {
                     if (typeof renderScreenshotList === 'function') {
                         renderScreenshotList(modalState.contentArea, sortedScreenshots, openLightboxHandler, null, modalState);
-                    }
-                    else {
+                    } else {
                         modalState.contentArea.innerHTML = '<p class="text-center text-red-500 dark:text-red-400 p-6">Ошибка: Функция отображения списка недоступна.</p>';
-                        console.error("Функция renderScreenshotList не найдена!");
                     }
                 }
             };
 
-            if (!isNewModal && modalState.gridBtn) {
-                modalState.gridBtn.onclick = null;
+            if (!isNewModal && modalState.gridBtn && modalState.gridBtnClickHandler) {
+                modalState.gridBtn.removeEventListener('click', modalState.gridBtnClickHandler);
             }
-            if (!isNewModal && modalState.listBtn) {
-                modalState.listBtn.onclick = null;
+            if (!isNewModal && modalState.listBtn && modalState.listBtnClickHandler) {
+                modalState.listBtn.removeEventListener('click', modalState.listBtnClickHandler);
             }
 
             modalState.gridBtnClickHandler = () => { if (currentView !== 'grid') { currentView = 'grid'; updateViewButtons(); renderContent(); } };
@@ -2568,7 +2723,6 @@
 
             modalState.gridBtn.addEventListener('click', modalState.gridBtnClickHandler);
             modalState.listBtn.addEventListener('click', modalState.listBtnClickHandler);
-            console.log(`[showScreenshotViewerModal] Attached view toggle handlers for #${modalId}.`);
 
             updateViewButtons();
             renderContent();
@@ -2929,6 +3083,14 @@
                         return `<div class="algorithm-step bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 p-4 mb-3 rounded shadow-sm text-red-700 dark:text-red-300">Ошибка: Некорректные данные для шага ${index + 1}.</div>`;
                     }
 
+                    let additionalInfoTopHTML = '';
+                    if (step.additionalInfoText && step.additionalInfoShowTop) {
+                        additionalInfoTopHTML = `
+                    <div class="additional-info-top mb-2 p-2 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-sm text-gray-700 dark:text-gray-300 rounded break-words">
+                        ${linkify(step.additionalInfoText)}
+                    </div>`;
+                    }
+
                     let screenshotIconHtml = '';
                     let iconContainerHtml = '';
                     if (!isMainAlgorithm) {
@@ -2965,14 +3127,24 @@
                         exampleHtml += `</div>`;
                     }
 
+                    let additionalInfoBottomHTML = '';
+                    if (step.additionalInfoText && step.additionalInfoShowBottom) {
+                        additionalInfoBottomHTML = `
+                    <div class="additional-info-bottom mt-3 p-2 border-t border-gray-200 dark:border-gray-600 pt-3 text-sm text-gray-700 dark:text-gray-300 rounded bg-gray-50 dark:bg-gray-700/50 break-words">
+                       ${linkify(step.additionalInfoText)}
+                    </div>`;
+                    }
+
                     const stepTitle = escapeHtml(step.title ?? `Шаг ${index + 1}`);
                     const stepHTML = `
-                         <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3 relative">
-                             <h3 class="font-bold text-lg ${iconContainerHtml ? 'inline' : ''}" title="${stepTitle}">${stepTitle}</h3>
-                             ${iconContainerHtml}
-                             ${descriptionHtml}
-                             ${exampleHtml}
-                         </div>`;
+                 <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3 relative">
+                     ${additionalInfoTopHTML}
+                     <h3 class="font-bold text-lg ${iconContainerHtml ? 'inline' : ''}" title="${stepTitle}">${stepTitle}</h3>
+                     ${iconContainerHtml}
+                     ${descriptionHtml}
+                     ${exampleHtml}
+                     ${additionalInfoBottomHTML}
+                 </div>`;
                     console.log(`[showAlgorithmDetail Step Render Debug] Шаг ${index}: HTML сгенерирован.`);
                     return stepHTML;
                 });
@@ -3022,25 +3194,25 @@
             initialEditState = null;
 
             const isMainAlgorithm = section === 'main';
-            console.log(`[editAlgorithm v7 Исправленная] Попытка редактирования: ID=${algorithmId}, Секция=${section}, isMainAlgorithm=${isMainAlgorithm}`);
+            console.log(`[editAlgorithm v8 Исправленная] Попытка редактирования: ID=${algorithmId}, Секция=${section}, isMainAlgorithm=${isMainAlgorithm}`);
 
             try {
-                console.log(`[editAlgorithm v7] Поиск/загрузка данных для ID ${algorithmId} в секции ${section}...`);
+                console.log(`[editAlgorithm v8] Поиск/загрузка данных для ID ${algorithmId} в секции ${section}...`);
                 if (isMainAlgorithm) {
                     if (algorithms?.main?.id === 'main') {
                         algorithm = algorithms.main;
-                        console.log("[editAlgorithm v7] Найден главный алгоритм в памяти.");
+                        console.log("[editAlgorithm v8] Найден главный алгоритм в памяти.");
                     } else {
-                        console.log("[editAlgorithm v7] Главный алгоритм не найден в памяти, попытка загрузки из IndexedDB...");
+                        console.log("[editAlgorithm v8] Главный алгоритм не найден в памяти, попытка загрузки из IndexedDB...");
                         const savedAlgoContainer = await getFromIndexedDB('algorithms', 'all');
                         if (savedAlgoContainer?.data?.main?.id === 'main') {
                             algorithm = savedAlgoContainer.data.main;
                             if (typeof algorithms !== 'undefined') {
                                 algorithms.main = JSON.parse(JSON.stringify(algorithm));
                             }
-                            console.log("[editAlgorithm v7] Главный алгоритм загружен из IndexedDB.");
+                            console.log("[editAlgorithm v8] Главный алгоритм загружен из IndexedDB.");
                         } else {
-                            console.warn("[editAlgorithm v7] Главный алгоритм не найден ни в памяти, ни в IndexedDB.");
+                            console.warn("[editAlgorithm v8] Главный алгоритм не найден ни в памяти, ни в IndexedDB.");
                         }
                     }
                 } else {
@@ -3049,12 +3221,12 @@
                         algorithm = algorithms[section].find(a => String(a?.id) === String(algorithmId));
                         if (algorithm) {
                             foundInMemory = true;
-                            console.log(`[editAlgorithm v7] Алгоритм ${algorithmId} найден в памяти [${section}].`);
+                            console.log(`[editAlgorithm v8] Алгоритм ${algorithmId} найден в памяти [${section}].`);
                         }
                     }
 
                     if (!foundInMemory) {
-                        console.log(`[editAlgorithm v7] Алгоритм ${algorithmId} не найден в памяти [${section}], попытка загрузки из IndexedDB...`);
+                        console.log(`[editAlgorithm v8] Алгоритм ${algorithmId} не найден в памяти [${section}], попытка загрузки из IndexedDB...`);
                         const savedAlgoContainer = await getFromIndexedDB('algorithms', 'all');
                         const savedAlgoData = savedAlgoContainer?.data;
                         if (savedAlgoData?.[section] && Array.isArray(savedAlgoData[section])) {
@@ -3063,23 +3235,23 @@
                                 if (algorithms && algorithms[section]) {
                                     const indexInMemory = algorithms[section].findIndex(a => String(a?.id) === String(algorithmId));
                                     if (indexInMemory > -1) {
-                                        console.log(`[editAlgorithm v7] Обновление алгоритма ${algorithmId} в памяти из данных БД.`);
+                                        console.log(`[editAlgorithm v8] Обновление алгоритма ${algorithmId} в памяти из данных БД.`);
                                         algorithms[section][indexInMemory] = JSON.parse(JSON.stringify(algorithm));
                                     } else {
-                                        console.log(`[editAlgorithm v7] Добавление алгоритма ${algorithmId} в память из данных БД.`);
+                                        console.log(`[editAlgorithm v8] Добавление алгоритма ${algorithmId} в память из данных БД.`);
                                         algorithms[section].push(JSON.parse(JSON.stringify(algorithm)));
                                     }
                                 } else {
-                                    console.warn(`[editAlgorithm v7] Секция ${section} не найдена в 'algorithms' для обновления из БД.`);
+                                    console.warn(`[editAlgorithm v8] Секция ${section} не найдена в 'algorithms' для обновления из БД.`);
                                     if (!algorithms) algorithms = {};
                                     algorithms[section] = [JSON.parse(JSON.stringify(algorithm))];
                                 }
-                                console.log(`[editAlgorithm v7] Алгоритм ${algorithmId} загружен из IndexedDB [${section}].`);
+                                console.log(`[editAlgorithm v8] Алгоритм ${algorithmId} загружен из IndexedDB [${section}].`);
                             } else {
-                                console.warn(`[editAlgorithm v7] Алгоритм ${algorithmId} не найден в IndexedDB [${section}].`);
+                                console.warn(`[editAlgorithm v8] Алгоритм ${algorithmId} не найден в IndexedDB [${section}].`);
                             }
                         } else {
-                            console.warn(`[editAlgorithm v7] Секция ${section} не найдена в сохраненных данных IndexedDB или не является массивом.`);
+                            console.warn(`[editAlgorithm v8] Секция ${section} не найдена в сохраненных данных IndexedDB или не является массивом.`);
                         }
                     }
                 }
@@ -3087,15 +3259,28 @@
                     throw new Error(`Алгоритм с ID ${algorithmId} не найден в секции ${section} после всех проверок.`);
                 }
 
+                if (algorithm.steps && Array.isArray(algorithm.steps)) {
+                    algorithm.steps = algorithm.steps.map(step => ({
+                        additionalInfoText: '',
+                        additionalInfoShowTop: false,
+                        additionalInfoShowBottom: false,
+                        isCopyable: false,
+                        ...step
+                    }));
+                } else {
+                    algorithm.steps = [];
+                }
+
+
             } catch (error) {
-                console.error(`[editAlgorithm v7 Исправленная] Ошибка при получении данных алгоритма:`, error);
+                console.error(`[editAlgorithm v8 Исправленная] Ошибка при получении данных алгоритма:`, error);
                 showNotification(`Ошибка при поиске данных алгоритма: ${error.message || error}`, "error");
                 initialEditState = null;
                 return;
             }
 
             if (!algorithm || typeof algorithm !== 'object') {
-                console.error(`[editAlgorithm v7 FATAL] 'algorithm' все еще не объект после блока try/catch! ID=${algorithmId}, Section=${section}`);
+                console.error(`[editAlgorithm v8 FATAL] 'algorithm' все еще не объект после блока try/catch! ID=${algorithmId}, Section=${section}`);
                 showNotification("Критическая ошибка: не удалось получить данные алгоритма.", "error");
                 initialEditState = null;
                 return;
@@ -3106,24 +3291,30 @@
             const algorithmTitleInput = document.getElementById('algorithmTitle');
             const descriptionContainer = document.getElementById('algorithmDescriptionContainer');
             const algorithmDescriptionInput = document.getElementById('algorithmDescription');
-            const editStepsContainer = document.getElementById('editSteps');
+            const editStepsContainerElement = document.getElementById('editSteps');
             const addStepBtn = document.getElementById('addStepBtn');
             const saveAlgorithmBtn = document.getElementById('saveAlgorithmBtn');
 
-            if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainer || !addStepBtn || !saveAlgorithmBtn || !descriptionContainer) {
-                console.error("[editAlgorithm v7 Исправленная] КРИТИЧЕСКАЯ ОШИБКА: Не найдены ОБЯЗАТЕЛЬНЫЕ элементы модального окна редактирования.");
+            if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainerElement || !addStepBtn || !saveAlgorithmBtn || !descriptionContainer) {
+                console.error("[editAlgorithm v8 Исправленная] КРИТИЧЕСКАЯ ОШИБКА: Не найдены ОБЯЗАТЕЛЬНЫЕ элементы модального окна редактирования.");
                 showNotification("Критическая ошибка интерфейса: не найдены элементы окна редактирования.", "error");
                 if (editModal && !editModal.classList.contains('hidden')) { editModal.classList.add('hidden'); }
                 initialEditState = null;
                 return;
             }
             if (!isMainAlgorithm && !algorithmDescriptionInput) {
-                console.error("[editAlgorithm v7 Исправленная] КРИТИЧЕСКАЯ ОШИБКА: Не найдено поле описания (#algorithmDescription) для не-главного алгоритма.");
+                console.error("[editAlgorithm v8 Исправленная] КРИТИЧЕСКАЯ ОШИБКА: Не найдено поле описания (#algorithmDescription) для не-главного алгоритма.");
                 showNotification("Критическая ошибка интерфейса: не найдено поле описания.", "error");
-                if (editModal && !editModal.classList.contains('hidden')) { editModal.classList.add('hidden'); }
+                if (editModal && !editModal.classList.contains('hidden')) editModal.classList.add('hidden');
                 initialEditState = null;
                 return;
             }
+
+            const stepsOuterContainer = document.getElementById('editStepsContainer');
+            if (stepsOuterContainer) {
+                stepsOuterContainer.classList.add('min-h-0');
+            }
+
 
             try {
                 descriptionContainer.style.display = isMainAlgorithm ? 'none' : 'block';
@@ -3134,13 +3325,16 @@
                     algorithmDescriptionInput.value = algorithm.description ?? '';
                 }
 
-                editStepsContainer.innerHTML = '';
+                editStepsContainerElement.innerHTML = '';
                 if (!Array.isArray(algorithm.steps)) {
-                    console.error(`[editAlgorithm v7 Исправленная] Алгоритм (ID: ${algorithm.id || algorithmId}) имеет невалидные 'steps'.`);
-                    editStepsContainer.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки шагов: данные некорректны.</p>';
+                    console.error(`[editAlgorithm v8 Исправленная] Алгоритм (ID: ${algorithm.id || algorithmId}) имеет невалидные 'steps'.`);
+                    editStepsContainerElement.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки шагов: данные некорректны.</p>';
                 } else if (algorithm.steps.length === 0 && !isMainAlgorithm) {
-                    editStepsContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center p-4">У этого алгоритма еще нет шагов. Добавьте первый шаг.</p>';
-                } else {
+                    editStepsContainerElement.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center p-4">У этого алгоритма еще нет шагов. Добавьте первый шаг.</p>';
+                } else if (algorithm.steps.length === 0 && isMainAlgorithm) {
+                    editStepsContainerElement.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center p-4">В главном алгоритме пока нет шагов. Добавьте первый шаг.</p>';
+                }
+                else {
                     const fragment = document.createDocumentFragment();
                     for (const [index, step] of algorithm.steps.entries()) {
                         if (!step || typeof step !== 'object') {
@@ -3153,7 +3347,7 @@
                         try {
                             stepDiv.innerHTML = createStepElementHTML(index + 1, isMainAlgorithm, !isMainAlgorithm);
                         } catch (htmlError) {
-                            console.error(`[editAlgorithm v7] Ошибка при вызове createStepElementHTML для шага ${index + 1}:`, htmlError);
+                            console.error(`[editAlgorithm v8] Ошибка при вызове createStepElementHTML для шага ${index + 1}:`, htmlError);
                             stepDiv.innerHTML = `<p class="text-red-500">Ошибка рендеринга шага ${index + 1}</p>`;
                             fragment.appendChild(stepDiv);
                             continue;
@@ -3162,10 +3356,20 @@
                         const titleInput = stepDiv.querySelector('.step-title');
                         const descInput = stepDiv.querySelector('.step-desc');
                         const exampleTextarea = stepDiv.querySelector('.step-example');
+                        const additionalInfoTextarea = stepDiv.querySelector('.step-additional-info');
+                        const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
+                        const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
+                        const isCopyableCheckbox = stepDiv.querySelector('.step-is-copyable');
+
 
                         if (titleInput) { titleInput.value = step.title ?? ''; }
                         if (descInput) { descInput.value = step.description ?? ''; }
                         if (exampleTextarea) { exampleTextarea.value = formatExampleForTextarea(step.example); }
+                        if (additionalInfoTextarea) { additionalInfoTextarea.value = step.additionalInfoText || ''; }
+                        if (additionalInfoPosTopCheckbox) { additionalInfoPosTopCheckbox.checked = step.additionalInfoShowTop || false; }
+                        if (additionalInfoPosBottomCheckbox) { additionalInfoPosBottomCheckbox.checked = step.additionalInfoShowBottom || false; }
+                        if (isMainAlgorithm && isCopyableCheckbox) { isCopyableCheckbox.checked = step.isCopyable || false; }
+
 
                         if (!isMainAlgorithm) {
                             const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
@@ -3177,49 +3381,49 @@
                                     if (typeof renderExistingThumbnail === 'function') {
                                         const renderPromises = existingIds.map(screenshotId =>
                                             renderExistingThumbnail(screenshotId, thumbsContainer, stepDiv)
-                                                .catch(err => console.error(`[editAlgorithm v7 - Step ${index}] Ошибка рендеринга миниатюры ID ${screenshotId}:`, err))
+                                                .catch(err => console.error(`[editAlgorithm v8 - Step ${index}] Ошибка рендеринга миниатюры ID ${screenshotId}:`, err))
                                         );
                                         await Promise.allSettled(renderPromises);
-                                    } else { }
+                                    } else { console.warn(`[editAlgorithm v8 - Step ${index}] renderExistingThumbnail is not a function.`); }
                                 }
                                 stepDiv.dataset.existingRendered = 'true';
                                 stepDiv._tempScreenshotBlobs = [];
                                 stepDiv.dataset.screenshotsToDelete = '';
                                 if (typeof attachScreenshotHandlers === 'function') {
                                     attachScreenshotHandlers(stepDiv);
-                                } else { }
-                            } else { }
+                                } else { console.warn(`[editAlgorithm v8 - Step ${index}] attachScreenshotHandlers is not a function.`); }
+                            } else { console.warn(`[editAlgorithm v8 - Step ${index}] #screenshotThumbnailsContainer not found.`); }
                         }
 
                         const deleteStepBtn = stepDiv.querySelector('.delete-step');
                         if (deleteStepBtn) {
                             if (typeof attachStepDeleteHandler === 'function') {
-                                attachStepDeleteHandler(deleteStepBtn, stepDiv, editStepsContainer, section, 'edit', isMainAlgorithm);
-                            } else { }
-                        } else { }
+                                attachStepDeleteHandler(deleteStepBtn, stepDiv, editStepsContainerElement, section, 'edit', isMainAlgorithm);
+                            } else { console.warn(`[editAlgorithm v8 - Step ${index}] attachStepDeleteHandler is not a function.`); }
+                        } else { console.warn(`[editAlgorithm v8 - Step ${index}] .delete-step button not found.`); }
 
                         fragment.appendChild(stepDiv);
                     }
-                    editStepsContainer.appendChild(fragment);
+                    editStepsContainerElement.appendChild(fragment);
 
                     if (typeof updateStepNumbers === 'function') {
-                        updateStepNumbers(editStepsContainer);
+                        updateStepNumbers(editStepsContainerElement);
                     } else {
-                        console.error("[editAlgorithm v7 Исправленная] Функция updateStepNumbers не найдена!");
+                        console.error("[editAlgorithm v8 Исправленная] Функция updateStepNumbers не найдена!");
                     }
                 }
 
                 if (typeof captureInitialEditState === 'function') {
                     captureInitialEditState(algorithm);
                 } else {
-                    console.warn("[editAlgorithm v7 Исправленная] Функция captureInitialEditState не найдена.");
+                    console.warn("[editAlgorithm v8 Исправленная] Функция captureInitialEditState не найдена.");
                     initialEditState = null;
                 }
 
             } catch (error) {
-                console.error("[editAlgorithm v7 Исправленная] Ошибка при заполнении формы данными:", error);
+                console.error("[editAlgorithm v8 Исправленная] Ошибка при заполнении формы данными:", error);
                 showNotification("Произошла ошибка при подготовке формы редактирования.", "error");
-                editStepsContainer.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки данных в форму.</p>';
+                if (editStepsContainerElement) editStepsContainerElement.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки данных в форму.</p>';
                 if (saveAlgorithmBtn) saveAlgorithmBtn.disabled = true;
                 initialEditState = null;
                 return;
@@ -3228,7 +3432,7 @@
             if (algorithm && (typeof algorithm.id === 'string' || typeof algorithm.id === 'number') && algorithm.id !== '' && algorithm.id !== null && algorithm.id !== undefined) {
                 editModal.dataset.algorithmId = String(algorithm.id);
             } else {
-                console.error(`[editAlgorithm v7 FATAL] Не удалось получить валидный algorithm.id для установки dataset! algorithm:`, algorithm);
+                console.error(`[editAlgorithm v8 FATAL] Не удалось получить валидный algorithm.id для установки dataset! algorithm:`, algorithm);
                 showNotification("Критическая ошибка: не удалось определить ID редактируемого алгоритма.", "error");
                 if (editModal && !editModal.classList.contains('hidden')) editModal.classList.add('hidden');
                 initialEditState = null;
@@ -3239,21 +3443,22 @@
             const algorithmModal = document.getElementById('algorithmModal');
             if (algorithmModal) { algorithmModal.classList.add('hidden'); }
 
-            editModal.classList.remove('hidden');
+            openAnimatedModal(editModal);
+
             setTimeout(() => {
                 try {
                     const titleInputForFocus = document.getElementById('algorithmTitle');
                     if (titleInputForFocus && titleInputForFocus.offsetParent !== null) {
                         titleInputForFocus.focus();
                     } else {
-                        console.warn("[editAlgorithm v7] Не удалось установить фокус: поле заголовка не найдено или не видимо.");
+                        console.warn("[editAlgorithm v8] Не удалось установить фокус: поле заголовка не найдено или не видимо.");
                     }
                 } catch (focusError) {
-                    console.warn("[editAlgorithm v7] Ошибка при попытке установить фокус на поле заголовка:", focusError);
+                    console.warn("[editAlgorithm v8] Ошибка при попытке установить фокус на поле заголовка:", focusError);
                 }
             }, 50);
 
-            console.log(`[editAlgorithm v7 Исправленная] Успешно открыто окно редактирования для Algorithm ID: ${algorithm.id}, Секция: ${section}. Начальное состояние захвачено.`);
+            console.log(`[editAlgorithm v8 Исправленная] Успешно открыто окно редактирования для Algorithm ID: ${algorithm.id}, Секция: ${section}. Начальное состояние захвачено.`);
         }
 
 
@@ -3437,6 +3642,7 @@
 
                     if (item.classList.contains('bookmark-item')) {
                         item.classList.add('pb-12', 'relative', 'h-full');
+                        item.classList.add('cursor-pointer');
                         if (actions) {
                             actions.classList.add('absolute', 'bottom-0', 'left-0', 'right-0', 'border-t', 'border-gray-200', 'dark:border-gray-700', 'px-4', 'py-2', 'justify-end', 'bg-inherit', 'rounded-b-lg');
                             actions.classList.add('opacity-0', 'group-hover:opacity-100', 'focus-within:opacity-100', 'transition-opacity', 'duration-200');
@@ -3460,7 +3666,6 @@
                     }
 
                 } else {
-                    // Вид "Список"
                     const baseListClassesFiltered = LIST_ITEM_BASE_CLASSES.filter(cls => ![
                         'p-3', 'border-b', 'border-gray-200', 'dark:border-gray-600'
                     ].includes(cls));
@@ -3480,7 +3685,7 @@
                     }
                 }
             });
-            console.log(`[applyView v3 Исправленная] Стили для вида '${view}' применены к ${items.length} элементам в контейнере ${sectionId || container.id}.`); // v3
+            console.log(`[applyView v3 Исправленная] Стили для вида '${view}' применены к ${items.length} элементам в контейнере ${sectionId || container.id}.`);
         }
 
 
@@ -3493,51 +3698,80 @@
         }
 
 
-        function createStepElementHTML(stepNumber, includeExampleField, includeScreenshotsField) {
+        function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsField) {
             const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
             const commonTextareaClasses = `${commonInputClasses} resize-y`;
 
-            const exampleInputHTML = includeExampleField ? `
-            <div class="mt-2">
-                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (опционально)</label>
-                <textarea class="step-example ${commonTextareaClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2"></textarea>
-                <p class="text-xs text-gray-500 mt-1">Для списка используйте дефис (-) или звездочку (*) в начале каждой строки. Первая строка без дефиса/звездочки будет вступлением.</p>
+            const exampleInputHTML = isMainAlgorithm ? `
+    <div class="mt-2">
+        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (опционально)</label>
+        <textarea class="step-example ${commonTextareaClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2"></textarea>
+        <p class="text-xs text-gray-500 mt-1">Для списка используйте дефис (-) или звездочку (*) в начале каждой строки. Первая строка без дефиса/звездочки будет вступлением.</p>
+    </div>
+` : '';
+
+            const additionalInfoHTML = `
+        <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Дополнительная информация (опционально)</label>
+            <textarea class="step-additional-info ${commonTextareaClasses}" rows="3" placeholder="Введите дополнительную информацию..."></textarea>
+            <div class="mt-2 flex items-center space-x-4">
+                <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input type="checkbox" class="step-additional-info-pos-top form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                    <span class="ml-2">Разместить вверху</span>
+                </label>
+                <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input type="checkbox" class="step-additional-info-pos-bottom form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                    <span class="ml-2">Разместить внизу</span>
+                </label>
             </div>
-        ` : '';
+        </div>
+    `;
 
             const screenshotHTML = includeScreenshotsField ? `
-                <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
-                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
-                     <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
-                    <div id="screenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button type="button" class="add-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
-                            <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
-                        </button>
-                    </div>
-                    <input type="file" class="screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
-                </div>
-            ` : '';
+        <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
+             <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
+            <div id="screenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="button" class="add-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
+                    <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
+                </button>
+            </div>
+            <input type="file" class="screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
+        </div>
+    ` : '';
+
+            const isCopyableCheckboxHTML = isMainAlgorithm ? `
+        <div class="mt-2">
+            <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input type="checkbox" class="step-is-copyable form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                <span class="ml-2">Копировать содержимое шага по клику</span>
+            </label>
+        </div>
+    ` : '';
+
 
             return `
-                    <div class="flex justify-between items-start mb-2">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${stepNumber}</label>
-                        <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${stepNumber}">
-                            <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <div class="mb-2">
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
-                        <input type="text" class="step-title ${commonInputClasses}" placeholder="Введите заголовок...">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
-                        <textarea class="step-desc ${commonTextareaClasses}" rows="3" placeholder="Введите описание шага..."></textarea>
-                    </div>
-                    ${exampleInputHTML}
-                    ${screenshotHTML}
-                `;
+            <div class="flex justify-between items-start mb-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${stepNumber}</label>
+                <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${stepNumber}">
+                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="mb-2">
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
+                <input type="text" class="step-title ${commonInputClasses}" placeholder="Введите заголовок...">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+                <textarea class="step-desc ${commonTextareaClasses}" rows="3" placeholder="Введите описание шага..."></textarea>
+            </div>
+            ${exampleInputHTML}
+            ${isCopyableCheckboxHTML} 
+            ${additionalInfoHTML}
+            ${screenshotHTML}
+        `;
         }
 
 
@@ -3629,17 +3863,17 @@
             const saveButton = document.getElementById('saveAlgorithmBtn');
 
             if (!editModal || !algorithmIdStr || !section || !algorithmTitleInput || !editStepsContainer || !saveButton) {
-                console.error("saveAlgorithm v6 (TX Fix): Missing required elements.");
+                console.error("saveAlgorithm v7 (TX Fix): Missing required elements.");
                 showNotification("Ошибка: Не найдены элементы формы.", "error");
                 return;
             }
             const isMainAlgo = section === 'main';
             if (!isMainAlgo && !algorithmDescriptionInput) {
-                console.error("saveAlgorithm v6 (TX Fix): Missing description input for non-main.");
+                console.error("saveAlgorithm v7 (TX Fix): Missing description input for non-main.");
                 showNotification("Ошибка: Не найдено поле описания.", "error");
                 return;
             }
-            console.log(`[Save Algorithm v6 (TX Fix)] Start. ID: ${algorithmIdStr}, Section: ${section}`);
+            console.log(`[Save Algorithm v7 (TX Fix)] Start. ID: ${algorithmIdStr}, Section: ${section}`);
 
             const finalTitle = algorithmTitleInput.value.trim();
             const newDescription = (!isMainAlgo && algorithmDescriptionInput) ? algorithmDescriptionInput.value.trim() : undefined;
@@ -3652,11 +3886,20 @@
             saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
 
             const { steps: newStepsBase, screenshotOps, isValid } = extractStepsDataFromEditForm(editStepsContainer, isMainAlgo);
-            if (!isValid && !isMainAlgo) {
-                showNotification("Алгоритм должен содержать хотя бы один шаг.", "warning");
-                saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения'; return;
+
+            if (!isValid) {
+                if (isMainAlgo && newStepsBase.length === 0 && editStepsContainer.querySelectorAll('.edit-step').length > 0) {
+                    showNotification("Главный алгоритм содержит только пустые шаги. Заполните их или удалите.", "warning");
+                } else if (!isMainAlgo) {
+                    showNotification("Алгоритм должен содержать хотя бы один непустой шаг.", "warning");
+                } else {
+                    console.log("Сохранение главного алгоритма без шагов (допустимо).");
+                }
+                if (!isMainAlgo || (isMainAlgo && newStepsBase.length === 0 && editStepsContainer.querySelectorAll('.edit-step').length > 0)) {
+                    saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения'; return;
+                }
             }
-            console.log(`[Save Algorithm v6] Извлечено: ${newStepsBase.length} шагов, ${screenshotOps.length} скриншот-операций.`);
+            console.log(`[Save Algorithm v7] Извлечено: ${newStepsBase.length} шагов, ${screenshotOps.length} скриншот-операций.`);
 
             let transaction;
             let updateSuccessful = false;
@@ -3673,16 +3916,16 @@
                     oldAlgorithmData = algorithms[section].find(a => String(a?.id) === String(algorithmIdStr)) || null;
                     if (oldAlgorithmData) oldAlgorithmData = JSON.parse(JSON.stringify(oldAlgorithmData));
                 }
-                if (oldAlgorithmData) console.log("[Save Algorithm v6] Старые данные для индекса получены.");
-                else console.warn(`[Save Algorithm v6] Не найдены старые данные для ${section}/${algorithmIdStr}.`);
-            } catch (e) { console.error("[Save Algorithm v6] Ошибка получения старых данных:", e); }
+                if (oldAlgorithmData) console.log("[Save Algorithm v7] Старые данные для индекса получены.");
+                else console.warn(`[Save Algorithm v7] Не найдены старые данные для ${section}/${algorithmIdStr}.`);
+            } catch (e) { console.error("[Save Algorithm v7] Ошибка получения старых данных:", e); }
 
             try {
                 if (!db) throw new Error("База данных недоступна");
                 transaction = db.transaction(['algorithms', 'screenshots'], 'readwrite');
                 const screenshotsStore = transaction.objectStore('screenshots');
                 const algorithmsStore = transaction.objectStore('algorithms');
-                console.log("[Save Algorithm v6 TX] Транзакция начата.");
+                console.log("[Save Algorithm v7 TX] Транзакция начата.");
 
                 const deletePromises = [];
                 const addPromises = [];
@@ -3695,12 +3938,12 @@
                         deletePromises.push(new Promise((resolve) => {
                             const request = screenshotsStore.delete(oldScreenshotId);
                             request.onsuccess = () => {
-                                console.log(`[Save Algorithm v6 TX] Deleted screenshot ID: ${oldScreenshotId}`);
+                                console.log(`[Save Algorithm v7 TX] Deleted screenshot ID: ${oldScreenshotId}`);
                                 screenshotOpResults.push({ success: true, action: 'delete', oldId: oldScreenshotId, stepIndex });
                                 resolve();
                             };
                             request.onerror = (e) => {
-                                console.error(`[Save Algorithm v6 TX] Error deleting screenshot ID ${oldScreenshotId}:`, e.target.error);
+                                console.error(`[Save Algorithm v7 TX] Error deleting screenshot ID ${oldScreenshotId}:`, e.target.error);
                                 screenshotOpResults.push({ success: false, action: 'delete', oldId: oldScreenshotId, stepIndex, error: e.target.error || new Error('Delete failed') });
                                 resolve();
                             };
@@ -3708,7 +3951,7 @@
                     });
                     if (deletePromises.length > 0) {
                         await Promise.all(deletePromises);
-                        console.log("[Save Algorithm v6 TX] Delete operations finished.");
+                        console.log("[Save Algorithm v7 TX] Delete operations finished.");
                         const deleteErrors = screenshotOpResults.filter(r => r.action === 'delete' && !r.success);
                         if (deleteErrors.length > 0) {
                             throw new Error(`Ошибка удаления скриншота: ${deleteErrors[0].error?.message || 'Unknown delete error'}`);
@@ -3725,14 +3968,14 @@
                             const request = screenshotsStore.add(record);
                             request.onsuccess = e => {
                                 const newId = e.target.result;
-                                console.log(`[Save Algorithm v6 TX] Added screenshot, new ID: ${newId} for step ${stepIndex}`);
+                                console.log(`[Save Algorithm v7 TX] Added screenshot, new ID: ${newId} for step ${stepIndex}`);
                                 screenshotOpResults.push({ success: true, action: 'add', newId, stepIndex });
                                 if (!newScreenshotIdsMap[stepIndex]) newScreenshotIdsMap[stepIndex] = [];
                                 newScreenshotIdsMap[stepIndex].push(newId);
                                 resolve();
                             };
                             request.onerror = e => {
-                                console.error(`[Save Algorithm v6 TX] Error adding screenshot for step ${stepIndex}:`, e.target.error);
+                                console.error(`[Save Algorithm v7 TX] Error adding screenshot for step ${stepIndex}:`, e.target.error);
                                 screenshotOpResults.push({ success: false, action: 'add', stepIndex, error: e.target.error || new Error('Add failed') });
                                 resolve();
                             };
@@ -3740,7 +3983,7 @@
                     });
                     if (addPromises.length > 0) {
                         await Promise.all(addPromises);
-                        console.log("[Save Algorithm v6 TX] Add operations finished.");
+                        console.log("[Save Algorithm v7 TX] Add operations finished.");
                         const addErrors = screenshotOpResults.filter(r => r.action === 'add' && !r.success);
                         if (addErrors.length > 0) {
                             throw new Error(`Ошибка добавления скриншота: ${addErrors[0].error?.message || 'Unknown add error'}`);
@@ -3772,7 +4015,7 @@
                     delete step.tempScreenshotsCount; delete step.deletedScreenshotIds;
                     return step;
                 });
-                console.log("[Save Algorithm v6 TX] Финальный массив шагов подготовлен.");
+                console.log("[Save Algorithm v7 TX] Финальный массив шагов подготовлен.");
 
                 let targetAlgorithmObject;
                 const timestamp = new Date().toISOString();
@@ -3799,56 +4042,56 @@
                         };
                         targetAlgorithmObject = algorithms[section][algorithmIndex];
                     } else {
-                        console.warn(`[Save Algorithm v6 TX] Алгоритм ${algorithmIdStr} не найден в памяти ${section}. Создание нового.`);
+                        console.warn(`[Save Algorithm v7 TX] Алгоритм ${algorithmIdStr} не найден в памяти ${section}. Создание нового.`);
                         targetAlgorithmObject = { ...algoDataBase, dateAdded: timestamp };
                         algorithms[section].push(targetAlgorithmObject);
                     }
                 }
                 finalAlgorithmData = JSON.parse(JSON.stringify(targetAlgorithmObject));
-                console.log(`[Save Algorithm v6 TX] Объект алгоритма ${algorithmIdStr} обновлен в памяти.`);
+                console.log(`[Save Algorithm v7 TX] Объект алгоритма ${algorithmIdStr} обновлен в памяти.`);
 
-                algorithmContainerToSave = { section: 'all', data: algorithms };
-                console.log("[Save Algorithm v6 TX] Запрос put для всего контейнера 'algorithms'...");
+                const algorithmContainerToSave = { section: 'all', data: algorithms };
+                console.log("[Save Algorithm v7 TX] Запрос put для всего контейнера 'algorithms'...");
                 const putAlgoReq = algorithmsStore.put(algorithmContainerToSave);
 
                 await new Promise((resolve, reject) => {
                     putAlgoReq.onerror = (e) => reject(e.target.error || new Error("Ошибка сохранения контейнера algorithms"));
                     transaction.oncomplete = () => {
-                        console.log("[Save Algorithm v6 TX] Транзакция успешно завершена (oncomplete).");
+                        console.log("[Save Algorithm v7 TX] Транзакция успешно завершена (oncomplete).");
                         updateSuccessful = true;
                         resolve();
                     };
                     transaction.onerror = (e) => {
-                        console.error("[Save Algorithm v6 TX] ОШИБКА ТРАНЗАКЦИИ (onerror):", e.target.error);
+                        console.error("[Save Algorithm v7 TX] ОШИБКА ТРАНЗАКЦИИ (onerror):", e.target.error);
                         updateSuccessful = false;
                         reject(e.target.error || new Error("Ошибка транзакции"));
                     };
                     transaction.onabort = (e) => {
-                        console.warn("[Save Algorithm v6 TX] Транзакция ПРЕРВАНА (onabort):", e.target.error);
+                        console.warn("[Save Algorithm v7 TX] Транзакция ПРЕРВАНА (onabort):", e.target.error);
                         updateSuccessful = false;
                         reject(e.target.error || new Error("Транзакция прервана"));
                     };
                 });
 
             } catch (error) {
-                console.error(`[Save Algorithm v6 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА сохранения для ${algorithmIdStr}:`, error);
+                console.error(`[Save Algorithm v7 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА сохранения для ${algorithmIdStr}:`, error);
                 if (transaction && transaction.readyState !== 'done' && transaction.abort && !transaction.error) {
-                    try { transaction.abort(); console.log("[Save Algorithm v6] Транзакция отменена в catch."); }
-                    catch (e) { console.error("[Save Algorithm v6] Ошибка при отмене транзакции в catch:", e); }
+                    try { transaction.abort(); console.log("[Save Algorithm v7] Транзакция отменена в catch."); }
+                    catch (e) { console.error("[Save Algorithm v7] Ошибка при отмене транзакции в catch:", e); }
                 }
                 updateSuccessful = false;
                 if (oldAlgorithmData && typeof algorithms === 'object' && algorithms !== null) {
-                    console.warn("[Save Algorithm v6] Восстановление состояния 'algorithms' в памяти из-за ошибки...");
+                    console.warn("[Save Algorithm v7] Восстановление состояния 'algorithms' в памяти из-за ошибки...");
                     if (isMainAlgo) { algorithms.main = oldAlgorithmData; }
                     else if (algorithms[section]) {
                         const indexToRestore = algorithms[section].findIndex(a => String(a?.id) === String(algorithmIdStr));
                         if (indexToRestore !== -1) { algorithms[section][indexToRestore] = oldAlgorithmData; }
                         else if (oldAlgorithmData.id) {
                             algorithms[section].push(oldAlgorithmData);
-                            console.warn(`[Save Algorithm v6] Старый алгоритм ${algorithmIdStr} добавлен обратно.`);
+                            console.warn(`[Save Algorithm v7] Старый алгоритм ${algorithmIdStr} добавлен обратно.`);
                         }
                     }
-                    console.log("[Save Algorithm v6] Состояние 'algorithms' в памяти восстановлено (попытка).");
+                    console.log("[Save Algorithm v7] Состояние 'algorithms' в памяти восстановлено (попытка).");
                 }
                 showNotification(`Произошла критическая ошибка при сохранении: ${error.message || error}`, "error");
             } finally {
@@ -3859,22 +4102,22 @@
             }
 
             if (updateSuccessful) {
-                console.log(`[Save Algorithm v6 (Robust TX)] Алгоритм ${algorithmIdStr} успешно сохранен.`);
+                console.log(`[Save Algorithm v7 (Robust TX)] Алгоритм ${algorithmIdStr} успешно сохранен.`);
                 if (typeof updateSearchIndex === 'function' && finalAlgorithmData?.id) {
                     const indexId = isMainAlgo ? 'main' : finalAlgorithmData.id;
                     updateSearchIndex('algorithms', indexId, finalAlgorithmData, 'update', oldAlgorithmData)
-                        .then(() => console.log(`[Save Algorithm v6] Индекс обновлен для ${indexId}.`))
-                        .catch(indexError => console.error(`[Save Algorithm v6] Ошибка обновления индекса для ${indexId}:`, indexError));
-                } else { console.warn(`[Save Algorithm v6] Не удалось обновить индекс для ${algorithmIdStr}.`); }
+                        .then(() => console.log(`[Save Algorithm v7] Индекс обновлен для ${indexId}.`))
+                        .catch(indexError => console.error(`[Save Algorithm v7] Ошибка обновления индекса для ${indexId}:`, indexError));
+                } else { console.warn(`[Save Algorithm v7] Не удалось обновить индекс для ${algorithmIdStr}.`); }
                 try {
                     if (isMainAlgo && typeof renderMainAlgorithm === 'function') { await renderMainAlgorithm(); }
                     else if (!isMainAlgo && typeof renderAlgorithmCards === 'function') { renderAlgorithmCards(section); }
-                } catch (renderError) { console.error("[Save Algorithm v6] Ошибка обновления UI:", renderError); }
+                } catch (renderError) { console.error("[Save Algorithm v7] Ошибка обновления UI:", renderError); }
                 showNotification("Алгоритм успешно сохранен.");
                 initialEditState = null;
                 editModal.classList.add('hidden');
             } else {
-                console.error(`[Save Algorithm v6 (Robust TX)] Сохранение алгоритма ${algorithmIdStr} НЕ УДАЛОСЬ.`);
+                console.error(`[Save Algorithm v7 (Robust TX)] Сохранение алгоритма ${algorithmIdStr} НЕ УДАЛОСЬ.`);
             }
         }
 
@@ -3914,24 +4157,47 @@
             stepDivs.forEach((stepDiv, formIndex) => {
                 const titleInput = stepDiv.querySelector('.step-title');
                 const descInput = stepDiv.querySelector('.step-desc');
-                const exampleInput = isMainAlgorithm ? stepDiv.querySelector('.step-example') : null;
+                const exampleInput = stepDiv.querySelector('.step-example');
+                const additionalInfoInput = stepDiv.querySelector('.step-additional-info');
+                const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
+                const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
+                const isCopyableCheckbox = isMainAlgorithm ? stepDiv.querySelector('.step-is-copyable') : null;
+
 
                 const title = titleInput?.value.trim() || '';
                 const description = descInput?.value.trim() || '';
+                const additionalInfoText = additionalInfoInput?.value.trim() || '';
+                const additionalInfoShowTop = additionalInfoPosTopCheckbox?.checked || false;
+                const additionalInfoShowBottom = additionalInfoPosBottomCheckbox?.checked || false;
+                const isCopyable = isMainAlgorithm ? (isCopyableCheckbox?.checked || false) : undefined;
 
-                if (!title && !description) {
+
+                if (!title && !description && !additionalInfoText && !isMainAlgorithm) {
                     console.warn(`Пропуск пустого шага (индекс в форме ${formIndex + 1}) при извлечении данных из формы редактирования.`);
                     return;
                 }
 
                 const stepIndexForOps = stepsData.steps.length;
 
-                const step = { title, description };
+                const step = {
+                    title,
+                    description,
+                    additionalInfoText,
+                    additionalInfoShowTop,
+                    additionalInfoShowBottom
+                };
 
-                if (isMainAlgorithm && exampleInput) {
+                if (isMainAlgorithm) {
+                    step.isCopyable = isCopyable;
+                }
+
+                if (exampleInput) {
                     const exampleValue = exampleInput.value.trim();
                     step.example = parseExample(exampleValue);
+                } else if (!isMainAlgorithm) {
+                    delete step.example;
                 }
+
 
                 if (stepDiv.dataset.stepType) {
                     step.type = stepDiv.dataset.stepType;
@@ -4006,9 +4272,12 @@
                 stepsData.steps.push(step);
             });
 
-            stepsData.isValid = stepsData.steps.length > 0 || isMainAlgorithm;
+            stepsData.isValid = stepsData.steps.length > 0 || (isMainAlgorithm && stepsData.steps.length === 0 && stepDivs.length === 0);
             if (!stepsData.isValid) {
                 console.warn("extractStepsDataFromEditForm: Не найдено валидных шагов (для не-главного алгоритма).");
+            } else if (stepsData.steps.length === 0 && isMainAlgorithm && stepDivs.length > 0) {
+                stepsData.isValid = false;
+                console.warn("extractStepsDataFromEditForm: Главный алгоритм содержит только пустые шаги.");
             } else if (stepsData.steps.length === 0 && isMainAlgorithm) {
                 console.info("extractStepsDataFromEditForm: Главный алгоритм не содержит шагов (допустимо при редактировании).");
             }
@@ -4597,32 +4866,42 @@
                 await initDB();
                 dbInitialized = true;
                 console.log("appInit: База данных успешно инициализирована.");
+            } catch (dbError) {
+                console.error("appInit: Ошибка инициализации базы данных:", dbError);
+                showNotification("Ошибка инициализации базы данных. Некоторые функции могут быть недоступны.", "warning");
+            }
 
+            try {
                 await Promise.all([
                     loadCategoryInfo(),
                     loadFromIndexedDB()
                 ]);
-                console.log("appInit: Основные данные загружены.");
+                console.log("appInit: Основные данные (попытка) загружены.");
 
-            } catch (error) {
-                console.error("Ошибка во время инициализации данных в appInit:", error);
-                if (!dbInitialized) {
-                    console.warn("appInit: Инициализация БД не удалась. Приложение может работать некорректно.");
-                    showNotification("Критическая ошибка: Не удалось инициализировать базу данных.", "error");
-                } else {
-                    console.warn("appInit: Ошибка при загрузке данных из БД. Используются значения по умолчанию, где возможно.");
-                }
+            } catch (loadDataError) {
+                console.error("Критическая ошибка во время основной загрузки данных в appInit (после initDB):", loadDataError);
                 if (!algorithms || !algorithms.main || !algorithms.main.steps || algorithms.main.steps.length === 0) {
-                    console.error("CRITICAL (appInit catch): Данные главного алгоритма отсутствуют! Применение стандартных.");
-                    if (typeof algorithms === 'undefined') algorithms = {};
-                    const defaultAlgo = { id: "main", title: "Главный алгоритм работы", steps: [] };
-                    algorithms.main = JSON.parse(JSON.stringify(defaultAlgo));
-                    if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
-                    else console.error("Функция renderMainAlgorithm не найдена для отображения дефолта в catch!");
+                    console.error("CRITICAL (appInit loadDataError catch): Данные главного алгоритма отсутствуют! Применение DEFAULT_MAIN_ALGORITHM.");
+                    if (typeof algorithms === 'undefined' || algorithms === null) algorithms = {};
+                    algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
+                    Object.keys(DEFAULT_OTHER_SECTIONS).forEach(section => {
+                        if (!algorithms[section] || !Array.isArray(algorithms[section])) {
+                            algorithms[section] = JSON.parse(JSON.stringify(DEFAULT_OTHER_SECTIONS[section]));
+                        }
+                    });
+
+                    if (typeof renderAllAlgorithms === 'function') {
+                        renderAllAlgorithms();
+                    } else {
+                        if (typeof renderMainAlgorithm === 'function') renderMainAlgorithm();
+                        Object.keys(DEFAULT_OTHER_SECTIONS).forEach(section => {
+                            if (typeof renderAlgorithmCards === 'function') renderAlgorithmCards(section);
+                        });
+                    }
                 }
+                showNotification("Произошла ошибка при загрузке данных. Часть информации может отсутствовать.", "error");
             }
 
-            // Инициализация подсистем UI
             console.log("appInit: Инициализация подсистем UI...");
             initSearchSystem();
             initBookmarkSystem();
@@ -4640,14 +4919,15 @@
 
 
         // СИСТЕМА ТАЙМЕРА
-        let notificationPermissionState = null; // null | 'granted' | 'denied' | 'default'
+        let notificationPermissionState = null;
         let timerInterval = null;
         const timerDefaultDuration = 110; // 1:50 в секундах
         let timerCurrentSetDuration = timerDefaultDuration;
-        let timeLeftInSeconds = timerCurrentSetDuration;
+        let targetEndTime = 0;
+        let timeLeftVisual = timerDefaultDuration;
         let isTimerRunning = false;
         let originalDocumentTitle = "";
-        const TIMER_STATE_KEY = 'appTimerStateCopilot1CO';
+        const TIMER_STATE_KEY = 'appTimerStateCopilot1CO_v2';
 
         let timerDisplayElement, timerToggleButton, timerResetButton, timerIncreaseButton, timerDecreaseButton;
         let timerToggleIcon;
@@ -4838,8 +5118,8 @@
         function updateTimerDisplay() {
             if (!timerDisplayElement || !timerToggleIcon) return;
 
-            const minutes = Math.floor(timeLeftInSeconds / 60);
-            const seconds = timeLeftInSeconds % 60;
+            const minutes = Math.floor(timeLeftVisual / 60);
+            const seconds = timeLeftVisual % 60;
             timerDisplayElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
             if (isTimerRunning) {
@@ -4855,11 +5135,13 @@
         function saveTimerState() {
             try {
                 const timerState = {
-                    timeLeftInSeconds,
                     timerCurrentSetDuration,
-                    isTimerRunning
+                    isTimerRunning,
+                    targetEndTime: isTimerRunning ? targetEndTime : null,
+                    timeLeftVisualOnPause: !isTimerRunning ? timeLeftVisual : null
                 };
                 localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(timerState));
+                console.log("Timer state saved:", timerState);
             } catch (error) {
                 console.error("Ошибка сохранения состояния таймера в localStorage:", error);
             }
@@ -4871,45 +5153,49 @@
                 const savedStateJSON = localStorage.getItem(TIMER_STATE_KEY);
                 if (savedStateJSON) {
                     const savedState = JSON.parse(savedStateJSON);
+                    console.log("Loaded timer state from localStorage:", savedState);
 
-                    if (typeof savedState.timeLeftInSeconds === 'number' && savedState.timeLeftInSeconds >= 0) {
-                        timeLeftInSeconds = savedState.timeLeftInSeconds;
-                    } else {
-                        console.warn("Некорректное значение timeLeftInSeconds в localStorage, сброс к по умолчанию.");
-                        timeLeftInSeconds = timerDefaultDuration;
-                        timerCurrentSetDuration = timerDefaultDuration;
-                        isTimerRunning = false;
-                        updateTimerDisplay();
-                        saveTimerState();
-                        return;
-                    }
+                    timerCurrentSetDuration = (typeof savedState.timerCurrentSetDuration === 'number' && savedState.timerCurrentSetDuration >= 0)
+                        ? savedState.timerCurrentSetDuration
+                        : timerDefaultDuration;
 
-                    if (typeof savedState.timerCurrentSetDuration === 'number' && savedState.timerCurrentSetDuration >= 0) {
-                        timerCurrentSetDuration = savedState.timerCurrentSetDuration;
-                    } else {
-                        timerCurrentSetDuration = (timeLeftInSeconds > 0) ? timeLeftInSeconds : timerDefaultDuration;
-                        console.warn("timerCurrentSetDuration не найдено или некорректно в localStorage, установлено на основе timeLeftInSeconds или по умолчанию.");
-                    }
+                    isTimerRunning = (typeof savedState.isTimerRunning === 'boolean') ? savedState.isTimerRunning : false;
 
-                    if (typeof savedState.isTimerRunning === 'boolean' && timeLeftInSeconds > 0) {
-                        isTimerRunning = savedState.isTimerRunning;
+                    if (isTimerRunning && typeof savedState.targetEndTime === 'number' && savedState.targetEndTime > 0) {
+                        targetEndTime = savedState.targetEndTime;
+                        const now = Date.now();
+                        timeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
+                        if (timeLeftVisual === 0) {
+                            isTimerRunning = false;
+                        }
                     } else {
                         isTimerRunning = false;
+                        targetEndTime = 0;
+                        timeLeftVisual = (typeof savedState.timeLeftVisualOnPause === 'number' && savedState.timeLeftVisualOnPause >= 0)
+                            ? savedState.timeLeftVisualOnPause
+                            : timerCurrentSetDuration;
+                    }
+                    if (timeLeftVisual <= 0 && isTimerRunning && savedState.targetEndTime > 0) {
+                        console.log("Таймер истек во время отсутствия, вызываем handleTimerEnd.");
+                        isTimerRunning = false;
+                    } else if (timeLeftVisual <= 0 && !isTimerRunning) {
+                        timeLeftVisual = timerCurrentSetDuration;
                     }
 
-                    console.log("Состояние таймера загружено:", { timeLeftInSeconds, timerCurrentSetDuration, isTimerRunning });
 
                 } else {
                     console.log("Сохраненное состояние таймера не найдено, установка значений по умолчанию.");
-                    timeLeftInSeconds = timerDefaultDuration;
                     timerCurrentSetDuration = timerDefaultDuration;
+                    timeLeftVisual = timerCurrentSetDuration;
                     isTimerRunning = false;
+                    targetEndTime = 0;
                 }
             } catch (error) {
                 console.error("Ошибка загрузки состояния таймера из localStorage:", error);
-                timeLeftInSeconds = timerDefaultDuration;
                 timerCurrentSetDuration = timerDefaultDuration;
+                timeLeftVisual = timerCurrentSetDuration;
                 isTimerRunning = false;
+                targetEndTime = 0;
             }
             updateTimerDisplay();
         }
@@ -4920,11 +5206,16 @@
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
 
+            timeLeftVisual = 0;
+
             showAppNotification("ВЕРНИСЬ К КЛИЕНТУ!");
             if (originalDocumentTitle) {
                 document.title = "⏰ ВРЕМЯ! - " + originalDocumentTitle;
             } else {
-                document.title = "⏰ ВРЕМЯ! - " + document.title;
+                const currentTitle = document.title;
+                if (!currentTitle.startsWith("⏰ ВРЕМЯ! - ")) {
+                    document.title = "⏰ ВРЕМЯ! - " + currentTitle;
+                }
             }
             updateTimerDisplay();
             saveTimerState();
@@ -4935,16 +5226,40 @@
         function startTimerInternal() {
             if (timerInterval) clearInterval(timerInterval);
 
-            timerInterval = setInterval(() => {
-                timeLeftInSeconds--;
-                updateTimerDisplay();
-                saveTimerState();
+            if (targetEndTime <= Date.now() && timeLeftVisual > 0) {
+                targetEndTime = Date.now() + timeLeftVisual * 1000;
+                console.log(`Таймер запускается/возобновляется. Новое targetEndTime: ${new Date(targetEndTime).toLocaleTimeString()}`);
+            } else if (timeLeftVisual <= 0) {
+                console.log("Попытка запуска таймера с нулевым временем. Вызов handleTimerEnd.");
+                handleTimerEnd();
+                return;
+            }
 
-                if (timeLeftInSeconds <= 0) {
+            isTimerRunning = true;
+
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const newTimeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
+
+                if (newTimeLeftVisual !== timeLeftVisual) {
+                    timeLeftVisual = newTimeLeftVisual;
+                    updateTimerDisplay();
+                }
+
+                if (timeLeftVisual <= 0) {
                     handleTimerEnd();
                 }
+                saveTimerState();
+
             }, 1000);
-            console.log("Таймер запущен (внутренний интервал).");
+
+            const initialTimeLeft = Math.max(0, Math.round((targetEndTime - Date.now()) / 1000));
+            if (initialTimeLeft !== timeLeftVisual) {
+                timeLeftVisual = initialTimeLeft;
+            }
+            updateTimerDisplay();
+            saveTimerState();
+            console.log("Таймер запущен (внутренний интервал). targetEndTime:", new Date(targetEndTime).toLocaleTimeString());
         }
 
 
@@ -4953,9 +5268,10 @@
             isTimerRunning = false;
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
+
             updateTimerDisplay();
             saveTimerState();
-            console.log("Таймер на паузе.");
+            console.log("Таймер на паузе. Оставшееся время для отображения:", timeLeftVisual);
         }
 
 
@@ -4965,69 +5281,48 @@
                 pauseTimer();
             } else {
                 console.log("toggleTimer: Попытка запуска таймера.");
-                if (timeLeftInSeconds <= 0) {
-                    if (timerCurrentSetDuration > 0) {
-                        timeLeftInSeconds = timerCurrentSetDuration;
-                    } else {
-                        timerCurrentSetDuration = timerDefaultDuration;
-                        timeLeftInSeconds = timerDefaultDuration;
-                    }
-                    console.log(`toggleTimer: Время было <= 0, установлено в ${timeLeftInSeconds}с.`);
+
+                if (timeLeftVisual <= 0 && timerCurrentSetDuration > 0) {
+                    timeLeftVisual = timerCurrentSetDuration;
+                    targetEndTime = 0;
+                    console.log(`toggleTimer: Время было <= 0, сброшено на ${timeLeftVisual}с из timerCurrentSetDuration.`);
+                } else if (timeLeftVisual <= 0 && timerCurrentSetDuration <= 0) {
+                    timerCurrentSetDuration = timerDefaultDuration;
+                    timeLeftVisual = timerCurrentSetDuration;
+                    targetEndTime = 0;
+                    console.log(`toggleTimer: Время и установленная длительность были <=0. Сброшено на ${timerDefaultDuration}с.`);
                 }
 
-                let permissionObtainedForNotifications = (notificationPermissionState === 'granted');
 
+                let permissionObtainedForNotifications = (notificationPermissionState === 'granted');
                 if (!permissionObtainedForNotifications) {
                     const currentGlobalPermission = Notification.permission;
-                    console.log(`toggleTimer: notificationPermissionState='${notificationPermissionState}', Notification.permission='${currentGlobalPermission}'.`);
-
                     if (currentGlobalPermission === 'granted') {
                         notificationPermissionState = 'granted';
                         permissionObtainedForNotifications = true;
-                        console.log("toggleTimer: Разрешение 'granted' обнаружено (синхронизировано с Notification.permission).");
                         showNotification("Системные уведомления уже разрешены.", "info");
                     } else if (currentGlobalPermission === 'denied') {
                         notificationPermissionState = 'denied';
                         permissionObtainedForNotifications = false;
-                        console.log("toggleTimer: Разрешение 'denied' обнаружено (синхронизировано с Notification.permission).");
-                        showNotification(
-                            "Уведомления заблокированы. Проверьте настройки браузера и системные настройки Windows.",
-                            "info",
-                            10000
-                        );
+                        showNotification("Уведомления заблокированы. Проверьте настройки браузера и системные настройки Windows.", "info", 10000);
                     } else {
-                        console.log("toggleTimer: Вызов requestAppNotificationPermission()...");
                         permissionObtainedForNotifications = await requestAppNotificationPermission();
-                        console.log(`toggleTimer: Результат requestAppNotificationPermission() = ${permissionObtainedForNotifications}. Глобальное состояние notificationPermissionState = '${notificationPermissionState}'.`);
-
                         if (permissionObtainedForNotifications) {
                             showNotification("Системные уведомления успешно разрешены!", "success");
                         } else {
                             if (notificationPermissionState === 'denied') {
-                                showNotification(
-                                    "Вы отклонили показ уведомлений. Если передумаете, измените настройки браузера и проверьте системные настройки Windows.",
-                                    "info",
-                                    10000
-                                );
+                                showNotification("Вы отклонили показ уведомлений. Если передумаете, измените настройки браузера и проверьте системные настройки Windows.", "info", 10000);
                             } else {
-                                showNotification(
-                                    "Запрос на уведомления закрыт без выбора или не был успешно обработан. Уведомления таймера могут не работать. Проверьте настройки браузера и системные настройки Windows.",
-                                    "warning",
-                                    10000
-                                );
+                                showNotification("Запрос на уведомления закрыт без выбора или не был успешно обработан. Уведомления таймера могут не работать.", "warning", 10000);
                             }
                         }
                     }
                 }
 
-                console.log("toggleTimer: Установка isTimerRunning = true и запуск таймера...");
-                isTimerRunning = true;
                 if (originalDocumentTitle && document.title.startsWith("⏰")) {
                     document.title = originalDocumentTitle;
                 }
                 startTimerInternal();
-                updateTimerDisplay();
-                saveTimerState();
                 console.log("toggleTimer: Таймер запущен.");
             }
         }
@@ -5035,19 +5330,20 @@
 
         function resetTimer(event) {
             pauseTimer();
-            isTimerRunning = false;
 
             if (event && event.ctrlKey) {
-                timeLeftInSeconds = 0;
                 timerCurrentSetDuration = 0;
+                timeLeftVisual = 0;
                 console.log("Таймер сброшен в 00:00 (Ctrl+Click).");
             } else {
-                timeLeftInSeconds = timerDefaultDuration;
                 timerCurrentSetDuration = timerDefaultDuration;
+                timeLeftVisual = timerCurrentSetDuration;
                 console.log(`Таймер сброшен на значение по умолчанию: ${timerDefaultDuration} сек.`);
             }
 
-            if (originalDocumentTitle && document.title !== originalDocumentTitle) {
+            targetEndTime = 0;
+
+            if (originalDocumentTitle && document.title.startsWith("⏰")) {
                 document.title = originalDocumentTitle;
             }
             updateTimerDisplay();
@@ -5056,27 +5352,28 @@
 
 
         function adjustTimerDuration(secondsToAdd) {
-            const newSetDuration = timerCurrentSetDuration + secondsToAdd;
-            const minDuration = 10; // Минимальное время таймера, которое можно установить
-            const maxDuration = 3600; // 1 час
+            const minDuration = 10;
+            const maxDuration = 3600;
 
-            timerCurrentSetDuration = Math.max(minDuration, Math.min(maxDuration, newSetDuration));
+            timerCurrentSetDuration = Math.max(minDuration, Math.min(maxDuration, timerCurrentSetDuration + secondsToAdd));
 
-            if (!isTimerRunning) {
-                timeLeftInSeconds = timerCurrentSetDuration;
-            } else {
-                timeLeftInSeconds += secondsToAdd;
-                timeLeftInSeconds = Math.max(0, Math.min(maxDuration, timeLeftInSeconds));
+            if (isTimerRunning) {
+                const newEffectiveTimeLeft = Math.max(0, timeLeftVisual + secondsToAdd);
+                targetEndTime = Date.now() + newEffectiveTimeLeft * 1000;
+                timeLeftVisual = newEffectiveTimeLeft;
 
-                if (timeLeftInSeconds <= 0) {
+                if (timeLeftVisual <= 0) {
                     handleTimerEnd();
                     return;
                 }
+            } else {
+                timeLeftVisual = timerCurrentSetDuration;
+                targetEndTime = 0;
             }
 
             updateTimerDisplay();
             saveTimerState();
-            console.log(`Длительность таймера изменена. Новая установленная: ${timerCurrentSetDuration} сек. Оставшееся время: ${timeLeftInSeconds} сек.`);
+            console.log(`Длительность таймера изменена. Новая установленная: ${timerCurrentSetDuration} сек. Текущее отображаемое время: ${timeLeftVisual} сек.`);
         }
 
 
@@ -5102,39 +5399,38 @@
             const currentPermission = Notification.permission;
             if (currentPermission === "granted") {
                 notificationPermissionState = "granted";
-                console.log("Инициализация таймера: системные уведомления уже разрешены.");
             } else if (currentPermission === "denied") {
                 notificationPermissionState = "denied";
-                console.log("Инициализация таймера: системные уведомления были ранее отклонены.");
                 showNotification(
-                    "Системные уведомления таймера заблокированы. Вы можете не увидеть оповещение о завершении. Проверьте настройки браузера и Windows ('Уведомления и действия', 'Фокусировка внимания').",
-                    "warning",
-                    10000
+                    "Системные уведомления таймера заблокированы. Вы можете не увидеть оповещение о завершении. Проверьте настройки браузера и Windows.",
+                    "warning", 10000
                 );
             } else {
                 notificationPermissionState = 'default';
-                console.log("Инициализация таймера: статус разрешений на уведомления - " + notificationPermissionState + ". Запрос будет при первом запуске таймера.");
             }
 
             loadTimerState();
 
-            if (timeLeftInSeconds <= 0) {
-                isTimerRunning = false;
-                if (originalDocumentTitle) {
-                    document.title = "⏰ ВРЕМЯ! - " + originalDocumentTitle;
+            if (isTimerRunning) {
+                const now = Date.now();
+                if (targetEndTime > now) {
+                    timeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
+                    if (timeLeftVisual > 0) {
+                        startTimerInternal();
+                        console.log("Таймер был активен, перезапущен после загрузки страницы.");
+                    } else {
+                        isTimerRunning = false;
+                        handleTimerEnd();
+                        console.log("Таймер истек во время закрытия вкладки/браузера.");
+                    }
                 } else {
-                    const currentNonAlertTitle = document.title.startsWith("⏰") ? "" : document.title.replace(/^⏰ ВРЕМЯ! - /, "");
-                    document.title = "⏰ ВРЕМЯ! - " + currentNonAlertTitle;
-                }
-            } else if (isTimerRunning) {
-                startTimerInternal();
-                if (originalDocumentTitle && document.title.startsWith("⏰")) {
-                    document.title = originalDocumentTitle;
+                    isTimerRunning = false;
+                    timeLeftVisual = 0;
+                    handleTimerEnd();
+                    console.log("Сохраненное targetEndTime уже в прошлом. Таймер завершен.");
                 }
             } else {
-                if (originalDocumentTitle && document.title.startsWith("⏰")) {
-                    document.title = originalDocumentTitle;
-                }
+                console.log("Таймер не был активен при загрузке. Отображается сохраненное/установленное время.");
             }
 
             updateTimerDisplay();
@@ -5143,15 +5439,41 @@
             timerResetButton.addEventListener('click', (event) => resetTimer(event));
 
             timerIncreaseButton.addEventListener('click', (event) => {
-                const amount = event.ctrlKey ? 5 : 30; // Ctrl+Click: +/- 5 секунд
+                const amount = event.ctrlKey ? 5 : 30;
                 adjustTimerDuration(amount);
             });
             timerDecreaseButton.addEventListener('click', (event) => {
-                const amount = event.ctrlKey ? -5 : -30; // Ctrl+Click: +/- 5 секунд
+                const amount = event.ctrlKey ? -5 : -30;
                 adjustTimerDuration(amount);
             });
 
-            console.log("Система таймера инициализирована.");
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === 'visible' && isTimerRunning) {
+                    console.log("Вкладка стала видимой, таймер запущен. Проверка и синхронизация времени.");
+                    const now = Date.now();
+                    const expectedTimeLeft = Math.max(0, Math.round((targetEndTime - now) / 1000));
+                    if (Math.abs(expectedTimeLeft - timeLeftVisual) > 2 && timeLeftVisual > 0) {
+                        console.warn(`Обнаружено расхождение времени при активации вкладки. Ожидалось: ${expectedTimeLeft}, Отображалось: ${timeLeftVisual}. Синхронизация.`);
+                        timeLeftVisual = expectedTimeLeft;
+                        if (timeLeftVisual <= 0) {
+                            handleTimerEnd();
+                        } else {
+                            updateTimerDisplay();
+                            pauseTimer();
+                            startTimerInternal();
+                        }
+                    } else if (timeLeftVisual <= 0 && targetEndTime > now) {
+                        timeLeftVisual = expectedTimeLeft;
+                        console.log("Таймер 'восстановлен' после неактивности, так как targetEndTime еще не достигнут.");
+                        updateTimerDisplay();
+                        if (!timerInterval) {
+                            startTimerInternal();
+                        }
+                    }
+                }
+            });
+
+            console.log("Система таймера инициализирована (v2 с Date.now).");
         }
 
 
@@ -7139,7 +7461,6 @@
             if (modal && !modal.querySelector('#bookmarkForm')) {
                 console.warn(`Модальное окно #${modalId} найдено, но его содержимое некорректно. Пересоздание содержимого.`);
                 mustRebuildContent = true;
-                modal.innerHTML = '';
             }
 
             if (!modal || mustRebuildContent) {
@@ -7152,76 +7473,75 @@
                 }
 
                 modal.innerHTML = `
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-            <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
-                        Заголовок окна
-                    </h2>
-                    <div class="flex items-center flex-shrink-0">
-                        <button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-                            <i class="fas fa-expand"></i>
-                        </button>
-                        <button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
-                            <i class="fas fa-times text-xl"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="p-content overflow-y-auto flex-1">
-                <form id="bookmarkForm" novalidate>
-                    <input type="hidden" id="bookmarkId" name="bookmarkId">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
-                        <input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
-                        <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки</label>
-                        <textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
-                        <p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (если URL пуст).</p>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
-                        <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
-                            <option value="">Выберите папку</option>
-                        </select>
-                    </div>
+                                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+                                        <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                                            <div class="flex justify-between items-center">
+                                                <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
+                                                    Заголовок окна
+                                                </h2>
+                                                <div class="flex items-center flex-shrink-0">
+                                                    <button id="toggleFullscreenBookmarkBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                                                        <i class="fas fa-expand"></i>
+                                                    </button>
+                                                    <button type="button" class="close-modal inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть">
+                                                        <i class="fas fa-times text-xl"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="p-content overflow-y-auto flex-1">
+                                            <form id="bookmarkForm" novalidate>
+                                                <input type="hidden" id="bookmarkId" name="bookmarkId">
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
+                                                    <input type="text" id="bookmarkTitle" name="bookmarkTitle" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (если пусто - будет текстовая заметка)</label>
+                                                    <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание / Текст заметки</label>
+                                                    <textarea id="bookmarkDescription" name="bookmarkDescription" rows="5" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"></textarea>
+                                                    <p class="text-xs text-gray-500 mt-1">Обязательно для текстовых заметок (если URL пуст).</p>
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка</label>
+                                                    <select id="bookmarkFolder" name="bookmarkFolder" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                                                        <option value="">Выберите папку</option>
+                                                    </select>
+                                                </div>
 
-                     <div class="mt-6 border-t border-gray-200 dark:border-gray-600 pt-4">
-                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
-                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
-                         <div id="bookmarkScreenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
-                         </div>
-                         <div class="flex items-center gap-3">
-                             <button type="button" class="add-bookmark-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
-                                 <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
-                             </button>
-                         </div>
-                         <input type="file" class="bookmark-screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
-                     </div>
+                                                <div class="mt-6 border-t border-gray-200 dark:border-gray-600 pt-4">
+                                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
+                                                    <div id="bookmarkScreenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
+                                                    </div>
+                                                    <div class="flex items-center gap-3">
+                                                        <button type="button" class="add-bookmark-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
+                                                            <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
+                                                        </button>
+                                                    </div>
+                                                    <input type="file" class="bookmark-screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
+                                                </div>
 
-                </form>
-            </div>
-            <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
-                        Отмена
-                    </button>
-                    <button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                        <i class="fas fa-save mr-1"></i> Сохранить
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
+                                            </form>
+                                        </div>
+                                        <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
+                                            <div class="flex justify-end gap-2">
+                                                <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                                    Отмена
+                                                </button>
+                                                <button type="submit" form="bookmarkForm" id="saveBookmarkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                                                    <i class="fas fa-save mr-1"></i> Сохранить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    `;
 
-                const currentClickHandler = modal._clickHandler;
-                if (currentClickHandler) {
-                    modal.removeEventListener('click', currentClickHandler);
+                if (modal._clickHandler) {
+                    modal.removeEventListener('click', modal._clickHandler);
                 }
 
                 const newClickHandler = (e) => {
@@ -7240,14 +7560,36 @@
                             if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
                             const saveButton = targetModal.querySelector('#saveBookmarkBtn');
                             if (saveButton) saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
-                            delete form._tempScreenshotBlobs;
-                            delete form.dataset.screenshotsToDelete;
+
                             const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
-                            if (thumbsContainer) thumbsContainer.innerHTML = '';
+                            if (thumbsContainer) {
+                                if (typeof clearTemporaryThumbnailsFromContainer === 'function') {
+                                    clearTemporaryThumbnailsFromContainer(thumbsContainer);
+                                } else {
+                                    const tempThumbs = thumbsContainer.querySelectorAll('.screenshot-thumbnail.temporary img[data-object-url]');
+                                    tempThumbs.forEach(img => {
+                                        if (img.dataset.objectUrl && img.dataset.objectUrlRevoked !== 'true') {
+                                            try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn("Fallback revoke error:", revokeError); }
+                                        }
+                                    });
+                                    thumbsContainer.innerHTML = '';
+                                    console.warn("Использован Fallback для очистки временных скриншотов в ensureBookmarkModal.");
+                                }
+                            }
+                            if (form._tempScreenshotBlobs) {
+                                delete form._tempScreenshotBlobs;
+                                console.log("[ensureBookmarkModal Handler] Очищен массив form._tempScreenshotBlobs.");
+                            }
+                            if (form.dataset.screenshotsToDelete) {
+                                delete form.dataset.screenshotsToDelete;
+                                console.log("[ensureBookmarkModal Handler] Очищен form.dataset.screenshotsToDelete.");
+                            }
                         }
-                        document.body.classList.remove('modal-open');
                         if (typeof removeEscapeHandler === 'function') {
                             removeEscapeHandler(targetModal);
+                        }
+                        if (getVisibleModals().length === 0) {
+                            document.body.classList.remove('modal-open');
                         }
                     }
                 };
@@ -7274,8 +7616,8 @@
                     });
                     fullscreenBtn.dataset.fullscreenListenerAttached = 'true';
                     console.log(`Fullscreen listener attached to ${bookmarkModalConfig.buttonId}`);
-                } else if (!fullscreenBtn) {
-                    console.error(`Кнопка #${bookmarkModalConfig.buttonId} не найдена в модальном окне закладок!`);
+                } else if (!fullscreenBtn && (!modal || mustRebuildContent)) {
+                    console.error(`Кнопка #${bookmarkModalConfig.buttonId} не найдена в модальном окне закладок! (При создании/пересоздании)`);
                 }
 
                 const form = modal.querySelector('#bookmarkForm');
@@ -7297,41 +7639,51 @@
                     }
 
                 } else {
-                    console.error("Критическая ошибка: Не удалось найти форму #bookmarkForm после создания содержимого модального окна!");
+                    console.error("Критическая ошибка: Не удалось найти форму #bookmarkForm после создания/пересоздания содержимого модального окна!");
                 }
             }
 
-            const form = modal.querySelector('#bookmarkForm');
-            const modalTitle = modal.querySelector('#bookmarkModalTitle');
-            const submitButton = modal.querySelector('#saveBookmarkBtn');
-            const idInput = modal.querySelector('#bookmarkId');
-            const titleInput = modal.querySelector('#bookmarkTitle');
-            const urlInput = modal.querySelector('#bookmarkUrl');
-            const descriptionInput = modal.querySelector('#bookmarkDescription');
-            const folderSelect = modal.querySelector('#bookmarkFolder');
-            const thumbsContainer = modal.querySelector('#bookmarkScreenshotThumbnailsContainer');
+            if (typeof addEscapeHandler === 'function') {
+                addEscapeHandler(modal);
+            } else {
+                console.warn("[ensureBookmarkModal] addEscapeHandler function not found.");
+            }
 
-            if (!form || !modalTitle || !submitButton || !idInput || !titleInput || !urlInput || !descriptionInput || !folderSelect || !thumbsContainer) {
-                console.error("Критическая ошибка: Не удалось найти все необходимые элементы формы (#bookmarkForm, #bookmarkModalTitle, #saveBookmarkBtn, ..., #bookmarkScreenshotThumbnailsContainer) внутри модального окна!");
+            const currentForm = modal.querySelector('#bookmarkForm');
+            const currentModalTitle = modal.querySelector('#bookmarkModalTitle');
+            const currentSubmitButton = modal.querySelector('#saveBookmarkBtn');
+            const currentIdInput = modal.querySelector('#bookmarkId');
+            const currentTitleInput = modal.querySelector('#bookmarkTitle');
+            const currentUrlInput = modal.querySelector('#bookmarkUrl');
+            const currentDescriptionInput = modal.querySelector('#bookmarkDescription');
+            const currentFolderSelect = modal.querySelector('#bookmarkFolder');
+            const currentThumbsContainer = modal.querySelector('#bookmarkScreenshotThumbnailsContainer');
+
+            if (!currentForm || !currentModalTitle || !currentSubmitButton || !currentIdInput || !currentTitleInput || !currentUrlInput || !currentDescriptionInput || !currentFolderSelect || !currentThumbsContainer) {
+                console.error("Критическая ошибка: Не удалось найти все необходимые элементы формы ПОСЛЕ ensureBookmarkModal (#bookmarkForm, ..., #bookmarkScreenshotThumbnailsContainer)!");
                 modal.classList.add('hidden');
                 return null;
             }
 
-            delete form._tempScreenshotBlobs;
-            delete form.dataset.screenshotsToDelete;
-            if (thumbsContainer) thumbsContainer.innerHTML = '';
+            if (currentForm._tempScreenshotBlobs) {
+                delete currentForm._tempScreenshotBlobs;
+            }
+            if (currentForm.dataset.screenshotsToDelete) {
+                delete currentForm.dataset.screenshotsToDelete;
+            }
+            if (currentThumbsContainer) currentThumbsContainer.innerHTML = '';
 
             return {
                 modal,
-                form,
-                modalTitle,
-                submitButton,
-                idInput,
-                titleInput,
-                urlInput,
-                descriptionInput,
-                folderSelect,
-                thumbsContainer
+                form: currentForm,
+                modalTitle: currentModalTitle,
+                submitButton: currentSubmitButton,
+                idInput: currentIdInput,
+                titleInput: currentTitleInput,
+                urlInput: currentUrlInput,
+                descriptionInput: currentDescriptionInput,
+                folderSelect: currentFolderSelect,
+                thumbsContainer: currentThumbsContainer
             };
         }
 
@@ -8045,6 +8397,18 @@
         }
 
 
+        function ensureBookmarksScroll() {
+            const bookmarksTabContent = document.getElementById('bookmarksContent');
+            if (bookmarksTabContent) {
+                bookmarksTabContent.style.overflowY = 'auto';
+                bookmarksTabContent.style.minHeight = '1px';
+                console.log('[ensureBookmarksScroll] Установлен overflow-y: auto и min-height для #bookmarksContent.');
+            } else {
+                console.warn('[ensureBookmarksScroll] Контейнер #bookmarksContent не найден.');
+            }
+        }
+
+
         async function renderBookmarks(bookmarks, folderMap = {}) {
             const bookmarksContainer = document.getElementById('bookmarksContainer');
             if (!bookmarksContainer) {
@@ -8061,6 +8425,14 @@
                 } else {
                     applyView(bookmarksContainer, 'cards');
                     console.warn("applyCurrentView не найдена, применен вид 'cards' по умолчанию для пустого списка.");
+                }
+                const bookmarksTabContent = document.getElementById('bookmarksContent');
+                if (bookmarksTabContent) {
+                    bookmarksTabContent.style.overflowY = 'auto';
+                    bookmarksTabContent.style.minHeight = '1px';
+                    console.log('[renderBookmarks - FIX] Установлен overflow-y: auto и min-height для bookmarksContent (пустой список).');
+                } else {
+                    console.warn('[renderBookmarks - FIX] Контейнер #bookmarksContent не найден для установки overflowY (пустой список).');
                 }
                 return;
             }
@@ -8181,6 +8553,15 @@
             } else {
                 applyView(bookmarksContainer, 'cards');
                 console.warn("applyCurrentView не найдена, применен вид 'cards' по умолчанию.");
+            }
+
+            const bookmarksTabContent = document.getElementById('bookmarksContent');
+            if (bookmarksTabContent) {
+                bookmarksTabContent.style.overflowY = 'auto';
+                bookmarksTabContent.style.minHeight = '1px';
+                console.log('[renderBookmarks - FIX] Установлен overflow-y: auto и min-height для bookmarksContent после рендеринга.');
+            } else {
+                console.warn('[renderBookmarks - FIX] Контейнер #bookmarksContent не найден для установки overflowY.');
             }
         }
 
@@ -8713,6 +9094,7 @@
                 dataAttribute: 'folder',
                 textSelectors: ['h3', 'p.bookmark-description']
             });
+            ensureBookmarksScroll();
         }
 
 
@@ -8844,40 +9226,64 @@
             let modal = document.getElementById(modalId);
             const isNewModal = !modal;
 
+            const bookmarkDetailModalConfig = {
+                modalId: 'bookmarkDetailModal',
+                buttonId: 'toggleFullscreenBookmarkDetailBtn',
+                classToggleConfig: {
+                    normal: {
+                        modal: ['p-4'],
+                        innerContainer: ['max-w-3xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'],
+                        contentArea: ['p-6']
+                    },
+                    fullscreen: {
+                        modal: ['p-0'],
+                        innerContainer: ['w-screen', 'h-screen', 'max-w-none', 'max-h-none', 'rounded-none', 'shadow-none'],
+                        contentArea: ['p-6']
+                    }
+                },
+                innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '#bookmarkDetailOuterContent'
+            };
+
             if (isNewModal) {
                 modal = document.createElement('div');
                 modal.id = modalId;
                 modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center';
                 modal.innerHTML = `
-                                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-                                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                                            <div class="flex justify-between items-center">
-                                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
-                                                <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть (Esc)">
-                                                    <i class="fas fa-times text-xl"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="p-6 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
-                                            <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
-                                                <p>Загрузка...</p>
-                                            </div>
-                                            <div id="bookmarkDetailScreenshotsContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
-                                                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
-                                                <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
-                                            <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
-                                                <i class="fas fa-edit mr-1"></i> Редактировать
-                                            </button>
-                                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
-                                                Закрыть
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                            <div class="flex justify-between items-center">
+                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
+                                <div class="flex items-center flex-shrink-0">
+                                    <button id="toggleFullscreenBookmarkDetailBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                                        <i class="fas fa-expand"></i>
+                                    </button>
+                                    <button type="button" class="close-modal ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть (Esc)">
+                                        <i class="fas fa-times text-xl"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-6 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
+                            <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
+                                <p>Загрузка...</p>
+                            </div>
+                            <div id="bookmarkDetailScreenshotsContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
+                                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
+                                <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
+                            <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
+                                <i class="fas fa-edit mr-1"></i> Редактировать
+                            </button>
+                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                Закрыть
+                            </button>
+                        </div>
+                    </div>
+                `;
                 document.body.appendChild(modal);
 
                 modal.addEventListener('click', (e) => {
@@ -8885,11 +9291,9 @@
                     if (!currentModal) return;
 
                     if (e.target.closest('.close-modal, .cancel-modal')) {
-                        if (currentModal._escapeHandler) {
-                            document.removeEventListener('keydown', currentModal._escapeHandler);
-                            delete currentModal._escapeHandler;
-                        }
                         currentModal.classList.add('hidden');
+                        removeEscapeHandler(currentModal);
+
                         const images = currentModal.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
                         images.forEach(img => {
                             if (img.dataset.objectUrl) {
@@ -8897,19 +9301,23 @@
                                 delete img.dataset.objectUrl;
                             }
                         });
+
+                        ensureBookmarksScroll();
+
+                        if (getVisibleModals().length === 0) document.body.classList.remove('overflow-hidden');
+
                     }
                     else if (e.target.closest('#editBookmarkFromDetailBtn')) {
                         const currentId = parseInt(currentModal.dataset.currentBookmarkId, 10);
                         if (!isNaN(currentId)) {
                             currentModal.classList.add('hidden');
-                            if (currentModal._escapeHandler) {
-                                document.removeEventListener('keydown', currentModal._escapeHandler);
-                                delete currentModal._escapeHandler;
-                            }
-                            if (typeof showAddBookmarkModal === 'function') {
-                                showAddBookmarkModal(currentId);
+                            removeEscapeHandler(currentModal);
+                            if (getVisibleModals().length === 0) document.body.classList.remove('overflow-hidden');
+
+                            if (typeof showEditBookmarkModal === 'function') {
+                                showEditBookmarkModal(currentId);
                             } else {
-                                console.error("Функция showAddBookmarkModal не определена!");
+                                console.error("Функция showEditBookmarkModal не определена!");
                                 showNotification("Ошибка: функция редактирования недоступна.", "error");
                             }
                         } else {
@@ -8918,23 +9326,30 @@
                         }
                     }
                 });
+            }
 
-                const closeModalOnEscape = (e) => {
-                    const currentModalInstance = document.getElementById(modalId);
-                    if (e.key === 'Escape' && currentModalInstance && !currentModalInstance.classList.contains('hidden')) {
-                        currentModalInstance.classList.add('hidden');
-                        document.removeEventListener('keydown', closeModalOnEscape);
-                        delete currentModalInstance._escapeHandler;
-                        const images = currentModalInstance.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
-                        images.forEach(img => {
-                            if (img.dataset.objectUrl) {
-                                try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn("Error revoking URL on escape:", revokeError); }
-                                delete img.dataset.objectUrl;
-                            }
-                        });
-                    }
-                };
-                modal._closeModalOnEscape = closeModalOnEscape;
+            const fullscreenBtn = modal.querySelector('#toggleFullscreenBookmarkDetailBtn');
+            if (fullscreenBtn) {
+                if (!fullscreenBtn.dataset.fullscreenListenerAttached) {
+                    fullscreenBtn.addEventListener('click', () => {
+                        if (typeof toggleModalFullscreen === 'function') {
+                            toggleModalFullscreen(
+                                bookmarkDetailModalConfig.modalId,
+                                bookmarkDetailModalConfig.buttonId,
+                                bookmarkDetailModalConfig.classToggleConfig,
+                                bookmarkDetailModalConfig.innerContainerSelector,
+                                bookmarkDetailModalConfig.contentAreaSelector
+                            );
+                        } else {
+                            console.error("Функция toggleModalFullscreen не найдена!");
+                            showNotification("Ошибка: Функция переключения полноэкранного режима недоступна.", "error");
+                        }
+                    });
+                    fullscreenBtn.dataset.fullscreenListenerAttached = 'true';
+                    console.log(`Fullscreen listener attached to ${bookmarkDetailModalConfig.buttonId} (modal: ${isNewModal ? 'new' : 'existing'})`);
+                }
+            } else {
+                console.error("Кнопка #toggleFullscreenBookmarkDetailBtn не найдена в модальном окне деталей закладки!");
             }
 
             const titleEl = modal.querySelector('#bookmarkDetailTitle');
@@ -8949,16 +9364,9 @@
                 return;
             }
 
-            if (modal._escapeHandler) {
-                document.removeEventListener('keydown', modal._escapeHandler);
-                delete modal._escapeHandler;
-            }
-            if (modal._closeModalOnEscape) {
-                document.addEventListener('keydown', modal._closeModalOnEscape);
-                modal._escapeHandler = modal._closeModalOnEscape;
-            }
+            addEscapeHandler(modal);
 
-            modal.dataset.currentBookmarkId = bookmarkId;
+            modal.dataset.currentBookmarkId = String(bookmarkId);
             titleEl.textContent = 'Загрузка...';
             textContentEl.innerHTML = '<p>Загрузка...</p>';
             screenshotsGridEl.innerHTML = '';
@@ -8966,6 +9374,8 @@
             editButton.classList.add('hidden');
 
             modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+
 
             try {
                 const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
@@ -9001,7 +9411,7 @@
                             } else {
                                 screenshotsGridEl.innerHTML = '';
                                 screenshotsContainer.classList.add('hidden');
-                                console.log("Скриншоты не найдены в БД, хотя ID были в закладке.");
+                                console.log("Скриншоты не найдены в БД (по parentType='bookmark'), хотя ID были в закладке.");
                             }
                         } catch (screenshotError) {
                             console.error("Ошибка загрузки скриншотов для деталей закладки:", screenshotError);
@@ -9016,7 +9426,7 @@
 
                 } else {
                     titleEl.textContent = 'Ошибка';
-                    textContentEl.innerHTML = '<p class="text-red-500">Не удалось загрузить данные закладки. Возможно, она была удалена.</p>';
+                    textContentEl.innerHTML = `<p class="text-red-500">Не удалось загрузить данные закладки (ID: ${bookmarkId}). Возможно, она была удалена.</p>`;
                     showNotification("Закладка не найдена", "error");
                     editButton.classList.add('hidden');
                     screenshotsContainer.classList.add('hidden');
@@ -9151,6 +9561,13 @@
                 modal.addEventListener('click', (e) => {
                     if (e.target.closest('.close-modal')) {
                         modal.classList.add('hidden');
+                        if (typeof removeEscapeHandler === 'function') {
+                            removeEscapeHandler(modal);
+                        }
+                        if (getVisibleModals().length === 0) {
+                            document.body.classList.remove('modal-open');
+                        }
+
                         const form = modal.querySelector('#folderForm');
                         if (form && form.dataset.editingId) {
                             form.reset();
@@ -9195,7 +9612,14 @@
                 console.error("Не найден элемент #foldersList в модальном окне папок.");
             }
 
+            if (modal && typeof addEscapeHandler === 'function') {
+                addEscapeHandler(modal);
+            } else if (modal) {
+                console.warn("[showOrganizeFoldersModal] addEscapeHandler function not found.");
+            }
+
             modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
         }
 
 
@@ -9412,12 +9836,71 @@
             }
 
             modal.querySelectorAll('.close-modal, .cancel-modal').forEach(button => {
-                button.addEventListener('click', () => {
-                    modal.classList.add('hidden');
-                });
+                button.removeEventListener('click', closeModalHandler);
+                button.addEventListener('click', closeModalHandler);
             });
 
+            function closeModalHandler() {
+                modal.classList.add('hidden');
+                removeEscapeHandler(modal);
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+            }
+
+            form.removeEventListener('submit', handleCibLinkSubmit);
             form.addEventListener('submit', handleCibLinkSubmit);
+        }
+
+        async function showAddEditCibLinkModal(linkId = null) {
+            const modalElements = getRequiredElements([
+                'cibLinkModal', 'cibLinkForm', 'cibLinkModalTitle', 'cibLinkId',
+                'saveCibLinkBtn', 'cibLinkTitle', 'cibLinkValue', 'cibLinkDescription'
+            ]);
+            if (!modalElements) return;
+
+            const {
+                cibLinkModal: modal,
+                cibLinkForm: form,
+                cibLinkModalTitle: modalTitle,
+                cibLinkId: linkIdInput,
+                saveCibLinkBtn: saveButton,
+                cibLinkTitle: titleInput,
+                cibLinkValue: linkValueInput,
+                cibLinkDescription: descriptionInput
+            } = modalElements;
+
+            form.reset();
+            linkIdInput.value = linkId ? linkId : '';
+
+            try {
+                if (linkId) {
+                    modalTitle.textContent = 'Редактировать ссылку 1С';
+                    saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
+
+                    const link = await getFromIndexedDB('links', linkId);
+                    if (!link) {
+                        showNotification(`Ссылка с ID ${linkId} не найдена`, "error");
+                        return;
+                    }
+                    titleInput.value = link.title ?? '';
+                    linkValueInput.value = link.link ?? '';
+                    descriptionInput.value = link.description ?? '';
+
+                } else {
+                    modalTitle.textContent = 'Добавить ссылку 1С';
+                    saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
+                }
+
+                modal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+                addEscapeHandler(modal);
+                titleInput.focus();
+
+            } catch (error) {
+                console.error(`Ошибка при ${linkId ? 'загрузке' : 'подготовке'} ссылки 1С:`, error);
+                showNotification(`Не удалось ${linkId ? 'загрузить данные' : 'открыть форму'} ссылки`, "error");
+            }
         }
 
 
@@ -9778,11 +10261,16 @@
                 textArea.focus();
                 textArea.select();
                 try {
-                    document.execCommand('copy');
-                    showNotification(successMessage);
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        showNotification(successMessage);
+                    } else {
+                        console.error('Fallback: Не удалось скопировать');
+                        showNotification("Ошибка при копировании (fallback)", "error");
+                    }
                 } catch (err) {
                     console.error('Fallback: Ошибка копирования', err);
-                    showNotification("Ошибка при копировании", "error");
+                    showNotification("Ошибка при копировании (fallback)", "error");
                 } finally {
                     document.body.removeChild(textArea);
                 }
@@ -10193,13 +10681,16 @@
                         const success = await saveCategoryInfo();
                         if (success) {
                             renderReglamentCategories();
+                            populateReglamentCategoryDropdowns();
                             showNotification(`Категория "${categoryTitle}" удалена.`);
                         } else {
                             showNotification("Ошибка при сохранении удаления категории.", "error");
                         }
                     } else {
                         showNotification("Ошибка: Категория для удаления не найдена в данных.", "error");
-                        categoryElement.remove();
+                        if (categoryElement && categoryElement.parentNode) {
+                            categoryElement.remove();
+                        }
                         renderReglamentCategories();
                     }
                 }
@@ -10573,20 +11064,118 @@
         };
 
         const addEscapeHandler = (modalElement) => {
-            if (!modalElement || modalElement._escapeHandler) return;
-
-            const handler = (event) => {
-                const currentModal = document.getElementById(modalElement.id);
-                if (event.key === 'Escape' && currentModal && !currentModal.classList.contains('hidden')) {
-                    console.log(`[Escape Handler for ${modalElement.id}] Closing modal.`);
-                    currentModal.classList.add('hidden');
-                    removeEscapeHandler(currentModal);
-                }
-            };
-            document.addEventListener('keydown', handler);
-            modalElement._escapeHandler = handler;
-            console.log(`[addEscapeHandler] Added Escape handler for #${modalElement.id}`);
+            if (!modalElement) return;
+            console.log(`[addEscapeHandler STUB] Вызвана для #${modalElement.id}, но ничего не делает (обработка Escape централизована).`);
         };
+
+
+        function openAnimatedModal(modalElement) {
+            if (!modalElement) return;
+
+            modalElement.classList.add('modal-transition');
+            modalElement.classList.remove('modal-visible');
+            modalElement.classList.remove('hidden');
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    modalElement.classList.add('modal-visible');
+                    document.body.classList.add('modal-open');
+                    console.log(`[openAnimatedModal] Opened modal #${modalElement.id}`);
+                });
+            });
+        }
+
+
+        function requestCloseModal(modalElement) {
+            if (!modalElement) return false;
+
+            const modalId = modalElement.id;
+            let modalType = null;
+
+            if (modalId === 'editModal') {
+                modalType = 'edit';
+            } else if (modalId === 'addModal') {
+                modalType = 'add';
+            } else if (modalId === 'customizeUIModal') {
+                modalType = 'customizeUI';
+            } else {
+                console.warn("requestCloseModal: Вызвано для неизвестного или не требующего проверки модального окна:", modalId);
+                modalElement.classList.add('hidden');
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('modal-open');
+                }
+                return true;
+            }
+
+            let performClose = true;
+            let hasUnsavedChanges = false;
+
+            if (modalType === 'edit' || modalType === 'add') {
+                hasUnsavedChanges = hasChanges(modalType);
+            } else if (modalType === 'customizeUI') {
+                hasUnsavedChanges = window.isUISettingsDirty || false;
+            }
+
+
+            if (hasUnsavedChanges) {
+                if (!confirm("Вы не сохранили изменения. Закрыть без сохранения?")) {
+                    console.log(`Закрытие окна ${modalId} отменено пользователем.`);
+                    performClose = false;
+                } else {
+                    console.log(`Закрытие окна ${modalId} подтверждено пользователем (с несохраненными изменениями).`);
+                }
+            } else {
+                console.log(`Закрытие окна ${modalId} (без изменений).`);
+            }
+
+            if (performClose) {
+                if (modalType === 'edit' || modalType === 'add') {
+                    const stepsContainerSelector = modalType === 'edit' ? '#editSteps' : '#newSteps';
+                    const stepsContainer = modalElement.querySelector(stepsContainerSelector);
+                    if (stepsContainer) {
+                        const stepDivs = stepsContainer.querySelectorAll('.edit-step');
+                        stepDivs.forEach(stepDiv => {
+                            const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
+                            if (thumbsContainer && typeof clearTemporaryThumbnailsFromContainer === 'function') {
+                                clearTemporaryThumbnailsFromContainer(thumbsContainer);
+                            } else if (thumbsContainer) {
+                                console.warn("clearTemporaryThumbnailsFromContainer не найдена, временные миниатюры могут остаться.");
+                            }
+                            delete stepDiv._tempScreenshotBlobs;
+                            delete stepDiv.dataset.screenshotsToDelete;
+                        });
+                    }
+                } else if (modalType === 'customizeUI' && hasUnsavedChanges) {
+                    if (typeof applyPreviewSettings === 'function' && typeof window.originalUISettings !== 'undefined') {
+                        applyPreviewSettings(window.originalUISettings);
+                        window.isUISettingsDirty = false;
+                        console.log("Предпросмотр настроек UI откачен к оригинальным.");
+                    }
+                    const inputField = document.getElementById('employeeExtensionInput');
+                    if (inputField && !inputField.classList.contains('hidden')) {
+                        const displaySpan = document.getElementById('employeeExtensionDisplay');
+                        inputField.classList.add('hidden');
+                        if (displaySpan) displaySpan.classList.remove('hidden');
+                        if (typeof loadEmployeeExtension === 'function') loadEmployeeExtension();
+                    }
+                }
+
+
+                modalElement.classList.add('hidden');
+
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+
+                if (modalType === 'edit') {
+                    initialEditState = null;
+                } else if (modalType === 'add') {
+                    initialAddState = null;
+                }
+            }
+            return performClose;
+        }
+
 
         const removeEscapeHandler = (modalElement) => {
             if (modalElement?._escapeHandler) {
@@ -11287,7 +11876,15 @@
                                     </div>
                                     </div>`;
                 document.body.appendChild(modal);
-                const closeModal = () => modal.classList.add('hidden');
+                const closeModal = () => {
+                    modal.classList.add('hidden');
+                    if (typeof removeEscapeHandler === 'function') {
+                        removeEscapeHandler(modal);
+                    }
+                    if (getVisibleModals().length === 0) {
+                        document.body.classList.remove('modal-open');
+                    }
+                };
                 modal.querySelectorAll('.close-modal, .cancel-modal').forEach(btn => btn.addEventListener('click', closeModal));
 
                 const form = modal.querySelector('#extLinkForm');
@@ -11322,6 +11919,12 @@
                 if (!elements[key]) {
                     console.warn(`[ensureExtLinkModal] Элемент '${key}' не был найден в модальном окне #${modalId}!`);
                 }
+            }
+
+            if (elements.modal && typeof addEscapeHandler === 'function') {
+                addEscapeHandler(elements.modal);
+            } else if (elements.modal) {
+                console.warn("[ensureExtLinkModal] addEscapeHandler function not found.");
             }
 
             const categorySelect = elements.categoryInput;
@@ -11573,7 +12176,7 @@
 
                 if (isUISettingsDirty && !forceClose) {
                     if (!confirm("Изменения не сохранены. Вы уверены, что хотите выйти?")) {
-                        return;
+                        return false;
                     }
                 }
 
@@ -11587,7 +12190,10 @@
 
                 isUISettingsDirty = false;
                 customizeUIModal.classList.add('hidden');
-                document.body.classList.remove('overflow-hidden');
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+                return true;
             };
 
             const openModal = async () => {
@@ -11610,12 +12216,20 @@
                 if (customizeUIModal) {
                     customizeUIModal.classList.remove('hidden');
                     document.body.classList.add('overflow-hidden');
+                    addEscapeHandler(customizeUIModal);
                 }
                 console.log("Customize UI modal opened.");
             };
 
             customizeUIBtn.addEventListener('click', openModal);
-            [closeCustomizeUIModalBtn, cancelUISettingsBtn].forEach(btn => btn?.addEventListener('click', () => closeModal()));
+
+            if (closeCustomizeUIModalBtn) {
+                closeCustomizeUIModalBtn.addEventListener('click', () => closeModal(true));
+            }
+            if (cancelUISettingsBtn) {
+                cancelUISettingsBtn.addEventListener('click', () => closeModal());
+            }
+
 
             saveUISettingsBtn?.addEventListener('click', async () => {
                 updatePreviewSettingsFromModal();
@@ -11728,24 +12342,6 @@
 
             setupExtensionFieldListeners();
 
-            document.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape') {
-                    const visibleModals = getVisibleModals();
-                    if (!visibleModals.length) return;
-                    const topmostModal = getTopmostModal(visibleModals);
-
-                    if (topmostModal && topmostModal.id === 'customizeUIModal') {
-                        const inputField = topmostModal.querySelector('#employeeExtensionInput');
-                        if (inputField && !inputField.classList.contains('hidden')) {
-                            finishEditing(false);
-                        } else {
-                            closeModal();
-                        }
-                    }
-                }
-            });
-
-
             document.addEventListener('click', (event) => {
                 if (customizeUIModal && !customizeUIModal.classList.contains('hidden')) {
                     const innerContainer = customizeUIModal.querySelector('.bg-white.dark\\:bg-gray-800');
@@ -11756,7 +12352,6 @@
                         if ((inputField && inputField.contains(event.target)) || (displaySpan && displaySpan.contains(event.target))) {
                             return;
                         }
-
                         closeModal();
                     }
                 }
@@ -11907,21 +12502,33 @@
 
             clearAllDataBtn.addEventListener('click', () => {
                 confirmClearDataModal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                if (typeof addEscapeHandler === 'function') {
+                    addEscapeHandler(confirmClearDataModal);
+                } else {
+                    console.warn("[initClearDataFunctionality] addEscapeHandler function not found for confirmClearDataModal.");
+                }
             });
 
-            cancelClearDataBtn.addEventListener('click', () => {
+            const closeConfirmModal = () => {
                 confirmClearDataModal.classList.add('hidden');
-            });
+                if (typeof removeEscapeHandler === 'function') {
+                    removeEscapeHandler(confirmClearDataModal);
+                }
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('modal-open');
+                }
+            };
+
+            cancelClearDataBtn.addEventListener('click', closeConfirmModal);
 
             closeConfirmClearModalBtns?.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    confirmClearDataModal.classList.add('hidden');
-                });
+                btn.addEventListener('click', closeConfirmModal);
             });
 
             confirmAndClearDataBtn.addEventListener('click', async () => {
                 console.log("Attempting to clear all application data...");
-                confirmClearDataModal.classList.add('hidden');
+                closeConfirmModal();
 
                 const loadingOverlay = document.getElementById('loadingOverlay');
                 if (loadingOverlay) {
@@ -12688,35 +13295,6 @@
             }
         });
 
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                const visibleModals = getVisibleModals();
-                if (!visibleModals.length) {
-                    return;
-                }
-
-                const topmostModal = getTopmostModal(visibleModals);
-
-                if (!topmostModal) {
-                    return;
-                }
-
-                if (topmostModal.id === 'editModal' || topmostModal.id === 'addModal') {
-                    requestCloseModal(topmostModal);
-                } else {
-                    console.log('Escape pressed. Hiding non-edit/add modal:', topmostModal.id);
-                    topmostModal.classList.add('hidden');
-                    if (topmostModal.id === 'customizeUIModal' && isUISettingsDirty) {
-                        console.log("Closing customize UI modal via Escape with unsaved changes. Reverting preview.");
-                        if (typeof applyPreviewSettings === 'function' && originalUISettings) {
-                            applyPreviewSettings(originalUISettings);
-                            isUISettingsDirty = false;
-                        }
-                    }
-                }
-            }
-        });
-
 
         // ПРОЧЕЕ
         function linkify(text) {
@@ -12815,6 +13393,7 @@
             const viewBtn = document.getElementById('toggleFullscreenViewBtn');
             const addBtn = document.getElementById('toggleFullscreenAddBtn');
             const editBtn = document.getElementById('toggleFullscreenEditBtn');
+            const hotkeysBtn = document.getElementById('toggleFullscreenHotkeysBtn');
 
             const algorithmModalConfig = {
                 modalId: 'algorithmModal',
@@ -12847,6 +13426,17 @@
                 contentAreaSelector: '.p-content.overflow-y-auto.flex-1'
             };
 
+            const hotkeysModalConfig = {
+                modalId: 'hotkeysModal',
+                buttonId: 'toggleFullscreenHotkeysBtn',
+                classToggleConfig: {
+                    normal: { modal: ['p-4'], innerContainer: ['max-w-3xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'], contentArea: ['p-6'] },
+                    fullscreen: { modal: ['p-0'], innerContainer: ['w-screen', 'h-screen', 'max-w-none', 'max-h-none', 'rounded-none', 'shadow-none'], contentArea: ['p-6'] }
+                },
+                innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+                contentAreaSelector: '.p-6.overflow-y-auto.flex-1'
+            };
+
             const initButton = (btn, config) => {
                 if (btn && !btn.dataset.fullscreenListenerAttached) {
                     btn.addEventListener('click', () => {
@@ -12873,8 +13463,9 @@
             initButton(viewBtn, algorithmModalConfig);
             initButton(addBtn, addModalConfig);
             initButton(editBtn, editModalConfig);
+            initButton(hotkeysBtn, hotkeysModalConfig);
 
-            console.log("Выполнена инициализация переключателей полноэкранного режима (только для статичных/гарантированных окон).");
+            console.log("Выполнена инициализация переключателей полноэкранного режима (включая hotkeysModal).");
         }
 
 
@@ -12982,11 +13573,18 @@
                 const titleInput = stepDiv.querySelector('.step-title');
                 const descInput = stepDiv.querySelector('.step-desc');
                 const exampleInput = stepDiv.querySelector('.step-example');
+                const additionalInfoTextarea = stepDiv.querySelector('.step-additional-info');
+                const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
+                const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
+
 
                 const currentStepData = {
                     title: titleInput ? titleInput.value.trim() : '',
                     description: descInput ? descInput.value.trim() : '',
-                    example: exampleInput ? exampleInput.value.trim() : ''
+                    example: exampleInput ? formatExampleForTextarea(exampleInput.value.trim()) : (isMainAlgorithm ? '' : undefined),
+                    additionalInfoText: additionalInfoTextarea ? additionalInfoTextarea.value.trim() : '',
+                    additionalInfoShowTop: additionalInfoPosTopCheckbox ? additionalInfoPosTopCheckbox.checked : false,
+                    additionalInfoShowBottom: additionalInfoPosBottomCheckbox ? additionalInfoPosBottomCheckbox.checked : false
                 };
                 if (stepDiv.dataset.stepType) {
                     currentStepData.type = stepDiv.dataset.stepType;
@@ -13045,21 +13643,25 @@
             stepDivs.forEach(stepDiv => {
                 const titleInput = stepDiv.querySelector('.step-title');
                 const descInput = stepDiv.querySelector('.step-desc');
-                const exampleInput = stepDiv.querySelector('.step-example');
+                const additionalInfoTextarea = stepDiv.querySelector('.step-additional-info');
+                const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
+                const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
+
 
                 const stepData = {
                     title: titleInput ? titleInput.value.trim() : '',
                     description: descInput ? descInput.value.trim() : '',
-                    example: exampleInput ? exampleInput.value.trim() : '',
+                    example: '',
+                    additionalInfoText: additionalInfoTextarea ? additionalInfoTextarea.value.trim() : '',
+                    additionalInfoShowTop: additionalInfoPosTopCheckbox ? additionalInfoPosTopCheckbox.checked : false,
+                    additionalInfoShowBottom: additionalInfoPosBottomCheckbox ? additionalInfoPosBottomCheckbox.checked : false,
                     existingScreenshotIds: '',
                     tempScreenshotsCount: (stepDiv._tempScreenshotBlobs && Array.isArray(stepDiv._tempScreenshotBlobs))
                         ? stepDiv._tempScreenshotBlobs.length
                         : 0,
-                    deletedScreenshotIds: stepDiv.dataset.screenshotsToDelete || ''
+                    deletedScreenshotIds: stepDiv.dataset.screenshotsToDelete || '',
+                    ...(stepDiv.dataset.stepType && { type: stepDiv.dataset.stepType })
                 };
-                if (stepDiv.dataset.stepType) {
-                    stepData.type = stepDiv.dataset.stepType;
-                }
                 currentSteps.push(stepData);
             });
 
@@ -13128,26 +13730,60 @@
             } else {
                 console.warn("requestCloseModal: Вызвано для неизвестного модального окна:", modalId);
                 modalElement.classList.add('hidden');
+                if (typeof removeEscapeHandler === 'function') {
+                    removeEscapeHandler(modalElement);
+                }
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('modal-open');
+                }
                 return true;
             }
 
+            let performClose = true;
             if (hasChanges(modalType)) {
                 if (!confirm("Вы не сохранили изменения. Закрыть без сохранения?")) {
                     console.log(`Закрытие окна ${modalId} отменено пользователем.`);
-                    return false;
+                    performClose = false;
+                } else {
+                    console.log(`Закрытие окна ${modalId} подтверждено пользователем (с изменениями).`);
                 }
-                console.log(`Закрытие окна ${modalId} подтверждено пользователем (с изменениями).`);
             } else {
                 console.log(`Закрытие окна ${modalId} (без изменений).`);
             }
 
-            modalElement.classList.add('hidden');
-            if (modalType === 'edit') {
-                initialEditState = null;
-            } else if (modalType === 'add') {
-                initialAddState = null;
+            if (performClose) {
+                if (modalId === 'editModal' || modalId === 'addModal') {
+                    const stepsContainerSelector = modalId === 'editModal' ? '#editSteps' : '#newSteps';
+                    const stepsContainer = modalElement.querySelector(stepsContainerSelector);
+                    if (stepsContainer) {
+                        const stepDivs = stepsContainer.querySelectorAll('.edit-step');
+                        stepDivs.forEach(stepDiv => {
+                            const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
+                            if (thumbsContainer) {
+                                clearTemporaryThumbnailsFromContainer(thumbsContainer);
+                                delete stepDiv._tempScreenshotBlobs;
+                                delete stepDiv.dataset.screenshotsToDelete;
+                            }
+                        });
+                    }
+                }
+
+                modalElement.classList.add('hidden');
+                if (typeof removeEscapeHandler === 'function') {
+                    removeEscapeHandler(modalElement);
+                }
+
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('modal-open');
+                }
+
+                if (modalType === 'edit') {
+                    initialEditState = null;
+                } else if (modalType === 'add') {
+                    initialAddState = null;
+                }
             }
-            return true;
+            return performClose;
         }
 
 
@@ -13179,8 +13815,15 @@
                             title: step.title || '',
                             description: step.description || '',
                             example: formatExampleForTextarea(step.example),
+                            additionalInfoText: step.additionalInfoText || '',
+                            additionalInfoShowTop: step.additionalInfoShowTop || false,
+                            additionalInfoShowBottom: step.additionalInfoShowBottom || false,
                             ...(step.type && { type: step.type })
                         };
+
+                        if (isMainAlgorithm) {
+                            initialStep.isCopyable = step.isCopyable || false;
+                        }
 
                         if (!isMainAlgorithm) {
                             const existingIds = Array.isArray(step.screenshotIds)
@@ -13200,7 +13843,7 @@
                 }
 
                 initialEditState = JSON.parse(JSON.stringify(initialData));
-                console.log("Захвачено НАЧАЛЬНОЕ состояние для редактирования (с учетом скриншотов):", JSON.parse(JSON.stringify(initialEditState)));
+                console.log("Захвачено НАЧАЛЬНОЕ состояние для редактирования (с учетом isCopyable и скриншотов):", JSON.parse(JSON.stringify(initialEditState)));
 
             } catch (error) {
                 console.error("Ошибка при захвате начального состояния редактирования:", error);
@@ -13217,6 +13860,31 @@
             const initialTitle = newAlgorithmTitle ? newAlgorithmTitle.value.trim() : '';
             const initialDescription = newAlgorithmDesc ? newAlgorithmDesc.value.trim() : '';
             const initialSteps = [];
+
+            const stepDivs = newStepsContainer.querySelectorAll('.edit-step');
+            stepDivs.forEach(stepDiv => {
+                const titleInput = stepDiv.querySelector('.step-title');
+                const descInput = stepDiv.querySelector('.step-desc');
+                const additionalInfoTextarea = stepDiv.querySelector('.step-additional-info');
+                const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
+                const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
+
+                initialSteps.push({
+                    title: titleInput ? titleInput.value.trim() : '',
+                    description: descInput ? descInput.value.trim() : '',
+                    example: '',
+                    additionalInfoText: additionalInfoTextarea ? additionalInfoTextarea.value.trim() : '',
+                    additionalInfoShowTop: additionalInfoPosTopCheckbox ? additionalInfoPosTopCheckbox.checked : false,
+                    additionalInfoShowBottom: additionalInfoPosBottomCheckbox ? additionalInfoPosBottomCheckbox.checked : false,
+                    existingScreenshotIds: '',
+                    tempScreenshotsCount: (stepDiv._tempScreenshotBlobs && Array.isArray(stepDiv._tempScreenshotBlobs))
+                        ? stepDiv._tempScreenshotBlobs.length
+                        : 0,
+                    deletedScreenshotIds: stepDiv.dataset.screenshotsToDelete || '',
+                    ...(stepDiv.dataset.stepType && { type: stepDiv.dataset.stepType })
+                });
+            });
+
 
             initialAddState = {
                 title: initialTitle,
@@ -13262,17 +13930,16 @@
                 modal.addEventListener('click', (e) => {
                     if (e.target === modal || e.target.closest('.close-modal')) {
                         modal.classList.add('hidden');
+                        removeEscapeHandler(modal);
+                        if (getVisibleModals().length === 0) {
+                            document.body.classList.remove('overflow-hidden');
+                        }
                     }
                 });
-                const closeModalOnEscape = (e) => {
-                    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-                        modal.classList.add('hidden');
-                        document.removeEventListener('keydown', closeModalOnEscape);
-                    }
-                };
-                document.addEventListener('keydown', closeModalOnEscape);
             }
             modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+            addEscapeHandler(modal);
         }
 
 
@@ -13540,9 +14207,9 @@
                 console.log("DOMContentLoaded: Инициализация appInit завершена. Статус БД:", dbReady);
 
                 initClearDataFunctionality();
+                initHotkeysModal();
                 initFullscreenToggles();
                 initReloadButton();
-                initHotkeysModal();
                 console.log("DOMContentLoaded: Инициализация горячих клавиш...");
                 setupHotkeys();
 
@@ -13594,13 +14261,13 @@
                 console.error("КРИТИЧЕСКАЯ ОШИБКА во время инициализации приложения (DOMContentLoaded):", error);
 
                 loadingOverlay.innerHTML = `
-                    <div class="text-center text-red-600 dark:text-red-400 p-4">
-                        <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
-                        <p class="text-lg font-medium">Ошибка загрузки приложения!</p>
-                        <p class="text-sm mt-2">Не удалось загрузить необходимые данные или настройки.</p>
-                        <p class="text-xs mt-4">Детали ошибки: ${error.message || 'Неизвестная ошибка'}</p>
-                        <p class="text-sm mt-2">Пожалуйста, попробуйте обновить страницу (F5) или проверьте консоль разработчика (F12) для получения дополнительной информации.</p>
-                    </div>`;
+            <div class="text-center text-red-600 dark:text-red-400 p-4">
+                <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                <p class="text-lg font-medium">Ошибка загрузки приложения!</p>
+                <p class="text-sm mt-2">Не удалось загрузить необходимые данные или настройки.</p>
+                <p class="text-xs mt-4">Детали ошибки: ${error.message || 'Неизвестная ошибка'}</p>
+                <p class="text-sm mt-2">Пожалуйста, попробуйте обновить страницу (F5) или проверьте консоль разработчика (F12) для получения дополнительной информации.</p>
+            </div>`;
                 loadingOverlay.style.display = 'flex';
                 if (appContent) {
                     appContent.classList.add('hidden');
@@ -13644,42 +14311,168 @@
                 activeElement.isContentEditable
             );
 
-            if (code === 'Backspace' && !ctrlOrMeta && !shift && !alt && !isInputFocused) {
-                console.log("[Hotkey] Обнаружен Backspace (вне поля ввода)");
-                const visibleModals = getVisibleModals();
-                const nonClosableByBack = [
-                    'customizeUIModal',
-                    'hotkeysModal',
-                    'confirmClearDataModal',
-                    'screenshotLightbox'
-                ];
-                const topmostModal = visibleModals.length > 0 ? getTopmostModal(visibleModals) : null;
+            const lightbox = document.getElementById('screenshotLightbox');
+            const viewerModal = document.getElementById('screenshotViewerModal');
+            const algorithmModal = document.getElementById('algorithmModal');
+            const bookmarkDetailModal = document.getElementById('bookmarkDetailModal');
+            const reglamentDetailModal = document.getElementById('reglamentDetailModal');
+            const reglamentsListDiv = document.getElementById('reglamentsList');
+            const backToCategoriesBtn = document.getElementById('backToCategories');
 
-                if (topmostModal && !nonClosableByBack.includes(topmostModal.id)) {
-                    console.log(`[Hotkey Backspace] Closing modal: ${topmostModal.id}`);
-                    topmostModal.classList.add('hidden');
-                    if (topmostModal._escapeHandler && typeof topmostModal._escapeHandler === 'function') {
-                        document.removeEventListener('keydown', topmostModal._escapeHandler);
-                        delete topmostModal._escapeHandler;
-                        console.log(`[Hotkey Backspace] Removed escape handler for modal ${topmostModal.id}`);
-                    }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                } else if (topmostModal) {
-                    console.log(`[Hotkey Backspace] Modal ${topmostModal.id} is open, but not closable by Backspace. Ignoring.`);
-                    return;
-                } else {
-                    console.log("[Hotkey Backspace] No interfering modal open. Preventing browser back navigation.");
-                    event.preventDefault();
-                    event.stopPropagation();
-                    console.log("[Hotkey Backspace] Calling navigateBackWithinApp()");
-                    navigateBackWithinApp();
-                    return;
+            if (lightbox && !lightbox.classList.contains('hidden') && !isInputFocused) {
+                console.log(`[GlobalHotkey] Лайтбокс активен, перехват клавиши: ${event.key}`);
+                switch (event.key) {
+                    case 'Escape':
+                        console.log("[GlobalHotkey Esc] Лайтбокс: Закрытие всей цепочки.");
+                        event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
+                        if (lightbox._closeLightboxFunction) lightbox._closeLightboxFunction();
+                        if (viewerModal && !viewerModal.classList.contains('hidden') && viewerModal._modalState?.closeModalFunction) viewerModal._modalState.closeModalFunction();
+                        else if (viewerModal && !viewerModal.classList.contains('hidden')) { viewerModal.classList.add('hidden'); removeEscapeHandler(viewerModal); }
+                        if (algorithmModal && !algorithmModal.classList.contains('hidden')) { algorithmModal.classList.add('hidden'); removeEscapeHandler(algorithmModal); }
+                        if (bookmarkDetailModal && !bookmarkDetailModal.classList.contains('hidden')) { bookmarkDetailModal.classList.add('hidden'); removeEscapeHandler(bookmarkDetailModal); ensureBookmarksScroll(); }
+                        if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) { reglamentDetailModal.classList.add('hidden'); removeEscapeHandler(reglamentDetailModal); }
+                        if (getVisibleModals().length === 0) document.body.classList.remove('overflow-hidden');
+                        return;
+                    case 'Backspace':
+                        console.log("[GlobalHotkey Backspace] Лайтбокс: Закрытие лайтбокса.");
+                        event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
+                        if (lightbox._closeLightboxFunction) lightbox._closeLightboxFunction();
+                        if (getVisibleModals().length === 0) document.body.classList.remove('overflow-hidden');
+                        return;
+                    case 'ArrowLeft':
+                        console.log("[GlobalHotkey ArrowLeft] Лайтбокс: Предыдущее изображение.");
+                        event.preventDefault(); event.stopPropagation();
+                        if (lightbox._navigateImageFunction) lightbox._navigateImageFunction('prev');
+                        return;
+                    case 'ArrowRight':
+                        console.log("[GlobalHotkey ArrowRight] Лайтбокс: Следующее изображение.");
+                        event.preventDefault(); event.stopPropagation();
+                        if (lightbox._navigateImageFunction) lightbox._navigateImageFunction('next');
+                        return;
+                    case 'Tab':
+                        const focusableElements = Array.from(lightbox.querySelectorAll('button:not([disabled]), [href]:not([disabled])'))
+                            .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0);
+                        if (focusableElements.length === 0) { event.preventDefault(); return; }
+                        const firstElement = focusableElements[0];
+                        const lastElement = focusableElements[focusableElements.length - 1];
+                        if (event.shiftKey) {
+                            if (document.activeElement === firstElement) {
+                                lastElement.focus(); event.preventDefault();
+                            }
+                        } else {
+                            if (document.activeElement === lastElement) {
+                                firstElement.focus(); event.preventDefault();
+                            }
+                        }
+                        event.stopPropagation();
+                        return;
                 }
             }
 
-            // --- Обработка комбинаций Alt ---
+            if (code === 'Escape' && !isInputFocused) {
+                console.log("[GlobalHotkey Esc] (Лайтбокс неактивен или Escape не для него)");
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                let closedSomethingInChain = false;
+
+                if (viewerModal && !viewerModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Esc] Цепочка: Вьювер -> Детали");
+                    if (viewerModal._modalState?.closeModalFunction) viewerModal._modalState.closeModalFunction();
+                    else { viewerModal.classList.add('hidden'); removeEscapeHandler(viewerModal); }
+
+                    if (algorithmModal && !algorithmModal.classList.contains('hidden')) {
+                        algorithmModal.classList.add('hidden'); removeEscapeHandler(algorithmModal);
+                    }
+                    if (bookmarkDetailModal && !bookmarkDetailModal.classList.contains('hidden')) {
+                        bookmarkDetailModal.classList.add('hidden'); removeEscapeHandler(bookmarkDetailModal); ensureBookmarksScroll();
+                    }
+                    if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
+                        reglamentDetailModal.classList.add('hidden'); removeEscapeHandler(reglamentDetailModal);
+                    }
+                    closedSomethingInChain = true;
+                } else if (algorithmModal && !algorithmModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Esc] Закрытие окна деталей алгоритма");
+                    algorithmModal.classList.add('hidden'); removeEscapeHandler(algorithmModal);
+                    closedSomethingInChain = true;
+                } else if (bookmarkDetailModal && !bookmarkDetailModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Esc] Закрытие окна деталей закладки");
+                    bookmarkDetailModal.classList.add('hidden'); removeEscapeHandler(bookmarkDetailModal); ensureBookmarksScroll();
+                    closedSomethingInChain = true;
+                } else if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Esc] Закрытие окна деталей регламента");
+                    reglamentDetailModal.classList.add('hidden'); removeEscapeHandler(reglamentDetailModal);
+                    closedSomethingInChain = true;
+                }
+
+                if (!closedSomethingInChain) {
+                    const visibleModals = getVisibleModals();
+                    if (visibleModals.length > 0) {
+                        const topmost = getTopmostModal(visibleModals);
+                        console.log(`[GlobalHotkey Esc] Закрытие общего самого верхнего модального окна: ${topmost.id}`);
+
+                        if (typeof requestCloseModal === 'function' &&
+                            (topmost.id === 'editModal' || topmost.id === 'addModal' || topmost.id === 'customizeUIModal')) {
+                            if (!requestCloseModal(topmost)) {
+                                return;
+                            }
+                        } else {
+                            topmost.classList.add('hidden');
+                            removeEscapeHandler(topmost);
+                        }
+                    } else {
+                        console.log("[GlobalHotkey Esc] Нет активных модальных окон для закрытия.");
+                    }
+                }
+
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+                return;
+            }
+
+            if (code === 'Backspace' && !isInputFocused) {
+                console.log("[GlobalHotkey Backspace] (Лайтбокс неактивен или Backspace не для него)");
+                event.preventDefault();
+                event.stopPropagation();
+
+                let handledByBackspace = false;
+
+                if (viewerModal && !viewerModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Backspace] Шаг назад: Закрытие вьювера скриншотов");
+                    if (viewerModal._modalState?.closeModalFunction) viewerModal._modalState.closeModalFunction();
+                    else { viewerModal.classList.add('hidden'); removeEscapeHandler(viewerModal); }
+                    handledByBackspace = true;
+                } else if (algorithmModal && !algorithmModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Backspace] Шаг назад: Закрытие окна деталей алгоритма");
+                    algorithmModal.classList.add('hidden'); removeEscapeHandler(algorithmModal);
+                    handledByBackspace = true;
+                } else if (bookmarkDetailModal && !bookmarkDetailModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Backspace] Шаг назад: Закрытие окна деталей закладки");
+                    bookmarkDetailModal.classList.add('hidden'); removeEscapeHandler(bookmarkDetailModal);
+                    ensureBookmarksScroll();
+                    handledByBackspace = true;
+                } else if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
+                    console.log("[GlobalHotkey Backspace] Шаг назад: Закрытие окна деталей регламента");
+                    reglamentDetailModal.classList.add('hidden'); removeEscapeHandler(reglamentDetailModal);
+                    handledByBackspace = true;
+                } else if (reglamentsListDiv && !reglamentsListDiv.classList.contains('hidden') && backToCategoriesBtn) {
+                    console.log("[GlobalHotkey Backspace] Шаг назад: Возврат к категориям регламентов");
+                    backToCategoriesBtn.click();
+                    handledByBackspace = true;
+                }
+
+                if (handledByBackspace && getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+
+                if (!handledByBackspace) {
+                    console.log("[GlobalHotkey Backspace] Нет подходящего действия 'шаг назад' для текущего состояния.");
+                }
+                return;
+            }
+
             if (alt && !ctrlOrMeta && !isInputFocused) {
                 switch (code) {
                     case 'KeyN': // Alt + N
@@ -13787,16 +14580,16 @@
                             return;
                         }
                         break;
-                    case 'KeyV': // Alt + V (Переключить вид)
+                    case 'KeyV':
                         if (!shift) {
                             console.log("[Hotkey] Обнаружена комбинация Alt + KeyV (вне поля ввода)");
                             event.preventDefault(); event.stopPropagation();
 
-                            const screenshotModal = document.getElementById('screenshotViewerModal');
-                            if (screenshotModal && !screenshotModal.classList.contains('hidden')) {
-                                console.log("[Hotkey]   > Окно просмотра скриншотов активно. Переключаем вид в нем.");
-                                const gridBtn = screenshotModal.querySelector('#screenshotViewToggleGrid');
-                                const listBtn = screenshotModal.querySelector('#screenshotViewToggleList');
+                            const screenshotModalForViewToggle = document.getElementById('screenshotViewerModal');
+                            if (screenshotModalForViewToggle && !screenshotModalForViewToggle.classList.contains('hidden')) {
+                                console.log("[Hotkey Alt+V]   > Окно просмотра скриншотов активно. Переключаем вид в нем.");
+                                const gridBtn = screenshotModalForViewToggle.querySelector('#screenshotViewToggleGrid');
+                                const listBtn = screenshotModalForViewToggle.querySelector('#screenshotViewToggleList');
 
                                 if (gridBtn && listBtn) {
                                     const isGridActive = gridBtn.classList.contains('bg-primary');
@@ -13812,7 +14605,7 @@
                                     showNotification("Ошибка: Не найдены кнопки вида в окне скриншотов.", "error");
                                 }
                             } else {
-                                console.log("[Hotkey]   > Выполнение стандартного действия: переключить вид активной секции");
+                                console.log("[Hotkey Alt+V]   > Выполнение стандартного действия: переключить вид активной секции");
                                 if (typeof toggleActiveSectionView === 'function') { toggleActiveSectionView(); }
                                 else { console.warn("Alt+V: Функция toggleActiveSectionView не найдена."); showNotification("Функция переключения вида недоступна.", "error"); }
                             }
@@ -13822,10 +14615,9 @@
                 }
             }
 
-            // --- Комбинации Ctrl/Meta ---
             if (ctrlOrMeta && !alt) {
                 switch (code) {
-                    case 'KeyD': // D / В
+                    case 'KeyD':
                         if (shift) {
                             console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + Shift + KeyD");
                             event.preventDefault(); event.stopPropagation();
@@ -13836,7 +14628,7 @@
                         }
                         break;
                     case 'Backspace':
-                        if (shift) {
+                        if (shift && !isInputFocused) {
                             console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + Shift + Backspace");
                             event.preventDefault(); event.stopPropagation();
                             console.log("[Hotkey]   > Выполнение действия: очистка заметок клиента");
@@ -13851,7 +14643,7 @@
                             return;
                         }
                         break;
-                    case 'KeyH': // H / Р
+                    case 'KeyH':
                         if (shift) {
                             console.log("[Hotkey] Обнаружена комбинация Ctrl/Meta + Shift + KeyH");
                             event.preventDefault(); event.stopPropagation();
@@ -13882,10 +14674,25 @@
                 return;
             }
 
-            const handleEscapeKey = (event) => {
+            if (hotkeysModal._escapeHandlerInstance) {
+                document.removeEventListener('keydown', hotkeysModal._escapeHandlerInstance);
+                delete hotkeysModal._escapeHandlerInstance;
+            }
+
+            const handleEscapeKeyInternal = (event) => {
                 if (event.key === 'Escape') {
                     if (hotkeysModal && !hotkeysModal.classList.contains('hidden')) {
-                        closeModal();
+
+                        const visibleModals = getVisibleModals();
+                        const topmostModal = visibleModals.length > 0 ? getTopmostModal(visibleModals) : null;
+                        if (topmostModal && topmostModal.id !== hotkeysModal.id) {
+                            console.log(`[HotkeysModal Escape] Event not handled, topmost is ${topmostModal.id}`);
+                            return;
+                        }
+
+                        closeModalInternal();
+                        event.stopPropagation();
+                        event.stopImmediatePropagation();
                     }
                 }
             };
@@ -13894,15 +14701,24 @@
                 if (!hotkeysModal) return;
                 hotkeysModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
-                document.addEventListener('keydown', handleEscapeKey);
+                if (hotkeysModal._escapeHandlerInstance) {
+                    document.removeEventListener('keydown', hotkeysModal._escapeHandlerInstance);
+                }
+                hotkeysModal._escapeHandlerInstance = handleEscapeKeyInternal;
+                document.addEventListener('keydown', hotkeysModal._escapeHandlerInstance);
                 console.log("Hotkey modal opened, Escape listener added.");
             };
 
-            const closeModal = () => {
+            const closeModalInternal = () => {
                 if (!hotkeysModal) return;
                 hotkeysModal.classList.add('hidden');
-                document.body.classList.remove('modal-open');
-                document.removeEventListener('keydown', handleEscapeKey);
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+                if (hotkeysModal._escapeHandlerInstance) {
+                    document.removeEventListener('keydown', hotkeysModal._escapeHandlerInstance);
+                    delete hotkeysModal._escapeHandlerInstance;
+                }
                 console.log("Hotkey modal closed, Escape listener removed.");
             };
 
@@ -13913,11 +14729,11 @@
 
 
             if (!closeHotkeysModalBtn.dataset.listenerAttached) {
-                closeHotkeysModalBtn.addEventListener('click', closeModal);
+                closeHotkeysModalBtn.addEventListener('click', closeModalInternal);
                 closeHotkeysModalBtn.dataset.listenerAttached = 'true';
             }
             if (!okHotkeysModalBtn.dataset.listenerAttached) {
-                okHotkeysModalBtn.addEventListener('click', closeModal);
+                okHotkeysModalBtn.addEventListener('click', closeModalInternal);
                 okHotkeysModalBtn.dataset.listenerAttached = 'true';
             }
 
@@ -13925,7 +14741,7 @@
             if (!hotkeysModal.dataset.overlayListenerAttached) {
                 hotkeysModal.addEventListener('click', (event) => {
                     if (event.target === hotkeysModal) {
-                        closeModal();
+                        closeModalInternal();
                     }
                 });
                 hotkeysModal.dataset.overlayListenerAttached = 'true';
@@ -14067,7 +14883,6 @@
             let currentObjectUrl = null;
             let preloadedUrls = { next: null, prev: null };
             let wheelListener = null;
-            let keydownListener = null;
             let mousedownListener = null;
             let mousemoveListener = null;
             let mouseupListener = null;
@@ -14089,9 +14904,12 @@
             const closeLightboxInternal = () => {
                 const lbElement = document.getElementById('screenshotLightbox');
                 if (!lbElement || lbElement.classList.contains('hidden')) return;
-                console.log("Закрытие лайтбокса и очистка ресурсов...");
+                console.log("[Lightbox] Закрытие лайтбокса и очистка ресурсов...");
                 lbElement.classList.add('hidden');
-                document.body.classList.remove('overflow-hidden');
+
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
 
                 const imgElement = lbElement.querySelector('#lightboxImage');
 
@@ -14099,19 +14917,16 @@
                     const closeBtn = lbElement.querySelector('#closeLightboxBtn');
                     if (closeBtn) {
                         closeBtn.removeEventListener('click', lightboxCloseButtonClickListener);
-                        console.log("Удален слушатель клика кнопки закрытия.");
                     }
                     lightboxCloseButtonClickListener = null;
                 }
                 if (lightboxOverlayClickListener) {
                     lbElement.removeEventListener('click', lightboxOverlayClickListener);
-                    console.log("Удален слушатель клика оверлея.");
-                    lightboxOverlayClickListener = null;
                 }
 
-                if (currentObjectUrl) { try { URL.revokeObjectURL(currentObjectUrl); console.log("Освобожден URL:", currentObjectUrl); } catch (e) { console.warn("Ошибка освобождения currentObjectUrl:", e); } currentObjectUrl = null; }
-                if (preloadedUrls.next) { try { URL.revokeObjectURL(preloadedUrls.next); console.log("Освобожден preloadedUrls.next:", preloadedUrls.next); } catch (e) { console.warn("Ошибка освобождения preloadedUrls.next:", e); } preloadedUrls.next = null; }
-                if (preloadedUrls.prev) { try { URL.revokeObjectURL(preloadedUrls.prev); console.log("Освобожден preloadedUrls.prev:", preloadedUrls.prev); } catch (e) { console.warn("Ошибка освобождения preloadedUrls.prev:", e); } preloadedUrls.prev = null; }
+                if (currentObjectUrl) { try { URL.revokeObjectURL(currentObjectUrl); console.log("[Lightbox] Освобожден URL:", currentObjectUrl); } catch (e) { console.warn("[Lightbox] Ошибка освобождения currentObjectUrl:", e); } currentObjectUrl = null; }
+                if (preloadedUrls.next) { try { URL.revokeObjectURL(preloadedUrls.next); console.log("[Lightbox] Освобожден preloadedUrls.next:", preloadedUrls.next); } catch (e) { console.warn("[Lightbox] Ошибка освобождения preloadedUrls.next:", e); } preloadedUrls.next = null; }
+                if (preloadedUrls.prev) { try { URL.revokeObjectURL(preloadedUrls.prev); console.log("[Lightbox] Освобожден preloadedUrls.prev:", preloadedUrls.prev); } catch (e) { console.warn("[Lightbox] Ошибка освобождения preloadedUrls.prev:", e); } preloadedUrls.prev = null; }
 
                 if (imgElement) {
                     imgElement.onload = null; imgElement.onerror = null; imgElement.src = '';
@@ -14121,40 +14936,21 @@
                     if (mousedownListener) imgElement.removeEventListener('mousedown', mousedownListener);
                     if (mouseleaveListener) imgElement.removeEventListener('mouseleave', mouseleaveListener);
                     wheelListener = mousedownListener = mouseleaveListener = null;
-                    console.log("Обработчики событий изображения удалены.");
                 }
 
                 if (mousemoveListener) document.removeEventListener('mousemove', mousemoveListener);
                 if (mouseupListener) document.removeEventListener('mouseup', mouseupListener);
                 mousemoveListener = mouseupListener = null;
-                console.log("Глобальные обработчики панорамирования удалены.");
-
-                if (keydownListener) { document.removeEventListener('keydown', keydownListener); keydownListener = null; console.log("Обработчик клавиатуры удален."); }
 
                 if (originalTriggerElement && typeof originalTriggerElement.focus === 'function') {
-                    console.log("Возврат фокуса на элемент:", originalTriggerElement);
-                    setTimeout(() => { try { originalTriggerElement.focus(); } catch (focusError) { console.warn("Не удалось вернуть фокус (ошибка):", focusError); } }, 0);
-                } else { console.warn("Не удалось вернуть фокус на исходный элемент."); }
+                    setTimeout(() => { try { originalTriggerElement.focus(); } catch (focusError) { console.warn("[Lightbox] Не удалось вернуть фокус (ошибка):", focusError); } }, 0);
+                }
                 originalTriggerElement = null;
+                console.log("[Lightbox] Лайтбокс закрыт.");
             };
 
-            const preloadImage = (index) => {
-                if (index < 0 || index >= lightboxBlobs.length) return null;
-                const blob = lightboxBlobs[index];
-                if (!(blob instanceof Blob)) return null;
-                try { const url = URL.createObjectURL(blob); return url; } catch (e) { console.error(`Ошибка создания URL для предзагрузки индекса ${index}:`, e); return null; }
-            };
-
-            const updateImageTransform = () => {
-                const img = document.getElementById('lightboxImage');
-                if (img) {
-                    const finalTranslateX = currentScale > 1 ? translateX : 0;
-                    const finalTranslateY = currentScale > 1 ? translateY : 0;
-                    img.style.transform = `translate(${finalTranslateX}px, ${finalTranslateY}px) scale(${currentScale})`;
-                } else { console.warn("updateImageTransform: Элемент #lightboxImage не найден."); }
-            };
-
-            const navigateImage = (direction) => {
+            if (lightbox) lightbox._closeLightboxFunction = closeLightboxInternal;
+            if (lightbox) lightbox._navigateImageFunction = (direction) => {
                 if (lightboxBlobs.length <= 1) return;
                 let newIndex = currentIndex;
                 if (direction === 'prev') { newIndex = (currentIndex - 1 + lightboxBlobs.length) % lightboxBlobs.length; }
@@ -14171,6 +14967,23 @@
                     updateImageTransform: updateImageTransform,
                     preloadImage: preloadImage
                 });
+            };
+
+
+            const preloadImage = (index) => {
+                if (index < 0 || index >= lightboxBlobs.length) return null;
+                const blob = lightboxBlobs[index];
+                if (!(blob instanceof Blob)) return null;
+                try { const url = URL.createObjectURL(blob); return url; } catch (e) { console.error(`[Lightbox] Ошибка создания URL для предзагрузки индекса ${index}:`, e); return null; }
+            };
+
+            const updateImageTransform = () => {
+                const img = document.getElementById('lightboxImage');
+                if (img) {
+                    const finalTranslateX = currentScale > 1 ? translateX : 0;
+                    const finalTranslateY = currentScale > 1 ? translateY : 0;
+                    img.style.transform = `translate(${finalTranslateX}px, ${finalTranslateY}px) scale(${currentScale})`;
+                } else { console.warn("[Lightbox] updateImageTransform: Элемент #lightboxImage не найден."); }
             };
 
             const handleWheelZoom = (event) => {
@@ -14199,45 +15012,52 @@
             const onMouseMove = (event) => { if (isPanning) { event.preventDefault(); translateX = event.clientX - startX; translateY = event.clientY - startY; updateImageTransform(); } };
             const onMouseUpOrLeave = (event) => { const img = document.getElementById('lightboxImage'); if (isPanning && img) { event.preventDefault(); isPanning = false; img.style.cursor = 'grab'; img.classList.remove('panning'); } };
 
-            const handleKeydown = (event) => {
-                const activeLightbox = document.getElementById('screenshotLightbox');
-                if (!activeLightbox || activeLightbox.classList.contains('hidden')) { document.removeEventListener('keydown', handleKeydown); keydownListener = null; return; }
-                if (event.key === 'Tab') {
-                    const focusableElements = Array.from(activeLightbox.querySelectorAll('button:not([disabled]), [href]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(el => el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0);
-                    if (focusableElements.length === 0) { event.preventDefault(); return; }
-                    const firstElement = focusableElements[0]; const lastElement = focusableElements[focusableElements.length - 1];
-                    if (event.shiftKey) { if (document.activeElement === firstElement) { lastElement.focus(); event.preventDefault(); } }
-                    else { if (document.activeElement === lastElement) { firstElement.focus(); event.preventDefault(); } }
-                }
-                switch (event.key) {
-                    case 'ArrowLeft': navigateImage('prev'); break;
-                    case 'ArrowRight': navigateImage('next'); break;
-                    case 'Escape': closeLightboxInternal(); break;
-                }
-            };
-
-            if (!Array.isArray(lightboxBlobs) || lightboxBlobs.length === 0) { console.error("openLightbox: Требуется массив Blob'ов."); if (typeof showNotification === 'function') showNotification("Ошибка: Нет изображений для отображения.", "error"); return; }
-            if (typeof initialIndex !== 'number' || initialIndex < 0 || initialIndex >= lightboxBlobs.length) { console.warn(`openLightbox: Некорректный начальный индекс ${initialIndex}. Используем 0.`); currentIndex = 0; }
+            if (!Array.isArray(lightboxBlobs) || lightboxBlobs.length === 0) { console.error("[Lightbox] openLightbox: Требуется массив Blob'ов."); if (typeof showNotification === 'function') showNotification("Ошибка: Нет изображений для отображения.", "error"); return; }
+            if (typeof initialIndex !== 'number' || initialIndex < 0 || initialIndex >= lightboxBlobs.length) { console.warn(`[Lightbox] openLightbox: Некорректный начальный индекс ${initialIndex}. Используем 0.`); currentIndex = 0; }
             else { currentIndex = initialIndex; }
 
             lightbox = document.getElementById('screenshotLightbox');
             if (!lightbox) {
-                console.error("Критическая ошибка: элемент #screenshotLightbox не найден в DOM.");
+                console.error("[Lightbox] Критическая ошибка: элемент #screenshotLightbox не найден в DOM.");
                 if (typeof showNotification === 'function') showNotification("Ошибка: Не найден контейнер для просмотра изображений.", "error");
                 return;
             }
 
-            closeLightboxInternal();
+            if (!lightbox.classList.contains('hidden')) {
+                console.warn("[Lightbox] openLightbox: Лайтбокс был видим перед открытием, принудительное закрытие старого экземпляра.");
+                if (lightbox._closeLightboxFunction) lightbox._closeLightboxFunction();
+                else closeLightboxInternal();
+            }
 
-            console.log("Планирование инициализации лайтбокса через setTimeout(0)...");
+            console.log("[Lightbox] Планирование инициализации лайтбокса через setTimeout(0)...");
             setTimeout(() => {
                 const currentLightboxInstance = document.getElementById('screenshotLightbox');
-                if (!currentLightboxInstance) { console.error("openLightbox (setTimeout): Лайтбокс исчез!"); return; }
+                if (!currentLightboxInstance) { console.error("[Lightbox] openLightbox (setTimeout): Лайтбокс исчез!"); return; }
 
-                console.log("openLightbox (setTimeout): Инициализация лайтбокса...");
+                console.log("[Lightbox] openLightbox (setTimeout): Инициализация лайтбокса...");
                 currentIndex = initialIndex;
                 currentScale = 1.0; translateX = 0; translateY = 0; isPanning = false;
                 originalTriggerElement = document.activeElement;
+                currentLightboxInstance._closeLightboxFunction = closeLightboxInternal;
+                currentLightboxInstance._navigateImageFunction = (direction) => {
+                    if (lightboxBlobs.length <= 1) return;
+                    let newIndex = currentIndex;
+                    if (direction === 'prev') { newIndex = (currentIndex - 1 + lightboxBlobs.length) % lightboxBlobs.length; }
+                    else if (direction === 'next') { newIndex = (currentIndex + 1) % lightboxBlobs.length; }
+                    showImageAtIndex(newIndex, lightboxBlobs, {
+                        getCurrentIndex: () => currentIndex,
+                        getCurrentObjectUrl: () => currentObjectUrl,
+                        getCurrentPreloadedUrls: () => preloadedUrls,
+                        updateCurrentIndex: (idx) => currentIndex = idx,
+                        updateCurrentScale: (s) => currentScale = s,
+                        updateTranslate: (x, y) => { translateX = x; translateY = y; },
+                        updateObjectUrl: (url) => currentObjectUrl = url,
+                        updatePreloadedUrls: (urls) => preloadedUrls = urls,
+                        updateImageTransform: updateImageTransform,
+                        preloadImage: preloadImage
+                    });
+                };
+
 
                 const imgElement = currentLightboxInstance.querySelector('#lightboxImage');
                 const prevButton = currentLightboxInstance.querySelector('#prevLightboxBtn');
@@ -14247,7 +15067,7 @@
                 const counterElement = currentLightboxInstance.querySelector('#lightboxCounter');
 
                 if (!imgElement || !prevButton || !nextButton || !closeButton || !loadingIndicator || !counterElement) {
-                    console.error("openLightbox (setTimeout): Ошибка! Не найдены все необходимые внутренние элементы лайтбокса.");
+                    console.error("[Lightbox] openLightbox (setTimeout): Ошибка! Не найдены все необходимые внутренние элементы лайтбокса.");
                     if (typeof showNotification === 'function') showNotification("Критическая ошибка интерфейса лайтбокса.", "error");
                     currentLightboxInstance.classList.add('hidden');
                     document.body.classList.remove('overflow-hidden');
@@ -14262,25 +15082,22 @@
                 }
 
                 lightboxCloseButtonClickListener = () => {
-                    console.log("Клик по кнопке закрытия (крестик)");
-                    closeLightboxInternal();
+                    if (currentLightboxInstance._closeLightboxFunction) currentLightboxInstance._closeLightboxFunction();
                 };
                 lightboxOverlayClickListener = (event) => {
                     if (event.target === currentLightboxInstance) {
-                        console.log("Клик по оверлею");
-                        closeLightboxInternal();
+                        if (currentLightboxInstance._closeLightboxFunction) currentLightboxInstance._closeLightboxFunction();
                     }
                 };
 
                 if (closeButton) {
                     closeButton.addEventListener('click', lightboxCloseButtonClickListener);
-                    console.log("Добавлен слушатель клика на кнопку закрытия.");
                 }
                 currentLightboxInstance.addEventListener('click', lightboxOverlayClickListener);
-                console.log("Добавлен слушатель клика на оверлей.");
 
-                prevButton.onclick = () => navigateImage('prev');
-                nextButton.onclick = () => navigateImage('next');
+                prevButton.onclick = () => { if (currentLightboxInstance._navigateImageFunction) currentLightboxInstance._navigateImageFunction('prev'); };
+                nextButton.onclick = () => { if (currentLightboxInstance._navigateImageFunction) currentLightboxInstance._navigateImageFunction('next'); };
+
 
                 if (wheelListener) imgElement.removeEventListener('wheel', wheelListener);
                 wheelListener = handleWheelZoom;
@@ -14295,12 +15112,6 @@
                 document.addEventListener('mousemove', mousemoveListener);
                 document.addEventListener('mouseup', mouseupListener);
                 imgElement.addEventListener('mouseleave', mouseleaveListener);
-                console.log("Обработчики зума и панорамирования добавлены/обновлены.");
-
-                if (keydownListener) document.removeEventListener('keydown', keydownListener);
-                keydownListener = handleKeydown;
-                document.addEventListener('keydown', keydownListener);
-                console.log("Обработчик keydown для лайтбокса добавлен/обновлен.");
 
                 currentLightboxInstance.classList.remove('hidden');
                 document.body.classList.add('overflow-hidden');
@@ -14320,11 +15131,10 @@
 
                 setTimeout(() => {
                     const focusTarget = document.querySelector('#screenshotLightbox #closeLightboxBtn');
-                    if (focusTarget) { focusTarget.focus(); console.log("Фокус установлен на кнопку закрытия."); }
-                    else { console.warn("Не удалось установить фокус на кнопку закрытия."); }
+                    if (focusTarget) { focusTarget.focus(); }
                 }, 50);
 
-                console.log(`Лайтбокс открыт для ${lightboxBlobs.length} изображений, начиная с индекса ${currentIndex} (инициализация из setTimeout).`);
+                console.log(`[Lightbox] Лайтбокс открыт для ${lightboxBlobs.length} изображений, начиная с индекса ${currentIndex} (инициализация из setTimeout).`);
             }, 0);
         }
 
@@ -14454,6 +15264,49 @@
 
             applyCurrentView('bookmarksContainer');
         }
+
+        const closeModalOnEscapeWithPropagationStop = (event, modalIdToClose) => {
+            const modalElement = document.getElementById(modalIdToClose);
+            if (!modalElement || modalElement.classList.contains('hidden')) {
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                const visibleModals = getVisibleModals();
+                const topmostModal = visibleModals.length > 0 ? getTopmostModal(visibleModals) : null;
+
+                if (topmostModal && topmostModal.id !== modalIdToClose) {
+                    console.log(`[closeModalOnEscapeWPS] Escape для #${modalIdToClose}, но активное окно #${topmostModal.id}. Не закрываем.`);
+                    return;
+                }
+
+                console.log(`[closeModalOnEscapeWPS] Закрытие модального окна #${modalIdToClose} по Escape.`);
+                modalElement.classList.add('hidden');
+
+                if (modalElement._escapeHandler) {
+                    document.removeEventListener('keydown', modalElement._escapeHandler);
+                    delete modalElement._escapeHandler;
+                }
+
+                if (modalIdToClose === 'bookmarkDetailModal') {
+                    const images = modalElement.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
+                    images.forEach(img => {
+                        if (img.dataset.objectUrl) {
+                            try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn(`Ошибка отзыва URL при закрытии ${modalIdToClose}:`, revokeError); }
+                            delete img.dataset.objectUrl;
+                        }
+                    });
+                }
+
+                if (getVisibleModals().length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+        };
+
 
         async function updateBookmarkInDOM(bookmarkData) {
             const bookmarksContainer = document.getElementById('bookmarksContainer');
@@ -14729,31 +15582,35 @@
             const addModalTitle = document.getElementById('addModalTitle');
             const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
             const newAlgorithmDesc = document.getElementById('newAlgorithmDesc');
-            const newStepsContainer = document.getElementById('newSteps');
+            const newStepsContainerElement = document.getElementById('newSteps');
             const saveButton = document.getElementById('saveNewAlgorithmBtn');
 
-            if (!addModalTitle || !newAlgorithmTitle || !newAlgorithmDesc || !newStepsContainer || !saveButton) {
-                console.error("Show Add Modal failed: Missing required elements.");
+            if (!addModalTitle || !newAlgorithmTitle || !newAlgorithmDesc || !newStepsContainerElement || !saveButton) {
+                console.error("Show Add Modal failed: Missing required elements (#addModalTitle, #newAlgorithmTitle, #newAlgorithmDesc, #newSteps, #saveNewAlgorithmBtn).");
                 showNotification("Ошибка интерфейса: не найдены элементы окна добавления.", "error");
                 return;
+            }
+
+            const stepsOuterContainer = document.getElementById('newStepsContainer');
+            if (stepsOuterContainer) {
+                stepsOuterContainer.classList.add('min-h-0');
             }
 
             addModalTitle.textContent = 'Новый алгоритм для раздела: ' + getSectionName(section);
             newAlgorithmTitle.value = '';
             newAlgorithmDesc.value = '';
-            newStepsContainer.innerHTML = '';
-            newStepsContainer.className = 'space-y-4';
+            newStepsContainerElement.innerHTML = '';
 
             const firstStepDiv = document.createElement('div');
             firstStepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
             firstStepDiv.innerHTML = createStepElementHTML(1, false, true);
             firstStepDiv.dataset.stepIndex = 0;
-            newStepsContainer.appendChild(firstStepDiv);
+            newStepsContainerElement.appendChild(firstStepDiv);
 
             const firstDeleteBtn = firstStepDiv.querySelector('.delete-step');
             if (firstDeleteBtn) {
                 if (typeof attachStepDeleteHandler === 'function') {
-                    attachStepDeleteHandler(firstDeleteBtn, firstStepDiv, newStepsContainer, section, 'add', false);
+                    attachStepDeleteHandler(firstDeleteBtn, firstStepDiv, newStepsContainerElement, section, 'add', false);
                 } else {
                     console.error("Функция attachStepDeleteHandler не найдена в showAddModal!");
                     firstDeleteBtn.disabled = true;
