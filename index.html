@@ -57,6 +57,41 @@
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* ======================================== */
+        /*               Переменные                 */
+        /* ======================================== */
+        :root {
+            --color-primary-default: #5D5CDE;
+            --search-highlight-text-bg-light: #fff352;
+            --search-highlight-text-color-light: #333333;
+            --search-highlight-text-bg-dark: #FFD700;
+            --search-highlight-text-color-dark: #1a1a1a;
+            --exact-match-border-color-light: #28a745;
+            --exact-match-border-color-dark: #38c172;
+            --element-highlight-bg-light: rgba(255, 220, 100, 0.2);
+            --element-highlight-outline-light: rgba(255, 180, 50, 0.5);
+            --element-highlight-bg-dark: rgba(184, 134, 11, 0.25);
+            --element-highlight-outline-dark: rgba(218, 165, 32, 0.6);
+            --scrollbar-track-color-light: #f0f0f0;
+            --scrollbar-track-color-dark: #2a2a2e;
+            --scrollbar-thumb-opacity: 0.65;
+            --scrollbar-thumb-hover-opacity: 0.85;
+        }
+
+        html {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+
+        /* ======================================== */
+        /*           Стили для сортировки           */
+        /* ======================================== */
         .my-sortable-ghost {
             background-color: #d1d5db;
             opacity: 0.75;
@@ -67,14 +102,18 @@
             background-color: #4b5563;
         }
 
-        .reglament-item {
-            margin-top: 0 !important;
-        }
 
+        /* ======================================== */
+        /*           Кастомизация UI                */
+        /* ======================================== */
         .color-swatch.ring-primary {
-            --tw-ring-color: var(--color-primary, #5D5CDE);
+            --tw-ring-color: var(--color-primary, var(--color-primary-default));
         }
 
+
+        /* ======================================== */
+        /*      Полноэкранный режим модальных окон  */
+        /* ======================================== */
         .is-fullscreen {
             position: fixed !important;
             top: 0 !important;
@@ -82,113 +121,46 @@
             width: 100vw !important;
             height: 100vh !important;
             max-width: none !important;
+            max-height: none !important;
             z-index: 90 !important;
             padding: 0 !important;
-            overflow: hidden;
+            overflow: hidden !important;
         }
 
-        .is-fullscreen>.flex {
-            padding: 0 !important;
-            height: 100%;
-            min-height: 100%;
-        }
-
-        .is-fullscreen .bg-white {
+        .is-fullscreen>.bg-white,
+        .is-fullscreen>.dark\:bg-gray-800 {
             border-radius: 0 !important;
-            height: 100%;
-            width: 100%;
-            max-width: none !important;
-            max-height: none !important;
-            display: flex;
-            flex-direction: column;
+            height: 100% !important;
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
         }
 
-        .is-fullscreen .p-content.overflow-y-auto.flex-1,
-        .is-fullscreen #algorithmSteps.flex-1,
-        .is-fullscreen #hotkeysModal .p-6.overflow-y-auto.flex-1 {
+        .is-fullscreen .modal-content-area-fullscreen-scroll,
+        .is-fullscreen #algorithmSteps,
+        .is-fullscreen #hotkeysModal .p-6.overflow-y-auto.flex-1,
+        .is-fullscreen #reglamentModal .modal-content-area,
+        .is-fullscreen #extLinkModal .modal-content-area,
+        .is-fullscreen #cibLinkModal .modal-content-area,
+        .is-fullscreen #bookmarkModal .p-content.overflow-y-auto.flex-1,
+        .is-fullscreen #bookmarkDetailModal #bookmarkDetailOuterContent,
+        .is-fullscreen #addModal .p-content.overflow-y-auto.flex-1,
+        .is-fullscreen #editModal .p-content.overflow-y-auto.flex-1 {
             flex-grow: 1;
-            height: auto;
-            min-height: 0;
             overflow-y: auto;
-        }
-
-        .is-fullscreen .p-content.border-t {
-            margin-top: auto;
+            min-height: 0;
         }
 
         .is-fullscreen .edit-step .step-desc {
             min-height: 150px;
         }
 
-        .is-fullscreen #editSteps,
-        .is-fullscreen #newSteps {
-            height: auto;
-        }
 
+        /* ======================================== */
+        /*       Общие стили модальных окон         */
+        /* ======================================== */
         body.modal-open {
             overflow: hidden;
-        }
-
-        @media (min-width: 768px) {
-
-            #customizeUIModal .p-content.overflow-y-auto.flex-1 {
-                scrollbar-width: none;
-                -ms-overflow-style: none;
-            }
-
-            #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar {
-                display: none;
-            }
-        }
-
-        .reglament-item {
-            cursor: pointer !important;
-        }
-
-        #clientNotes.custom-scrollbar {
-            scrollbar-width: thin;
-            scrollbar-color: #9ca3af #e5e7eb;
-        }
-
-        .dark #clientNotes.custom-scrollbar {
-            scrollbar-color: #4b5563 #374151;
-        }
-
-        #clientNotes.custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-
-        #clientNotes.custom-scrollbar::-webkit-scrollbar-track {
-            background: #e5e7eb;
-            border-radius: 2px;
-        }
-
-        .dark #clientNotes.custom-scrollbar::-webkit-scrollbar-track {
-            background: #374151;
-        }
-
-        #clientNotes.custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #9ca3af;
-            border-radius: 2px;
-            border: none;
-        }
-
-        .dark #clientNotes.custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #4b5563;
-            border-color: #374151;
-        }
-
-        #clientNotes.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background-color: #6b7280;
-        }
-
-        .dark #clientNotes.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background-color: #6b7280;
-        }
-
-        #screenshotLightbox img {
-            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
         }
 
         .modal-transition {
@@ -217,6 +189,7 @@
         #addReglamentCategoryModal,
         #foldersModal,
         #reglamentModal,
+        #reglamentDetailModal,
         #bookmarkModal,
         #bookmarkDetailModal,
         #extLinkModal {
@@ -236,17 +209,185 @@
         #addReglamentCategoryModal:not(.hidden),
         #foldersModal:not(.hidden),
         #reglamentModal:not(.hidden),
+        #reglamentDetailModal:not(.hidden),
         #bookmarkModal:not(.hidden),
         #bookmarkDetailModal:not(.hidden),
         #extLinkModal:not(.hidden) {
             pointer-events: auto;
         }
 
-        #hotkeysModal.is-fullscreen>.flex.items-center.justify-center {
-            padding: 0 !important;
-            height: 100%;
+
+        /* ================================================ */
+        /*               Кастомный Скроллбар                */
+        /* ================================================ */
+
+        :root {
+            --scrollbar-track-color-light: rgba(0, 0, 0, 0.05);
+            --scrollbar-track-color-dark: rgba(255, 255, 255, 0.05);
         }
 
+        .custom-scrollbar,
+        html,
+        #searchResults,
+        .modal-content-area-fullscreen-scroll,
+        #algorithmSteps,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1,
+        #reglamentModal .modal-content-area,
+        #reglamentDetailModal #reglamentDetailContent,
+        #extLinkModal .modal-content-area,
+        #cibLinkModal .modal-content-area,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1,
+        #bookmarkDetailModal #bookmarkDetailOuterContent,
+        #addModal .p-content.overflow-y-auto.flex-1,
+        #editModal .p-content.overflow-y-auto.flex-1,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1 {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-light);
+        }
+
+        .dark .custom-scrollbar,
+        html.dark,
+        .dark #searchResults,
+        .dark .modal-content-area-fullscreen-scroll,
+        .dark #algorithmSteps,
+        .dark #hotkeysModal .p-6.overflow-y-auto.flex-1,
+        .dark #reglamentModal .modal-content-area,
+        .dark #reglamentDetailModal #reglamentDetailContent,
+        .dark #extLinkModal .modal-content-area,
+        .dark #cibLinkModal .modal-content-area,
+        .dark #bookmarkModal .p-content.overflow-y-auto.flex-1,
+        .dark #bookmarkDetailModal #bookmarkDetailOuterContent,
+        .dark #addModal .p-content.overflow-y-auto.flex-1,
+        .dark #editModal .p-content.overflow-y-auto.flex-1,
+        .dark #customizeUIModal .p-content.overflow-y-auto.flex-1 {
+            scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-dark);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar,
+        html::-webkit-scrollbar,
+        #searchResults::-webkit-scrollbar,
+        .modal-content-area-fullscreen-scroll::-webkit-scrollbar,
+        #algorithmSteps::-webkit-scrollbar,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1::-webkit-scrollbar,
+        #reglamentModal .modal-content-area::-webkit-scrollbar,
+        #reglamentDetailModal #reglamentDetailContent::-webkit-scrollbar,
+        #extLinkModal .modal-content-area::-webkit-scrollbar,
+        #cibLinkModal .modal-content-area::-webkit-scrollbar,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar,
+        #bookmarkDetailModal #bookmarkDetailOuterContent::-webkit-scrollbar,
+        #addModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar,
+        #editModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar {
+            width: 4px !important;
+            height: 4px !important;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track,
+        html::-webkit-scrollbar-track,
+        #searchResults::-webkit-scrollbar-track,
+        .modal-content-area-fullscreen-scroll::-webkit-scrollbar-track,
+        #algorithmSteps::-webkit-scrollbar-track,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        #reglamentModal .modal-content-area::-webkit-scrollbar-track,
+        #reglamentDetailModal #reglamentDetailContent::-webkit-scrollbar-track,
+        #extLinkModal .modal-content-area::-webkit-scrollbar-track,
+        #cibLinkModal .modal-content-area::-webkit-scrollbar-track,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        #bookmarkDetailModal #bookmarkDetailOuterContent::-webkit-scrollbar-track,
+        #addModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        #editModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track {
+            background-color: var(--scrollbar-track-color-light);
+            border-radius: 15px;
+        }
+
+        .dark .custom-scrollbar::-webkit-scrollbar-track,
+        html.dark::-webkit-scrollbar-track,
+        .dark #searchResults::-webkit-scrollbar-track,
+        .dark .modal-content-area-fullscreen-scroll::-webkit-scrollbar-track,
+        .dark #algorithmSteps::-webkit-scrollbar-track,
+        .dark #hotkeysModal .p-6.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        .dark #reglamentModal .modal-content-area::-webkit-scrollbar-track,
+        .dark #reglamentDetailModal #reglamentDetailContent::-webkit-scrollbar-track,
+        .dark #extLinkModal .modal-content-area::-webkit-scrollbar-track,
+        .dark #cibLinkModal .modal-content-area::-webkit-scrollbar-track,
+        .dark #bookmarkModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        .dark #bookmarkDetailModal #bookmarkDetailOuterContent::-webkit-scrollbar-track,
+        .dark #addModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        .dark #editModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track,
+        .dark #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-track {
+            background-color: var(--scrollbar-track-color-dark);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb,
+        html::-webkit-scrollbar-thumb,
+        #searchResults::-webkit-scrollbar-thumb,
+        .modal-content-area-fullscreen-scroll::-webkit-scrollbar-thumb,
+        #algorithmSteps::-webkit-scrollbar-thumb,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1::-webkit-scrollbar-thumb,
+        #reglamentModal .modal-content-area::-webkit-scrollbar-thumb,
+        #reglamentDetailModal #reglamentDetailContent::-webkit-scrollbar-thumb,
+        #extLinkModal .modal-content-area::-webkit-scrollbar-thumb,
+        #cibLinkModal .modal-content-area::-webkit-scrollbar-thumb,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb,
+        #bookmarkDetailModal #bookmarkDetailOuterContent::-webkit-scrollbar-thumb,
+        #addModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb,
+        #editModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb {
+            background-color: var(--scrollbar-thumb-bg);
+            border-radius: 15px;
+            border: 2px solid transparent;
+            background-clip: content-box;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+        html::-webkit-scrollbar-thumb:hover,
+        #searchResults::-webkit-scrollbar-thumb:hover,
+        .modal-content-area-fullscreen-scroll::-webkit-scrollbar-thumb:hover,
+        #algorithmSteps::-webkit-scrollbar-thumb:hover,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1::-webkit-scrollbar-thumb:hover,
+        #reglamentModal .modal-content-area::-webkit-scrollbar-thumb:hover,
+        #reglamentDetailModal #reglamentDetailContent::-webkit-scrollbar-thumb:hover,
+        #extLinkModal .modal-content-area::-webkit-scrollbar-thumb:hover,
+        #cibLinkModal .modal-content-area::-webkit-scrollbar-thumb:hover,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb:hover,
+        #bookmarkDetailModal #bookmarkDetailOuterContent::-webkit-scrollbar-thumb:hover,
+        #addModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb:hover,
+        #editModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb:hover,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-thumb:hover {
+            background-color: var(--scrollbar-thumb-hover-bg);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-corner,
+        html::-webkit-scrollbar-corner,
+        #searchResults::-webkit-scrollbar-corner,
+        .modal-content-area-fullscreen-scroll::-webkit-scrollbar-corner,
+        #algorithmSteps::-webkit-scrollbar-corner,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1::-webkit-scrollbar-corner,
+        #reglamentModal .modal-content-area::-webkit-scrollbar-corner,
+        #reglamentDetailModal #reglamentDetailContent::-webkit-scrollbar-corner,
+        #extLinkModal .modal-content-area::-webkit-scrollbar-corner,
+        #cibLinkModal .modal-content-area::-webkit-scrollbar-corner,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-corner,
+        #bookmarkDetailModal #bookmarkDetailOuterContent::-webkit-scrollbar-corner,
+        #addModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-corner,
+        #editModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-corner,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+
+        /* ======================================== */
+        /*            Стили для Лайтбокса           */
+        /* ======================================== */
+        #screenshotLightbox img {
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+        }
+
+
+        /* ======================================== */
+        /*      Переходы для Табов и Поиска       */
+        /* ======================================== */
         #searchResults {
             transition: opacity 150ms ease-out, transform 150ms ease-out;
             opacity: 0;
@@ -271,6 +412,327 @@
         .tab-content.fade-in {
             opacity: 1;
         }
+
+
+        /* ======================================== */
+        /*          Стили для кнопок табов          */
+        /* ======================================== */
+        .tab-btn {
+            padding-left: 0.6rem;
+            padding-right: 0.6rem;
+            padding-top: 0.4rem;
+            padding-bottom: 0.4rem;
+            font-size: 0.8rem;
+        }
+
+        .tab-btn i {
+            margin-right: 0.25rem;
+        }
+
+        @media (min-width: 640px) {
+
+            .tab-btn {
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+                font-size: 0.875rem;
+            }
+
+            .tab-btn i {
+                margin-right: 0.35rem;
+            }
+        }
+
+        #mainTab,
+        #programTab,
+        #linksTab,
+        #extLinksTab,
+        #skziTab,
+        #lk1cTab,
+        #webRegTab,
+        #reglamentsTab,
+        #bookmarksTab,
+        #sedoTypesTab {
+            padding-left: 0.4rem;
+            padding-right: 0.4rem;
+        }
+
+
+        /* ======================================== */
+        /*  Стили для Подсветки Результатов Поиска  */
+        /* ======================================== */
+
+        .exact-match-highlight {
+            border-left: 4px solid var(--exact-match-border-color-light) !important;
+            padding-left: calc(0.75rem - 4px);
+            background-color: transparent !important;
+        }
+
+        .dark .exact-match-highlight,
+        .dark .exact-match-highlight-dark {
+            border-left-color: var(--exact-match-border-color-dark) !important;
+            background-color: transparent !important;
+        }
+
+        .exact-match-highlight:hover {
+            background-color: rgba(0, 0, 0, 0.03) !important;
+        }
+
+        .dark .exact-match-highlight:hover {
+            background-color: rgba(255, 255, 255, 0.04) !important;
+        }
+
+        .search-highlight-active {
+            background-color: var(--element-highlight-bg-light) !important;
+            outline: 2px solid var(--element-highlight-outline-light) !important;
+            outline-offset: -2px;
+            transition: background-color 0.3s ease-out, outline-color 0.3s ease-out;
+            position: relative;
+            z-index: 1;
+        }
+
+        .dark .search-highlight-active {
+            background-color: var(--element-highlight-bg-dark) !important;
+            outline-color: var(--element-highlight-outline-dark) !important;
+        }
+
+        @keyframes pulse-highlight {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 180, 50, 0.4);
+            }
+
+            50% {
+                transform: scale(1.01);
+                box-shadow: 0 0 3px 6px rgba(255, 180, 50, 0);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 180, 50, 0);
+            }
+        }
+
+        .search-highlight-pulse {
+            animation: pulse-highlight 1.3s ease-in-out;
+        }
+
+        .search-term-highlight,
+        mark {
+            background-color: var(--search-highlight-text-bg-light);
+            color: var(--search-highlight-text-color-light);
+            padding: 0.05em 0.2em;
+            border-radius: 0.15em;
+            font-weight: 600;
+            box-shadow: none;
+        }
+
+        .dark .search-term-highlight,
+        .dark mark {
+            background-color: var(--search-highlight-text-bg-dark);
+            color: var(--search-highlight-text-color-dark);
+        }
+
+        .highlight-search-result-textarea {
+            transition: box-shadow 0.3s ease-in-out;
+            box-shadow: 0 0 8px 2px var(--color-primary, var(--color-primary-default));
+        }
+
+
+        /* ======================================== */
+        /*             Прочие стили                 */
+        /* ======================================== */
+        .reglament-item {
+            cursor: pointer;
+        }
+
+        .cib-link-item {
+            cursor: pointer !important;
+        }
+
+        #appContent {
+            flex-grow: 1;
+        }
+
+        #appContent.content-hidden-initial {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        #appContent.content-fading-in {
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.6s ease-in;
+        }
+
+        #important-notifications-container.custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #important-notifications-container.custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+
+        #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+
+        #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .notification-updated-shake {
+            animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+            transform: translate3d(0, 0, 0);
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+
+
+        /* ======================================== */
+        /*        Стили для Копирайта             */
+        /* ======================================== */
+        #app-copyright {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            color: #9ca3af;
+            background-color: transparent;
+            z-index: 10;
+            transition: color 0.2s ease-in-out;
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+        }
+
+        .dark #app-copyright {
+            color: #4b5563;
+        }
+
+        #app-copyright a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        #app-copyright a:hover {
+            text-decoration: underline;
+            color: var(--color-primary, #5D5CDE);
+        }
+
+        .timer-segment {
+            display: inline-block;
+            min-width: 2ch;
+            text-align: center;
+            padding: .5rem;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            vertical-align: baseline;
+        }
+
+        .timer-colon {
+            display: inline-block;
+            padding: 0 0.1ch;
+            vertical-align: baseline;
+            user-select: none;
+        }
+
+        .timer-segment:hover,
+        .timer-segment:focus {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .timer-segment:hover,
+        .dark .timer-segment:focus {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        input.timer-input-active {
+            text-align: center;
+            border: 1px solid var(--color-primary, #5D5CDE);
+            border-radius: 3px;
+            padding: 0;
+            min-width: 2ch;
+            width: 2.1ch;
+            box-sizing: border-box;
+            background-color: var(--input-bg-color, #fff);
+            color: var(--input-text-color, #000);
+            vertical-align: baseline;
+        }
+
+        .dark input.timer-input-active {
+            background-color: var(--input-bg-color-dark, #374151);
+            color: var(--input-text-color-dark, #e5e7eb);
+        }
+
+
+        /* ======================================== */
+        /*     Стили для ховера кнопок табов        */
+        /* ======================================== */
+        .tab-btn {
+            position: relative;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .tab-btn::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--color-primary);
+            opacity: 0;
+            transform: scaleY(0);
+            transform-origin: bottom;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.2s 0.05s ease-out;
+            z-index: -1;
+        }
+
+        .tab-btn:hover::before {
+            transform: scaleY(1);
+            opacity: 0.1;
+        }
+
+        .tab-btn.border-primary.text-primary:hover::before {
+            transform: scaleY(0);
+            opacity: 0;
+            transition: none;
+        }
     </style>
 </head>
 
@@ -278,16 +740,13 @@
 
     <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
         <header class="mb-4">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-3 mb-3">
+            <div class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-3">
                 <div>
                     <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
-                    <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Помощник для технических
-                        специалистов любых
-                        калибров
-                    </p>
+                    <p class="text-sm md:text-base text-gray-600 dark:text-gray-400">Ваш надежный второй пилот</p>
                 </div>
-                <div class="flex items-center gap-3">
-                    <div id="appTimer" class="flex items-center gap-1 text-sm mr-2">
+                <div class="flex flex-wrap items-center justify-center md:justify-end gap-x-3 gap-y-2 w-full md:w-auto">
+                    <div id="appTimer" class="flex items-center gap-1 text-sm flex-shrink-0">
                         <button id="timerToggleButton" title="Старт/Пауза"
                             class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors">
                             <i class="fas fa-play"></i>
@@ -297,7 +756,9 @@
                             <i class="fas fa-undo"></i>
                         </button>
                         <span id="timerDisplay"
-                            class="font-mono p-1.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 min-w-[50px] text-center tabular-nums">02:00</span>
+                            class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-baseline text-base">
+                            <!-- Динамика из JavaScript -->
+                        </span>
                         <button id="timerDecreaseButton" title="Уменьшить на 1 мин"
                             class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors">
                             <i class="fas fa-minus"></i>
@@ -309,14 +770,14 @@
                     </div>
 
                     <button id="themeToggle"
-                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0"
                         title="Сменить тему">
                         <i class="fas fa-sun text-yellow-500 hidden dark:inline"></i>
                         <i class="fas fa-moon text-blue-300 dark:hidden"></i>
                     </button>
-                    <div class="relative">
+                    <div class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-48 lg:w-64">
                         <input type="text" id="searchInput" placeholder="Поиск..."
-                            class="w-48 md:w-64 pl-10 pr-10 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                            class="w-full pl-10 pr-10 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
                         <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                         <button id="clearSearchInputBtn" type="button"
                             class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
@@ -327,30 +788,30 @@
                             class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto">
                         </div>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 flex-shrink-0">
                         <button id="customizeUIBtn"
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                             title="Настройки">
-                            <i class="fas fa-sliders-h"></i>
+                            <i class="fas fa-cog"></i>
                         </button>
                         <button id="exportDataBtn"
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                            title="Экспорт данных">
+                            title="Экспорт базы данных">
                             <i class="fas fa-upload"></i>
                         </button>
                         <button id="importDataBtn"
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                            title="Импорт данных">
+                            title="Импорт базы данных">
                             <i class="fas fa-download"></i>
                         </button>
                         <button id="forceReloadBtn"
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                            title="Обновить приложение (перезагрузка)">
+                            title="Перезагрузка приложения">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                         <button id="showHotkeysBtn"
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                            title="Горячие клавиши">
+                            title="Горячие клавиши и управление Copilot">
                             <i class="fas fa-info-circle"></i>
                         </button>
                         <input type="file" id="importFileInput" accept=".json" class="hidden">
@@ -358,7 +819,6 @@
                 </div>
             </div>
 
-            <!-- Расширенные опции поиска -->
             <div id="advancedSearchOptions" class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
@@ -397,8 +857,8 @@
         <div class="mb-3 border-b border-gray-200 dark:border-gray-700">
             <nav class="flex flex-wrap -mb-px text-sm font-medium text-center">
                 <button id="mainTab"
-                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 whitespace-nowrap text-sm sm:text-base">
-                    <i class="fas fa-home mr-1"></i>Главная
+                    class="tab-btn inline-block px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-t-lg border-b-2 whitespace-nowrap text-xs sm:text-sm">
+                    <i class="fas fa-home mr-0.5 sm:mr-1"></i>Главная
                 </button>
                 <button id="programTab"
                     class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
@@ -432,7 +892,16 @@
                     class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
                     <i class="fas fa-bookmark mr-1"></i>Закладки
                 </button>
-                <div class="relative group ml-auto md:ml-1">
+                <button id="sedoTypesTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-comments mr-1"></i>Типы СЭДО
+                </button>
+                <button id="blacklistedClientsTab"
+                    class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
+                    <i class="fas fa-user-secret mr-1"></i>
+                    <span class="hidden sm:inline">Черный список жаб</span>
+                </button>
+                <div class="relative group ml-auto md:ml-1 shrink-0">
                     <button id="moreTabsBtn"
                         class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base">
                         <i class="fas fa-ellipsis-h"></i>
@@ -450,11 +919,12 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-content">
                 <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-content-sm">
-                        <h2 class="text-xl font-bold">Главный алгоритм работы</h2>
+                        <h2 class="text-xl font-bold flex-shrink min-w-0">Главный алгоритм работы (значения можно
+                            редактировать под ваши нужды)</h2>
                         <button id="editMainBtn"
-                            class="p-1.5 lg:px-3 lg:py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition sm:self-start"
+                            class="p-1.5 lg:px-3 lg:py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition sm:self-start flex-shrink-0"
                             title="Редактировать">
-                            <i class="fas fa-edit lg:mr-1"></i>
+                            <i class="fas fa-edit fa-xs lg:mr-1"></i>
                             <span class="hidden lg:inline">Редактировать</span>
                         </button>
                     </div>
@@ -503,17 +973,17 @@
                         <h2 class="text-lg font-bold">Информация по обращению</h2>
                         <div class="flex gap-2">
                             <button id="clearClientDataBtn"
-                                class="p-2 lg:px-2 lg:py-1 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition text-ls"
+                                class="p-2 lg:px-3 lg:py-1.5 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition text-sm flex items-center"
                                 title="Очистить">
-                                <i class="fas fa-trash lg:mr-1"></i>
-                                <span class="hidden lg:inline">Очистить</span>
+                                <i class="fas fa-trash"></i>
+                                <span class="hidden lg:inline lg:ml-1">Очистить</span>
                             </button>
                         </div>
                     </div>
                     <div class="bg-white dark:bg-gray-700 p-1 rounded-lg shadow-sm overflow-hidden">
                         <textarea id="clientNotes" rows="20"
                             placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
-                            class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 custom-scrollbar"></textarea>
+                            class="w-full p-1 resize-none bg-gray-50 dark:bg-gray-800 border-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 custom-scrollbar"></textarea>
                     </div>
                 </div>
             </div>
@@ -634,14 +1104,15 @@
                         </div>
                         <button id="addLinkBtn"
                             class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                            <i class="fas fa-plus mr-2"></i>Добавить ссылку
+                            <i class="fas fa-plus mr-2"></i>Добавить
                         </button>
                     </div>
                 </div>
                 <div
                     class="mb-content p-content-sm bg-blue-50 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700 rounded-lg text-sm text-blue-800 dark:text-blue-200">
                     <i class="fas fa-info-circle mr-1"></i> Это внутренние ссылки 1С (формат `e1cib/...`). Используйте
-                    кнопку <i class="fas fa-copy"></i> для копирования.
+                    кнопку <i class="fas fa-copy"></i> для копирования. В 1С скопированную ссылку можно вставить по
+                    комбинации клавиш Shift + F11.
                 </div>
                 <div class="mb-content flex flex-col md:flex-row gap-content-sm relative">
                     <input type="text" id="linkSearchInput" placeholder="Поиск по названию..."
@@ -665,14 +1136,30 @@
             <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
                     <h2 class="text-2xl font-bold">Регламенты</h2>
-                    <div class="flex flex-wrap gap-2">
+                    <div id="globalReglamentActionsBar" class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5"
+                            role="group">
+                            <button type="button"
+                                class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300"
+                                data-view="cards" title="Вид плитками">
+                                <i class="fas fa-th-large"></i>
+                            </button>
+                            <button type="button"
+                                class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300"
+                                data-view="list" title="Вид списком">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
                         <button id="addReglamentBtn"
-                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md flex items-center justify-center whitespace-nowrap">
                             <i class="fas fa-plus mr-2"></i>Добавить регламент
                         </button>
                     </div>
                 </div>
-                <div id="reglamentCategoryGrid" class="grid grid-cols-1 md:grid-cols-3 gap-content mb-content-lg">
+
+                <div id="reglamentCategoryGrid"
+                    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-content mb-content-lg"
+                    data-section-id="reglamentCategoryGrid" data-default-view="cards">
                     <div class="text-center py-6 text-gray-500 md:col-span-3">Загрузка категорий...</div>
                 </div>
 
@@ -686,15 +1173,8 @@
                             </button>
                             <h3 id="currentCategoryTitle" class="text-xl font-bold"></h3>
                         </div>
-                        <div
-                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5 self-end sm:self-center">
-                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек"> <i
-                                    class="fas fa-th-large"></i> </button>
-                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка"> <i
-                                    class="fas fa-list"></i> </button>
-                        </div>
                     </div>
-                    <div id="reglamentsContainer" class="space-y-content-sm" data-section-id="reglamentsContainer"
+                    <div id="reglamentsContainer" class="auto-rows-fr" data-section-id="reglamentsContainer"
                         data-default-view="list">
                     </div>
                 </div>
@@ -716,7 +1196,7 @@
                         </div>
                         <button id="addBookmarkBtn"
                             class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                            <i class="fas fa-plus mr-2"></i>Добавить закладку
+                            <i class="fas fa-plus mr-2"></i>Добавить
                         </button>
                         <button id="organizeBookmarksBtn"
                             class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -745,6 +1225,34 @@
             </div>
         </div>
 
+        <!-- Типы сообщений СЭДО -->
+        <div id="sedoTypesContent" class="tab-content hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-content">
+                    <h2 class="text-2xl font-bold text-primary">Типы сообщений СЭДО</h2>
+                    <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <button id="editSedoTypesBtn"
+                            class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition flex items-center">
+                            <i class="fas fa-edit mr-1.5"></i>Редактировать
+                        </button>
+                        <button id="saveSedoTypesBtn"
+                            class="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md transition flex items-center"
+                            style="display: none;">
+                            <i class="fas fa-save mr-1.5"></i>Сохранить
+                        </button>
+                        <button id="cancelSedoTypesBtn"
+                            class="px-3 py-1.5 text-sm bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition"
+                            style="display: none;">
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+
+                <div id="sedoTypesInfoContainer" class="space-y-content">
+                </div>
+            </div>
+        </div>
+
         <!-- Внешние ресурсы -->
         <div id="extLinksContent" class="tab-content hidden">
             <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
@@ -760,7 +1268,7 @@
                         </div>
                         <button id="addExtLinkBtn"
                             class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                            <i class="fas fa-plus mr-2"></i>Добавить ресурс
+                            <i class="fas fa-plus mr-2"></i>Добавить
                         </button>
                     </div>
                 </div>
@@ -778,10 +1286,34 @@
             </div>
         </div>
 
+        <div id="blacklistedClientsContent" class="tab-content hidden p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200">Черный список для жаб (но не
+                    говорите о нем <s>жабам</s> клиентам!)</h2>
+                <button id="addBlacklistEntryBtn"
+                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md shadow-sm transition">
+                    <i class="fas fa-plus mr-2"></i>Добавить
+                </button>
+            </div>
+            <div class="mb-4 flex items-center gap-2">
+                <label for="blacklistSearchInput" class="sr-only">Поиск по черному списку</label>
+                <input type="text" id="blacklistSearchInput"
+                    placeholder="Поиск по организации, ИНН, телефону, примечанию..."
+                    class="flex-grow px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-sm">
+                <button id="clearBlacklistSearchBtn" title="Очистить поиск"
+                    class="p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 hidden">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="blacklistTableContainer" class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-x-auto">
+                <!-- Динамика через JavaScript -->
+                <p class="text-gray-500 dark:text-gray-400 text-center py-4">Загрузка данных...</p>
+            </div>
+        </div>
 
-        <!-- ================= Модальные окна ================= -->
+        <!-- Модальные окна -->
         <div id="algorithmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto">
-            <div class="flex items-center justify-center min-h-full p-4 sm:p-6 md:p-8">
+            <div class="flex items-center justify-center min-h-full">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -817,8 +1349,9 @@
 
         <!-- Окно настроек -->
         <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
-            <div class="flex items-center justify-center min-h-full py-content">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full">
+            <div class="flex items-center justify-center min-h-full">
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] flex flex-col overflow-hidden">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                         <div class="flex justify-between items-center">
                             <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate"
@@ -840,7 +1373,7 @@
                         </div>
                     </div>
 
-                    <div class="p-content overflow-y-auto flex-1">
+                    <div class="p-content overflow-y-auto flex-1 min-h-0">
                         <form id="editAlgorithmForm">
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
@@ -880,7 +1413,7 @@
         </div>
 
         <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
-            <div class="flex items-center justify-center min-h-full py-content">
+            <div class="flex items-center justify-center min-h-full">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
@@ -946,7 +1479,7 @@
         <!-- Модальное окно Настройки UI -->
         <div id="customizeUIModal"
             class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center hidden">
-            <div class="flex items-center justify-center min-h-full py-content">
+            <div class="flex items-center justify-center min-h-full">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-screen flex flex-col">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center gap-4">
@@ -1066,8 +1599,7 @@
                                 </div>
                                 <div class="mb-content">
                                     <label
-                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Размер
-                                        шрифта</label>
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Масштаб</label>
                                     <div class="flex items-center space-x-3 mt-2">
                                         <button id="decreaseFontBtn"
                                             class="p-1.5 rounded border border-gray-300 dark:border-gray-600 focus:outline-none text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -1083,7 +1615,7 @@
                                 </div>
                                 <div class="mb-content">
                                     <label
-                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Округление
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скругление
                                         углов</label>
                                     <input type="range" min="0" max="20" value="8"
                                         class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
@@ -1095,14 +1627,48 @@
                                 </div>
                                 <div class="mb-content">
                                     <label
-                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Плотность
-                                        информации</label>
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Настройка
+                                        отступов</label>
                                     <input type="range" min="0" max="6" value="3"
                                         class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
                                         id="densitySlider">
                                     <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        <span>Компактная</span>
-                                        <span>Просторная</span>
+                                        <span>Меньше</span>
+                                        <span>Больше</span>
+                                    </div>
+                                </div>
+                                <div class="space-y-content-sm border-t border-gray-200 dark:border-gray-600 pt-content-sm mt-content-lg"
+                                    id="additionalSecuritySettingsSection">
+                                    <div>
+                                        <label for="toggleBlacklistWarning" class="flex items-center cursor-pointer">
+                                            <input type="checkbox" id="toggleBlacklistWarning"
+                                                name="showBlacklistUsageWarning"
+                                                class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300">Всегда
+                                                показывать
+                                                предупреждение при входе в раздел ЧС</span>
+                                        </label>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8">
+                                            Если эта опция отключена, вы не будете видеть страницу с предупреждением
+                                            каждый
+                                            раз при переходе в раздел "Черный список".
+                                        </p>
+                                    </div>
+
+                                    <div class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                        id="uiImportSettingsSection">
+                                        <label for="toggleDisableForcedBackup" class="flex items-center cursor-pointer">
+                                            <input type="checkbox" id="toggleDisableForcedBackup"
+                                                name="disableForcedBackupOnImport"
+                                                class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300">Отключить
+                                                принудительный бэкап при импорте базы</span>
+                                        </label>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8">
+                                            Если эта опция включена, приложение не будет автоматически создавать
+                                            резервную копию текущей базы данных перед импортом новой. Используйте с
+                                            осторожностью.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -1137,7 +1703,7 @@
 
         <!-- Модальное окно подтверждения очистки данных -->
         <div id="confirmClearDataModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 overflow-y-auto">
-            <div class="flex items-center justify-center min-h-full py-content">
+            <div class="flex items-center justify-center min-h-full">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
@@ -1153,8 +1719,8 @@
                     <div class="p-content space-y-4">
                         <p class="text-base text-gray-700 dark:text-gray-300">
                             Вы уверены, что хотите <strong class="text-red-600 dark:text-red-500">полностью удалить все
-                                данные</strong> приложения (алгоритмы, настройки, заметки, закладки, ссылки,
-                            регламенты)?
+                                данные</strong> приложения (алгоритмы, настройки, заметки, закладки, ссылки, регламенты
+                            - всё, что Вы вносили)?
                         </p>
                         <p class="text-lg font-semibold text-red-600 dark:text-red-500">
                             Это действие необратимо!
@@ -1188,7 +1754,7 @@
 
         <!-- Модальное окно Ссылки 1С -->
         <div id="cibLinkModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto">
-            <div class="flex items-center justify-center min-h-full py-content">
+            <div class="flex items-center justify-center min-h-full">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full">
                     <div class="p-content border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
@@ -1241,14 +1807,14 @@
         </div>
     </div>
 
-    <!-- ================= Модальное окно Горячие клавиши ================= -->
+    <!-- Модальное окно Горячие клавиши -->
     <div id="hotkeysModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto">
-        <div class="flex items-center justify-center min-h-full py-content">
+        <div class="flex items-center justify-center min-h-full">
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
                 <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
-                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и управление
+                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и управление Copilot
                         </h2>
                         <div class="flex items-center flex-shrink-0">
                             <button id="toggleFullscreenHotkeysBtn" type="button"
@@ -1287,7 +1853,7 @@
                                 активной секции (например, для закладок, ссылок и т.д.).</li>
                             <li><code
                                     class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + H</code>
-                                (вне поля ввода): Открыть/закрыть это окно "Горячие клавиши и управление".</li>
+                                (вне поля ввода): Открыть/закрыть это окно "Горячие клавиши и управление Copilot".</li>
                         </ul>
                     </section>
 
@@ -1310,6 +1876,7 @@
                                         скриншотов (если был) и окно деталей элемента.</li>
                                     <li>В других модальных окнах (редактирование, настройки и т.д.): Закрыть текущее
                                         активное модальное окно.</li>
+                                    <li>В любом поле поиска - удалить ввод и выйти из фокуса строки</li>
                                 </ul>
                             </li>
                             <li><code
@@ -1455,19 +2022,9 @@
         </div>
     </div>
 
-    <div id="loadingOverlay" class="fixed inset-0 z-[9999] flex items-center justify-center bg-white dark:bg-gray-900">
-        <div class="text-center">
-            <i class="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
-            <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Загрузка данных...</p>
-        </div>
-    </div>
-
-    <div id="screenshotLightbox"
+    <div id="screenshotLightbox" tabindex="-1"
         class="fixed inset-0 bg-black bg-opacity-80 hidden z-[90] p-4 flex items-center justify-center backdrop-blur-sm overflow-hidden">
         <div class="relative w-full h-full flex items-center justify-center">
-            <div id="lightboxLoading" class="absolute text-white text-xl z-10">
-                <i class="fas fa-spinner fa-spin"></i> Загрузка...
-            </div>
             <img id="lightboxImage" src="" alt="Просмотр скриншота"
                 class="max-w-[95%] max-h-[95%] object-contain hidden cursor-grab active:cursor-grabbing"
                 style="transition: transform 0.1s ease-out; transform-origin: center center;">
@@ -1477,7 +2034,7 @@
                 1 / 1
             </div>
             <button id="closeLightboxBtn"
-                class="absolute top-4 right-4 text-white text-3xl opacity-80 hover:opacity-100 transition-opacity focus:outline-none z-20"
+                class="absolute top-4 right-4 text-white text-3xl opacity-80 hover:opacity-100 transition-opacity focus:outline-none focus:shadow-none z-20"
                 title="Закрыть (Esc)">
                 ×
             </button>
@@ -1493,8 +2050,15 @@
             </button>
         </div>
     </div>
-    
-<script defer src="./script.js"></script>
+
+
+    <div id="app-copyright" class="p-3 text-center text-2xs">
+        Copilot 1CO by <a href="https://t.me/guthleifur" target="_blank" rel="noopener noreferrer"
+            class="hover:underline">@guthleifur</a>
+    </div>
+
+
+    <script defer src="./script.js"></script>
 </body>
 
 </html>
