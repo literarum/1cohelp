@@ -13913,7 +13913,9 @@ async function handleBookmarkAction(event) {
             showEditBookmarkModal(bookmarkId);
         } else {
             console.error("Функция showEditBookmarkModal не определена.");
-            showNotification("Функция редактирования недоступна.", "error");
+            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                NotificationService.add("Функция редактирования недоступна.", "error");
+            }
         }
     } else if (action === 'delete') {
         const title = bookmarkItem.querySelector('h3')?.title || `закладку с ID ${bookmarkId}`;
@@ -13922,7 +13924,9 @@ async function handleBookmarkAction(event) {
                 deleteBookmark(bookmarkId);
             } else {
                 console.error("Функция deleteBookmark не определена.");
-                showNotification("Функция удаления недоступна.", "error");
+                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                    NotificationService.add("Функция удаления недоступна.", "error");
+                }
             }
         }
     } else if (action === 'open-link-icon' || action === 'open-link-hostname' || action === 'open-card-url') {
@@ -13931,11 +13935,17 @@ async function handleBookmarkAction(event) {
             : (button || actionTarget)?.href;
 
         if (urlToOpen) {
-            console.log(`Попытка открытия URL (${action}) для закладки ${bookmarkId}: ${urlToOpen}`);
-            const openedWindow = window.open(urlToOpen, '_blank', 'noopener,noreferrer');
-            if (!openedWindow || openedWindow.closed || typeof openedWindow.closed === 'undefined') {
-                console.warn(`Не удалось открыть окно для URL: ${urlToOpen}. Возможно, заблокировано всплывающее окно или URL недействителен для window.open.`);
-                showNotification("Не удалось открыть ссылку. Проверьте блокировщик всплывающих окон или корректность URL.", "warning");
+            console.log(`[BM_ACTION V_NO_OPEN_CHECK] Попытка открытия URL (${action}): ${urlToOpen}`);
+            try {
+                window.open(urlToOpen, '_blank', 'noopener,noreferrer');
+                console.log(`[BM_ACTION V_NO_OPEN_CHECK] Вызов window.open для ${urlToOpen} выполнен.`);
+            } catch (e) {
+                console.error(`[BM_ACTION V_NO_OPEN_CHECK] Ошибка при вызове window.open для ${urlToOpen}:`, e);
+                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                    NotificationService.add("Внутренняя ошибка JavaScript при попытке открыть ссылку. Проверьте консоль.", "error", { duration: 7000 });
+                } else {
+                    alert("Внутренняя ошибка JavaScript при попытке открыть ссылку. Проверьте консоль.");
+                }
             }
         } else {
             console.warn(`Нет URL для действия '${action}' у закладки ID: ${bookmarkId}. Элемент, с которого пытались взять href:`, (button || actionTarget));
@@ -13947,7 +13957,9 @@ async function handleBookmarkAction(event) {
                     console.warn("Функция showBookmarkDetailModal не определена.");
                 }
             } else {
-                showNotification("URL для этого действия не найден.", "error");
+                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                    NotificationService.add("URL для этого действия не найден.", "error");
+                }
             }
         }
     } else if (action === 'view-screenshots') {
@@ -13955,14 +13967,18 @@ async function handleBookmarkAction(event) {
             handleViewBookmarkScreenshots(bookmarkId);
         } else {
             console.error("Функция handleViewBookmarkScreenshots не определена.");
-            showNotification("Функция просмотра скриншотов недоступна.", "error");
+            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                NotificationService.add("Функция просмотра скриншотов недоступна.", "error");
+            }
         }
     } else if (action === 'view-details') {
         if (typeof showBookmarkDetailModal === 'function') {
             showBookmarkDetailModal(bookmarkId);
         } else {
             console.warn("Функция showBookmarkDetailModal не определена.");
-            showNotification("Невозможно отобразить детали этой заметки.", "info");
+            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                NotificationService.add("Невозможно отобразить детали этой заметки.", "info");
+            }
         }
     }
 }
