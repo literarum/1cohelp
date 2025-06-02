@@ -62,6 +62,8 @@ let windowFocusHandlerInstance = null;
 let updateVisibleTabsRetryCount = 0;
 let tabsResizeTimeout;
 
+let initialBookmarkFormState = null;
+
 
 
 const DEFAULT_WELCOME_CLIENT_NOTES_TEXT = `   Итак, вы здесь. Трудовой договор специалиста техподдержки 1С-Отчетности у вас в кармане (надеемся). А это значит, что вам вручается ключ от всех дверей... ну, почти от всех. Точнее, экземпляр приложения Copilot 1СО. Это штука будет притворяться вашим верным помощником и пытаться стать вашим верным другом. Иногда даже успешно. Добро пожаловать в клуб!
@@ -489,6 +491,26 @@ const algorithmDetailModalConfig = {
     },
     innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
     contentAreaSelector: '#algorithmSteps'
+};
+
+
+const bookmarkModalConfigGlobal = {
+    modalId: 'bookmarkModal',
+    buttonId: 'toggleFullscreenBookmarkBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-4'],
+            innerContainer: ['max-w-2xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'],
+            contentArea: ['p-content', 'overflow-y-auto', 'flex-1', 'min-h-0']
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+            contentArea: [...UNIFIED_FULLSCREEN_MODAL_CLASSES.contentArea, 'flex', 'flex-col']
+        }
+    },
+    innerContainerSelector: '.modal-inner-container',
+    contentAreaSelector: '.modal-content-area'
 };
 
 
@@ -4171,16 +4193,16 @@ if (importDataBtn && importFileInput) {
 
 
 async function _processActualImport(jsonString) {
-    console.log("[_processActualImport V3 - Полная версия с фиксом 99%] Начало фактической обработки импортируемых данных...");
+    console.log("[_processActualImport V4 - Reglament Persistance Debug] Начало фактической обработки импортируемых данных...");
 
     const STAGE_WEIGHTS_ACTUAL_IMPORT = {
-        PARSE_JSON: 10,
-        VALIDATE_SCHEMA: 10,
+        PARSE_JSON: 5,
+        VALIDATE_SCHEMA: 5,
         DB_CHECK_REINIT: 5,
-        CLEAR_STORES: 15,
+        CLEAR_STORES: 20,
         IMPORT_DATA: 35,
-        APP_RE_INIT: 15,
-        BUILD_INDEX: 10,
+        APP_RE_INIT: 20,
+        RENDER_ACTIVE_REGLAMENTS: 5,
     };
     let currentImportProgress = 0;
     let notificationMessageOnError = "Произошла ошибка во время импорта.";
@@ -4188,44 +4210,53 @@ async function _processActualImport(jsonString) {
     const updateTotalImportProgress = (stageWeightCompleted, stageName) => {
         currentImportProgress += stageWeightCompleted;
         const displayProgress = Math.min(currentImportProgress, (stageName === "FinalizeImportSuccess" ? 100 : 99));
-        loadingOverlayManager.updateProgress(displayProgress);
+        if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
+            loadingOverlayManager.updateProgress(displayProgress);
+        }
         console.log(`Прогресс импорта (${stageName}): ${displayProgress.toFixed(1)}% (добавлено ${stageWeightCompleted.toFixed(1)}%, всего ${currentImportProgress.toFixed(1)}%)`);
     };
 
-    const updateFineGrainedProgressForImport = (baseProgress, stageWeight, current, total) => {
+    const updateFineGrainedProgressForImport = (baseProgress, stageWeight, current, total, operationName = "Операция") => {
         if (total === 0 && current === 0) return;
         const stageProgressFraction = total > 0 ? (current / total) : 1;
         const currentStageProgressContribution = stageProgressFraction * stageWeight;
         const newOverallProgress = baseProgress + currentStageProgressContribution;
         const displayProgress = Math.min(newOverallProgress, 99);
-        loadingOverlayManager.updateProgress(displayProgress);
+        if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
+            loadingOverlayManager.updateProgress(displayProgress, `${operationName}: ${Math.round(stageProgressFraction * 100)}%`);
+        }
     };
 
-    if (!loadingOverlayManager.overlayElement) {
-        console.warn("[_processActualImport V3] Оверлей не был показан. Показываем сейчас.");
-        loadingOverlayManager.createAndShow();
+    if (typeof loadingOverlayManager !== 'undefined' && !loadingOverlayManager.overlayElement) {
+        console.warn("[_processActualImport V4] Оверлей не был показан. Показываем сейчас.");
+        if (typeof loadingOverlayManager.createAndShow === 'function') loadingOverlayManager.createAndShow();
     }
     currentImportProgress = 0;
-    loadingOverlayManager.updateProgress(1);
+    if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
+        loadingOverlayManager.updateProgress(1, "Начало импорта...");
+    }
 
-    NotificationService.add("Началась обработка и загрузка новой базы данных...", "info", { duration: 4000, id: "import-processing-started" });
+    if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+        NotificationService.add("Началась обработка и загрузка новой базы данных...", "info", { duration: 4000, id: "import-processing-started" });
+    }
 
     const errorsOccurred = [];
     let skippedPuts = 0;
+    let storesToImport = [];
 
     try {
-        if (!db || (db.connections !== undefined && db.connections === 0) || !db.objectStoreNames || db.objectStoreNames.length === 0) {
-            console.warn("[_processActualImport V3] DB is null, closed, or in an invalid state. Attempting re-initialization...");
+        if (!db || (typeof db.objectStoreNames === 'undefined') || (db.connections !== undefined && db.connections === 0) || db.objectStoreNames.length === 0) {
+            console.warn("[_processActualImport V4] DB is null, closed, or in an invalid state. Attempting re-initialization...");
             await initDB();
             if (!db || !db.objectStoreNames || db.objectStoreNames.length === 0) {
-                console.error("[_processActualImport V3] База данных не доступна или пуста после повторной попытки инициализации.");
+                console.error("[_processActualImport V4] База данных не доступна или пуста после повторной попытки инициализации.");
                 throw new Error("База данных не доступна или пуста после повторной попытки инициализации.");
             }
-            console.log("[_processActualImport V3] DB re-initialized successfully.");
+            console.log("[_processActualImport V4] DB re-initialized successfully.");
         } else {
-            console.log("[_processActualImport V3] DB connection seems active and valid.");
+            console.log("[_processActualImport V4] DB connection seems active and valid.");
         }
-        updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.DB_CHECK_REINIT, "DBCheckReinit");
+        updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.DB_CHECK_REINIT, "Проверка БД");
 
         if (typeof jsonString !== 'string' || jsonString.trim() === '') {
             throw new Error("Файл пуст или не содержит текстовых данных.");
@@ -4233,8 +4264,8 @@ async function _processActualImport(jsonString) {
         let importData;
         try {
             importData = JSON.parse(jsonString);
-            console.log("[_processActualImport V3] JSON успешно распарсен.");
-            updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.PARSE_JSON, "ParseJSON");
+            console.log("[_processActualImport V4] JSON успешно распарсен.");
+            updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.PARSE_JSON, "Парсинг JSON");
         } catch (error) {
             throw new Error("Некорректный формат JSON файла.");
         }
@@ -4242,7 +4273,7 @@ async function _processActualImport(jsonString) {
         if (!importData || typeof importData.data !== 'object' || !importData.schemaVersion) {
             throw new Error("Некорректный формат файла импорта (отсутствует data или schemaVersion)");
         }
-        console.log(`[_processActualImport V3] Импорт данных версии схемы файла: ${importData.schemaVersion}. Ожидаемая версия приложения: ${CURRENT_SCHEMA_VERSION}`);
+        console.log(`[_processActualImport V4] Импорт данных версии схемы файла: ${importData.schemaVersion}. Ожидаемая версия приложения: ${CURRENT_SCHEMA_VERSION}`);
         const [fileMajorStr, fileMinorStr] = importData.schemaVersion.split('.');
         const [appMajorStr, appMinorStr] = CURRENT_SCHEMA_VERSION.split('.');
         const fileMajor = parseInt(fileMajorStr, 10); const fileMinor = parseInt(fileMinorStr, 10);
@@ -4257,18 +4288,18 @@ async function _processActualImport(jsonString) {
         if (fileMinor > appMinor) {
             throw new Error(`Импорт невозможен: версия схемы файла (${importData.schemaVersion}) новее, чем версия приложения (${CURRENT_SCHEMA_VERSION}). Обновите приложение до более новой версии.`);
         }
-        if (fileMinor < appMinor) {
+        if (fileMinor < appMinor && typeof NotificationService !== 'undefined' && NotificationService.add) {
             NotificationService.add(`ВНИМАНИЕ: Версия импортируемого файла (${importData.schemaVersion}) старше текущей версии приложения (${CURRENT_SCHEMA_VERSION}). Некоторые данные могут не перенестись корректно или будут утеряны. Рекомендуется обновить файл экспорта.`, "warning", { important: true, id: "old-schema-import-warning", isDismissible: true });
         }
-        updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.VALIDATE_SCHEMA, "ValidateSchema");
+        updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.VALIDATE_SCHEMA, "Валидация схемы");
 
-        const storesToImport = Object.keys(importData.data).filter(storeName => {
+        storesToImport = Object.keys(importData.data).filter(storeName => {
             if (!db.objectStoreNames.contains(storeName)) {
-                console.warn(`[_processActualImport V3] Хранилище '${storeName}' из файла импорта не найдено в текущей схеме БД. Пропускается.`);
+                console.warn(`[_processActualImport V4] Хранилище '${storeName}' из файла импорта не найдено в текущей схеме БД. Пропускается.`);
                 return false;
             }
             if (storeName === 'searchIndex') {
-                console.log(`[_processActualImport V3] Хранилище 'searchIndex' будет пропущено при импорте данных, оно перестраивается отдельно.`);
+                console.log(`[_processActualImport V4] Хранилище 'searchIndex' будет пропущено при импорте данных, оно перестраивается отдельно.`);
                 return false;
             }
             return true;
@@ -4276,11 +4307,11 @@ async function _processActualImport(jsonString) {
         if (storesToImport.length === 0) {
             throw new Error("Нет данных для импорта в текущую структуру БД (после фильтрации по существующим хранилищам).");
         }
-        console.log("[_processActualImport V3] Хранилища для импорта:", storesToImport);
+        console.log("[_processActualImport V4] Хранилища для импорта:", storesToImport);
 
         let importTransactionSuccessful = false;
         try {
-            console.log("[_processActualImport V3] Попытка начать основную транзакцию импорта...");
+            console.log("[_processActualImport V4] Попытка начать основную транзакцию импорта...");
             importTransactionSuccessful = await new Promise(async (resolvePromise, rejectPromise) => {
                 let transaction;
                 try {
@@ -4288,26 +4319,28 @@ async function _processActualImport(jsonString) {
                     if (!transaction) throw new Error("db.transaction вернула null/undefined.");
                 } catch (txError) { errorsOccurred.push({ storeName: storesToImport.join(', '), error: `Ошибка создания транзакции: ${txError.message}`, item: null }); return rejectPromise(txError); }
 
-                transaction.oncomplete = () => { console.log("[_processActualImport V3] Транзакция импорта успешно завершена (oncomplete)."); resolvePromise(true); };
-                transaction.onerror = (e) => { const errorMsg = `Критическая ошибка транзакции: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.error(`[_processActualImport V3] Transaction error:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
-                transaction.onabort = (e) => { const errorMsg = `Транзакция прервана: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.warn(`[_processActualImport V3] Transaction aborted:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
+                transaction.oncomplete = () => { console.log("[_processActualImport V4] Транзакция импорта успешно завершена (oncomplete)."); resolvePromise(true); };
+                transaction.onerror = (e) => { const errorMsg = `Критическая ошибка транзакции: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.error(`[_processActualImport V4] Transaction error:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
+                transaction.onabort = (e) => { const errorMsg = `Транзакция прервана: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.warn(`[_processActualImport V4] Transaction aborted:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
 
                 const clearPromises = []; const baseProgressForClear = currentImportProgress;
+                console.log(`[_processActualImport V4] Начало очистки ${storesToImport.length} хранилищ...`);
                 for (let i = 0; i < storesToImport.length; i++) {
                     const storeName = storesToImport[i];
                     clearPromises.push(new Promise((resolveClear, rejectClear) => {
                         try {
                             const store = transaction.objectStore(storeName); const clearRequest = store.clear();
-                            clearRequest.onsuccess = () => { updateFineGrainedProgressForImport(baseProgressForClear, STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES, i + 1, storesToImport.length); resolveClear(); };
+                            clearRequest.onsuccess = () => { console.log(`[_processActualImport V4] Хранилище ${storeName} успешно очищено.`); updateFineGrainedProgressForImport(baseProgressForClear, STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES, i + 1, storesToImport.length, "Очистка хранилищ"); resolveClear(); };
                             clearRequest.onerror = (e_clear) => { const errorMsg_clear = `Ошибка очистки ${storeName}: ${e_clear.target.error?.message || 'Неизвестно'}`; console.error(errorMsg_clear, e_clear.target.error); errorsOccurred.push({ storeName, error: errorMsg_clear, item: null }); rejectClear(new Error(errorMsg_clear)); };
                         } catch (storeError) { errorsOccurred.push({ storeName, error: `Ошибка доступа к ${storeName} для очистки: ${storeError.message}`, item: null }); rejectClear(storeError); }
                     }));
                 }
-                try { await Promise.all(clearPromises); currentImportProgress = Math.max(currentImportProgress, baseProgressForClear + STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES); loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99)); }
-                catch (clearAllError) { return rejectPromise(new Error(`Не удалось очистить хранилища: ${clearAllError.message || clearAllError}`)); }
+                try { await Promise.all(clearPromises); currentImportProgress = Math.max(currentImportProgress, baseProgressForClear + STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES); if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Очистка завершена"); console.log('[_processActualImport V4] Все хранилища успешно очищены.'); }
+                catch (clearAllError) { console.error('[_processActualImport V4] Ошибка во время очистки хранилищ:', clearAllError); return rejectPromise(new Error(`Не удалось очистить хранилища: ${clearAllError.message || clearAllError}`)); }
 
                 let putPromises = []; let totalItemsToPut = 0; storesToImport.forEach(storeName => { totalItemsToPut += (importData.data[storeName] || []).length; });
                 let processedItemsPut = 0; const baseProgressForImportData = currentImportProgress;
+                console.log(`[_processActualImport V4] Начало записи ${totalItemsToPut} элементов...`);
                 for (const storeName of storesToImport) {
                     let itemsToImportOriginal = importData.data[storeName];
                     if (!Array.isArray(itemsToImportOriginal)) { errorsOccurred.push({ storeName, error: 'Данные не являются массивом', item: null }); if (totalItemsToPut > 0) { totalItemsToPut = Math.max(0, totalItemsToPut - (importData.data[storeName]?.length || 0)); } continue; }
@@ -4333,9 +4366,9 @@ async function _processActualImport(jsonString) {
                             putPromises.push(new Promise((resolveReq) => {
                                 try {
                                     const putRequest = store.put(item);
-                                    putRequest.onsuccess = () => { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut); resolveReq({ storeName, operation: 'put', success: true }); };
-                                    putRequest.onerror = (e_put) => { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut); const errorMsg_put = e_put.target.error?.message || 'Put request failed'; errorsOccurred.push({ storeName, error: `Ошибка записи: ${errorMsg_put}`, item: JSON.stringify(item)?.substring(0, 100) }); resolveReq({ storeName, operation: 'put', success: false, error: e_put.target.error }); };
-                                } catch (putError) { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut); errorsOccurred.push({ storeName, error: `Исключение при записи: ${putError.message}`, item: JSON.stringify(item).substring(0, 100) }); resolveReq({ storeName, operation: 'put', success: false, error: putError }); }
+                                    putRequest.onsuccess = () => { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных"); resolveReq({ storeName, operation: 'put', success: true }); };
+                                    putRequest.onerror = (e_put) => { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных"); const errorMsg_put = e_put.target.error?.message || 'Put request failed'; errorsOccurred.push({ storeName, error: `Ошибка записи: ${errorMsg_put}`, item: JSON.stringify(item)?.substring(0, 100) }); resolveReq({ storeName, operation: 'put', success: false, error: e_put.target.error }); };
+                                } catch (putError) { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных"); errorsOccurred.push({ storeName, error: `Исключение при записи: ${putError.message}`, item: JSON.stringify(item).substring(0, 100) }); resolveReq({ storeName, operation: 'put', success: false, error: putError }); }
                             }));
                         }
                     }
@@ -4343,34 +4376,108 @@ async function _processActualImport(jsonString) {
 
                 Promise.all(putPromises).then(putResults => {
                     const putErrors = putResults.filter(r => !r.success);
-                    if (putErrors.length > 0) { if (transaction.abort) { transaction.abort(); } else { rejectPromise(new Error("Ошибки при записи, транзакция не отменена.")); } }
-                    else { currentImportProgress = Math.max(currentImportProgress, baseProgressForImportData + STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA); loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99)); }
-                }).catch(promiseAllError => { if (transaction.abort) transaction.abort(); else rejectPromise(promiseAllError); });
+                    if (putErrors.length > 0) { console.warn(`[_processActualImport V4] Были ошибки при записи ${putErrors.length} элементов. Транзакция будет отменена.`); if (transaction.abort) { transaction.abort(); } else { rejectPromise(new Error("Ошибки при записи, транзакция не отменена (отсутствует метод abort).")); } }
+                    else { currentImportProgress = Math.max(currentImportProgress, baseProgressForImportData + STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA); if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Запись данных завершена"); console.log('[_processActualImport V4] Все элементы успешно записаны.'); }
+                }).catch(promiseAllError => {
+                    console.error('[_processActualImport V4] Ошибка в Promise.all(putPromises):', promiseAllError);
+                    if (transaction.abort) transaction.abort(); else rejectPromise(promiseAllError);
+                });
             });
-            importTransactionSuccessful = true;
         } catch (transactionError) {
-            console.error("[_processActualImport V3] Ошибка на уровне транзакции импорта:", transactionError);
+            console.error("[_processActualImport V4] Ошибка на уровне транзакции импорта:", transactionError);
             notificationMessageOnError = `Ошибка транзакции при импорте: ${transactionError.message || transactionError}. Данные не были изменены.`;
             throw transactionError;
         }
 
         if (importTransactionSuccessful) {
-            console.log("[_processActualImport V3] Импорт данных в IndexedDB завершен. Обновление приложения...");
+            const reglamentsWereImportedFromFile = storesToImport.includes('reglaments');
+            const preferencesWereInFile = Object.keys(importData.data).includes('preferences');
+            let categoryInfoWasInImportedPreferences = false;
+            if (preferencesWereInFile && importData.data.preferences && Array.isArray(importData.data.preferences)) {
+                categoryInfoWasInImportedPreferences = importData.data.preferences.some(p => p.id === CATEGORY_INFO_KEY);
+            }
+
+            if (reglamentsWereImportedFromFile && (!preferencesWereInFile || !categoryInfoWasInImportedPreferences)) {
+                console.warn(`[_processActualImport V4] Регламенты импортированы, но ${CATEGORY_INFO_KEY} отсутствует в импортированных preferences или preferences не импортировались. Удаление старой ${CATEGORY_INFO_KEY} из БД...`);
+                try {
+                    await deleteFromIndexedDB('preferences', CATEGORY_INFO_KEY);
+                    console.log(`[_processActualImport V4] Старая запись ${CATEGORY_INFO_KEY} удалена из 'preferences'.`);
+                } catch (deleteError) {
+                    console.error(`[_processActualImport V4] Ошибка при удалении ${CATEGORY_INFO_KEY} из 'preferences':`, deleteError);
+                    errorsOccurred.push({ storeName: 'preferences', error: `Ошибка очистки старых категорий (${CATEGORY_INFO_KEY}): ${deleteError.message}`, item: CATEGORY_INFO_KEY });
+                }
+            }
+        }
+
+        if (importTransactionSuccessful) {
+            console.log("[_processActualImport V4] Импорт данных в IndexedDB завершен. Обновление приложения...");
+            if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
+                loadingOverlayManager.updateProgress(Math.min(currentImportProgress + 1, 99), "Инициализация приложения");
+            }
             try {
+
+                if (typeof algorithms !== 'undefined') algorithms = { main: {}, program: [], skzi: [], lk1c: [], webReg: [] };
+                console.log("[_processActualImport V4] Предполагаемые кэши данных в памяти сброшены перед appInit.");
+
                 const dbReadyAfterImport = await appInit();
                 if (!dbReadyAfterImport && db === null) {
                     throw new Error("Не удалось переинициализировать приложение после импорта (БД стала null).");
                 }
-                if (storesToImport.includes('preferences') && importData.data.preferences?.find(p => p.id === 'uiSettings')) {
+                if (storesToImport.includes('preferences') &&
+                    importData.data.preferences?.some(p => p.id === 'uiSettings')) {
                     await loadUISettings();
                 }
 
-                updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.APP_RE_INIT, "AppReInit");
+                updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.APP_RE_INIT, "Инициализация приложения");
 
-                updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.BUILD_INDEX, "BuildIndexAfterAppReInit");
+                const reglamentsListDiv = document.getElementById('reglamentsList');
+                const categoryGrid = document.getElementById('reglamentCategoryGrid');
 
-                loadingOverlayManager.updateProgress(100);
-                console.log("[_processActualImport V3] Финальный прогресс импорта установлен на 100%.");
+                if (currentSection === 'reglaments' &&
+                    reglamentsListDiv && !reglamentsListDiv.classList.contains('hidden') &&
+                    categoryGrid && categoryGrid.classList.contains('hidden')) {
+
+                    const currentCategoryId = reglamentsListDiv.dataset.currentCategory;
+                    if (currentCategoryId) {
+                        console.log(`[_processActualImport V4 - FIX] Обновление отображения регламентов для активной категории: ${currentCategoryId}`);
+                        if (typeof showReglamentsForCategory === 'function') {
+                            try {
+                                await showReglamentsForCategory(currentCategoryId);
+                                console.log(`[_processActualImport V4 - FIX] showReglamentsForCategory для ${currentCategoryId} вызвана после импорта.`);
+                                updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.RENDER_ACTIVE_REGLAMENTS, "Обновление регламентов");
+                            } catch (e) {
+                                console.error(`[_processActualImport V4 - FIX] Ошибка при вызове showReglamentsForCategory для категории ${currentCategoryId}:`, e);
+                                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                                    NotificationService.add(`Ошибка обновления списка регламентов для категории. Попробуйте выбрать категорию заново.`, "warning");
+                                }
+                                if (categoryGrid && reglamentsListDiv) {
+                                    reglamentsListDiv.classList.add('hidden');
+                                    categoryGrid.classList.remove('hidden');
+                                    const currentCategoryTitleEl = document.getElementById('currentCategoryTitle');
+                                    if (currentCategoryTitleEl) currentCategoryTitleEl.textContent = '';
+                                    if (typeof renderReglamentCategories === 'function') renderReglamentCategories();
+                                }
+                            }
+                        } else {
+                            console.warn('[_processActualImport V4 - FIX] Функция showReglamentsForCategory не найдена для обновления UI регламентов.');
+                            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                                NotificationService.add("Ошибка: не удалось обновить список регламентов (функция не найдена).", "error");
+                            }
+                        }
+                    } else {
+                        console.warn('[_processActualImport V4 - FIX] reglamentsListDiv активен, но currentCategory не найден в dataset. Не удалось обновить список регламентов.');
+                        if (typeof NotificationService !== 'undefined' && NotificationService.add) {
+                            NotificationService.add("Не удалось определить активную категорию регламентов для обновления.", "warning");
+                        }
+                    }
+                } else {
+                    updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.RENDER_ACTIVE_REGLAMENTS || 0, "Обновление регламентов (пропущено)");
+                }
+
+                if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
+                    loadingOverlayManager.updateProgress(100, "FinalizeImportSuccess");
+                }
+                console.log("[_processActualImport V4] Финальный прогресс импорта установлен на 100%.");
 
                 const nonFatalErrors = errorsOccurred.filter(e => !e.error.includes('Критическая ошибка транзакции') && !e.error.includes('Транзакция прервана'));
                 if (nonFatalErrors.length > 0 || skippedPuts > 0) {
@@ -4378,20 +4485,20 @@ async function _processActualImport(jsonString) {
                     if (skippedPuts > 0) { const skippedMsg = `\n  - Пропущено при валидации (до записи): ${skippedPuts} записей.`; errorSummary = nonFatalErrors.length > 0 ? errorSummary + skippedMsg : skippedMsg.trimStart(); }
                     if (errorSummary.length > 500) errorSummary = errorSummary.substring(0, 500) + '...\n(Полный список ошибок в консоли)';
                     const importWarningMessage = `Импорт завершен с ${nonFatalErrors.length + skippedPuts} предупреждениями/пропусками. Детали в консоли.`;
-                    NotificationService.add(importWarningMessage, "warning", { important: true, duration: 15000 });
+                    if (typeof NotificationService !== 'undefined' && NotificationService.add) NotificationService.add(importWarningMessage, "warning", { important: true, duration: 15000 });
                     console.warn(`Предупреждения/ошибки/пропуски при импорте (всего ${nonFatalErrors.length + skippedPuts}):`, nonFatalErrors, `Skipped Validating: ${skippedPuts}`);
                     return { success: true, message: importWarningMessage };
                 } else {
-                    NotificationService.add("Импорт данных успешно завершен. Приложение обновлено!", "success", { duration: 7000 });
+                    if (typeof NotificationService !== 'undefined' && NotificationService.add) NotificationService.add("Импорт данных успешно завершен. Приложение обновлено!", "success", { duration: 7000 });
                     return { success: true };
                 }
             } catch (postImportError) {
-                console.error("[_processActualImport V3] Критическая ошибка во время обновления приложения после импорта:", postImportError);
+                console.error("[_processActualImport V4] Критическая ошибка во время обновления приложения после импорта:", postImportError);
                 notificationMessageOnError = `Критическая ошибка после импорта: ${postImportError.message}. Пожалуйста, обновите страницу (F5).`;
                 throw postImportError;
             }
         } else {
-            console.error("[_processActualImport V3] Транзакция импорта НЕ УДАЛАСЬ (importTransactionSuccessful is false).");
+            console.error("[_processActualImport V4] Транзакция импорта НЕ УДАЛАСЬ (importTransactionSuccessful is false).");
             if (!errorsOccurred.some(e => e.error.includes('Критическая ошибка транзакции') || e.error.includes('Транзакция прервана'))) {
                 notificationMessageOnError = "Импорт данных не удался из-за ошибок при записи или очистке. Данные не были изменены.";
             } else if (errorsOccurred.length > 0) {
@@ -4402,14 +4509,14 @@ async function _processActualImport(jsonString) {
             throw new Error(notificationMessageOnError);
         }
     } catch (error) {
-        console.error("[_processActualImport V3] Общая ошибка выполнения импорта:", error);
+        console.error("[_processActualImport V4] Общая ошибка выполнения импорта:", error);
         if (notificationMessageOnError === "Произошла ошибка во время импорта." || (error.message && !notificationMessageOnError.includes(error.message))) {
             notificationMessageOnError = `Ошибка импорта: ${error.message || "Неизвестная ошибка"}`;
         }
-        if (loadingOverlayManager.overlayElement) {
-            loadingOverlayManager.updateProgress(100);
+        if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.overlayElement && loadingOverlayManager.updateProgress) {
+            loadingOverlayManager.updateProgress(100, "Ошибка импорта");
         }
-        NotificationService.add(notificationMessageOnError, "error", { important: true, duration: 0 });
+        if (typeof NotificationService !== 'undefined' && NotificationService.add) NotificationService.add(notificationMessageOnError, "error", { important: true, duration: 0 });
         return { success: false, message: notificationMessageOnError };
     }
 }
@@ -12510,52 +12617,48 @@ function initBookmarkSystem() {
 
 
 async function ensureBookmarkModal() {
-    const modalId = 'bookmarkModal';
+    const modalId = bookmarkModalConfigGlobal.modalId;
     let modal = document.getElementById(modalId);
     let mustRebuildContent = false;
+    const LOG_PREFIX = "[ensureBookmarkModal_V2]";
 
-    const bookmarkModalConfig = {
-        modalId: 'bookmarkModal',
-        buttonId: 'toggleFullscreenBookmarkBtn',
-        classToggleConfig: {
-            normal: { modal: ['p-4'], innerContainer: ['max-w-2xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'], contentArea: [] },
-            fullscreen: {
-                modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
-                innerContainer: UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
-                contentArea: UNIFIED_FULLSCREEN_MODAL_CLASSES.contentArea
-            }
-        },
-        innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
-        contentAreaSelector: '.p-content.overflow-y-auto.flex-1'
-    };
-
-    if (modal && !modal.querySelector('#bookmarkForm')) {
-        console.warn(`Модальное окно #${modalId} найдено, но его содержимое некорректно. Пересоздание содержимого.`);
-        mustRebuildContent = true;
+    if (modal) {
+        const formInModal = modal.querySelector('#bookmarkForm');
+        if (!formInModal) {
+            console.warn(`${LOG_PREFIX} Модальное окно #${modalId} найдено, но не содержит #bookmarkForm. Пересоздание содержимого.`);
+            mustRebuildContent = true;
+        }
     }
 
     if (!modal || mustRebuildContent) {
-        if (!modal) {
-            console.log("Модальное окно #bookmarkModal не найдено, создаем новое.");
+        if (modal && mustRebuildContent) {
+            const innerModalContainer = modal.querySelector(bookmarkModalConfigGlobal.innerContainerSelector);
+            if (innerModalContainer) innerModalContainer.innerHTML = ''; else modal.innerHTML = '';
+            console.log(`${LOG_PREFIX} Содержимое существующего #${modalId} очищено для пересоздания.`);
+        } else if (!modal) {
+            console.log(`${LOG_PREFIX} Модальное окно #${modalId} не найдено, создаем новое.`);
             modal = document.createElement('div');
             modal.id = modalId;
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[90] p-4 flex items-center justify-center';
             document.body.appendChild(modal);
         }
 
-        const normalClassesModal = bookmarkModalConfig.classToggleConfig.normal.modal || [];
-        if (normalClassesModal.length > 0) modal.classList.add(...normalClassesModal);
+        const normalModalClasses = bookmarkModalConfigGlobal.classToggleConfig.normal.modal || [];
+        if (normalModalClasses.length > 0) {
+            modal.classList.remove(...normalModalClasses);
+            modal.classList.add(...normalModalClasses);
+        }
 
 
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div class="modal-inner-container bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
                 <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
-                            Заголовок окна
+                            Заголовок окна закладки
                         </h2>
                         <div class="flex items-center flex-shrink-0">
-                            <button id="${bookmarkModalConfig.buttonId}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
+                            <button id="${bookmarkModalConfigGlobal.buttonId}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                 <i class="fas fa-expand"></i>
                             </button>
                             <button type="button" class="close-modal-btn-hook inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle ml-1" title="Закрыть (Esc)">
@@ -12564,32 +12667,47 @@ async function ensureBookmarkModal() {
                         </div>
                     </div>
                 </div>
-                                    <div class="p-content overflow-y-auto flex-1 min-h-0">
-                        <form id="editAlgorithmForm">
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                    for="algorithmTitle">Название алгоритма</label>
-                                <input type="text" id="algorithmTitle" name="algorithmTitle" required
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                            </div>
-                            <div id="algorithmDescriptionContainer" class="mb-4">
-                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                    for="algorithmDescription">Описание</label>
-                                <textarea id="algorithmDescription" name="algorithmDescription" rows="3"
-                                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
-                                    placeholder="Введите описание алгоритма..."></textarea>
-                            </div>
-                            <div id="algorithmDescriptionContainer" class="mb-4">
-                                <!-- Этот блок выглядит как дубликат ID, но он не влияет на текущую проблему -->
-                            </div>
-                            <div id="editSteps" class="space-y-4">
-                            </div>
-                            <button type="button" id="addStepBtn"
-                                class="mt-4 px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                                <i class="fas fa-plus mr-2"></i>Добавить шаг
-                            </button>
-                        </form>
-                    </div>
+                <div class="modal-content-area p-content overflow-y-auto flex-1 min-h-0">
+                    <form id="bookmarkForm" novalidate>
+                        <input type="hidden" id="bookmarkId" name="bookmarkId">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
+                            <input type="text" id="bookmarkTitle" name="bookmarkTitle" required
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkUrl">URL (опционально)</label>
+                            <input type="url" id="bookmarkUrl" name="bookmarkUrl" placeholder="https://example.com"
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkDescription">Описание <span class="text-red-500" id="bookmarkDescriptionRequiredIndicator" style="display:none;">*</span></label>
+                            <textarea id="bookmarkDescription" name="bookmarkDescription" rows="4"
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"
+                                placeholder="Краткое описание закладки или текст заметки"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkFolder">Папка (опционально)</label>
+                            <select id="bookmarkFolder" name="bookmarkFolder"
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
+                                <option value="">Без папки</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
+                             <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl+V) в эту область.</p>
+                             <div id="bookmarkScreenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem] p-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/30">
+                                 <!-- Миниатюры будут вставлены сюда -->
+                             </div>
+                             <div class="flex items-center gap-3">
+                                 <button type="button" class="add-bookmark-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
+                                     <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
+                                 </button>
+                             </div>
+                             <input type="file" class="bookmark-screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
+                         </div>
+                    </form>
+                </div>
                 <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
                     <div class="flex justify-end gap-2">
                         <button type="button" class="cancel-modal-btn-hook px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
@@ -12602,29 +12720,27 @@ async function ensureBookmarkModal() {
                 </div>
             </div>
         `;
+        console.log(`${LOG_PREFIX} HTML-структура для #${modalId} создана/пересоздана.`);
 
-        const innerContainer = modal.querySelector(bookmarkModalConfig.innerContainerSelector);
-        const contentArea = modal.querySelector(bookmarkModalConfig.contentAreaSelector);
+        const innerContainer = modal.querySelector(bookmarkModalConfigGlobal.innerContainerSelector);
+        const contentArea = modal.querySelector(bookmarkModalConfigGlobal.contentAreaSelector);
 
-        const normalInnerClasses = bookmarkModalConfig.classToggleConfig.normal.innerContainer || [];
-        const normalContentClasses = bookmarkModalConfig.classToggleConfig.normal.contentArea || [];
-
+        const normalInnerClasses = bookmarkModalConfigGlobal.classToggleConfig.normal.innerContainer || [];
+        const normalContentClasses = bookmarkModalConfigGlobal.classToggleConfig.normal.contentArea || [];
         if (innerContainer && normalInnerClasses.length > 0) innerContainer.classList.add(...normalInnerClasses);
         if (contentArea && normalContentClasses.length > 0) contentArea.classList.add(...normalContentClasses);
-        if (modal._globalClickHandler) {
-            document.removeEventListener('click', modal._globalClickHandler);
-            delete modal._globalClickHandler;
-        }
+
 
         const handleCloseActions = (targetModal) => {
             const form = targetModal.querySelector('#bookmarkForm');
             let doClose = true;
-
-            if (form && form._initialState) {
-                const currentState = getCurrentBookmarkFormState(form);
-                if (!deepEqual(form._initialState, currentState)) {
-                    if (!confirm("Изменения не сохранены. Закрыть без сохранения?")) {
-                        doClose = false;
+            if (form && typeof getCurrentBookmarkFormState === 'function' && typeof deepEqual === 'function') {
+                if (initialBookmarkFormState) {
+                    const currentState = getCurrentBookmarkFormState(form);
+                    if (!deepEqual(initialBookmarkFormState, currentState)) {
+                        if (!confirm("Изменения не сохранены. Закрыть без сохранения?")) {
+                            doClose = false;
+                        }
                     }
                 }
             }
@@ -12633,74 +12749,48 @@ async function ensureBookmarkModal() {
                 targetModal.classList.add('hidden');
                 if (form) {
                     form.reset();
-                    const idInput = form.querySelector('#bookmarkId');
-                    if (idInput) idInput.value = '';
-                    const modalTitleEl = targetModal.querySelector('#bookmarkModalTitle');
-                    if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
-                    const saveButton = targetModal.querySelector('#saveBookmarkBtn');
-                    if (saveButton) saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
-
+                    const idInput = form.querySelector('#bookmarkId'); if (idInput) idInput.value = '';
+                    const modalTitleEl = targetModal.querySelector('#bookmarkModalTitle'); if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
+                    const saveButton = targetModal.querySelector('#saveBookmarkBtn'); if (saveButton) saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
                     const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
-                    if (thumbsContainer) {
-                        if (typeof clearTemporaryThumbnailsFromContainer === 'function') {
-                            clearTemporaryThumbnailsFromContainer(thumbsContainer);
-                        } else {
-                            thumbsContainer.innerHTML = '';
-                        }
-                    }
+                    if (thumbsContainer && typeof clearTemporaryThumbnailsFromContainer === 'function') clearTemporaryThumbnailsFromContainer(thumbsContainer);
                     delete form._tempScreenshotBlobs;
                     delete form.dataset.screenshotsToDelete;
-                    delete form._initialState;
+                    initialBookmarkFormState = null;
                 }
-                if (typeof removeEscapeHandler === 'function') {
-                    removeEscapeHandler(targetModal);
-                }
-                if (getVisibleModals().length === 0) {
-                    document.body.classList.remove('overflow-hidden');
-                }
+                if (typeof removeEscapeHandler === 'function') removeEscapeHandler(targetModal);
+                if (getVisibleModals().length === 0) document.body.classList.remove('overflow-hidden');
             }
         };
 
         modal.querySelectorAll('.close-modal-btn-hook, .cancel-modal-btn-hook').forEach(btn => {
             if (btn._specificClickHandler) btn.removeEventListener('click', btn._specificClickHandler);
-            btn._specificClickHandler = (e) => {
-                e.stopPropagation();
-                console.log(`[ensureBookmarkModal] Клик по кнопке .close-modal-btn-hook или .cancel-modal-btn-hook`);
-                handleCloseActions(modal);
-            };
+            btn._specificClickHandler = (e) => { e.stopPropagation(); handleCloseActions(modal); };
             btn.addEventListener('click', btn._specificClickHandler);
         });
 
         if (modal._overlayClickHandler) modal.removeEventListener('click', modal._overlayClickHandler);
-        modal._overlayClickHandler = (e) => {
-            if (e.target === modal) {
-                console.log(`[ensureBookmarkModal] Клик по оверлею модального окна #${modalId}`);
-                handleCloseActions(modal);
-            }
-        };
+        modal._overlayClickHandler = (e) => { if (e.target === modal) handleCloseActions(modal); };
         modal.addEventListener('click', modal._overlayClickHandler);
 
-        const fullscreenBtn = modal.querySelector('#' + bookmarkModalConfig.buttonId);
+
+        const fullscreenBtn = modal.querySelector('#' + bookmarkModalConfigGlobal.buttonId);
         if (fullscreenBtn) {
             if (fullscreenBtn._fullscreenToggleHandler) fullscreenBtn.removeEventListener('click', fullscreenBtn._fullscreenToggleHandler);
             fullscreenBtn._fullscreenToggleHandler = () => {
                 if (typeof toggleModalFullscreen === 'function') {
                     toggleModalFullscreen(
-                        bookmarkModalConfig.modalId,
-                        bookmarkModalConfig.buttonId,
-                        bookmarkModalConfig.classToggleConfig,
-                        bookmarkModalConfig.innerContainerSelector,
-                        bookmarkModalConfig.contentAreaSelector
+                        bookmarkModalConfigGlobal.modalId,
+                        bookmarkModalConfigGlobal.buttonId,
+                        bookmarkModalConfigGlobal.classToggleConfig,
+                        bookmarkModalConfigGlobal.innerContainerSelector,
+                        bookmarkModalConfigGlobal.contentAreaSelector
                     );
-                } else {
-                    console.error("Функция toggleModalFullscreen не найдена!");
-                }
+                } else console.error("Функция toggleModalFullscreen не найдена!");
             };
             fullscreenBtn.addEventListener('click', fullscreenBtn._fullscreenToggleHandler);
-            console.log(`Fullscreen listener attached to ${bookmarkModalConfig.buttonId}`);
-        } else {
-            console.error(`Кнопка #${bookmarkModalConfig.buttonId} не найдена в модальном окне закладок!`);
-        }
+            console.log(`${LOG_PREFIX} Fullscreen listener attached to ${bookmarkModalConfigGlobal.buttonId}`);
+        } else console.error(`${LOG_PREFIX} Кнопка #${bookmarkModalConfigGlobal.buttonId} не найдена!`);
 
         const formElement = modal.querySelector('#bookmarkForm');
         if (formElement) {
@@ -12708,60 +12798,160 @@ async function ensureBookmarkModal() {
             if (typeof handleBookmarkFormSubmit === 'function') {
                 formElement._submitHandler = handleBookmarkFormSubmit;
                 formElement.addEventListener('submit', formElement._submitHandler);
-                console.log("Новый обработчик submit добавлен к форме #bookmarkForm.");
-            } else {
-                console.error("Ошибка: Функция handleBookmarkFormSubmit не найдена!");
-            }
+                console.log(`${LOG_PREFIX} Новый обработчик submit добавлен к #bookmarkForm.`);
+            } else console.error(`${LOG_PREFIX} Ошибка: Функция handleBookmarkFormSubmit не найдена!`);
 
             if (typeof attachBookmarkScreenshotHandlers === 'function') {
                 attachBookmarkScreenshotHandlers(formElement);
-            } else {
-                console.error("Функция attachBookmarkScreenshotHandlers не найдена!");
-            }
-        } else {
-            console.error("Критическая ошибка: Не удалось найти форму #bookmarkForm после создания модального окна!");
+            } else console.error(`${LOG_PREFIX} Ошибка: Функция attachBookmarkScreenshotHandlers не найдена!`);
+        } else console.error(`${LOG_PREFIX} КРИТИЧЕСКАЯ ОШИБКА: Не удалось найти форму #bookmarkForm ПОСЛЕ создания модального окна!`);
+    }
+
+    if (typeof addEscapeHandler === 'function') addEscapeHandler(modal);
+    else console.warn(`${LOG_PREFIX} addEscapeHandler function not found.`);
+
+    const elements = {
+        modal,
+        form: modal.querySelector('#bookmarkForm'),
+        modalTitle: modal.querySelector('#bookmarkModalTitle'),
+        submitButton: modal.querySelector('#saveBookmarkBtn'),
+        idInput: modal.querySelector('#bookmarkId'),
+        titleInput: modal.querySelector('#bookmarkTitle'),
+        urlInput: modal.querySelector('#bookmarkUrl'),
+        descriptionInput: modal.querySelector('#bookmarkDescription'),
+        folderSelect: modal.querySelector('#bookmarkFolder'),
+        thumbsContainer: modal.querySelector('#bookmarkScreenshotThumbnailsContainer')
+    };
+
+    for (const key in elements) {
+        if (!elements[key]) {
+            console.error(`${LOG_PREFIX} КРИТИЧЕСКАЯ ОШИБКА: Элемент '${key}' не найден ПОСЛЕ ensureBookmarkModal!`);
+            modal.classList.add('hidden');
+            if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
+            return null;
         }
     }
 
-    if (typeof addEscapeHandler === 'function') {
-        addEscapeHandler(modal);
+    if (elements.form && elements.thumbsContainer) {
+        delete elements.form._tempScreenshotBlobs;
+        delete elements.form.dataset.screenshotsToDelete;
+        delete elements.form.dataset.existingScreenshotIds;
+        elements.thumbsContainer.innerHTML = '';
+        if (typeof attachBookmarkScreenshotHandlers === 'function') {
+            attachBookmarkScreenshotHandlers(elements.form);
+        }
+    }
+
+    console.log(`${LOG_PREFIX} Модальное окно для закладок успешно подготовлено/найдено.`);
+    return elements;
+}
+
+async function showAddBookmarkModal(bookmarkToEditId = null) {
+    const LOG_PREFIX = "[showAddBookmarkModal_V2]";
+    console.log(`${LOG_PREFIX} Вызов для ID: ${bookmarkToEditId === null ? 'нового' : bookmarkToEditId}`);
+
+    const modalElements = await ensureBookmarkModal();
+    if (!modalElements) {
+        if (typeof showNotification === 'function') {
+            showNotification("Критическая ошибка: Не удалось инициализировать окно закладки", "error");
+        }
+        console.error(`${LOG_PREFIX} Не удалось получить элементы модального окна из ensureBookmarkModal.`);
+        return;
+    }
+
+    const { modal, form, modalTitle, submitButton, idInput, titleInput, urlInput, descriptionInput, folderSelect, thumbsContainer } = modalElements;
+
+    form.reset();
+    idInput.value = '';
+    if (thumbsContainer) thumbsContainer.innerHTML = '';
+    delete form._tempScreenshotBlobs;
+    delete form.dataset.screenshotsToDelete;
+    form.dataset.existingScreenshotIds = '';
+    form.dataset.existingRendered = 'false';
+
+    const descRequiredIndicator = form.querySelector('#bookmarkDescriptionRequiredIndicator');
+    if (descRequiredIndicator) descRequiredIndicator.style.display = 'none';
+
+
+    if (typeof populateBookmarkFolders === 'function') {
+        await populateBookmarkFolders(folderSelect);
     } else {
-        console.warn("[ensureBookmarkModal] addEscapeHandler function not found.");
+        console.warn(`${LOG_PREFIX} Функция populateBookmarkFolders не найдена.`);
+    }
+    submitButton.disabled = false;
+
+    if (bookmarkToEditId !== null) {
+        modalTitle.textContent = 'Редактировать закладку';
+        submitButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
+        try {
+            const bookmark = await getFromIndexedDB('bookmarks', parseInt(bookmarkToEditId, 10));
+            if (!bookmark) {
+                if (typeof showNotification === 'function') showNotification("Закладка не найдена", "error");
+                modal.classList.add('hidden');
+                return;
+            }
+            idInput.value = bookmark.id;
+            titleInput.value = bookmark.title || '';
+            urlInput.value = bookmark.url || '';
+            descriptionInput.value = bookmark.description || '';
+            folderSelect.value = bookmark.folder || '';
+
+            if (!bookmark.url && descRequiredIndicator) {
+                descRequiredIndicator.style.display = 'inline';
+            }
+
+            const existingIds = bookmark.screenshotIds || [];
+            form.dataset.existingScreenshotIds = existingIds.join(',');
+            if (existingIds.length > 0 && typeof renderExistingThumbnail === 'function') {
+                const renderPromises = existingIds.map(screenshotId =>
+                    renderExistingThumbnail(screenshotId, thumbsContainer, form)
+                );
+                await Promise.all(renderPromises);
+            }
+            form.dataset.existingRendered = 'true';
+            console.log(`${LOG_PREFIX} Форма заполнена для редактирования закладки ID: ${bookmark.id}`);
+
+        } catch (error) {
+            console.error(`${LOG_PREFIX} Ошибка при загрузке закладки для редактирования:`, error);
+            if (typeof showNotification === 'function') showNotification("Ошибка загрузки закладки", "error");
+            modal.classList.add('hidden');
+            return;
+        }
+    } else {
+        modalTitle.textContent = 'Добавить закладку';
+        submitButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
+        console.log(`${LOG_PREFIX} Форма подготовлена для добавления новой закладки.`);
     }
 
-    const currentForm = modal.querySelector('#bookmarkForm');
-    const currentModalTitle = modal.querySelector('#bookmarkModalTitle');
-    const currentSubmitButton = modal.querySelector('#saveBookmarkBtn');
-    const currentIdInput = modal.querySelector('#bookmarkId');
-    const currentTitleInput = modal.querySelector('#bookmarkTitle');
-    const currentUrlInput = modal.querySelector('#bookmarkUrl');
-    const currentDescriptionInput = modal.querySelector('#bookmarkDescription');
-    const currentFolderSelect = modal.querySelector('#bookmarkFolder');
-    const currentThumbsContainer = modal.querySelector('#bookmarkScreenshotThumbnailsContainer');
-
-    if (!currentForm || !currentModalTitle || !currentSubmitButton || !currentIdInput || !currentTitleInput || !currentUrlInput || !currentDescriptionInput || !currentFolderSelect || !currentThumbsContainer) {
-        console.error("Критическая ошибка: Не удалось найти все необходимые элементы формы ПОСЛЕ ensureBookmarkModal!");
-        modal.classList.add('hidden');
-        return null;
+    if (typeof getCurrentBookmarkFormState === 'function') {
+        initialBookmarkFormState = getCurrentBookmarkFormState(form);
+        console.log(`${LOG_PREFIX} Начальное состояние формы захвачено:`, JSON.parse(JSON.stringify(initialBookmarkFormState)));
+    } else {
+        console.warn(`${LOG_PREFIX} Функция getCurrentBookmarkFormState не найдена, отслеживание изменений может не работать.`);
+        initialBookmarkFormState = null;
     }
 
-    if (currentForm._tempScreenshotBlobs) delete currentForm._tempScreenshotBlobs;
-    if (currentForm.dataset.screenshotsToDelete) delete currentForm.dataset.screenshotsToDelete;
-    if (currentForm.dataset.existingScreenshotIds) delete currentForm.dataset.existingScreenshotIds;
-    if (currentThumbsContainer) currentThumbsContainer.innerHTML = '';
+    if (urlInput && descriptionInput && descRequiredIndicator) {
+        const updateDescRequirement = () => {
+            const urlIsEmpty = !urlInput.value.trim();
+            descRequiredIndicator.style.display = urlIsEmpty ? 'inline' : 'none';
+            descriptionInput.required = urlIsEmpty;
+        };
+        urlInput.removeEventListener('input', updateDescRequirement);
+        urlInput.addEventListener('input', updateDescRequirement);
+        updateDescRequirement();
+    }
 
-    return {
-        modal,
-        form: currentForm,
-        modalTitle: currentModalTitle,
-        submitButton: currentSubmitButton,
-        idInput: currentIdInput,
-        titleInput: currentTitleInput,
-        urlInput: currentUrlInput,
-        descriptionInput: currentDescriptionInput,
-        folderSelect: currentFolderSelect,
-        thumbsContainer: currentThumbsContainer
-    };
+
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+
+    if (titleInput) {
+        setTimeout(() => {
+            try { titleInput.focus(); }
+            catch (focusError) { console.warn(`${LOG_PREFIX} Не удалось установить фокус:`, focusError); }
+        }, 50);
+    }
 }
 
 
@@ -13024,8 +13214,16 @@ async function handleBookmarkFormSubmit(event) {
         form.elements.bookmarkDescription.focus(); return;
     }
     if (url) {
-        try { new URL(url); } catch (_) {
-            showNotification("Введите корректный URL", "error");
+        try {
+            let testUrl = url;
+            if (!testUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && testUrl.includes('.')) {
+                if (!testUrl.startsWith('//')) {
+                    testUrl = "https://" + testUrl;
+                }
+            }
+            new URL(testUrl);
+        } catch (_) {
+            showNotification("Введите корректный URL (например, https://example.com)", "error");
             saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
             form.elements.bookmarkUrl.focus(); return;
         }
@@ -13116,8 +13314,8 @@ async function handleBookmarkFormSubmit(event) {
                             const tempName = `${newDataBase.title || 'Закладка'}-${Date.now()}`;
                             const record = { blob, parentId: finalId, parentType: 'bookmark', name: tempName, uploadedAt: new Date().toISOString() };
                             const request = screenshotsStore.add(record);
-                            request.onsuccess = e => { const newId = e.target.result; screenshotOpResults.push({ success: true, action: 'add', newId }); newScreenshotIds.push(newId); resolve(); };
-                            request.onerror = e => { screenshotOpResults.push({ success: false, action: 'add', error: e.target.error || new Error('Add failed') }); resolve(); };
+                            request.onsuccess = e_add => { const newId = e_add.target.result; screenshotOpResults.push({ success: true, action: 'add', newId }); newScreenshotIds.push(newId); resolve(); };
+                            request.onerror = e_add_err => { screenshotOpResults.push({ success: false, action: 'add', error: e_add_err.target.error || new Error('Add failed') }); resolve(); };
                         } else { screenshotOpResults.push({ success: false, action: op.action || 'unknown', error: new Error('Invalid op') }); resolve(); }
                     } catch (opError) { screenshotOpResults.push({ success: false, action: action, error: opError }); resolve(); }
                 }));
@@ -13132,7 +13330,7 @@ async function handleBookmarkFormSubmit(event) {
         newDataBase.screenshotIds = [...new Set([...existingIdsToKeep, ...newScreenshotIds])];
         if (newDataBase.screenshotIds.length === 0) delete newDataBase.screenshotIds;
 
-        newDataBase.folder = folder;
+        newDataBase.folder = folder === null || folder === '' ? null : folder;
 
         console.log(`[Save Bookmark v5 TX ${finalId}] Финальный объект закладки для put:`, JSON.parse(JSON.stringify(newDataBase)));
 
@@ -13179,8 +13377,24 @@ async function handleBookmarkFormSubmit(event) {
         delete form.dataset.screenshotsToDelete;
         const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
         if (thumbsContainer) thumbsContainer.innerHTML = '';
+        initialBookmarkFormState = null;
 
         loadBookmarks();
+
+        if (typeof getVisibleModals === 'function') {
+            const visibleModals = getVisibleModals().filter(m => m.id !== modal.id && !m.classList.contains('hidden'));
+            if (visibleModals.length === 0) {
+                document.body.classList.remove('overflow-hidden');
+                document.body.classList.remove('modal-open');
+                console.log("[handleBookmarkFormSubmit] overflow-hidden и modal-open сняты с body (других модальных окон нет).");
+            } else {
+                console.log("[handleBookmarkFormSubmit] overflow-hidden и modal-open НЕ сняты, есть другие видимые модальные окна:", visibleModals.map(m => m.id));
+            }
+        } else {
+            document.body.classList.remove('overflow-hidden');
+            document.body.classList.remove('modal-open');
+            console.warn("[handleBookmarkFormSubmit] getVisibleModals не найдена, overflow-hidden и modal-open сняты принудительно.");
+        }
 
     } else {
         console.error(`[Save Bookmark v5 (Robust TX)] Сохранение закладки ${finalId || '(новый)'} НЕ удалось.`);
@@ -13593,6 +13807,15 @@ async function renderBookmarks(bookmarks, folderMap = {}) {
         return;
     }
 
+    const bookmarksTabContent = document.getElementById('bookmarksContent');
+    if (bookmarksTabContent) {
+        bookmarksTabContent.style.overflowY = 'auto';
+        bookmarksTabContent.style.minHeight = '0px';
+        console.log("[renderBookmarks - SCROLL FIX V2] Установлены overflowY='auto' и minHeight='0px' для #bookmarksContent.");
+    } else {
+        console.warn('[renderBookmarks - SCROLL FIX V2] Контейнер #bookmarksContent не найден для установки overflowY.');
+    }
+
     bookmarksContainer.innerHTML = '';
 
     if (!bookmarks?.length) {
@@ -13607,146 +13830,28 @@ async function renderBookmarks(bookmarks, folderMap = {}) {
                 console.error("Ни applyCurrentView, ни applyView не найдены для установки вида при пустом списке закладок.");
             }
         }
-
-        const bookmarksTabContent = document.getElementById('bookmarksContent');
-        if (bookmarksTabContent) {
-            bookmarksTabContent.style.overflowY = 'auto';
-            bookmarksTabContent.style.minHeight = '1px';
-        } else {
-            console.warn('[renderBookmarks - FIX] Контейнер #bookmarksContent не найден для установки overflowY (пустой список).');
-        }
         return;
     }
 
     const fragment = document.createDocumentFragment();
 
-    bookmarks.forEach(bookmark => {
+    for (const bookmark of bookmarks) {
         if (!bookmark || typeof bookmark.id === 'undefined') {
             console.warn("Пропуск невалидной закладки (отсутствует id или сам объект):", bookmark);
-            return;
+            continue;
         }
 
-        const bookmarkElement = document.createElement('div');
-        bookmarkElement.className = 'bookmark-item view-item group relative cursor-pointer flex flex-col justify-between h-full bg-white dark:bg-[#374151] shadow-md hover:shadow-lg transition-shadow duration-200 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
-        bookmarkElement.dataset.id = String(bookmark.id);
-        if (bookmark.folder) {
-            bookmarkElement.dataset.folder = String(bookmark.folder);
-        }
+        const bookmarkElement = await createBookmarkElement(bookmark, folderMap);
 
-        const folder = bookmark.folder ? folderMap[bookmark.folder] : null;
-        let folderBadgeHTML = '';
-        if (folder) {
-            const colorName = folder.color || 'gray';
-            folderBadgeHTML = `
-                <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-800 dark:bg-${colorName}-900 dark:text-${colorName}-200" title="Папка: ${escapeHtml(folder.name)}">
-                    <i class="fas fa-folder mr-1 opacity-75"></i>${escapeHtml(folder.name)}
-                </span>`;
-        } else if (bookmark.folder) {
-            folderBadgeHTML = `
-                <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${bookmark.folder} не найдена">
-                    <i class="fas fa-question-circle mr-1 opacity-75"></i>Неизв. папка
-                </span>`;
-        }
-
-        let urlHostnameHTML = '';
-        let externalLinkIconHTML = '';
-        let cardClickOpensUrl = false;
-        let displayHostname = 'URL';
-
-        if (bookmark.url) {
-            let fixedUrl = String(bookmark.url).trim();
-            fixedUrl = fixedUrl.replace(/[\u200B-\u200D\uFEFF]/g, '');
-
-            if (fixedUrl && !fixedUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fixedUrl.includes('.')) {
-                if (!fixedUrl.startsWith('//')) {
-                    fixedUrl = "https://" + fixedUrl;
-                }
-            }
-
-            const urlForHref = fixedUrl;
-            const displayUrlForTitle = escapeHtml(urlForHref);
-
-            try {
-                const urlObject = new URL(urlForHref);
-                const canonicalHref = urlObject.href;
-                displayHostname = escapeHtml(urlObject.hostname);
-
-                urlHostnameHTML = `
-                    <a href="${canonicalHref}" target="_blank" rel="noopener noreferrer" data-action="open-link-hostname" class="bookmark-url text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary text-xs inline-flex items-center group-hover:underline" title="Перейти: ${displayUrlForTitle}">
-                        <i class="fas fa-link mr-1 opacity-75"></i>${displayHostname}
-                    </a>`;
-                externalLinkIconHTML = `
-                    <a href="${canonicalHref}" target="_blank" rel="noopener noreferrer" data-action="open-link-icon" class="p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Открыть ссылку (${displayUrlForTitle}) в новой вкладке">
-                        <i class="fas fa-external-link-alt fa-fw"></i>
-                    </a>`;
-                cardClickOpensUrl = true;
-            } catch (e) {
-                console.warn(`Некорректный URL для закладки ID ${bookmark.id}: "${bookmark.url}". Обработанный URL: "${urlForHref}". Ошибка: ${e.message}`);
-                externalLinkIconHTML = `
-                    <span class="p-1.5 text-red-400 cursor-not-allowed" title="Некорректный URL: ${displayUrlForTitle}">
-                        <i class="fas fa-times-circle fa-fw"></i>
-                    </span>`;
-                urlHostnameHTML = `
-                    <span class="text-red-500 text-xs inline-flex items-center" title="Некорректный URL: ${displayUrlForTitle}">
-                        <i class="fas fa-exclamation-triangle mr-1"></i> Некорр. URL
-                    </span>`;
-                cardClickOpensUrl = false;
-            }
+        if (bookmarkElement) {
+            fragment.appendChild(bookmarkElement);
         } else {
-            externalLinkIconHTML = `
-                <span class="p-1.5 text-gray-400 dark:text-gray-500 cursor-help" title="Текстовая заметка (нет URL)">
-                    <i class="fas fa-sticky-note fa-fw"></i>
-                </span>`;
-            urlHostnameHTML = '';
-            cardClickOpensUrl = false;
+            console.error("Не удалось создать элемент для закладки:", bookmark);
         }
-        bookmarkElement.dataset.opensUrl = String(cardClickOpensUrl);
-
-        const hasScreenshots = bookmark.screenshotIds && Array.isArray(bookmark.screenshotIds) && bookmark.screenshotIds.length > 0;
-        const screenshotButtonHTML = hasScreenshots ? `
-            <button data-action="view-screenshots" class="p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Просмотреть скриншоты (${bookmark.screenshotIds.length})">
-                <i class="fas fa-images fa-fw"></i>
-            </button>
-        ` : '';
-
-        const actionsHTML = `
-            <div class="bookmark-actions absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
-                ${screenshotButtonHTML}
-                ${externalLinkIconHTML}
-                <button data-action="edit" class="edit-bookmark p-1 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Редактировать">
-                    <i class="fas fa-edit fa-fw"></i>
-                </button>
-                <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Удалить">
-                    <i class="fas fa-trash fa-fw"></i>
-                </button>
-            </div>`;
-
-        const safeTitle = escapeHtml(bookmark.title || 'Без названия');
-        const safeDescription = escapeHtml(bookmark.description || '');
-        const descriptionHTML = safeDescription
-            ? `<p class="bookmark-description text-gray-600 dark:text-gray-400 text-sm mt-1 mb-2 line-clamp-3" title="${safeDescription}">${safeDescription}</p>`
-            : (bookmark.url ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>' : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>');
-
-        const mainContentHTML = `
-            <div class="flex-grow min-w-0 mb-3"> 
-                <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary transition-colors duration-200 truncate pr-10 sm:pr-20" title="${safeTitle}">
-                    ${safeTitle}
-                </h3>
-                ${descriptionHTML}
-                <div class="bookmark-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-2">
-                    ${folderBadgeHTML}
-                    <span class="text-gray-500 dark:text-gray-400" title="Добавлено: ${new Date(bookmark.dateAdded || Date.now()).toLocaleString()}">
-                        <i class="far fa-clock mr-1 opacity-75"></i>${new Date(bookmark.dateAdded || Date.now()).toLocaleDateString()}
-                    </span>
-                    ${urlHostnameHTML} 
-                </div>
-            </div>`;
-
-        bookmarkElement.innerHTML = mainContentHTML + actionsHTML;
-        fragment.appendChild(bookmarkElement);
-    });
+    }
 
     bookmarksContainer.appendChild(fragment);
+
     if (bookmarksContainer._handleBookmarkAction) {
         bookmarksContainer.removeEventListener('click', bookmarksContainer._handleBookmarkAction);
     }
@@ -20572,8 +20677,6 @@ async function showBookmarkDetailModal(bookmarkId) {
     }
 }
 
-
-let initialBookmarkFormState = null;
 
 function getCurrentBookmarkFormState(form) {
     if (!form) return null;
