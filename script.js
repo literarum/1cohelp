@@ -50,6 +50,10 @@ let allBlacklistEntriesCache = [];
 let currentBlacklistSearchQuery = '';
 
 let isExportOperationInProgress = false;
+let isExpectingExportFileDialog = false;
+let exportDialogInteractionComplete = false;
+let exportWatchdogTimerId = null;
+let exportWindowFocusHandlerInstance = null;
 
 let importDialogInteractionComplete = false;
 
@@ -3753,363 +3757,305 @@ async function handleImportFileChange(e) {
 
 
 async function exportAllData(options = {}) {
+    console.log(`[exportAllData v_TIMEOUT_IMPLEMENTED] Начало экспорта. Options:`, JSON.parse(JSON.stringify(options || {})));
+
     if (isExportOperationInProgress) {
-        console.warn("[exportAllData v_FixTypeError_Full] Экспорт уже выполняется. Повторный вызов заблокирован.");
+        console.warn("[exportAllData v_TIMEOUT_IMPLEMENTED] Экспорт уже выполняется. Повторный вызов заблокирован.");
         if (!(options && options.isForcedBackupMode)) {
-            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                NotificationService.add("Операция экспорта уже выполняется. Пожалуйста, подождите.", "warning", { duration: 4000 });
-            } else if (typeof showNotification === 'function') {
-                showNotification("Операция экспорта уже выполняется. Пожалуйста, подождите.", "warning", 4000);
-            } else {
-                alert("Операция экспорта уже выполняется. Пожалуйста, подождите.");
-            }
+            NotificationService.add("Операция экспорта уже выполняется. Пожалуйста, подождите.", "warning", { duration: 4000 });
         }
+        return false;
+    }
+    if (isExpectingExportFileDialog && !(options && options.isForcedBackupMode)) {
+        console.warn("[exportAllData v_TIMEOUT_IMPLEMENTED] Диалог сохранения файла уже ожидается. Предотвращение повторного вызова.");
+        NotificationService.add("Пожалуйста, завершите предыдущую операцию сохранения файла.", "info");
         return false;
     }
 
     isExportOperationInProgress = true;
-    console.log(`[exportAllData v_FixTypeError_Full] isExportOperationInProgress = true. Options:`, JSON.parse(JSON.stringify(options || {})));
     let functionResult = false;
+    const { isForcedBackupMode = false } = options;
+
+    NotificationService.dismissImportant("export-cancelled-timeout");
+    NotificationService.dismissImportant("export-cancelled-by-user-focus");
+    NotificationService.dismissImportant("export-save-file-picker-failed");
+    NotificationService.dismissImportant("export-data-prep-failed");
+    NotificationService.dismissImportant("export-generic-error");
+    await new Promise(resolve => setTimeout(resolve, (NotificationService.FADE_DURATION_MS || 300) + 50));
+
 
     try {
-        const { isForcedBackupMode = false } = options;
-
         if (!isForcedBackupMode) {
-            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                NotificationService.add("Подготовка данных для экспорта...", "info", { duration: 3000 });
-            } else if (typeof showNotification === 'function') {
-                showNotification("Подготовка данных для экспорта...", "info", 3000);
-            }
+            NotificationService.add("Подготовка данных для экспорта...", "info", { duration: 3000, id: "export-data-prep-started" });
         }
-        console.log(`[exportAllData v_FixTypeError_Full] Начало экспорта данных. Режим ForcedBackup: ${isForcedBackupMode}`);
 
         if (!db) {
-            console.error("[exportAllData v_FixTypeError_Full] Export failed: Database (db variable) is not initialized.");
+            console.error("[exportAllData v_TIMEOUT_IMPLEMENTED] Export failed: Database (db variable) is not initialized.");
             if (!isForcedBackupMode) {
-                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                    NotificationService.add("Ошибка экспорта: База данных не доступна", "error");
-                } else if (typeof showNotification === 'function') {
-                    showNotification("Ошибка экспорта: База данных не доступна", "error");
+                NotificationService.add("Ошибка экспорта: База данных не доступна", "error", { important: true, id: "export-db-not-ready" });
+            }
+            throw new Error("База данных не доступна");
+        }
+
+        const allStoreNames = Array.from(db.objectStoreNames);
+        const storesToRead = allStoreNames.filter(storeName => storeName !== 'searchIndex');
+
+        if (storesToRead.length === 0) {
+            console.warn("[exportAllData v_TIMEOUT_IMPLEMENTED] Нет хранилищ для экспорта (кроме searchIndex).");
+            if (!isForcedBackupMode) {
+                NotificationService.add("Нет данных для экспорта.", "warning", { id: "export-no-data" });
+            }
+            return isForcedBackupMode ? true : false;
+        }
+
+        const exportData = {
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+            exportDate: new Date().toISOString(),
+            data: {}
+        };
+
+        const blobToBase64 = (blob) => {
+            return new Promise((resolve, reject) => {
+                if (!(blob instanceof Blob)) {
+                    console.warn("Попытка конвертировать не Blob в Base64:", blob);
+                    return resolve(null);
+                }
+                const reader = new FileReader();
+                reader.onerror = (errorEvent) => {
+                    console.error("FileReader error in blobToBase64:", errorEvent.target.error);
+                    reject(errorEvent.target.error);
+                };
+                reader.onload = () => {
+                    const dataUrl = reader.result;
+                    if (typeof dataUrl !== 'string' || !dataUrl.includes(',')) {
+                        const errorMsg = `Некорректный формат Data URL. Получено: ${String(dataUrl).substring(0, 50)}...`;
+                        console.error(errorMsg);
+                        return reject(new Error(errorMsg));
+                    }
+                    const base64String = dataUrl.split(',')[1];
+                    resolve({ base64: base64String, type: blob.type });
+                };
+                reader.readAsDataURL(blob);
+            });
+        };
+
+        let dataBlob;
+        let exportFileName;
+        let transaction;
+
+        try {
+            if (!db) throw new Error("База данных стала недоступна перед транзакцией экспорта.");
+            transaction = db.transaction(storesToRead, 'readonly');
+            let exportErrorInDataPrep = null;
+
+            const promises = storesToRead.map(storeName => {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const store = transaction.objectStore(storeName);
+                        const request = store.getAll();
+                        request.onsuccess = (e) => resolve({ storeName, data: e.target.result });
+                        request.onerror = (e) => {
+                            const errorMsg = `Ошибка чтения из ${storeName}: ${e.target.error?.message || e.target.error}`;
+                            console.error(errorMsg, e.target.error);
+                            reject(new Error(errorMsg));
+                        };
+                    } catch (err) {
+                        const errorMsg = `Ошибка доступа к хранилищу ${storeName}: ${err.message || err}`;
+                        console.error(errorMsg, err);
+                        reject(new Error(errorMsg));
+                    }
+                });
+            });
+            transaction.oncomplete = () => console.log("Транзакция чтения для экспорта успешно завершена.");
+            transaction.onerror = (e) => { if (!exportErrorInDataPrep) exportErrorInDataPrep = e.target.error || new Error("Transaction error"); };
+            transaction.onabort = (e) => { if (!exportErrorInDataPrep) exportErrorInDataPrep = e.target.error || new Error("Transaction aborted"); };
+
+            const results = await Promise.allSettled(promises);
+            const fulfilledResults = [];
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value && typeof result.value === 'object' && result.value.storeName) {
+                    fulfilledResults.push(result.value);
+                } else {
+                    const reason = result.reason || new Error(`Некорректный результат чтения для хранилища ${storesToRead[index]}`);
+                    console.error(`[exportAllData v_TIMEOUT_IMPLEMENTED] Ошибка при чтении хранилища ${storesToRead[index]}:`, reason);
+                    if (!exportErrorInDataPrep) exportErrorInDataPrep = reason;
+                }
+            });
+
+            if (exportErrorInDataPrep) throw exportErrorInDataPrep;
+
+            const screenshotDataIndex = fulfilledResults.findIndex(r => r && r.storeName === 'screenshots');
+            if (screenshotDataIndex !== -1) {
+                const screenshotResult = fulfilledResults[screenshotDataIndex];
+                if (Array.isArray(screenshotResult.data)) {
+                    if (!isForcedBackupMode && screenshotResult.data.length > 0) {
+                        NotificationService.add(`Обработка ${screenshotResult.data.length} скриншотов...`, "info", { duration: 2000, id: "export-screenshot-processing" });
+                    }
+                    const conversionPromises = screenshotResult.data.map(async (item) => {
+                        if (item && item.blob instanceof Blob) {
+                            try {
+                                const base64Data = await blobToBase64(item.blob);
+                                if (base64Data) return { ...item, blob: base64Data };
+                                const { blob, ...rest } = item; return rest;
+                            } catch (conversionError) {
+                                const { blob, ...rest } = item; return { ...rest, conversionError: conversionError.message || 'Unknown conversion error' };
+                            }
+                        }
+                        return item;
+                    });
+                    screenshotResult.data = await Promise.all(conversionPromises);
                 }
             }
-            functionResult = false;
-        } else {
-            const allStoreNames = Array.from(db.objectStoreNames);
-            const storesToRead = allStoreNames.filter(storeName => storeName !== 'searchIndex');
 
-            if (storesToRead.length === 0) {
-                console.warn("[exportAllData v_FixTypeError_Full] Нет хранилищ для экспорта (кроме searchIndex).");
+            fulfilledResults.forEach(result => {
+                if (result && result.storeName) {
+                    exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
+                }
+            });
+
+            const now = new Date();
+            const timestamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+            exportFileName = `${isForcedBackupMode ? "1C_Support_Guide_Backup_" : "1C_Support_Guide_Export_"}${timestamp}.json`;
+            dataBlob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
+
+        } catch (dataPrepError) {
+            console.error("[exportAllData v_TIMEOUT_IMPLEMENTED] Ошибка при подготовке данных для экспорта (внутренний try):", dataPrepError);
+            if (!isForcedBackupMode) {
+                NotificationService.add(`Критическая ошибка при подготовке экспорта: ${dataPrepError.message || "Неизвестная ошибка"}`, "error", { important: true, id: "export-data-prep-failed" });
+            }
+            if (transaction && typeof transaction.abort === 'function' && transaction.readyState !== 'done') {
+                try { transaction.abort(); } catch (e) { console.error("Ошибка при отмене транзакции в catch (dataPrepError):", e); }
+            }
+            throw dataPrepError;
+        }
+
+        isExpectingExportFileDialog = true;
+        exportDialogInteractionComplete = false;
+
+        exportWatchdogTimerId = setTimeout(() => {
+            if (exportDialogInteractionComplete) return;
+            console.warn("[Export Watchdog Timer] Сработал таймаут ожидания диалога сохранения.");
+            exportDialogInteractionComplete = true;
+            isExpectingExportFileDialog = false;
+            if (exportWindowFocusHandlerInstance) {
+                window.removeEventListener('focus', exportWindowFocusHandlerInstance);
+                exportWindowFocusHandlerInstance = null;
+            }
+            NotificationService.add("Экспорт отменен: превышено время ожидания ответа от диалога сохранения файла.", "warning", { duration: 7000, id: "export-cancelled-timeout" });
+            functionResult = false;
+        }, DIALOG_WATCHDOG_TIMEOUT_NEW);
+
+        if (exportWindowFocusHandlerInstance) {
+            window.removeEventListener('focus', exportWindowFocusHandlerInstance);
+        }
+        exportWindowFocusHandlerInstance = () => {
+            console.log("[Export WindowFocusHandler] Окно получило фокус.");
+            if (isExpectingExportFileDialog && !exportDialogInteractionComplete) {
+                console.log("[Export WindowFocusHandler] Диалог ожидался, но взаимодействие не завершено. Считаем отменой.");
+                exportDialogInteractionComplete = true;
+                isExpectingExportFileDialog = false;
+                if (exportWatchdogTimerId) {
+                    clearTimeout(exportWatchdogTimerId);
+                    exportWatchdogTimerId = null;
+                }
+                window.removeEventListener('focus', exportWindowFocusHandlerInstance);
+                exportWindowFocusHandlerInstance = null;
                 if (!isForcedBackupMode) {
-                    if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                        NotificationService.add("Нет данных для экспорта.", "warning");
-                    } else if (typeof showNotification === 'function') {
-                        showNotification("Нет данных для экспорта.", "warning");
-                    }
+                    NotificationService.add("Экспорт отменен пользователем (фокус вернулся на окно).", "info", { duration: 5000, id: "export-cancelled-by-user-focus" });
+                }
+                functionResult = false;
+            } else if (exportWindowFocusHandlerInstance) {
+                window.removeEventListener('focus', exportWindowFocusHandlerInstance);
+                exportWindowFocusHandlerInstance = null;
+            }
+        };
+        window.addEventListener('focus', exportWindowFocusHandlerInstance);
+
+        try {
+            if (window.showSaveFilePicker) {
+                console.log("[exportAllData v_TIMEOUT_IMPLEMENTED] Используется File System Access API.");
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: exportFileName,
+                    types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                });
+                exportDialogInteractionComplete = true;
+                const writable = await handle.createWritable();
+                await writable.write(dataBlob);
+                await writable.close();
+                console.log("[exportAllData v_TIMEOUT_IMPLEMENTED] Экспорт через File System Access API завершен успешно.");
+                if (!isForcedBackupMode) {
+                    NotificationService.add("Данные успешно сохранены в файл.", "success", { id: "export-success-fsapi" });
                 }
                 functionResult = true;
             } else {
-                const exportData = {
-                    schemaVersion: CURRENT_SCHEMA_VERSION,
-                    exportDate: new Date().toISOString(),
-                    data: {}
-                };
-
-                const blobToBase64 = (blob) => {
-                    return new Promise((resolve, reject) => {
-                        if (!(blob instanceof Blob)) {
-                            console.warn("Попытка конвертировать не Blob в Base64:", blob);
-                            return resolve(null);
-                        }
-                        const reader = new FileReader();
-                        reader.onerror = (errorEvent) => {
-                            console.error("FileReader error in blobToBase64:", errorEvent.target.error);
-                            reject(errorEvent.target.error);
-                        };
-                        reader.onload = () => {
-                            const dataUrl = reader.result;
-                            if (typeof dataUrl !== 'string' || !dataUrl.includes(',')) {
-                                const errorMsg = `Некорректный формат Data URL. Получено: ${String(dataUrl).substring(0, 50)}...`;
-                                console.error(errorMsg);
-                                return reject(new Error(errorMsg));
-                            }
-                            const base64String = dataUrl.split(',')[1];
-                            resolve({ base64: base64String, type: blob.type });
-                        };
-                        reader.readAsDataURL(blob);
-                    });
-                };
-
-                let dataBlob;
-                let exportFileName;
-                let transaction;
-
-                try {
-                    if (!db) throw new Error("База данных стала недоступна перед транзакцией экспорта.");
-                    transaction = db.transaction(storesToRead, 'readonly');
-                    let exportErrorInDataPrep = null;
-
-                    const promises = storesToRead.map(storeName => {
-                        return new Promise((resolve, reject) => {
-                            try {
-                                const store = transaction.objectStore(storeName);
-                                const request = store.getAll();
-                                request.onsuccess = (e) => {
-                                    console.log(`Прочитано ${e.target.result?.length ?? 0} записей из ${storeName}`);
-                                    resolve({ storeName, data: e.target.result });
-                                };
-                                request.onerror = (e) => {
-                                    const errorMsg = `Ошибка чтения из ${storeName}: ${e.target.error?.message || e.target.error}`;
-                                    console.error(errorMsg, e.target.error);
-                                    reject(new Error(errorMsg));
-                                };
-                            } catch (err) {
-                                const errorMsg = `Ошибка доступа к хранилищу ${storeName}: ${err.message || err}`;
-                                console.error(errorMsg, err);
-                                reject(new Error(errorMsg));
-                            }
-                        });
-                    });
-                    transaction.oncomplete = () => { console.log("Транзакция чтения для экспорта успешно завершена."); };
-                    transaction.onerror = (e) => {
-                        console.error("Ошибка транзакции чтения для экспорта:", e.target.error);
-                        if (!exportErrorInDataPrep) exportErrorInDataPrep = e.target.error || new Error("Transaction error");
-                    };
-                    transaction.onabort = (e) => {
-                        console.warn("Транзакция чтения для экспорта прервана:", e.target.error);
-                        if (!exportErrorInDataPrep) exportErrorInDataPrep = e.target.error || new Error("Transaction aborted");
-                    };
-
-                    const results = await Promise.allSettled(promises);
-                    const fulfilledResults = [];
-                    results.forEach((result, index) => {
-                        if (result.status === 'fulfilled') {
-                            if (result.value && typeof result.value === 'object' && result.value.storeName) {
-                                fulfilledResults.push(result.value);
-                            } else {
-                                console.warn(`[exportAllData v_FixTypeError_Full] Промис для ${storesToRead[index]} успешно выполнен, но вернул некорректное значение:`, result.value);
-
-                                if (!exportErrorInDataPrep) {
-                                    exportErrorInDataPrep = new Error(`Некорректный результат чтения для хранилища ${storesToRead[index]}`);
-                                }
-                            }
-                        } else {
-                            console.error(`[exportAllData v_FixTypeError_Full] Ошибка при чтении хранилища ${storesToRead[index]}:`, result.reason);
-                            if (!exportErrorInDataPrep) exportErrorInDataPrep = result.reason;
-                        }
-                    });
-
-                    if (exportErrorInDataPrep) throw exportErrorInDataPrep;
-
-                    const screenshotDataIndex = fulfilledResults.findIndex(r => r && r.storeName === 'screenshots');
-                    if (screenshotDataIndex !== -1) {
-                        const screenshotResult = fulfilledResults[screenshotDataIndex];
-                        if (Array.isArray(screenshotResult.data)) {
-                            if (!isForcedBackupMode && screenshotResult.data.length > 0) {
-                                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                                    NotificationService.add(`Обработка ${screenshotResult.data.length} скриншотов...`, "info", { duration: 2000 });
-                                } else if (typeof showNotification === 'function') {
-                                    showNotification(`Обработка ${screenshotResult.data.length} скриншотов...`, "info", 2000);
-                                }
-                            }
-                            console.log(`Начало обработки ${screenshotResult.data.length} скриншотов для конвертации в Base64...`);
-                            const conversionPromises = screenshotResult.data.map(async (item) => {
-                                if (item && item.blob instanceof Blob) {
-                                    try {
-                                        const base64Data = await blobToBase64(item.blob);
-                                        if (base64Data) {
-                                            const { blob, ...rest } = item;
-                                            return { ...rest, blob: base64Data };
-                                        } else {
-                                            console.warn(`Не удалось конвертировать Blob для скриншота ID: ${item.id}, возвращаем без blob.`);
-                                            const { blob, ...rest } = item;
-                                            return rest;
-                                        }
-                                    } catch (conversionError) {
-                                        console.error(`Ошибка конвертации скриншота ID ${item.id} в Base64:`, conversionError);
-                                        const { blob, ...rest } = item;
-                                        return { ...rest, conversionError: conversionError.message || 'Unknown conversion error' };
-                                    }
-                                } else if (item && item.blob && !(item.blob instanceof Blob)) {
-                                    console.warn(`Скриншот ID: ${item.id} имеет поле blob, но это не Blob. Оставляем как есть.`, item.blob);
-                                    return item;
-                                }
-                                return item;
-                            });
-                            screenshotResult.data = await Promise.all(conversionPromises);
-                            console.log(`Обработка скриншотов завершена.`);
-                        }
-                    }
-
-                    fulfilledResults.forEach(result => {
-                        if (result && result.storeName) {
-                            exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
-                        } else {
-                            console.warn("[exportAllData v_FixTypeError_Full] Пропущен некорректный элемент в fulfilledResults при формировании exportData:", result);
-                        }
-                    });
-
-                    console.log("[exportAllData v_FixTypeError_Full] Данные для экспорта собраны:", Object.keys(exportData.data).map(k => `${k}: ${exportData.data[k]?.length ?? 0} items`));
-
-                    const now = new Date();
-                    const timestamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-                    let exportFileNameBase = isForcedBackupMode ? "1C_Support_Guide_Backup_" : "1C_Support_Guide_Export_";
-                    exportFileName = `${exportFileNameBase}${timestamp}.json`;
-
-                    let dataStr;
-                    try {
-                        dataStr = JSON.stringify(exportData, null, 2);
-                    } catch (stringifyError) {
-                        console.error("[exportAllData v_FixTypeError_Full] Ошибка при сериализации данных в JSON:", stringifyError);
-                        if (!isForcedBackupMode) { }
-                        throw stringifyError;
-                    }
-                    dataBlob = new Blob([dataStr], { type: "application/json;charset=utf-8" });
-
-                } catch (dataPrepError) {
-                    console.error("[exportAllData v_FixTypeError_Full] Ошибка при подготовке данных для экспорта (внутренний try):", dataPrepError);
-                    if (!isForcedBackupMode) {
-                        const message = dataPrepError.message || 'Неизвестная ошибка';
-                        if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                            NotificationService.add(`Критическая ошибка при экспорте: ${message}`, "error");
-                        } else if (typeof showNotification === 'function') {
-                            showNotification(`Критическая ошибка при экспорте: ${message}`, "error");
-                        }
-                    }
-                    if (transaction && typeof transaction.abort === 'function' && transaction.readyState !== 'done') {
-                        try { transaction.abort(); console.log("Транзакция подготовки данных отменена в catch (dataPrepError)."); }
-                        catch (e) { console.error("Ошибка при отмене транзакции в catch (dataPrepError):", e); }
-                    }
-                    functionResult = false;
-                    throw dataPrepError;
-                }
-
-                let overlayPromise = Promise.resolve();
-                if (!isForcedBackupMode && typeof showOverlayForFixedDuration === 'function') {
-                    showOverlayForFixedDuration(5000);
-                    overlayPromise = new Promise(r => setTimeout(r, 5000));
-                }
-
-                let filePickerSuccessfulInternal = false;
-                let notificationMessage = "Экспорт отменен";
-                let notificationType = "info";
-
-                try {
-                    if (window.showSaveFilePicker) {
-                        try {
-                            const handle = await window.showSaveFilePicker({
-                                suggestedName: exportFileName,
-                                types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
-                            });
-                            const writable = await handle.createWritable();
-                            await writable.write(dataBlob);
-                            await writable.close();
-                            console.log("[exportAllData v_FixTypeError_Full] Экспорт через File System Access API завершен успешно.");
-                            filePickerSuccessfulInternal = true;
-                            if (!isForcedBackupMode) {
-                                notificationMessage = "Данные успешно сохранены в файл";
-                                notificationType = "success";
-                            }
-                        } catch (err) {
-                            filePickerSuccessfulInternal = false;
-                            if (err.name === 'AbortError') {
-                                console.log("[exportAllData v_FixTypeError_Full] Экспорт отменен пользователем (File System Access API).");
-                            } else if (err.name === 'SecurityError' && err.message.includes('user gesture')) {
-                                console.error('[exportAllData v_FixTypeError_Full] SecurityError при вызове showSaveFilePicker:', err);
-                                if (isForcedBackupMode) {
-                                    functionResult = { success: false, errorType: 'UserGestureRequired' };
-                                    throw new Error("USER_GESTURE_REQUIRED_FOR_FORCED_BACKUP");
-                                }
-                                notificationMessage = `Ошибка сохранения: ${err.message}.`;
-                                notificationType = "error";
-                            } else {
-                                console.error('[exportAllData v_FixTypeError_Full] Ошибка сохранения через File System Access API:', err);
-                                notificationMessage = `Ошибка сохранения: ${err.message}.`;
-                                notificationType = "error";
-                                if (!isForcedBackupMode) {
-                                    notificationMessage = `Ошибка сохранения: ${err.message}. Попытка резервного метода...`;
-                                    notificationType = "warning";
-                                    if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                                        NotificationService.add(notificationMessage, notificationType, { duration: 7000 });
-                                    }
-                                    const dataUri = URL.createObjectURL(dataBlob);
-                                    const linkElement = document.createElement('a');
-                                    linkElement.href = dataUri;
-                                    linkElement.download = exportFileName;
-                                    document.body.appendChild(linkElement);
-                                    linkElement.click();
-                                    document.body.removeChild(linkElement);
-                                    URL.revokeObjectURL(dataUri);
-                                    console.log("[exportAllData v_FixTypeError_Full] Экспорт через data URI (fallback) завершен успешно.");
-                                    filePickerSuccessfulInternal = true;
-                                    notificationMessage = "Данные успешно экспортированы (резервный метод)";
-                                    notificationType = "success";
-                                } else {
-                                    throw err;
-                                }
-                            }
-                        }
-                    } else {
-                        console.log("[exportAllData v_FixTypeError_Full] File System Access API не поддерживается, используется резервный метод.");
-                        const dataUri = URL.createObjectURL(dataBlob);
-                        const linkElement = document.createElement('a');
-                        linkElement.href = dataUri;
-                        linkElement.download = exportFileName;
-                        document.body.appendChild(linkElement);
-                        linkElement.click();
-                        document.body.removeChild(linkElement);
-                        URL.revokeObjectURL(dataUri);
-                        filePickerSuccessfulInternal = true;
-                        if (!isForcedBackupMode) {
-                            notificationMessage = "Данные успешно экспортированы";
-                            notificationType = "success";
-                        }
-                    }
-                } finally {
-                    await overlayPromise;
-
-                    if (!isForcedBackupMode) {
-                        if (filePickerSuccessfulInternal && notificationMessage !== "Экспорт отменен") {
-                            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                                NotificationService.add(notificationMessage, notificationType);
-                            }
-                        } else if (!filePickerSuccessfulInternal && notificationMessage === "Экспорт отменен") {
-                            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                                NotificationService.add(notificationMessage, notificationType);
-                            }
-                        } else if (!filePickerSuccessfulInternal) {
-                            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                                NotificationService.add(notificationMessage || "Экспорт не удался.", notificationType || "error");
-                            }
-                        }
-                    }
-                }
-                if (typeof functionResult !== 'object' || functionResult.errorType !== 'UserGestureRequired') {
-                    functionResult = filePickerSuccessfulInternal;
-                }
+                console.log("[exportAllData v_TIMEOUT_IMPLEMENTED] File System Access API не поддерживается, используется резервный метод.");
+                const dataUri = URL.createObjectURL(dataBlob);
+                const linkElement = document.createElement('a');
+                linkElement.href = dataUri;
+                linkElement.download = exportFileName;
+                document.body.appendChild(linkElement);
+                linkElement.click();
+                document.body.removeChild(linkElement);
+                URL.revokeObjectURL(dataUri);
+                console.log("[exportAllData v_TIMEOUT_IMPLEMENTED] Fallback экспорт инициирован.");
             }
+        } catch (err) {
+            exportDialogInteractionComplete = true;
+            if (err.name === 'AbortError') {
+                console.log("[exportAllData v_TIMEOUT_IMPLEMENTED] Экспорт отменен пользователем (File System Access API).");
+                if (!isForcedBackupMode) {
+                    NotificationService.add("Экспорт отменен пользователем.", "info", { id: "export-cancelled-user-fsapi" });
+                }
+                functionResult = false;
+            } else if (err.name === 'SecurityError' && err.message.includes('user gesture')) {
+                console.error('[exportAllData v_TIMEOUT_IMPLEMENTED] SecurityError при вызове showSaveFilePicker:', err);
+                if (isForcedBackupMode) {
+                    functionResult = { success: false, errorType: 'UserGestureRequired' };
+                    throw new Error("USER_GESTURE_REQUIRED_FOR_FORCED_BACKUP");
+                }
+                NotificationService.add(`Ошибка сохранения: ${err.message}. Требуется действие пользователя.`, "error", { important: true, id: "export-save-file-picker-failed" });
+                functionResult = false;
+            } else {
+                console.error('[exportAllData v_TIMEOUT_IMPLEMENTED] Ошибка сохранения файла:', err);
+                if (!isForcedBackupMode) {
+                    NotificationService.add(`Ошибка сохранения файла: ${err.message}.`, "error", { important: true, id: "export-save-file-picker-failed" });
+                }
+                functionResult = false;
+            }
+        } finally {
+            if (exportWatchdogTimerId) {
+                clearTimeout(exportWatchdogTimerId);
+                exportWatchdogTimerId = null;
+            }
+            if (exportWindowFocusHandlerInstance) {
+                window.removeEventListener('focus', exportWindowFocusHandlerInstance);
+                exportWindowFocusHandlerInstance = null;
+            }
+            isExpectingExportFileDialog = false;
         }
     } catch (error) {
-        console.error("[exportAllData v_FixTypeError_Full] Критическая ошибка в процессе экспорта:", error);
+        console.error("[exportAllData v_TIMEOUT_IMPLEMENTED] Критическая ошибка в процессе экспорта:", error);
         if (!(error.message === "USER_GESTURE_REQUIRED_FOR_FORCED_BACKUP" && typeof functionResult === 'object' && functionResult.errorType === 'UserGestureRequired')) {
             functionResult = false;
         }
-
         if (!(options && options.isForcedBackupMode) && !(error.message === "USER_GESTURE_REQUIRED_FOR_FORCED_BACKUP")) {
-            const message = error.message || 'Неизвестная критическая ошибка при экспорте.';
-            if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                NotificationService.add(message, "error", { important: true });
-            } else if (typeof showNotification === 'function') {
-                showNotification(message, "error");
-            } else {
-                alert(message);
-            }
+            NotificationService.add(`Критическая ошибка экспорта: ${error.message || "Неизвестная ошибка"}`, "error", { important: true, id: "export-generic-error" });
         }
     } finally {
         isExportOperationInProgress = false;
-        console.log(`[exportAllData v_FixTypeError_Full FINALLY] isExportOperationInProgress установлен в false. Options:`, JSON.parse(JSON.stringify(options || {})));
+        isExpectingExportFileDialog = false;
+        if (exportWatchdogTimerId) {
+            clearTimeout(exportWatchdogTimerId);
+            exportWatchdogTimerId = null;
+        }
+        if (exportWindowFocusHandlerInstance) {
+            window.removeEventListener('focus', exportWindowFocusHandlerInstance);
+            exportWindowFocusHandlerInstance = null;
+        }
+        console.log(`[exportAllData v_TIMEOUT_IMPLEMENTED FINALLY] isExportOperationInProgress установлен в false.`);
     }
 
-    console.log(`[exportAllData v_FixTypeError_Full] Возвращаемое значение:`, functionResult);
+    console.log(`[exportAllData v_TIMEOUT_IMPLEMENTED] Возвращаемое значение:`, functionResult);
     return functionResult;
 }
 
@@ -13474,9 +13420,8 @@ async function loadBookmarks() {
             const targetFolderIdForNote = firstFolderId;
 
             const sampleBookmarksData = [
-                { title: 'База знаний КриптоПро', url: 'https://support.cryptopro.ru/kb', description: 'Официальная база знаний КриптоПро.', folder: targetFolderIdForKB, dateAdded: new Date().toISOString() },
-                { title: 'База знаний Рутокен', url: 'https://dev.rutoken.ru/display/KB/Knowledge+Base', description: 'Официальная база знаний Рутокен.', folder: targetFolderIdForKB, dateAdded: new Date().toISOString() },
-                { title: 'Пример текстовой заметки', url: null, description: 'Это просто текстовая заметка без URL-адреса.', folder: targetFolderIdForNote, dateAdded: new Date().toISOString() }
+                { title: 'База знаний КриптоПро', url: 'https://support.cryptopro.ru/index.php?/Knowledgebase/List', description: 'Официальная база знаний КриптоПро.', folder: targetFolderIdForKB, dateAdded: new Date().toISOString() },
+                { title: 'База знаний Рутокен', url: 'https://dev.rutoken.ru/', description: 'Официальная база знаний Рутокен.', folder: targetFolderIdForKB, dateAdded: new Date().toISOString() }
             ];
 
             const savedBookmarkIds = await Promise.all(
@@ -16987,7 +16932,7 @@ async function loadExtLinks() {
         if (!extLinks || extLinks.length === 0) {
             console.log("База внешних ссылок пуста. Добавляем стартовый набор.");
             const sampleExtLinksData = [
-                { title: 'ЕГРЮЛ', url: 'https:https://egrul.nalog.ru/index.html' },
+                { title: 'ЕГРЮЛ', url: 'https:https://egrul.nalog.ru/index.html', category: 'gov', dateAdded: new Date().toISOString() },
                 { title: 'Портал ИТС 1С', url: 'https://its.1c.ru/', description: 'Инфа по 1ЭС', category: 'docs', dateAdded: new Date().toISOString() },
                 { title: 'Track Astral', url: 'https://track.astral.ru/support/display/Support1CO', description: 'Знания древних...', category: 'docs', dateAdded: new Date().toISOString() },
                 { title: 'База (знаний) Astral', url: 'https://astral.ru/help/1s-otchetnost/', description: 'Инфа для обычных людишек...', category: 'docs', dateAdded: new Date().toISOString() }
