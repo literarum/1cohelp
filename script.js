@@ -2271,7 +2271,7 @@ const defaultPanelOrder = tabsConfig.map(t => t.id);
 
 
 async function loadUISettings() {
-    console.log("Loading UI settings for modal (исправленная версия)...");
+    console.log("Loading UI settings for modal (исправленная версия с полной синхронизацией)...");
     let loadedSettings = {};
     let loadedUserPrefsSpecificFlags = {};
 
@@ -2281,32 +2281,38 @@ async function loadUISettings() {
             if (settingsFromDB && typeof settingsFromDB === 'object') {
                 loadedSettings = { ...settingsFromDB };
                 delete loadedSettings.themeMode;
-                console.log("[loadUISettings] UI-специфичные настройки загружены из 'uiSettings' (тема исключена).");
+                delete loadedSettings.showBlacklistUsageWarning;
+                delete loadedSettings.disableForcedBackupOnImport;
+                console.log("[loadUISettings] UI-специфичные настройки загружены из 'uiSettings'.");
             } else {
-                console.log("[loadUISettings] No UI settings (key: 'uiSettings') found in DB or format is incorrect, using defaults (тема исключена).");
-                loadedSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
-                delete loadedSettings.themeMode;
+                console.log("[loadUISettings] No UI settings (key: 'uiSettings') found in DB or format is incorrect, using defaults for UI-specific parts.");
+                const { themeMode, showBlacklistUsageWarning, disableForcedBackupOnImport, ...defaultUiSpecific } = DEFAULT_UI_SETTINGS;
+                loadedSettings = { ...defaultUiSpecific, id: 'uiSettings' };
             }
         } catch (error) {
             console.error("[loadUISettings] Error loading UI settings (key: 'uiSettings'):", error);
-            loadedSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
-            delete loadedSettings.themeMode;
+            const { themeMode, showBlacklistUsageWarning, disableForcedBackupOnImport, ...defaultUiSpecific } = DEFAULT_UI_SETTINGS;
+            loadedSettings = { ...defaultUiSpecific, id: 'uiSettings' };
         }
     } else {
-        loadedSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
-        delete loadedSettings.themeMode;
-        console.warn("[loadUISettings] База данных недоступна, используются дефолтные UI-специфичные настройки (тема исключена).");
+        const { themeMode, showBlacklistUsageWarning, disableForcedBackupOnImport, ...defaultUiSpecific } = DEFAULT_UI_SETTINGS;
+        loadedSettings = { ...defaultUiSpecific, id: 'uiSettings' };
+        console.warn("[loadUISettings] База данных недоступна, используются дефолтные UI-специфичные настройки.");
     }
 
     if (db) {
         try {
             const userPrefsContainer = await getFromIndexedDB('preferences', USER_PREFERENCES_KEY);
             if (userPrefsContainer && typeof userPrefsContainer.data === 'object') {
-                loadedUserPrefsSpecificFlags.showBlacklistUsageWarning = userPrefsContainer.data.showBlacklistUsageWarning;
-                loadedUserPrefsSpecificFlags.disableForcedBackupOnImport = userPrefsContainer.data.disableForcedBackupOnImport;
+                if (typeof userPrefsContainer.data.showBlacklistUsageWarning === 'boolean') {
+                    loadedUserPrefsSpecificFlags.showBlacklistUsageWarning = userPrefsContainer.data.showBlacklistUsageWarning;
+                }
+                if (typeof userPrefsContainer.data.disableForcedBackupOnImport === 'boolean') {
+                    loadedUserPrefsSpecificFlags.disableForcedBackupOnImport = userPrefsContainer.data.disableForcedBackupOnImport;
+                }
                 console.log(`[loadUISettings] Загружены флаги из userPrefsContainer.data:`, JSON.parse(JSON.stringify(loadedUserPrefsSpecificFlags)));
             } else {
-                console.log(`[loadUISettings] No user preferences (key: '${USER_PREFERENCES_KEY}') found in DB, using defaults for specific flags.`);
+                console.log(`[loadUISettings] No user preferences (key: '${USER_PREFERENCES_KEY}') found in DB, defaults for flags will be used.`);
             }
         } catch (error) {
             console.error(`[loadUISettings] Error loading user preferences (key: '${USER_PREFERENCES_KEY}') for flags:`, error);
@@ -2317,7 +2323,7 @@ async function loadUISettings() {
         ? userPreferences.theme
         : DEFAULT_UI_SETTINGS.themeMode;
 
-    const finalSettingsForModal = {
+    let settingsForModal = {
         ...DEFAULT_UI_SETTINGS,
         ...loadedSettings,
         themeMode: currentActiveTheme,
@@ -2326,15 +2332,72 @@ async function loadUISettings() {
         id: 'uiSettings'
     };
 
-    console.log("[loadUISettings] finalSettingsForModal.themeMode after merging:", finalSettingsForModal.themeMode);
-    console.log("[loadUISettings] finalSettingsForModal.showBlacklistUsageWarning after merging:", finalSettingsForModal.showBlacklistUsageWarning);
-    console.log("[loadUISettings] finalSettingsForModal.disableForcedBackupOnImport after merging:", finalSettingsForModal.disableForcedBackupOnImport);
+    const currentPanelIds = tabsConfig.map(t => t.id);
+    const knownPanelIds = new Set(currentPanelIds);
 
-    originalUISettings = JSON.parse(JSON.stringify(finalSettingsForModal));
-    currentPreviewSettings = JSON.parse(JSON.stringify(finalSettingsForModal));
+    const actualDefaultPanelOrder = (typeof defaultPanelOrder !== 'undefined' && Array.isArray(defaultPanelOrder) && defaultPanelOrder.length > 0)
+        ? defaultPanelOrder
+        : currentPanelIds;
+    const actualDefaultPanelVisibility = (typeof defaultPanelVisibility !== 'undefined' && Array.isArray(defaultPanelVisibility) && defaultPanelVisibility.length === actualDefaultPanelOrder.length)
+        ? defaultPanelVisibility
+        : currentPanelIds.map(id => !(id === 'sedoTypes' || id === 'blacklistedClients'));
 
-    await applyPreviewSettings(currentPreviewSettings);
-    console.log("UI settings for modal populated and preview applied:", currentPreviewSettings);
+    let savedOrder = settingsForModal.panelOrder;
+    let savedVisibility = settingsForModal.panelVisibility;
+
+    if (!Array.isArray(savedOrder) || savedOrder.length === 0 || !savedOrder.every(id => typeof id === 'string')) {
+        console.warn("[loadUISettings] panelOrder в settingsForModal невалиден или пуст. Используется defaultPanelOrder.");
+        savedOrder = [...actualDefaultPanelOrder];
+    }
+
+    if (!Array.isArray(savedVisibility) || savedVisibility.length === 0 || savedVisibility.length !== savedOrder.length || !savedVisibility.every(v => typeof v === 'boolean')) {
+        console.warn("[loadUISettings] panelVisibility в settingsForModal невалиден, пуст или не соответствует panelOrder. Генерируется на основе defaultPanelVisibility и актуального savedOrder.");
+        savedVisibility = savedOrder.map(id => {
+            const defaultIndex = actualDefaultPanelOrder.indexOf(id);
+            return defaultIndex !== -1 ? actualDefaultPanelVisibility[defaultIndex] : (!(id === 'sedoTypes' || id === 'blacklistedClients'));
+        });
+    }
+
+    let effectiveOrder = [];
+    let effectiveVisibility = [];
+    const processedIds = new Set();
+
+    savedOrder.forEach((panelId, index) => {
+        if (knownPanelIds.has(panelId)) {
+            effectiveOrder.push(panelId);
+            effectiveVisibility.push(savedVisibility[index]);
+            processedIds.add(panelId);
+        } else {
+            console.warn(`[loadUISettings - Sync] Панель с ID "${panelId}" из сохраненного порядка не найдена в tabsConfig. Пропускается.`);
+        }
+    });
+
+    currentPanelIds.forEach(panelId => {
+        if (!processedIds.has(panelId)) {
+            effectiveOrder.push(panelId);
+            const defaultIndex = actualDefaultPanelOrder.indexOf(panelId);
+            effectiveVisibility.push(
+                defaultIndex !== -1 ? actualDefaultPanelVisibility[defaultIndex] : (!(id === 'sedoTypes' || id === 'blacklistedClients'))
+            );
+            console.log(`[loadUISettings - Sync] Добавлена новая/недостающая панель "${panelId}" с дефолтной видимостью.`);
+        }
+    });
+
+    settingsForModal.panelOrder = effectiveOrder;
+    settingsForModal.panelVisibility = effectiveVisibility;
+
+    console.log("[loadUISettings] Финальные настройки для модального окна (после синхронизации):", JSON.parse(JSON.stringify(settingsForModal)));
+
+    originalUISettings = JSON.parse(JSON.stringify(settingsForModal));
+    currentPreviewSettings = JSON.parse(JSON.stringify(settingsForModal));
+
+    if (typeof applyPreviewSettings === 'function') {
+        await applyPreviewSettings(currentPreviewSettings);
+    } else {
+        console.warn("[loadUISettings] Функция applyPreviewSettings не найдена. Предпросмотр не будет применен.");
+    }
+
+    console.log("UI settings for modal populated, synchronized, and preview potentially applied:", currentPreviewSettings);
     return currentPreviewSettings;
 }
 
