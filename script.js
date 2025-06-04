@@ -20,9 +20,14 @@ const SEDO_CONFIG_KEY = 'sedoTypesConfigGlobal';
 const BLACKLIST_WARNING_ACCEPTED_KEY = 'blacklistWarningAccepted';
 const USER_PREFERENCES_KEY = 'userGlobalPreferences';
 
+const ARCHIVE_FOLDER_ID = "__archive__";
+const ARCHIVE_FOLDER_NAME = "Архив";
+
 const MAX_REFS_PER_WORD = 500;
 
 const MAX_UPDATE_VISIBLE_TABS_RETRIES = 30;
+
+const MIN_TOKEN_LEN_FOR_INDEX = 2;
 
 const extLinkCategoryInfo = {
     docs: { name: 'Документация', color: 'blue', icon: 'fa-file-alt' },
@@ -68,6 +73,86 @@ let tabsResizeTimeout;
 
 let initialBookmarkFormState = null;
 
+
+const FIELD_WEIGHTS = {
+    algorithms: { // Веса для алгоритмов (включая главный)
+        title: 3.0,
+        description: 1.5, // Общее описание алгоритма
+        steps: 1.0,       // Агрегированный текст всех шагов
+        sectionNameForAlgo: 1.2, // Название секции, если оно добавлено в описание
+        sectionIdForAlgo: 0.8,   // ID секции (если по нему будет поиск)
+        // Можно добавить специфичные веса для полей внутри шагов, если они индексируются отдельно
+        // stepTitle: 1.5,
+        // stepDescription: 1.0,
+        // stepExample: 0.8
+    },
+    main: { // Если нужны специфичные веса для главного алгоритма (могут наследоваться от algorithms)
+        title: 3.5,
+        description: 1.8,
+        steps: 1.2,
+    },
+    links: { // Ссылки 1С
+        title: 2.5,
+        description: 1.0,
+        link_path: 1.5 // Путь ссылки (e1cib/list/...)
+    },
+    bookmarks: { // Закладки
+        title: 3.0,
+        description: 1.5,         // Описание закладки или текст заметки
+        url_original: 0.7,        // Полный оригинальный URL (для точного поиска, если нужно)
+        url_hostname: 1.8,        // Доменное имя (example.com)
+        url_path_0: 1.2,          // Первая значащая часть пути
+        url_path_1: 1.0,          // Вторая значащая часть пути
+        url_path_2: 0.8,          // Третья ...
+        url_query_params: 0.5,    // Параметры запроса
+        url_fallback_text: 0.3,   // URL как текст, если не удалось распарсить
+        folderName: 2.0           // Название папки, в которой закладка
+    },
+    reglaments: {
+        title: 2.8,
+        content: 1.0,
+        categoryName: 1.5
+    },
+    extLinks: { // Внешние ресурсы
+        title: 2.5,
+        description: 1.0,
+        url_full: 0.8,
+        url_hostname: 1.5,
+        categoryName: 1.2,
+        url_fallback_text: 0.3
+    },
+    clientData: { // Заметки по клиенту
+        notes: 1.0
+    },
+    bookmarkFolders: { // Папки закладок
+        name: 2.0
+    },
+    preferences: { // Настройки (СЭДО, UI и т.д.)
+        name: 1.5, // Общее название настройки (например, "Типы сообщений СЭДО")
+        mainSedoGlobalContent: 1.0, // Агрегированный текст для СЭДО
+        // Для детальной индексации СЭДО, если поля добавляются с префиксами:
+        tableTitle: 1.2,           // Заголовки таблиц СЭДО
+        staticListItem: 0.9,       // Элементы статических списков СЭДО
+        tableCell: 0.8,            // Содержимое ячеек таблиц СЭДО
+        category_title: 1.0,       // Названия категорий регламентов (если индексируются через preferences)
+    },
+    blacklistedClients: {
+        organizationName: 2.5,
+        inn: 2.0,
+        phone: 1.5,
+        notes: 1.0
+    },
+    default: { // Веса по умолчанию, если для типа хранилища нет специфичных
+        title: 2.0,
+        name: 2.0,
+        description: 1.0,
+        content: 1.0,
+        // Общие поля, которые могут встретиться
+        text: 1.0,
+        url: 0.7,
+        notes: 1.0
+    }
+};
 
 
 const DEFAULT_WELCOME_CLIENT_NOTES_TEXT = `   Итак, вы здесь. Трудовой договор специалиста техподдержки 1С-Отчетности у вас в кармане (надеемся). А это значит, что вам вручается ключ от всех дверей... ну, почти от всех. Точнее, экземпляр приложения Copilot 1СО. Это штука будет притворяться вашим верным помощником и пытаться стать вашим верным другом. Иногда даже успешно. Добро пожаловать в клуб!
@@ -2112,6 +2197,10 @@ async function loadFromIndexedDB() {
                 if (!algorithms.main.id) algorithms.main.id = 'main';
                 if (Array.isArray(algorithms.main.steps)) {
                     algorithms.main.steps = algorithms.main.steps.map(step => {
+                        if (!step || typeof step !== 'object') {
+                            console.warn("[loadFromIndexedDB] Обнаружен невалидный шаг в main.steps:", step);
+                            return { title: "Ошибка: шаг невалиден", description: "", isCopyable: false, additionalInfoText: '', additionalInfoShowTop: false, additionalInfoShowBottom: false };
+                        }
                         const newStep = {
                             additionalInfoText: step.additionalInfoText || '',
                             additionalInfoShowTop: typeof step.additionalInfoShowTop === 'boolean' ? step.additionalInfoShowTop : false,
@@ -2130,7 +2219,7 @@ async function loadFromIndexedDB() {
                     algorithms.main.steps = [];
                 }
             } else {
-                console.warn("[loadFromIndexedDB] 'main' из БД пуст и не используется. Используется DEFAULT_MAIN_ALGORITHM.");
+                console.warn("[loadFromIndexedDB] 'main' из БД пуст и не используется (т.к. loadedDataUsed=false). Используется DEFAULT_MAIN_ALGORITHM.");
                 algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
             }
         } else {
@@ -2150,17 +2239,24 @@ async function loadFromIndexedDB() {
                             item.id = `${section}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
                         }
                         if (item.steps && Array.isArray(item.steps)) {
-                            item.steps = item.steps.map(step => ({
-                                additionalInfoText: step.additionalInfoText || '',
-                                additionalInfoShowTop: typeof step.additionalInfoShowTop === 'boolean' ? step.additionalInfoShowTop : false,
-                                additionalInfoShowBottom: typeof step.additionalInfoShowBottom === 'boolean' ? step.additionalInfoShowBottom : false,
-                                ...step
-                            }));
+                            item.steps = item.steps.map(step => {
+                                if (!step || typeof step !== 'object') {
+                                    console.warn(`[loadFromIndexedDB] Обнаружен невалидный шаг в ${section}/${item.id}:`, step);
+                                    return { title: "Ошибка: шаг невалиден", description: "" };
+                                }
+                                return {
+                                    additionalInfoText: step.additionalInfoText || '',
+                                    additionalInfoShowTop: typeof step.additionalInfoShowTop === 'boolean' ? step.additionalInfoShowTop : false,
+                                    additionalInfoShowBottom: typeof step.additionalInfoShowBottom === 'boolean' ? step.additionalInfoShowBottom : false,
+                                    ...step
+                                };
+                            });
                         } else if (item.steps === undefined) {
                             item.steps = [];
                         }
                         return item;
                     }
+                    console.warn(`[loadFromIndexedDB] Обнаружен невалидный элемент в секции ${section}:`, item);
                     return null;
                 }).filter(item => item && typeof item.id !== 'undefined');
             } else {
@@ -2500,21 +2596,21 @@ const DEFAULT_SEDO_DATA = {
             columns: ["Код", "Сообщение в спецификации СЭДО (код, название)", "Где увидеть в 1С"],
             codeField: "code",
             items: [
-                { code: "300", name: "Акт камеральной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "301", name: "Решение о привлечении к ответственности по результатам камеральной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "302", name: "Решение об отказе в привлечении к ответственности по результатам камеральной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "303", name: "Требование о представлении документов по камеральной проверке", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "304", name: "Решение о возмещении излишне понесенных расходов по результатам камеральной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "305", name: "Акт выездной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "306", name: "Решение о привлечении к ответственности по результатам выездной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "307", name: "Решение об отказе в привлечении к ответственности по результатам выездной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "308", name: "Требование о представлении документов по выездной проверке", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "309", name: "Решение о возмещении излишне понесенных расходов по результатам выездной проверки", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "310", name: "Требование об уплате недоимки по страховым взносам, пеней и штрафов", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "311", name: "Решение о взыскании", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "312", name: "Требование о возмещении излишне понесенных расходов", in1C: "Одноименные документы в рабочем месте 1С-Отчетность (Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления)" },
-                { code: "315", name: "Уведомление о приеме (отказе в приеме) территориальным органом Фонда документов по камеральной проверке", in1C: "Ссылка Уведомление о приеме в документе Ответ на требование СФР (бывш. ФСС) (Отчетность, справки – 1С-Отчетность – Письма)" },
-                { code: "316", name: "Уведомление о приеме (отказе в приеме) территориальным органом Фонда документов по выездной проверке", in1C: "Ссылка Уведомление о приеме в документе Ответ на требование СФР (бывш. ФСС) (Отчетность, справки – 1С-Отчетность – Письма)" },
+                { code: "300", name: "Акт камеральной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "301", name: "Решение о привлечении к ответственности по результатам камеральной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "302", name: "Решение об отказе в привлечении к ответственности по результатам камеральной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "303", name: "Требование о представлении документов по камеральной проверке", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "304", name: "Решение о возмещении излишне понесенных расходов по результатам камеральной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "305", name: "Акт выездной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "306", name: "Решение о привлечении к ответственности по результатам выездной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "307", name: "Решение об отказе в привлечении к ответственности по результатам выездной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "308", name: "Требование о представлении документов по выездной проверке", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "309", name: "Решение о возмещении излишне понесенных расходов по результатам выездной проверки", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "310", name: "Требование об уплате недоимки по страховым взносам, пеней и штрафов", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "311", name: "Решение о взыскании", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "312", name: "Требование о возмещении излишне понесенных расходов", in1C: "Отчетность, справки – 1С-Отчтеность – Входящие – Требования и уведомления" },
+                { code: "315", name: "Уведомление о приеме (отказе в приеме) территориальным органом Фонда документов по камеральной проверке", in1C: "Отчетность, справки – 1С-Отчетность – Письма" },
+                { code: "316", name: "Уведомление о приеме (отказе в приеме) территориальным органом Фонда документов по выездной проверке", in1C: "Отчетность, справки – 1С-Отчетность – Письма" },
                 { code: "318", name: "Результат регистрации заявление на формирование справки о расчетах", in1C: "Ссылка Этапы отправки в документе Запрос на сверку: Справка о расчетах (Отчетность, справки – 1С-Отчетность – Сверки)" },
                 { code: "319", name: "Справка о расчетах", in1C: "Ссылка Справка о расчетах в документе Запрос на сверку: Справка о расчетах (Отчетность, справки – 1С-Отчетность – Сверки)" }
             ]
@@ -4177,7 +4273,7 @@ async function _processActualImport(jsonString) {
         console.warn("[_processActualImport V4] Оверлей не был показан. Показываем сейчас.");
         if (typeof loadingOverlayManager.createAndShow === 'function') loadingOverlayManager.createAndShow();
     }
-    currentImportProgress = 0;
+    currentImportProgress = 0; // Сброс прогресса для текущей операции импорта
     if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
         loadingOverlayManager.updateProgress(1, "Начало импорта...");
     }
@@ -4186,11 +4282,12 @@ async function _processActualImport(jsonString) {
         NotificationService.add("Началась обработка и загрузка новой базы данных...", "info", { duration: 4000, id: "import-processing-started" });
     }
 
-    const errorsOccurred = [];
+    const errorsOccurred = []; // Для некритических ошибок отдельных записей
     let skippedPuts = 0;
     let storesToImport = [];
 
     try {
+        // Проверка и реинициализация БД, если нужно
         if (!db || (typeof db.objectStoreNames === 'undefined') || (db.connections !== undefined && db.connections === 0) || db.objectStoreNames.length === 0) {
             console.warn("[_processActualImport V4] DB is null, closed, or in an invalid state. Attempting re-initialization...");
             await initDB();
@@ -4204,6 +4301,7 @@ async function _processActualImport(jsonString) {
         }
         updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.DB_CHECK_REINIT, "Проверка БД");
 
+        // Парсинг JSON
         if (typeof jsonString !== 'string' || jsonString.trim() === '') {
             throw new Error("Файл пуст или не содержит текстовых данных.");
         }
@@ -4216,9 +4314,11 @@ async function _processActualImport(jsonString) {
             throw new Error("Некорректный формат JSON файла.");
         }
 
+        // Валидация схемы
         if (!importData || typeof importData.data !== 'object' || !importData.schemaVersion) {
             throw new Error("Некорректный формат файла импорта (отсутствует data или schemaVersion)");
         }
+        // (логика проверки версии схемы остается прежней)
         console.log(`[_processActualImport V4] Импорт данных версии схемы файла: ${importData.schemaVersion}. Ожидаемая версия приложения: ${CURRENT_SCHEMA_VERSION}`);
         const [fileMajorStr, fileMinorStr] = importData.schemaVersion.split('.');
         const [appMajorStr, appMinorStr] = CURRENT_SCHEMA_VERSION.split('.');
@@ -4239,6 +4339,7 @@ async function _processActualImport(jsonString) {
         }
         updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.VALIDATE_SCHEMA, "Валидация схемы");
 
+
         storesToImport = Object.keys(importData.data).filter(storeName => {
             if (!db.objectStoreNames.contains(storeName)) {
                 console.warn(`[_processActualImport V4] Хранилище '${storeName}' из файла импорта не найдено в текущей схеме БД. Пропускается.`);
@@ -4255,6 +4356,7 @@ async function _processActualImport(jsonString) {
         }
         console.log("[_processActualImport V4] Хранилища для импорта:", storesToImport);
 
+        // Основная транзакция импорта
         let importTransactionSuccessful = false;
         try {
             console.log("[_processActualImport V4] Попытка начать основную транзакцию импорта...");
@@ -4269,6 +4371,7 @@ async function _processActualImport(jsonString) {
                 transaction.onerror = (e) => { const errorMsg = `Критическая ошибка транзакции: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.error(`[_processActualImport V4] Transaction error:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
                 transaction.onabort = (e) => { const errorMsg = `Транзакция прервана: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.warn(`[_processActualImport V4] Transaction aborted:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
 
+                // Очистка хранилищ
                 const clearPromises = []; const baseProgressForClear = currentImportProgress;
                 console.log(`[_processActualImport V4] Начало очистки ${storesToImport.length} хранилищ...`);
                 for (let i = 0; i < storesToImport.length; i++) {
@@ -4284,12 +4387,14 @@ async function _processActualImport(jsonString) {
                 try { await Promise.all(clearPromises); currentImportProgress = Math.max(currentImportProgress, baseProgressForClear + STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES); if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Очистка завершена"); console.log('[_processActualImport V4] Все хранилища успешно очищены.'); }
                 catch (clearAllError) { console.error('[_processActualImport V4] Ошибка во время очистки хранилищ:', clearAllError); return rejectPromise(new Error(`Не удалось очистить хранилища: ${clearAllError.message || clearAllError}`)); }
 
+                // Запись данных
                 let putPromises = []; let totalItemsToPut = 0; storesToImport.forEach(storeName => { totalItemsToPut += (importData.data[storeName] || []).length; });
                 let processedItemsPut = 0; const baseProgressForImportData = currentImportProgress;
                 console.log(`[_processActualImport V4] Начало записи ${totalItemsToPut} элементов...`);
                 for (const storeName of storesToImport) {
                     let itemsToImportOriginal = importData.data[storeName];
                     if (!Array.isArray(itemsToImportOriginal)) { errorsOccurred.push({ storeName, error: 'Данные не являются массивом', item: null }); if (totalItemsToPut > 0) { totalItemsToPut = Math.max(0, totalItemsToPut - (importData.data[storeName]?.length || 0)); } continue; }
+                    // (валидация элементов остается прежней)
                     const storeConfigFound = storeConfigs.find(sc => sc.name === storeName);
                     if (!storeConfigFound) { errorsOccurred.push({ storeName, error: `Внутренняя ошибка: нет конфигурации для ${storeName}`, item: null }); if (transaction && transaction.abort) transaction.abort(); return rejectPromise(new Error(`Missing storeConfig for ${storeName}`)); }
                     const keyPathFromConfig = storeConfigFound.options?.keyPath; const autoIncrementFromConfig = storeConfigFound.options?.autoIncrement || false;
@@ -4301,32 +4406,53 @@ async function _processActualImport(jsonString) {
                         validItemsForStore.push(item);
                     }
                     let itemsToImport = validItemsForStore;
+
                     if (storeName === 'screenshots') {
                         itemsToImport = itemsToImport.map((item) => {
                             if (item && item.hasOwnProperty('blob')) { const blobData = item.blob; if (typeof blobData === 'object' && blobData !== null && typeof blobData.base64 === 'string' && typeof blobData.type === 'string') { const convertedBlob = base64ToBlob(blobData.base64, blobData.type); if (convertedBlob instanceof Blob) { item.blob = convertedBlob; } else { errorsOccurred.push({ storeName, error: `Ошибка конвертации Base64->Blob для скриншота ID: ${item.id || 'N/A'}`, item: `(данные blob: ${JSON.stringify(blobData)?.substring(0, 50)}...)` }); delete item.blob; } } else if (blobData === null) { delete item.blob; } else if (!(blobData instanceof Blob)) { errorsOccurred.push({ storeName, error: `Некорректный тип данных в поле blob для ID: ${item.id || 'N/A'}`, item: `(тип blob: ${typeof blobData})` }); delete item.blob; } } return item;
-                        }).filter(item => !(item.hasOwnProperty('blob') && item.blob === undefined));
+                        }).filter(item => !(item.hasOwnProperty('blob') && item.blob === undefined)); // Удаляем элементы, где blob стал undefined
                     }
+
                     if (itemsToImport.length > 0) {
                         let store = null; try { store = transaction.objectStore(storeName); } catch (storeError) { errorsOccurred.push({ storeName, error: `Ошибка доступа к ${storeName} для добавления: ${storeError.message}`, item: null }); totalItemsToPut = Math.max(0, totalItemsToPut - itemsToImport.length); continue; }
                         for (const item of itemsToImport) {
-                            putPromises.push(new Promise((resolveReq) => {
+                            // *** ИСПРАВЛЕНИЕ: rejectReq вместо resolveReq в onerror/catch ***
+                            putPromises.push(new Promise((resolveReq, rejectReq) => {
                                 try {
                                     const putRequest = store.put(item);
                                     putRequest.onsuccess = () => { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных"); resolveReq({ storeName, operation: 'put', success: true }); };
-                                    putRequest.onerror = (e_put) => { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных"); const errorMsg_put = e_put.target.error?.message || 'Put request failed'; errorsOccurred.push({ storeName, error: `Ошибка записи: ${errorMsg_put}`, item: JSON.stringify(item)?.substring(0, 100) }); resolveReq({ storeName, operation: 'put', success: false, error: e_put.target.error }); };
-                                } catch (putError) { processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных"); errorsOccurred.push({ storeName, error: `Исключение при записи: ${putError.message}`, item: JSON.stringify(item).substring(0, 100) }); resolveReq({ storeName, operation: 'put', success: false, error: putError }); }
+                                    putRequest.onerror = (e_put) => {
+                                        processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных");
+                                        const errorMsg_put = e_put.target.error?.message || 'Put request failed';
+                                        errorsOccurred.push({ storeName, error: `Ошибка записи: ${errorMsg_put}`, item: JSON.stringify(item)?.substring(0, 100) });
+                                        rejectReq(e_put.target.error || new Error(errorMsg_put)); // ИЗМЕНЕНО
+                                    };
+                                } catch (putError) {
+                                    processedItemsPut++; updateFineGrainedProgressForImport(baseProgressForImportData, STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA, processedItemsPut, totalItemsToPut, "Запись данных");
+                                    errorsOccurred.push({ storeName, error: `Исключение при записи: ${putError.message}`, item: JSON.stringify(item).substring(0, 100) });
+                                    rejectReq(putError); // ИЗМЕНЕНО
+                                }
                             }));
                         }
                     }
                 }
 
                 Promise.all(putPromises).then(putResults => {
-                    const putErrors = putResults.filter(r => !r.success);
-                    if (putErrors.length > 0) { console.warn(`[_processActualImport V4] Были ошибки при записи ${putErrors.length} элементов. Транзакция будет отменена.`); if (transaction.abort) { transaction.abort(); } else { rejectPromise(new Error("Ошибки при записи, транзакция не отменена (отсутствует метод abort).")); } }
-                    else { currentImportProgress = Math.max(currentImportProgress, baseProgressForImportData + STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA); if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Запись данных завершена"); console.log('[_processActualImport V4] Все элементы успешно записаны.'); }
+                    // Эта ветка теперь будет достигнута только если ВСЕ putPromises разрешились успешно.
+                    currentImportProgress = Math.max(currentImportProgress, baseProgressForImportData + STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA);
+                    if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Запись данных завершена");
+                    console.log('[_processActualImport V4] Все элементы успешно записаны.');
+                    // Транзакция завершится сама через oncomplete
                 }).catch(promiseAllError => {
-                    console.error('[_processActualImport V4] Ошибка в Promise.all(putPromises):', promiseAllError);
-                    if (transaction.abort) transaction.abort(); else rejectPromise(promiseAllError);
+                    // Если хотя бы один putPromise был отклонен, мы попадаем сюда.
+                    console.error('[_processActualImport V4] Ошибка в Promise.all(putPromises), одна или несколько записей не удались:', promiseAllError);
+                    if (transaction.abort) {
+                        console.log('[_processActualImport V4] Отмена транзакции из-за ошибки записи.');
+                        transaction.abort(); // Отменяем транзакцию
+                    } else {
+                        // Если abort не доступен, мы не можем явно отменить, но rejectPromise уже был вызван из onerror транзакции
+                        rejectPromise(promiseAllError); // Пробрасываем ошибку дальше
+                    }
                 });
             });
         } catch (transactionError) {
@@ -4335,6 +4461,7 @@ async function _processActualImport(jsonString) {
             throw transactionError;
         }
 
+        // Логика сброса категорий регламентов, если они не импортировались
         if (importTransactionSuccessful) {
             const reglamentsWereImportedFromFile = storesToImport.includes('reglaments');
             const preferencesWereInFile = Object.keys(importData.data).includes('preferences');
@@ -4355,27 +4482,32 @@ async function _processActualImport(jsonString) {
             }
         }
 
+
         if (importTransactionSuccessful) {
             console.log("[_processActualImport V4] Импорт данных в IndexedDB завершен. Обновление приложения...");
             if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
                 loadingOverlayManager.updateProgress(Math.min(currentImportProgress + 1, 99), "Инициализация приложения");
             }
             try {
-
+                // Сброс кэшированных данных в памяти
                 if (typeof algorithms !== 'undefined') algorithms = { main: {}, program: [], skzi: [], lk1c: [], webReg: [] };
+                // ... и других глобальных кэшей, если они есть и заполняются из БД ...
                 console.log("[_processActualImport V4] Предполагаемые кэши данных в памяти сброшены перед appInit.");
 
-                const dbReadyAfterImport = await appInit();
-                if (!dbReadyAfterImport && db === null) {
+                const dbReadyAfterImport = await appInit(); // appInit перестроит индекс
+                if (!dbReadyAfterImport && db === null) { // Проверка, если appInit сам не смог инициализировать БД
                     throw new Error("Не удалось переинициализировать приложение после импорта (БД стала null).");
                 }
+                // Если импортировались настройки UI, их нужно применить заново
                 if (storesToImport.includes('preferences') &&
                     importData.data.preferences?.some(p => p.id === 'uiSettings')) {
+                    // applyInitialUISettings вызывается внутри appInit, но можно еще раз вызвать loadUISettings для модалки
                     await loadUISettings();
                 }
 
                 updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.APP_RE_INIT, "Инициализация приложения");
 
+                // (Логика обновления UI регламентов остается прежней)
                 const reglamentsListDiv = document.getElementById('reglamentsList');
                 const categoryGrid = document.getElementById('reglamentCategoryGrid');
 
@@ -7595,9 +7727,9 @@ async function saveAlgorithm() {
         } else if (!isMainAlgo) {
             showNotification("Алгоритм должен содержать хотя бы один непустой шаг.", "warning");
         } else {
-            console.log("Сохранение главного алгоритма без шагов (допустимо).");
+            console.log("Сохранение главного алгоритма без шагов (допустимо, если форма изначально пуста или все удалено корректно).");
         }
-        if (!isMainAlgo || (isMainAlgo && newStepsBase.length === 0 && editStepsContainer.querySelectorAll('.edit-step').length > 0)) {
+        if (!isMainAlgo || (isMainAlgo && newStepsBase.length === 0 && editStepsContainer.querySelectorAll('.edit-step').length > 0 && isValid === false)) {
             saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения'; return;
         }
     }
@@ -7608,7 +7740,6 @@ async function saveAlgorithm() {
     let oldAlgorithmData = null;
     let finalAlgorithmData = null;
     const algorithmIdForRefs = isMainAlgo ? 'main' : algorithmIdStr;
-    const screenshotOpResults = [];
     let finalSteps = JSON.parse(JSON.stringify(newStepsBase));
 
     try {
@@ -7622,6 +7753,7 @@ async function saveAlgorithm() {
         else console.warn(`[Save Algorithm v7] Не найдены старые данные для ${section}/${algorithmIdStr}.`);
     } catch (e) { console.error("[Save Algorithm v7] Ошибка получения старых данных:", e); }
 
+
     try {
         if (!db) throw new Error("База данных недоступна");
         transaction = db.transaction(['algorithms', 'screenshots'], 'readwrite');
@@ -7629,94 +7761,93 @@ async function saveAlgorithm() {
         const algorithmsStore = transaction.objectStore('algorithms');
         console.log("[Save Algorithm v7 TX] Транзакция начата.");
 
-        const deletePromises = [];
-        const addPromises = [];
-        const newScreenshotIdsMap = {};
+        const screenshotOpPromises = [];
 
         if (!isMainAlgo) {
-            screenshotOps.filter(op => op.action === 'delete').forEach(op => {
-                const { stepIndex, oldScreenshotId } = op;
-                if (oldScreenshotId === null || oldScreenshotId === undefined) return;
-                deletePromises.push(new Promise((resolve) => {
-                    const request = screenshotsStore.delete(oldScreenshotId);
-                    request.onsuccess = () => {
-                        console.log(`[Save Algorithm v7 TX] Deleted screenshot ID: ${oldScreenshotId}`);
-                        screenshotOpResults.push({ success: true, action: 'delete', oldId: oldScreenshotId, stepIndex });
-                        resolve();
-                    };
-                    request.onerror = (e) => {
-                        console.error(`[Save Algorithm v7 TX] Error deleting screenshot ID ${oldScreenshotId}:`, e.target.error);
-                        screenshotOpResults.push({ success: false, action: 'delete', oldId: oldScreenshotId, stepIndex, error: e.target.error || new Error('Delete failed') });
-                        resolve();
-                    };
+            screenshotOps.forEach(op => {
+                screenshotOpPromises.push(new Promise((resolve, reject) => {
+                    try {
+                        if (op.action === 'delete' && op.oldScreenshotId !== null && op.oldScreenshotId !== undefined) {
+                            const request = screenshotsStore.delete(op.oldScreenshotId);
+                            request.onsuccess = () => {
+                                console.log(`[Save Algorithm v7 TX] Deleted screenshot ID: ${op.oldScreenshotId}`);
+                                resolve({ success: true, action: 'delete', oldId: op.oldScreenshotId, stepIndex: op.stepIndex });
+                            };
+                            request.onerror = (e) => {
+                                const error = e.target.error || new Error('Delete screenshot failed');
+                                console.error(`[Save Algorithm v7 TX] Error deleting screenshot ID ${op.oldScreenshotId}:`, error);
+                                reject({ success: false, action: 'delete', oldId: op.oldScreenshotId, stepIndex: op.stepIndex, error });
+                            };
+                        } else if (op.action === 'add' && op.blob instanceof Blob && typeof op.stepIndex === 'number' && finalSteps[op.stepIndex]) {
+                            const tempName = `${finalTitle}, изобр. ${Date.now() + Math.random()}`;
+                            const record = { blob: op.blob, parentId: algorithmIdForRefs, parentType: 'algorithm', stepIndex: op.stepIndex, name: tempName, uploadedAt: new Date().toISOString() };
+                            const request = screenshotsStore.add(record);
+                            request.onsuccess = e_add => {
+                                const newId = e_add.target.result;
+                                console.log(`[Save Algorithm v7 TX] Added screenshot, new ID: ${newId} for step ${op.stepIndex}`);
+                                if (!finalSteps[op.stepIndex].screenshotIds) finalSteps[op.stepIndex].screenshotIds = [];
+                                finalSteps[op.stepIndex].screenshotIds.push(newId);
+                                resolve({ success: true, action: 'add', newId, stepIndex: op.stepIndex });
+                            };
+                            request.onerror = e_add_err => {
+                                const error = e_add_err.target.error || new Error('Add screenshot failed');
+                                console.error(`[Save Algorithm v7 TX] Error adding screenshot for step ${op.stepIndex}:`, error);
+                                reject({ success: false, action: 'add', stepIndex: op.stepIndex, error });
+                            };
+                        } else {
+                            console.warn(`[Save Algorithm v7 TX] Пропуск невалидной операции со скриншотом:`, op);
+                            resolve({ success: true, action: 'skip', message: 'Invalid operation data' });
+                        }
+                    } catch (opError) {
+                        console.error(`[Save Algorithm v7 TX] Исключение в операции со скриншотом:`, opError);
+                        reject({ success: false, action: op.action, error: opError });
+                    }
                 }));
             });
-            if (deletePromises.length > 0) {
-                await Promise.all(deletePromises);
-                console.log("[Save Algorithm v7 TX] Delete operations finished.");
-                const deleteErrors = screenshotOpResults.filter(r => r.action === 'delete' && !r.success);
-                if (deleteErrors.length > 0) {
-                    console.warn(`[Save Algorithm v7 TX] Были ошибки при удалении скриншотов: ${deleteErrors.length} ошибок.`);
-                }
-            }
 
-            screenshotOps.filter(op => op.action === 'add').forEach(op => {
-                const { stepIndex, blob } = op;
-                if (!(blob instanceof Blob) || typeof stepIndex !== 'number' || stepIndex < 0 || !finalSteps[stepIndex]) return;
-
-                addPromises.push(new Promise((resolve) => {
-                    const tempName = `${finalTitle}, изобр. ${Date.now() + Math.random()}`;
-                    const record = { blob, parentId: algorithmIdForRefs, parentType: 'algorithm', stepIndex, name: tempName, uploadedAt: new Date().toISOString() };
-                    const request = screenshotsStore.add(record);
-                    request.onsuccess = e_add => {
-                        const newId = e_add.target.result;
-                        console.log(`[Save Algorithm v7 TX] Added screenshot, new ID: ${newId} for step ${stepIndex}`);
-                        screenshotOpResults.push({ success: true, action: 'add', newId, stepIndex });
-                        if (!newScreenshotIdsMap[stepIndex]) newScreenshotIdsMap[stepIndex] = [];
-                        newScreenshotIdsMap[stepIndex].push(newId);
-                        resolve();
-                    };
-                    request.onerror = e_add_err => {
-                        console.error(`[Save Algorithm v7 TX] Error adding screenshot for step ${stepIndex}:`, e_add_err.target.error);
-                        screenshotOpResults.push({ success: false, action: 'add', stepIndex, error: e_add_err.target.error || new Error('Add failed') });
-                        resolve();
-                    };
-                }));
-            });
-            if (addPromises.length > 0) {
-                await Promise.all(addPromises);
-                console.log("[Save Algorithm v7 TX] Add operations finished.");
-                const addErrors = screenshotOpResults.filter(r => r.action === 'add' && !r.success);
-                if (addErrors.length > 0) {
-                    console.warn(`[Save Algorithm v7 TX] Были ошибки при добавлении скриншотов: ${addErrors.length} ошибок.`);
+            if (screenshotOpPromises.length > 0) {
+                const screenshotResults = await Promise.all(screenshotOpPromises);
+                const failedScreenshotOps = screenshotResults.filter(r => !r.success);
+                if (failedScreenshotOps.length > 0) {
+                    console.error(`[Save Algorithm v7 TX] Ошибки при операциях со скриншотами (${failedScreenshotOps.length} шт.). Первая ошибка:`, failedScreenshotOps[0].error);
+                    throw new Error(`Не удалось обработать скриншоты: ${failedScreenshotOps[0].error.message || 'Ошибка операции со скриншотом'}`);
                 }
+                console.log("[Save Algorithm v7 TX] Все операции со скриншотами завершены успешно.");
             }
         }
 
-        let existingIdsToKeepMap = {};
-        if (!isMainAlgo && oldAlgorithmData?.steps) {
-            const deletedIdsSet = new Set(screenshotOpResults.filter(r => r.success && r.action === 'delete').map(r => r.oldId));
-            oldAlgorithmData.steps.forEach((step, index) => {
-                if (Array.isArray(step.screenshotIds)) {
-                    existingIdsToKeepMap[index] = step.screenshotIds.filter(id => !deletedIdsSet.has(id));
+        if (!isMainAlgo) {
+            let existingIdsToKeepMap = {};
+            if (oldAlgorithmData?.steps) {
+                const deletedIdsFromOps = new Set(
+                    screenshotOps.filter(op => op.action === 'delete').map(op => op.oldScreenshotId)
+                );
+                oldAlgorithmData.steps.forEach((step, index) => {
+                    if (Array.isArray(step.screenshotIds)) {
+                        existingIdsToKeepMap[index] = step.screenshotIds.filter(id => !deletedIdsFromOps.has(id));
+                    }
+                });
+            }
+
+            finalSteps = finalSteps.map((step, index) => {
+                const existingKeptIds = existingIdsToKeepMap[index] || [];
+                const newlyAddedIds = (step.screenshotIds || []).filter(id => typeof id === 'number');
+
+                const finalIds = [...new Set([...existingKeptIds, ...newlyAddedIds])];
+
+                if (finalIds.length > 0) {
+                    step.screenshotIds = finalIds;
+                } else {
+                    delete step.screenshotIds;
                 }
+                delete step._tempScreenshotBlobs;
+                delete step._screenshotsToDelete;
+                delete step.existingScreenshotIds;
+                delete step.tempScreenshotsCount;
+                delete step.deletedScreenshotIds;
+                return step;
             });
         }
-
-        finalSteps = finalSteps.map((step, index) => {
-            const existingKeptIds = existingIdsToKeepMap[index] || [];
-            const newlyAddedIds = newScreenshotIdsMap[index] || [];
-            const finalIds = [...new Set([...existingKeptIds, ...newlyAddedIds])];
-
-            if (finalIds.length > 0) {
-                step.screenshotIds = finalIds;
-            } else {
-                delete step.screenshotIds;
-            }
-            delete step._tempScreenshotBlobs; delete step._screenshotsToDelete; delete step.existingScreenshotIds;
-            delete step.tempScreenshotsCount; delete step.deletedScreenshotIds;
-            return step;
-        });
         console.log("[Save Algorithm v7 TX] Финальный массив шагов подготовлен.");
 
         let targetAlgorithmObject;
@@ -9201,269 +9332,6 @@ function initSearchSystem() {
 }
 
 
-async function updateSearchIndexForItem(item, type) {
-    const LOG_PREFIX = `[USIFI V15 - SEDO Batching]`;
-
-    if (!item || typeof item !== 'object' || !type) {
-        console.warn(`${LOG_PREFIX} Invalid item or type. Item: ${JSON.stringify(item)}, Type: ${type}`);
-        return;
-    }
-
-    const itemPreviewForLog = { ...item };
-    if (itemPreviewForLog.content) itemPreviewForLog.content = (String(itemPreviewForLog.content).substring(0, 30) + "...");
-    if (itemPreviewForLog.steps) itemPreviewForLog.steps = `[${itemPreviewForLog.steps?.length || 0} steps]`;
-    console.log(`${LOG_PREFIX} Called for type '${type}'. Input item (preview):`, JSON.parse(JSON.stringify(itemPreviewForLog)));
-
-    const originalItemId = item.id;
-    console.log(`${LOG_PREFIX} Original item.id for type '${type}':`, originalItemId, `(typeof: ${typeof originalItemId})`);
-
-    let refItemId;
-    if (type === 'clientData') {
-        refItemId = 'current';
-    } else if (type === 'preferences' && originalItemId === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null)) {
-        refItemId = (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null);
-        if (refItemId === null) {
-            console.error(`${LOG_PREFIX} SEDO_CONFIG_KEY is not defined. Cannot process SEDO preferences for indexing.`);
-            return;
-        }
-    } else if (originalItemId === undefined || originalItemId === null) {
-        console.error(`${LOG_PREFIX} CRITICAL ID ISSUE: Item ID is undefined or null for type '${type}'. Skipping indexing for this item.`);
-        return;
-    } else {
-        refItemId = String(originalItemId);
-    }
-    console.log(`${LOG_PREFIX} Determined refItemId:`, refItemId, `(typeof: ${typeof refItemId})`);
-
-    try {
-        console.log(`${LOG_PREFIX} Removing old index entries for type '${type}', refItemId '${refItemId}'...`);
-        await removeFromSearchIndex(refItemId, type);
-        console.log(`${LOG_PREFIX} Old index entries removed for type '${type}', refItemId '${refItemId}'.`);
-    } catch (e) {
-        console.error(`${LOG_PREFIX} Error removing old index entries for ${type}:${refItemId}`, e);
-
-    }
-
-    if (type === 'preferences' && originalItemId === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null) && item.tables && Array.isArray(item.tables)) {
-        console.log(`${LOG_PREFIX} Starting BATCH indexing for SEDO data (refItemId: ${refItemId}).`);
-        const sedoTokensMap = new Map();
-
-
-        if (item.articleLinks && Array.isArray(item.articleLinks)) {
-            item.articleLinks.forEach((linkItem, linkIndex) => {
-                let linkTextContent = '';
-                if (typeof linkItem === 'string' && linkItem.trim()) {
-                    linkTextContent = linkItem.trim();
-                } else if (linkItem && typeof linkItem === 'object') {
-                    if (linkItem.url && typeof linkItem.url === 'string' && linkItem.url.trim()) {
-                        linkTextContent += linkItem.url.trim() + " ";
-                    }
-                    if (linkItem.text && typeof linkItem.text === 'string' && linkItem.text.trim()) {
-                        linkTextContent += linkItem.text.trim();
-                    }
-                }
-                linkTextContent = linkTextContent.trim();
-                if (linkTextContent) {
-                    const tokens = tokenize(linkTextContent);
-                    const fieldName = `articleLink[${linkIndex}]`;
-                    const weight = 1;
-                    for (const token of tokens) {
-                        const sedoRefDetails = { store: type, id: refItemId, field: fieldName, articleLinkIndex: linkIndex };
-                        const newRefData = { type, id: refItemId, field: fieldName, weight, store: type, ...sedoRefDetails };
-                        if (!sedoTokensMap.has(token)) {
-                            sedoTokensMap.set(token, { word: token, refs: [] });
-                        }
-                        sedoTokensMap.get(token).refs.push(newRefData);
-                    }
-                }
-            });
-        }
-
-        let tableIdx = 0;
-        for (const table of item.tables) {
-            if (table.title && typeof table.title === 'string' && table.title.trim()) {
-                const tokens = tokenize(table.title.trim());
-                const fieldName = "tableTitle";
-                const weight = 3;
-                for (const token of tokens) {
-                    const sedoRefDetails = { store: type, id: refItemId, field: fieldName, tableIndex: tableIdx };
-                    const newRefData = { type, id: refItemId, field: fieldName, weight, store: type, ...sedoRefDetails };
-                    if (!sedoTokensMap.has(token)) {
-                        sedoTokensMap.set(token, { word: token, refs: [] });
-                    }
-                    sedoTokensMap.get(token).refs.push(newRefData);
-                }
-            }
-            if (table.items && Array.isArray(table.items)) {
-                let rowIdx = 0;
-                for (const rowItem of table.items) {
-                    if (typeof rowItem === 'string' && rowItem.trim()) {
-                        const tokens = tokenize(rowItem.trim());
-                        const fieldName = "staticListItem";
-                        const weight = 1;
-                        for (const token of tokens) {
-                            const sedoRefDetails = { store: type, id: refItemId, field: fieldName, tableIndex: tableIdx, rowIndex: rowIdx };
-                            const newRefData = { type, id: refItemId, field: fieldName, weight, store: type, ...sedoRefDetails };
-                            if (!sedoTokensMap.has(token)) {
-                                sedoTokensMap.set(token, { word: token, refs: [] });
-                            }
-                            sedoTokensMap.get(token).refs.push(newRefData);
-                        }
-                    } else if (typeof rowItem === 'object' && rowItem !== null) {
-                        for (const fieldKey of Object.keys(rowItem)) {
-                            if (rowItem[fieldKey] && typeof rowItem[fieldKey] === 'string' && rowItem[fieldKey].trim()) {
-                                const cellText = rowItem[fieldKey].trim();
-                                const tokens = tokenize(cellText);
-                                let weight = 1;
-                                if (fieldKey === 'name' || fieldKey === 'Сообщение в спецификации СЭДО (код, название)' || fieldKey === 'title') weight = 2;
-                                else if (fieldKey === 'code' || fieldKey === 'Код' || fieldKey === 'Тип') weight = 2.5;
-                                for (const token of tokens) {
-                                    const sedoRefDetails = { store: type, id: refItemId, field: fieldKey, tableIndex: tableIdx, rowIndex: rowIdx };
-                                    const newRefData = { type, id: refItemId, field: fieldKey, weight, store: type, ...sedoRefDetails };
-                                    if (!sedoTokensMap.has(token)) {
-                                        sedoTokensMap.set(token, { word: token, refs: [] });
-                                    }
-                                    sedoTokensMap.get(token).refs.push(newRefData);
-                                }
-                            }
-                        }
-                    }
-                    rowIdx++;
-                }
-            }
-            tableIdx++;
-        }
-        console.log(`${LOG_PREFIX} SEDO: Собрано ${sedoTokensMap.size} уникальных токенов для пакетной записи.`);
-
-
-        if (sedoTokensMap.size > 0) {
-            if (!db) {
-                console.error(`${LOG_PREFIX} SEDO Batch: DB not available for writing.`);
-                return;
-            }
-            const transaction = db.transaction(['searchIndex'], 'readwrite');
-            const store = transaction.objectStore('searchIndex');
-            const putPromises = [];
-
-            for (const [token, dataForToken] of sedoTokensMap) {
-                putPromises.push(new Promise(async (resolvePut, rejectPut) => {
-                    try {
-                        const existingEntry = await new Promise((resolveGet, rejectGet) => {
-                            const getReq = store.get(token);
-                            getReq.onsuccess = e => resolveGet(e.target.result);
-                            getReq.onerror = e => rejectGet(e.target.error);
-                        });
-
-                        let finalEntry;
-                        if (existingEntry) {
-
-                            const existingRefsSet = new Set(existingEntry.refs.map(r => JSON.stringify(r)));
-                            dataForToken.refs.forEach(newRef => {
-                                if (!existingRefsSet.has(JSON.stringify(newRef))) {
-                                    existingEntry.refs.push(newRef);
-                                }
-                            });
-                            if (existingEntry.refs.length > MAX_REFS_PER_WORD) {
-                                existingEntry.refs = existingEntry.refs.slice(0, MAX_REFS_PER_WORD);
-                                console.warn(`${LOG_PREFIX} SEDO Batch: Too many refs for token "${token}" (limit: ${MAX_REFS_PER_WORD}), trimmed.`);
-                            }
-                            finalEntry = existingEntry;
-                        } else {
-                            if (dataForToken.refs.length > MAX_REFS_PER_WORD) {
-                                dataForToken.refs = dataForToken.refs.slice(0, MAX_REFS_PER_WORD);
-                                console.warn(`${LOG_PREFIX} SEDO Batch: Too many refs for new token "${token}" (limit: ${MAX_REFS_PER_WORD}), trimmed.`);
-                            }
-                            finalEntry = dataForToken;
-                        }
-
-                        const putRequest = store.put(finalEntry);
-                        putRequest.onsuccess = () => resolvePut();
-                        putRequest.onerror = (e_put) => {
-                            console.error(`${LOG_PREFIX} SEDO Batch: Error putting entry for token "${token}":`, e_put.target.error);
-                            rejectPut(e_put.target.error || new Error("Failed to put entry into searchIndex (batch)"));
-                        };
-                    } catch (processingError) {
-                        console.error(`${LOG_PREFIX} SEDO Batch: Error processing entry for token "${token}":`, processingError);
-                        rejectPut(processingError);
-                    }
-                }));
-            }
-
-            try {
-                await Promise.all(putPromises);
-                await new Promise((resolveTx, rejectTx) => {
-                    transaction.oncomplete = resolveTx;
-                    transaction.onerror = (e) => rejectTx(e.target.error);
-                    transaction.onabort = (e) => rejectTx(e.target.error || new Error("Transaction aborted"));
-                });
-                console.log(`${LOG_PREFIX} SEDO Batch: Пакетная запись/обновление ${sedoTokensMap.size} токенов для СЭДО в searchIndex завершена.`);
-            } catch (batchError) {
-                console.error(`${LOG_PREFIX} SEDO Batch: Ошибка во время пакетной записи в searchIndex:`, batchError);
-
-            }
-        }
-        return;
-    }
-
-    const extractedTexts = getTextForItem(type, item);
-    if (!extractedTexts || Object.keys(extractedTexts).length === 0) {
-        console.log(`${LOG_PREFIX} No text to index for ${type}:${originalItemId} (refId: ${refItemId})`);
-        return;
-    }
-
-    const textsToIndex = [];
-    for (const fieldName in extractedTexts) {
-        if (Object.prototype.hasOwnProperty.call(extractedTexts, fieldName) &&
-            extractedTexts[fieldName] &&
-            typeof extractedTexts[fieldName] === 'string' &&
-            extractedTexts[fieldName].trim() !== "") {
-            let weight = 1;
-            if (fieldName === 'title' || fieldName === 'name' || fieldName === 'tableTitle') weight = 3;
-            else if (fieldName === 'description' || fieldName === 'notes' || fieldName === 'content' || fieldName === 'steps') weight = 2;
-            else if (fieldName === 'sectionNameForAlgo' || fieldName === 'sectionIdForAlgo') weight = 1.5;
-            textsToIndex.push({ content: extractedTexts[fieldName].trim(), field: fieldName, weight: weight });
-        }
-    }
-
-    if (textsToIndex.length === 0) {
-        console.log(`${LOG_PREFIX} No actual content in extracted texts for ${type}:${refItemId}. Skipping tokenization.`);
-        return;
-    }
-
-    for (const textEntry of textsToIndex) {
-        const tokens = tokenize(textEntry.content);
-        for (const token of tokens) {
-            const baseRefDetails = { store: type, id: refItemId, field: textEntry.field };
-            try {
-                await addToSearchIndex(token, type, refItemId, textEntry.field, textEntry.weight, baseRefDetails);
-            } catch (e) {
-                console.error(`${LOG_PREFIX} Error in addToSearchIndex. Token: ${token}`, e);
-            }
-        }
-    }
-
-    if (type === 'algorithms' && item.steps && Array.isArray(item.steps)) {
-        for (let i = 0; i < item.steps.length; i++) {
-            const step = item.steps[i];
-            if (step && step.title && typeof step.title === 'string' && step.title.trim() !== "") {
-                const stepTitle = step.title.trim();
-                const stepTokens = tokenize(stepTitle);
-                const fieldForStepTitle = 'steps.title';
-                const weightForStepTitle = 1.5;
-                for (const token of stepTokens) {
-                    const stepRefDetails = { store: type, id: refItemId, field: fieldForStepTitle, stepIndex: i };
-                    try {
-                        await addToSearchIndex(token, type, refItemId, fieldForStepTitle, weightForStepTitle, stepRefDetails);
-                    } catch (e) {
-                        console.error(`${LOG_PREFIX} Error in addToSearchIndex (step.title). Token: ${token}`, e);
-                    }
-                }
-            }
-        }
-    }
-    console.log(`${LOG_PREFIX} Indexing completed for ${type}:${refItemId}.`);
-}
-
-
 function renderSearchResults(results, query) {
     console.log(`[renderSearchResults V3] Отображение ${results?.length ?? 0} результатов для запроса "${query}"`);
     const searchResultsContainer = document.getElementById('searchResults');
@@ -9743,7 +9611,7 @@ function convertItemToSearchResult(ref, itemData, score) {
     const MAIN_SEDO_GLOBAL_CONTENT_FIELD = "mainSedoGlobalContent";
 
     if (!itemData) {
-        console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Попытка конвертировать пустой элемент для ${storeName}/${itemIdFromRef}`);
+        console.warn(`[convertItemToSearchResult V12 - SKZI Fix & Bookmark Desc Fix] Попытка конвертировать пустой элемент для ${storeName}/${itemIdFromRef}`);
         return null;
     }
 
@@ -9760,11 +9628,9 @@ function convertItemToSearchResult(ref, itemData, score) {
             finalItemId = 'main';
         } else {
             let determinedSection = null;
-
             if (itemData.section && algoSectionsFromTabs.includes(itemData.section)) {
                 determinedSection = itemData.section;
             }
-
             if (!determinedSection && (itemData.id || itemIdFromRef)) {
                 const idToCheck = itemData.id || itemIdFromRef;
                 if (typeof idToCheck === 'string') {
@@ -9776,7 +9642,6 @@ function convertItemToSearchResult(ref, itemData, score) {
                     }
                 }
             }
-
             if (determinedSection) {
                 finalSection = determinedSection;
                 finalItemId = itemData.id || itemIdFromRef;
@@ -9786,7 +9651,6 @@ function convertItemToSearchResult(ref, itemData, score) {
                 console.warn(`[convertItemToSearchResult V12 - SKZI Fix] КРИТИЧЕСКОЕ ПРЕДУПРЕЖДЕНИЕ: Не удалось определить секцию для algorithm ID: ${finalItemId}. itemData.section: '${itemData.section}'. Используется fallback '${finalSection}'. ItemData:`, itemData);
             }
         }
-
         if (typeof itemData === 'object' && itemData !== null) {
             if (!itemData.id || String(itemData.id) !== String(finalItemId)) itemData.id = finalItemId;
             if (!itemData.section || itemData.section !== finalSection) itemData.section = finalSection;
@@ -9814,7 +9678,8 @@ function convertItemToSearchResult(ref, itemData, score) {
     } else if (storeName === 'blacklistedClients') {
         finalSection = 'blacklistedClients';
         finalItemId = String(itemData.id || itemIdFromRef);
-    } else {
+    }
+    else {
         finalSection = storeName;
         finalItemId = String(itemData.id || itemIdFromRef);
         if (!finalItemId) {
@@ -9840,7 +9705,6 @@ function convertItemToSearchResult(ref, itemData, score) {
             let algoDesc = itemData.description || itemData.steps?.[0]?.description || itemData.steps?.[0]?.title || 'Нет описания';
             if (result.type === 'algorithm' && itemData.section && typeof getSectionName === 'function') {
                 const sectionNameText = getSectionName(itemData.section);
-
                 if (sectionNameText && sectionNameText.toLowerCase() !== "основной" && !algoDesc.toLowerCase().startsWith(`[${sectionNameText.toLowerCase()}]`)) {
                     algoDesc = `[${sectionNameText}] ${algoDesc}`;
                 }
@@ -9855,8 +9719,25 @@ function convertItemToSearchResult(ref, itemData, score) {
         case 'bookmarks':
             if (itemData.url) {
                 result.type = 'bookmark';
-                result.title = itemData.title || `Закладка #${finalItemId}`;
-                result.description = itemData.description || itemData.url;
+                result.title = itemData.title || itemData.url;
+                if (itemData.description) {
+                    result.description = itemData.description;
+                } else {
+                    try {
+                        let fullUrl = itemData.url;
+                        if (!fullUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fullUrl.includes('.')) {
+                            if (!fullUrl.startsWith('//')) {
+                                fullUrl = "https://" + fullUrl;
+                            } else {
+                                fullUrl = "https:" + fullUrl;
+                            }
+                        }
+                        const urlObj = new URL(fullUrl);
+                        result.description = `Ссылка на: ${urlObj.hostname.replace(/^www\./, '')}`;
+                    } catch (e) {
+                        result.description = itemData.url;
+                    }
+                }
             } else {
                 result.type = 'bookmark_note';
                 result.title = itemData.title || `Заметка #${finalItemId}`;
@@ -9873,7 +9754,7 @@ function convertItemToSearchResult(ref, itemData, score) {
             break;
         case 'extLinks':
             result.type = 'extLink';
-            result.title = itemData.title || `Ресурс #${finalItemId}`;
+            result.title = itemData.title || itemData.url || `Ресурс #${finalItemId}`;
             result.description = itemData.description || itemData.url || 'Нет описания или URL';
             break;
         case 'clientData':
@@ -9939,7 +9820,8 @@ function convertItemToSearchResult(ref, itemData, score) {
                     } else if (ref.field === "staticListItem" && table?.isStaticList && typeof table.items?.[ref.rowIndex] === 'string') {
                         specificTitle = table.items[ref.rowIndex];
                         specificDesc = `Из статического списка: ${table.title || 'Общая информация СЭДО'}`;
-                    } else {
+                    }
+                    else {
                         specificTitle = `Данные СЭДО (ошибка структуры)`;
                         specificDesc = `Элемент из таблицы СЭДО не найден. Поле: ${ref.field}`;
                         console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Не удалось точно определить элемент СЭДО для ref:`, ref, `itemData:`, itemData);
@@ -9956,7 +9838,6 @@ function convertItemToSearchResult(ref, itemData, score) {
                     result.title = 'Типы сообщений СЭДО';
                     let descText = `Настройки и информация по типам сообщений СЭДО.`;
                     if (ref.field === 'name' && itemData.name && typeof itemData.name === 'string') {
-
                     } else if (ref.field && typeof itemData[ref.field] === 'string') {
                         descText = `Найдено по полю "${ref.field}": ${truncateText(itemData[ref.field], 100)}`;
                     }
@@ -10497,108 +10378,111 @@ function tokenize(text) {
 
     const normalizedText = text.toLowerCase()
         .replace(/ё/g, 'е')
-        .replace(/[^a-zа-я0-9\s_-]/g, '');
+        .replace(/[^a-zа-я0-9\s]/g, c => (c === '-' || c === '_') ? c : ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
     const words = normalizedText.split(/\s+/).filter(word => word.length > 0);
     const tokens = new Set();
+    const MIN_TOKEN_LEN = 2;
     const MIN_PREFIX_LEN = 2;
+    const MAX_PREFIX_LEN_FOR_TOKEN = 8;
 
     function addPrefixes(str, tokenSet) {
         if (!str || str.length < MIN_PREFIX_LEN) return;
-
-        const maxPrefixes = Math.min(str.length, 8);
-        for (let i = MIN_PREFIX_LEN; i <= maxPrefixes; i++) {
+        const maxPrefixLen = Math.min(str.length, MAX_PREFIX_LEN_FOR_TOKEN);
+        for (let i = MIN_PREFIX_LEN; i <= maxPrefixLen; i++) {
             tokenSet.add(str.substring(0, i));
         }
     }
 
     words.forEach(word => {
-        if (word.length >= MIN_PREFIX_LEN) {
+        if (word.length >= MIN_TOKEN_LEN) {
             tokens.add(word);
-            const parts = word.split(/[-_]/);
-            parts.forEach(part => {
-                if (part.length >= MIN_PREFIX_LEN) {
+            addPrefixes(word, tokens);
+        }
+
+        const partsByHyphenOrUnderscore = word.split(/[-_]/);
+        if (partsByHyphenOrUnderscore.length > 1) {
+            partsByHyphenOrUnderscore.forEach(part => {
+                if (part.length >= MIN_TOKEN_LEN) {
                     tokens.add(part);
                     addPrefixes(part, tokens);
                 }
             });
-            if (parts.length === 1) {
-                addPrefixes(word, tokens);
-            }
         }
     });
-
+    console.log(`[tokenize NEW] Input: "${text.substring(0, 50)}...", Output tokens:`, Array.from(tokens));
     return Array.from(tokens);
+}
+
+
+function isExceptionShortToken(token) {
+    const exceptions = new Set(['1с', '1c', 'сф', 'фн', 'фс']);
+    return exceptions.has(token);
 }
 
 
 async function addToSearchIndex(word, type, id, field, weight = 1, originalRefDetails = null) {
     if (!db) {
-        console.warn(`[addToSearchIndex] DB not ready. Word: ${word}, Type: ${type}, ID: ${id}`);
+        console.warn(`[addToSearchIndex V2] DB not ready. Word: ${word}, Type: ${type}, ID: ${id}`);
         return Promise.resolve();
     }
 
     if (!word || typeof word !== 'string' || word.trim() === "") {
-
         return Promise.resolve();
     }
 
     if (!type || typeof type !== 'string') {
-        console.error(`[addToSearchIndex] Invalid type provided: ${type} (for word "${word}", id "${id}"). Skipping.`);
+        console.error(`[addToSearchIndex V2] Invalid type provided: ${type} (for word "${word}", id "${id}"). Skipping.`);
         return Promise.resolve();
     }
 
     if (id === undefined || id === null) {
-        console.error(`[addToSearchIndex] Invalid ID provided: ${id} (for word "${word}", type "${type}"). Skipping.`);
+        console.error(`[addToSearchIndex V2] Invalid ID provided: ${id} (for word "${word}", type "${type}"). Skipping.`);
         return Promise.resolve();
     }
 
     const normalizedWord = word.toLowerCase().replace(/ё/g, 'е');
 
     if (normalizedWord.length > 50) {
-        console.warn(`[addToSearchIndex] Token too long, skipping: "${normalizedWord.substring(0, 20)}..." (length: ${normalizedWord.length})`);
+        console.warn(`[addToSearchIndex V2] Token too long, skipping: "${normalizedWord.substring(0, 20)}..." (length: ${normalizedWord.length})`);
         return Promise.resolve();
     }
 
-    if (normalizedWord.length < 2 && normalizedWord !== '1') {
-
+    if (normalizedWord.length < MIN_TOKEN_LEN_FOR_INDEX && !isExceptionShortToken(normalizedWord)) {
         return Promise.resolve();
     }
+
 
     return new Promise((resolve, reject) => {
         let transaction;
         try {
             if (!db || typeof db.transaction !== 'function') {
-                console.error(`[addToSearchIndex] DB object is invalid or transaction method is missing. Word: "${normalizedWord}"`);
+                console.error(`[addToSearchIndex V2] DB object is invalid or transaction method is missing. Word: "${normalizedWord}"`);
                 return reject(new Error("DB object invalid for transaction"));
             }
             transaction = db.transaction(['searchIndex'], 'readwrite');
         } catch (txError) {
-            console.error(`[addToSearchIndex] Error creating transaction for word "${normalizedWord}":`, txError);
+            console.error(`[addToSearchIndex V2] Error creating transaction for word "${normalizedWord}":`, txError);
             return reject(txError);
         }
 
         const store = transaction.objectStore('searchIndex');
 
         transaction.onerror = (event) => {
-            console.error(`[addToSearchIndex] Transaction error for word "${normalizedWord}". Error: ${event.target.error?.name} - ${event.target.error?.message}. Source: ${event.target.source?.name}.`);
-
-
+            console.error(`[addToSearchIndex V2] Transaction error for word "${normalizedWord}". Error: ${event.target.error?.name} - ${event.target.error?.message}. Source: ${event.target.source?.name}.`);
+            reject(event.target.error || new Error("Transaction error in addToSearchIndex"));
         };
-
         transaction.onabort = (event) => {
-            console.warn(`[addToSearchIndex] Transaction aborted for word "${normalizedWord}". Error: ${event.target.error?.name} - ${event.target.error?.message}.`);
-
-        };
-
-        transaction.oncomplete = () => {
-
+            console.warn(`[addToSearchIndex V2] Transaction aborted for word "${normalizedWord}". Error: ${event.target.error?.name} - ${event.target.error?.message}.`);
+            reject(event.target.error || new Error("Transaction aborted in addToSearchIndex"));
         };
 
         const getRequest = store.get(normalizedWord);
 
         getRequest.onerror = e_get => {
-            console.error(`[addToSearchIndex] Error getting entry for word "${normalizedWord}":`, e_get.target.error);
+            console.error(`[addToSearchIndex V2] Error getting entry for word "${normalizedWord}":`, e_get.target.error);
             reject(e_get.target.error || new Error("Failed to get entry from searchIndex"));
         };
 
@@ -10614,21 +10498,14 @@ async function addToSearchIndex(word, type, id, field, weight = 1, originalRefDe
                 };
 
                 if (originalRefDetails && typeof originalRefDetails === 'object') {
-                    if (typeof originalRefDetails.tableIndex === 'number') {
-                        newRefData.tableIndex = originalRefDetails.tableIndex;
-                    }
-                    if (typeof originalRefDetails.rowIndex === 'number') {
-                        newRefData.rowIndex = originalRefDetails.rowIndex;
-                    }
-                    if (typeof originalRefDetails.stepIndex === 'number') {
-                        newRefData.stepIndex = originalRefDetails.stepIndex;
-                    }
-
+                    if (typeof originalRefDetails.tableIndex === 'number') newRefData.tableIndex = originalRefDetails.tableIndex;
+                    if (typeof originalRefDetails.rowIndex === 'number') newRefData.rowIndex = originalRefDetails.rowIndex;
+                    if (typeof originalRefDetails.stepIndex === 'number') newRefData.stepIndex = originalRefDetails.stepIndex;
+                    if (originalRefDetails.field) newRefData.field = originalRefDetails.field;
                 }
 
                 let putRequest;
                 if (existingEntry) {
-
                     const refExists = existingEntry.refs.some(existingRef =>
                         existingRef.id === newRefData.id &&
                         existingRef.type === newRefData.type &&
@@ -10643,12 +10520,12 @@ async function addToSearchIndex(word, type, id, field, weight = 1, originalRefDe
                             existingEntry.refs.push(newRefData);
                             putRequest = store.put(existingEntry);
                         } else {
-                            console.warn(`[addToSearchIndex] Too many refs for word "${normalizedWord}" (limit: ${MAX_REFS_PER_WORD}), skipping for ID ${newRefData.id}, Type ${newRefData.type}, Field ${newRefData.field}`);
+                            console.warn(`[addToSearchIndex V2] Too many refs for word "${normalizedWord}" (limit: ${MAX_REFS_PER_WORD}), skipping for ref:`, newRefData);
                             resolve();
                             return;
                         }
                     } else {
-
+                        console.log(`[addToSearchIndex V2] Ref already exists for word "${normalizedWord}":`, newRefData);
                         resolve();
                         return;
                     }
@@ -10658,16 +10535,15 @@ async function addToSearchIndex(word, type, id, field, weight = 1, originalRefDe
 
                 if (putRequest) {
                     putRequest.onerror = e_put => {
-                        console.error(`[addToSearchIndex] Error putting entry for word "${normalizedWord}":`, e_put.target.error);
+                        console.error(`[addToSearchIndex V2] Error putting entry for word "${normalizedWord}":`, e_put.target.error);
                         reject(e_put.target.error || new Error("Failed to put entry into searchIndex"));
                     };
                     putRequest.onsuccess = () => {
-
                         resolve();
                     };
                 }
             } catch (processingError) {
-                console.error(`[addToSearchIndex] Error processing entry for word "${normalizedWord}":`, processingError);
+                console.error(`[addToSearchIndex V2] Error processing entry for word "${normalizedWord}":`, processingError);
                 reject(processingError);
             }
         };
@@ -11005,24 +10881,33 @@ async function searchCandidates(queryTokens, searchContext, normalizedQuery) {
 
 
 function isRelevantForContext(ref, searchContext, actualToken) {
-    if (searchContext === 'general') return true;
+    if (searchContext === 'general') {
+        return true;
+    }
 
     switch (searchContext) {
-        case 'fns':
-            if (ref.store === 'preferences' && String(ref.id) === SEDO_CONFIG_KEY) return false;
-            return actualToken.includes('фнс') || actualToken.includes('налог') || actualToken.includes('егр');
-        case 'sedo':
-            return (ref.store === 'preferences' && String(ref.id) === SEDO_CONFIG_KEY) ||
-                actualToken.includes('сэдо') || actualToken.includes('фсс') || actualToken.includes('сфр');
         case 'skzi':
-            if (ref.store === 'preferences' && String(ref.id) === SEDO_CONFIG_KEY) return false;
-            return (ref.store === 'algorithms' && String(ref.id).includes('skzi')) ||
-                actualToken.includes('скзи') || actualToken.includes('эцп');
+            if (ref.store === 'algorithms' && ref.id && typeof ref.id === 'string' && ref.id.startsWith('skzi')) {
+                return true;
+            }
+
+            return false;
+
+        case 'sedo':
+            if (ref.store === 'preferences' && String(ref.id) === SEDO_CONFIG_KEY) {
+                return true;
+            }
+            return false;
+
+        case 'fns':
+            return false;
+
         case 'pfr':
-            if (ref.store === 'preferences' && String(ref.id) === SEDO_CONFIG_KEY) return false;
-            return actualToken.includes('пфр') || actualToken.includes('пенсион');
+            return false;
+
         default:
-            return true;
+            console.warn(`isRelevantForContext: Неизвестный searchContext "${searchContext}"`);
+            return false;
     }
 }
 
@@ -11155,71 +11040,127 @@ function trackSearchMetrics(query, resultsCount, executionTime, context) {
 
 
 async function processSearchResults(candidateDocs, normalizedQuery, originalQuery) {
+    const startTime = performance.now();
+    console.log(`[processSearchResults V2 - Grouping] Начало обработки ${candidateDocs.size} кандидатов для запроса "${originalQuery}" (нормализованный: "${normalizedQuery}")`);
+
     const finalDocEntries = Array.from(candidateDocs.values())
         .filter(candidate => candidate.matchedTokens.size > 0);
+    console.log(`[processSearchResults V2] После фильтрации по matchedTokens.size > 0: ${finalDocEntries.length} кандидатов.`);
 
     const filteredEntries = applyFieldFilters(finalDocEntries);
-    const fullResults = await loadFullDataForResults(filteredEntries);
+    console.log(`[processSearchResults V2] После applyFieldFilters: ${filteredEntries.length} кандидатов.`);
 
-    const searchResults = fullResults.map(entry => {
-        const result = convertItemToSearchResult(entry.ref, entry.itemData, entry.score);
+    const fullResults = await loadFullDataForResults(filteredEntries);
+    console.log(`[processSearchResults V2] После loadFullDataForResults: ${fullResults.length} полных записей.`);
+
+    const groupedByActualItem = new Map();
+    fullResults.forEach(entry => {
+        if (!entry || !entry.ref || !entry.itemData || entry.ref.id === undefined) {
+            console.warn("[processSearchResults V2] Пропуск некорректного entry при группировке:", entry);
+            return;
+        }
+
+        let actualItemIdValue;
+        if (entry.ref.store === 'clientData') {
+            actualItemIdValue = 'current';
+        } else if (entry.ref.store === 'algorithms' && entry.itemData.id === 'main') {
+            actualItemIdValue = 'main';
+        } else {
+            actualItemIdValue = String(entry.itemData.id || entry.ref.id);
+        }
+
+        const groupKey = `${entry.ref.store}:${actualItemIdValue}`;
+
+        if (!groupedByActualItem.has(groupKey)) {
+            groupedByActualItem.set(groupKey, {
+                itemData: entry.itemData,
+                totalScore: 0,
+                matchedTokensUnion: new Set(),
+                context: entry.context,
+                refsForConversion: []
+            });
+        }
+        const group = groupedByActualItem.get(groupKey);
+        group.refsForConversion.push(entry.ref);
+        group.totalScore += entry.score;
+        entry.matchedTokens.forEach(token => group.matchedTokensUnion.add(token));
+    });
+    console.log(`[processSearchResults V2] Сгруппировано в ${groupedByActualItem.size} уникальных элементов.`);
+
+    const searchResults = [];
+    for (const [groupKey, group] of groupedByActualItem.entries()) {
+        if (!group.refsForConversion || group.refsForConversion.length === 0) {
+            console.warn(`[processSearchResults V2] Группа ${groupKey} не имеет refsForConversion, пропуск.`);
+            continue;
+        }
+
+        const representativeRef = group.refsForConversion[0];
+
+        const result = convertItemToSearchResult(representativeRef, group.itemData, group.totalScore);
+
         if (result) {
             result.highlightTerm = normalizedQuery;
             result.query = originalQuery;
 
             const lowerOriginalQuery = originalQuery.toLowerCase();
 
-            if (entry.ref.store === 'preferences' && entry.ref.id === SEDO_CONFIG_KEY) {
-                const tableConfig = entry.itemData.tables?.[entry.ref.tableIndex];
-                const rowItem = tableConfig?.items?.[entry.ref.rowIndex];
-
-                if (tableConfig && rowItem && typeof rowItem === 'object' && tableConfig.codeField) {
-                    const codeFieldKey = tableConfig.codeField;
-                    const itemCodeValue = String(rowItem[codeFieldKey] || '').toLowerCase();
-
-                    if (itemCodeValue === lowerOriginalQuery) {
-                        result.isDirectPvsoOrCodeMatch = true;
-                        result.score = (result.score || 0) + 100000;
-                        console.log(`[processSearchResults] SEDO Exact Code Match (key '${codeFieldKey}'): '${itemCodeValue}' for query '${lowerOriginalQuery}'. New score: ${result.score}`);
-                    }
-                } else if (tableConfig && rowItem && typeof rowItem === 'object') {
-
-                    let itemCodeValue = '';
-                    let fallbackCodeFieldKey = null;
-                    if (Object.prototype.hasOwnProperty.call(rowItem, 'code')) {
-                        fallbackCodeFieldKey = 'code';
-                    } else if (Object.prototype.hasOwnProperty.call(rowItem, 'type')) {
-                        fallbackCodeFieldKey = 'type';
-                    } else if (tableConfig.columns && tableConfig.columns[0]) {
-                        const firstColumnNameLower = tableConfig.columns[0].toLowerCase();
-                        if (firstColumnNameLower.includes('код') || firstColumnNameLower.includes('тип')) {
-                            const keys = Object.keys(rowItem);
-                            if (keys.length > 0) fallbackCodeFieldKey = keys[0];
+            if (group.itemData && group.itemData.id === SEDO_CONFIG_KEY && representativeRef.store === 'preferences') {
+                let sedoCodeMatchFound = false;
+                if (group.itemData.tables && Array.isArray(group.itemData.tables)) {
+                    for (const table of group.itemData.tables) {
+                        if (table.items && Array.isArray(table.items) && table.codeField) {
+                            for (const rowItem of table.items) {
+                                if (rowItem && typeof rowItem === 'object') {
+                                    const codeFieldValue = String(rowItem[table.codeField] || '').toLowerCase();
+                                    if (codeFieldValue === lowerOriginalQuery) {
+                                        sedoCodeMatchFound = true;
+                                        break;
+                                    }
+                                }
+                            }
                         }
-                    }
-                    if (fallbackCodeFieldKey) {
-                        itemCodeValue = String(rowItem[fallbackCodeFieldKey] || '').toLowerCase();
-                        if (itemCodeValue === lowerOriginalQuery) {
-                            result.isDirectPvsoOrCodeMatch = true;
-                            result.score = (result.score || 0) + 90000;
-                            console.warn(`[processSearchResults] SEDO Exact Code Match (FALLBACK key '${fallbackCodeFieldKey}'): '${itemCodeValue}' for query '${lowerOriginalQuery}'. Using fallback. New score: ${result.score}`);
+                        if (sedoCodeMatchFound) break;
+                        if (!table.codeField && table.items && Array.isArray(table.items) && table.columns && table.columns[0]) {
+                            const firstColNameLower = table.columns[0].toLowerCase();
+                            if (firstColNameLower.includes('код') || firstColNameLower.includes('тип')) {
+                                for (const rowItem of table.items) {
+                                    if (rowItem && typeof rowItem === 'object') {
+                                        const keys = Object.keys(rowItem);
+                                        if (keys.length > 0) {
+                                            const firstColValue = String(rowItem[keys[0]] || '').toLowerCase();
+                                            if (firstColValue === lowerOriginalQuery) {
+                                                sedoCodeMatchFound = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        if (sedoCodeMatchFound) break;
                     }
+                }
+                if (sedoCodeMatchFound) {
+                    result.isDirectPvsoOrCodeMatch = true;
+                    result.score = (result.score || 0) + 100000;
                 }
             } else {
                 let itemTitleOrName = '';
-                if (entry.itemData?.title) itemTitleOrName = entry.itemData.title;
-                else if (entry.itemData?.name) itemTitleOrName = entry.itemData.name;
+                if (group.itemData?.title) itemTitleOrName = group.itemData.title;
+                else if (group.itemData?.name) itemTitleOrName = group.itemData.name;
 
                 if (itemTitleOrName.toLowerCase() === lowerOriginalQuery) {
                     result.isExactTitleMatch = true;
                     result.score = (result.score || 0) + 50000;
-                    console.log(`[processSearchResults] Exact Title/Name Match: "${itemTitleOrName}" for query ${lowerOriginalQuery}. New score: ${result.score}`);
                 }
             }
+            searchResults.push(result);
+        } else {
+            console.warn(`[processSearchResults V2] convertItemToSearchResult вернул null для группы ${groupKey}`, group);
         }
-        return result;
-    }).filter(Boolean);
+    }
+    const endTime = performance.now();
+    console.log(`[processSearchResults V2] Обработка кандидатов завершена за ${(endTime - startTime).toFixed(2)}ms. Финальных результатов: ${searchResults.length}.`);
     return searchResults;
 }
 
@@ -11481,6 +11422,7 @@ const searchAnalytics = {
     }
 };
 
+
 function getTextForItem(storeName, itemData) {
     if (!itemData || typeof itemData !== 'object') {
         return {};
@@ -11499,13 +11441,53 @@ function getTextForItem(storeName, itemData) {
             break;
         case 'links':
             if (itemData.title) textsByField.title = cleanHtml(itemData.title);
-            if (itemData.link) textsByField.link = itemData.link;
+            if (itemData.link) textsByField.link_path = itemData.link;
             if (itemData.description) textsByField.description = cleanHtml(itemData.description);
             break;
         case 'bookmarks':
             if (itemData.title) textsByField.title = cleanHtml(itemData.title);
-            if (itemData.url) textsByField.url = itemData.url;
             if (itemData.description) textsByField.description = cleanHtml(itemData.description);
+
+            if (itemData.url) {
+                textsByField.url_original = itemData.url;
+                try {
+                    let fullUrl = itemData.url;
+                    if (!fullUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fullUrl.includes('.')) {
+                        if (!fullUrl.startsWith('//')) {
+                            fullUrl = "https://" + fullUrl;
+                        } else {
+                            fullUrl = "https:" + fullUrl;
+                        }
+                    } else if (!fullUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && !fullUrl.includes('.')) {
+                        textsByField.url_fallback_text = fullUrl.replace(/[.:/?=&#%@_]/g, ' ');
+                    }
+
+                    const urlObj = new URL(fullUrl);
+                    if (urlObj.hostname) {
+                        textsByField.url_hostname = urlObj.hostname.replace(/^www\./, '');
+                    }
+                    if (urlObj.pathname && urlObj.pathname !== '/') {
+                        const pathParts = urlObj.pathname.split(/[\/\-_.]+/).filter(p => p && p.length > 2);
+                        pathParts.forEach((part, i) => {
+                            textsByField[`url_path_${i}`] = part;
+                        });
+                    }
+                    if (urlObj.search) {
+                        const searchParamsText = Array.from(urlObj.searchParams.entries())
+                            .map(([key, value]) => `${key} ${value}`)
+                            .join(' ');
+                        if (searchParamsText.trim()) {
+                            textsByField.url_query_params = searchParamsText.replace(/[=&#%_]/g, ' ');
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[getTextForItem] Could not parse URL for bookmark indexing: ${itemData.url}`, e);
+                    textsByField.url_fallback_text = itemData.url.replace(/[.:/?=&#%@_]/g, ' ');
+                }
+            }
+            if (itemData._folderNameForIndex) {
+                textsByField.folderName = cleanHtml(itemData._folderNameForIndex);
+            }
             break;
         case 'reglaments':
             if (itemData.title) textsByField.title = cleanHtml(itemData.title);
@@ -11518,7 +11500,24 @@ function getTextForItem(storeName, itemData) {
             break;
         case 'extLinks':
             if (itemData.title) textsByField.title = cleanHtml(itemData.title);
-            if (itemData.url) textsByField.url = itemData.url;
+            if (itemData.url) textsByField.url_full = itemData.url;
+            try {
+                let fullUrlExt = itemData.url;
+                if (!fullUrlExt.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fullUrlExt.includes('.')) {
+                    if (!fullUrlExt.startsWith('//')) {
+                        fullUrlExt = "https://" + fullUrlExt;
+                    } else {
+                        fullUrlExt = "https:" + fullUrlExt;
+                    }
+                }
+                const urlObjExt = new URL(fullUrlExt);
+                if (urlObjExt.hostname) {
+                    textsByField.url_hostname = urlObjExt.hostname.replace(/^www\./, '');
+                }
+            } catch (e) {
+                console.warn(`[getTextForItem] Could not parse URL for extLink indexing: ${itemData.url}`, e);
+                textsByField.url_fallback_text = itemData.url.replace(/[.:/?=&#%@_]/g, ' ');
+            }
             if (itemData.description) textsByField.description = cleanHtml(itemData.description);
             if (itemData.category && typeof extLinkCategoryInfo === 'object' && extLinkCategoryInfo[itemData.category]) {
                 textsByField.categoryName = cleanHtml(extLinkCategoryInfo[itemData.category].name);
@@ -11541,57 +11540,57 @@ function getTextForItem(storeName, itemData) {
             if (itemData.name) textsByField.name = cleanHtml(itemData.name);
             break;
         case 'preferences':
-
             const sedoKey = typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : 'sedoTypesConfigGlobal_fallback';
-
             if (itemData.id === sedoKey) {
-                textsByField.name = "Типы сообщений СЭДО СФР ФСС Сообщения";
+                textsByField.name = "Типы сообщений СЭДО СФР ФСС";
                 let allSedoTextParts = [
-                    "типы сообщений сэдо сфр фсс сообщения", "пвсо", "извещение", "элн", "уведомление",
+                    "типы сообщений сэдо сфр фсс", "пвсо", "извещение", "элн", "уведомление",
                     "запрос", "ответ", "результат", "регистрация", "проактивное назначение пособий",
-                    "прямые выплаты", "электронный документооборот", "сэдо", "социальный фонд", "входящие", "исходящие"
+                    "прямые выплаты", "электронный документооборот", "социальный фонд", "входящие", "исходящие"
                 ];
 
                 if (itemData.articleLinks && Array.isArray(itemData.articleLinks)) {
                     itemData.articleLinks.forEach(linkItem => {
-
-                        if (typeof linkItem === 'string') {
-                            if (linkItem.trim()) allSedoTextParts.push(linkItem.trim().toLowerCase());
-                        } else if (linkItem && typeof linkItem === 'object') {
+                        if (linkItem && typeof linkItem === 'object') {
                             if (linkItem.url && typeof linkItem.url === 'string' && linkItem.url.trim()) {
-                                allSedoTextParts.push(linkItem.url.trim().toLowerCase());
+                                allSedoTextParts.push(linkItem.url.trim().toLowerCase().replace(/[.:/?=&#%@_]/g, ' '));
                             }
                             if (linkItem.text && typeof linkItem.text === 'string' && linkItem.text.trim()) {
                                 allSedoTextParts.push(linkItem.text.trim().toLowerCase());
                             }
+                        } else if (typeof linkItem === 'string' && linkItem.trim()) {
+                            allSedoTextParts.push(linkItem.trim().toLowerCase().replace(/[.:/?=&#%@_]/g, ' '));
                         }
-
                     });
                 }
 
                 if (itemData.tables && Array.isArray(itemData.tables)) {
-                    itemData.tables.forEach(table => {
-                        if (table.title) allSedoTextParts.push(table.title.toLowerCase());
-
-
+                    itemData.tables.forEach((table, tableIndex) => {
+                        if (table.title) {
+                            allSedoTextParts.push(table.title.toLowerCase());
+                            textsByField[`tableTitle_${tableIndex}`] = table.title.toLowerCase();
+                        }
                         if (table.columns && Array.isArray(table.columns)) {
                             table.columns.forEach(colName => allSedoTextParts.push(String(colName).toLowerCase()));
                         }
                         if (table.items && Array.isArray(table.items)) {
-                            table.items.forEach(row => {
-                                if (typeof row === 'object' && row !== null) {
-                                    Object.values(row).forEach(cellValue => {
-                                        if (typeof cellValue === 'string') allSedoTextParts.push(cellValue.toLowerCase());
+                            table.items.forEach((rowItem, rowIndex) => {
+                                if (table.isStaticList && typeof rowItem === 'string') {
+                                    allSedoTextParts.push(rowItem.toLowerCase());
+                                    textsByField[`staticListItem_t${tableIndex}_r${rowIndex}`] = rowItem.toLowerCase();
+                                } else if (typeof rowItem === 'object' && rowItem !== null) {
+                                    Object.entries(rowItem).forEach(([key, cellValue]) => {
+                                        if (typeof cellValue === 'string') {
+                                            allSedoTextParts.push(cellValue.toLowerCase());
+                                            textsByField[`tableCell_t${tableIndex}_r${rowIndex}_f${key}`] = cellValue.toLowerCase();
+                                        }
                                     });
-                                } else if (typeof row === 'string') {
-                                    allSedoTextParts.push(row.toLowerCase());
                                 }
                             });
                         }
                     });
                 }
                 if (allSedoTextParts.length > 0) {
-
                     const uniqueLowercaseParts = Array.from(new Set(allSedoTextParts.map(part => String(part).trim()).filter(part => part.length > 0)));
                     textsByField[MAIN_SEDO_GLOBAL_CONTENT_FIELD] = uniqueLowercaseParts.join(' ');
                 }
@@ -11610,10 +11609,8 @@ function getTextForItem(storeName, itemData) {
             }
             break;
         default:
-
             Object.keys(itemData).forEach(key => {
-
-                const excludedKeys = ['id', 'category', 'section', 'color', 'icon', 'link', 'url', '_originalStore', '_sectionKey', 'blob', 'parentId', 'parentType', 'stepIndex', 'screenshotIds'];
+                const excludedKeys = ['id', 'category', 'section', 'color', 'icon', 'link', 'url', '_originalStore', '_sectionKey', 'blob', 'parentId', 'parentType', 'stepIndex', 'screenshotIds', 'folder'];
                 if (typeof itemData[key] === 'string' && !excludedKeys.includes(key) && !key.toLowerCase().includes('date') && !key.toLowerCase().includes('timestamp')) {
                     const cleanedValue = cleanHtml(itemData[key]);
                     if (cleanedValue && textsByField[key] === undefined) {
@@ -11621,7 +11618,6 @@ function getTextForItem(storeName, itemData) {
                     }
                 }
             });
-
             if (itemData.title && textsByField.title === undefined) textsByField.title = cleanHtml(itemData.title);
             if (itemData.name && textsByField.name === undefined) textsByField.name = cleanHtml(itemData.name);
             if (itemData.description && textsByField.description === undefined) textsByField.description = cleanHtml(itemData.description);
@@ -11666,7 +11662,7 @@ function findSectionMatches(normalizedQuery) {
 
 
 async function updateSearchIndex(storeName, itemId, newItemData, operation, oldItemData = null) {
-    const LOG_PREFIX_USI = `[updateSearchIndex V1]`;
+    const LOG_PREFIX_USI = `[updateSearchIndex V3 - Archive Logic Enhanced with Bookmark Folder Name]`;
 
     if (!db) {
         console.warn(`${LOG_PREFIX_USI} DB not ready. Index for ${storeName}:${itemId} (op: ${operation}) not updated.`);
@@ -11684,20 +11680,24 @@ async function updateSearchIndex(storeName, itemId, newItemData, operation, oldI
         return;
     }
 
-    if (itemId === undefined || itemId === null) {
-
-        if (storeName !== 'clientData' || (storeName === 'clientData' && itemId !== 'current' && (!newItemData || newItemData.id !== 'current'))) {
-            console.error(`${LOG_PREFIX_USI} itemId is undefined/null for store '${storeName}'. Operation: ${operation}. Index not updated.`);
-            return;
-        }
-    }
-
     let refItemId;
     if (storeName === 'clientData') {
         refItemId = 'current';
-    } else if (storeName === 'preferences' && itemId === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : '___SEDO_CONFIG_KEY_NOT_DEF___')) {
-        refItemId = (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : '___SEDO_CONFIG_KEY_NOT_DEF___');
-    } else {
+    } else if (storeName === 'preferences' && itemId === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null)) {
+        refItemId = (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null);
+        if (refItemId === null) {
+            console.error(`${LOG_PREFIX_USI} SEDO_CONFIG_KEY is not defined. Cannot process SEDO preferences for indexing.`);
+            return;
+        }
+    } else if (itemId === undefined || itemId === null) {
+        if (newItemData && newItemData.id !== undefined) {
+            refItemId = String(newItemData.id);
+        } else {
+            console.error(`${LOG_PREFIX_USI} itemId is undefined/null and newItemData.id is also undefined for store '${storeName}'. Operation: ${operation}. Index not updated.`);
+            return;
+        }
+    }
+    else {
         const storeConfig = storeConfigs.find(sc => sc.name === storeName);
         if (storeConfig && storeConfig.options && storeConfig.options.autoIncrement) {
             refItemId = Number(itemId);
@@ -11715,23 +11715,72 @@ async function updateSearchIndex(storeName, itemId, newItemData, operation, oldI
             await removeFromSearchIndex(refItemId, storeName);
             console.log(`${LOG_PREFIX_USI} Index entries removed for ${storeName}:${refItemId}`);
         } else if (operation === 'add' || operation === 'update') {
-            let dataForIndexing = newItemData;
-            if (typeof dataForIndexing.id === 'undefined' && itemId !== undefined) {
-                dataForIndexing = { ...newItemData, id: itemId };
-            } else if (dataForIndexing.id !== undefined && String(dataForIndexing.id) !== String(itemId)) {
+            let dataForIndexing = { ...newItemData };
+            if (dataForIndexing.id === undefined && refItemId !== undefined) {
+                dataForIndexing.id = refItemId;
+            }
 
-                if (storeName !== 'clientData' && !(storeName === 'preferences' && itemId === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null))) {
-                    console.warn(`${LOG_PREFIX_USI} Mismatch between itemId (${itemId}) and newItemData.id (${dataForIndexing.id}) for store ${storeName}. Using itemId (${itemId}) for consistency.`);
-                    dataForIndexing = { ...newItemData, id: itemId };
+            if (storeName === 'bookmarks' && dataForIndexing.folder && dataForIndexing.folder !== ARCHIVE_FOLDER_ID) {
+                try {
+                    const folderIdToFetch = parseInt(dataForIndexing.folder, 10);
+                    if (!isNaN(folderIdToFetch)) {
+                        const folderData = await getFromIndexedDB('bookmarkFolders', folderIdToFetch);
+                        if (folderData && folderData.name) {
+                            dataForIndexing._folderNameForIndex = folderData.name;
+                            console.log(`${LOG_PREFIX_USI} Added folder name '${folderData.name}' for indexing bookmark ${refItemId}.`);
+                        } else {
+                            console.warn(`${LOG_PREFIX_USI} Folder data not found for bookmark ${refItemId}, folder ID ${folderIdToFetch}.`);
+                        }
+                    } else {
+                        console.warn(`${LOG_PREFIX_USI} Invalid folder ID '${dataForIndexing.folder}' for bookmark ${refItemId}. Cannot fetch folder name.`);
+                    }
+                } catch (e) {
+                    console.warn(`${LOG_PREFIX_USI} Could not fetch folder name for bookmark ${refItemId}, folder ID ${dataForIndexing.folder}: ${e.message}`);
                 }
             }
-            await updateSearchIndexForItem(dataForIndexing, storeName);
-            console.log(`${LOG_PREFIX_USI} Index (re)built for ${storeName}:${refItemId}`);
+
+            if (storeName === 'bookmarks') {
+                const isNewItemArchived = dataForIndexing && dataForIndexing.folder === ARCHIVE_FOLDER_ID;
+                const isOldItemArchived = oldItemData && oldItemData.folder === ARCHIVE_FOLDER_ID;
+
+                if (operation === 'add') {
+                    if (isNewItemArchived) {
+                        console.log(`${LOG_PREFIX_USI} Bookmark ${dataForIndexing.id} (new) is archived. Not indexing.`);
+                    } else {
+                        console.log(`${LOG_PREFIX_USI} Indexing new non-archived bookmark ${dataForIndexing.id}.`);
+                        await updateSearchIndexForItem(dataForIndexing, storeName);
+                    }
+                } else if (operation === 'update') {
+                    if (!isNewItemArchived && oldItemData) {
+                        await removeFromSearchIndex(refItemId, storeName);
+                    }
+
+                    if (isNewItemArchived && !isOldItemArchived) {
+                        console.log(`${LOG_PREFIX_USI} Bookmark ${dataForIndexing.id} moved TO archive. Ensuring removal from index.`);
+                        await removeFromSearchIndex(refItemId, storeName);
+                    } else if (!isNewItemArchived && isOldItemArchived) {
+                        console.log(`${LOG_PREFIX_USI} Bookmark ${dataForIndexing.id} moved FROM archive. Indexing.`);
+                        await updateSearchIndexForItem(dataForIndexing, storeName);
+                    } else if (!isNewItemArchived && !isOldItemArchived) {
+                        console.log(`${LOG_PREFIX_USI} Updating non-archived bookmark ${dataForIndexing.id} in index.`);
+                        await updateSearchIndexForItem(dataForIndexing, storeName);
+                    } else {
+                        console.log(`${LOG_PREFIX_USI} Bookmark ${dataForIndexing.id} updated within archive. Ensuring it's not in index.`);
+                        await removeFromSearchIndex(refItemId, storeName);
+                    }
+                }
+            } else {
+                if (operation === 'update' && oldItemData) {
+                    await removeFromSearchIndex(refItemId, storeName);
+                }
+                await updateSearchIndexForItem(dataForIndexing, storeName);
+            }
+            console.log(`${LOG_PREFIX_USI} Index processing finished for ${storeName}:${refItemId}`);
         } else {
             console.warn(`${LOG_PREFIX_USI} Unknown operation type: ${operation}. Index not updated for ${storeName}:${itemId}.`);
         }
     } catch (error) {
-        console.error(`${LOG_PREFIX_USI} Error during index operation '${operation}' for ${storeName}:${itemId}:`, error);
+        console.error(`${LOG_PREFIX_USI} Error during index operation '${operation}' for ${storeName}:${refItemId}:`, error);
         if (typeof showNotification === 'function') {
             showNotification(`Ошибка обновления поискового индекса для ${storeName}.`, "error");
         }
@@ -11856,7 +11905,7 @@ function highlightText(text, tokensToHighlight) {
 
 
 async function buildInitialSearchIndex(progressCallback) {
-    const LOG_PREFIX_BUILD = "[SearchIndexBuild V9]";
+    const LOG_PREFIX_BUILD = "[SearchIndexBuild V11 - Archive Logic Refined with Bookmark Folder Name]";
     if (!db) {
         console.error(`${LOG_PREFIX_BUILD} Cannot build search index: DB not initialized.`);
         if (typeof showNotification === 'function') showNotification("Ошибка построения поискового индекса: База данных недоступна.", "error");
@@ -11879,7 +11928,6 @@ async function buildInitialSearchIndex(progressCallback) {
         await clearIndexedDBStore('searchIndex');
         console.log(`${LOG_PREFIX_BUILD} Existing search index cleared.`);
 
-        const indexingPromises = [];
         const sourcesToProcess = [
             { name: 'algorithms', type: 'algorithms' },
             { name: 'reglaments', type: 'reglaments' },
@@ -11916,6 +11964,22 @@ async function buildInitialSearchIndex(progressCallback) {
         console.log(`${LOG_PREFIX_BUILD} Estimated total items for indexing: ${totalItemsToEstimate}`);
         if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
 
+        let bookmarkFoldersMap = new Map();
+        try {
+            const folders = await getAllFromIndexedDB('bookmarkFolders');
+            if (folders && folders.length > 0) {
+                folders.forEach(folder => {
+                    if (folder && folder.id !== undefined && folder.name) {
+                        bookmarkFoldersMap.set(String(folder.id), folder.name);
+                    }
+                });
+            }
+            console.log(`${LOG_PREFIX_BUILD} Pre-fetched ${bookmarkFoldersMap.size} bookmark folder names.`);
+        } catch (e) {
+            console.warn(`${LOG_PREFIX_BUILD} Could not pre-fetch bookmark folder names: ${e.message}`);
+        }
+
+        const indexingPromises = [];
         for (const source of sourcesToProcess) {
             console.log(`${LOG_PREFIX_BUILD} Processing source: ${source.name}`);
             if (source.name === 'algorithms') {
@@ -11923,7 +11987,6 @@ async function buildInitialSearchIndex(progressCallback) {
                 if (algoContainer && algoContainer.data) {
                     const algoData = algoContainer.data;
                     if (algoData.main) {
-                        console.log(`${LOG_PREFIX_BUILD} [DEBUG] Processing main algorithm. ID from data: ${algoData.main.id}`);
                         const pMain = updateSearchIndexForItem(algoData.main, 'algorithms')
                             .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
                             .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing main algorithm:`, err); overallSuccess = false; });
@@ -11933,53 +11996,55 @@ async function buildInitialSearchIndex(progressCallback) {
                         if (sectionKey !== 'main' && Array.isArray(algoData[sectionKey])) {
                             for (const item of algoData[sectionKey]) {
                                 if (item && typeof item.id !== 'undefined') {
-                                    console.log(`${LOG_PREFIX_BUILD} [DEBUG] Processing algorithm item from section ${sectionKey}. ID: ${item.id}`);
                                     const pItem = updateSearchIndexForItem(item, 'algorithms')
                                         .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
                                         .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing algorithm ${item.id} from ${sectionKey}:`, err); overallSuccess = false; });
                                     indexingPromises.push(pItem);
-                                } else {
-                                    console.warn(`${LOG_PREFIX_BUILD} [DEBUG] Skipping algorithm item in section ${sectionKey} due to missing ID or invalid item:`, item);
                                 }
                             }
                         }
                     }
-                } else {
-                    console.warn(`${LOG_PREFIX_BUILD} No algorithm data found in container for source 'algorithms'.`);
                 }
             } else if (source.keyForSpecificItem && source.name === 'preferences' && source.keyForSpecificItem) {
                 const specificItem = await getFromIndexedDB(source.name, source.keyForSpecificItem);
                 if (specificItem) {
-
                     let itemToIndex = { ...specificItem };
-                    if (typeof itemToIndex.id === 'undefined') {
-                        itemToIndex.id = source.keyForSpecificItem;
-                    }
-                    console.log(`${LOG_PREFIX_BUILD} [DEBUG] Processing specific preference item. ID: ${itemToIndex.id}`);
+                    if (typeof itemToIndex.id === 'undefined') itemToIndex.id = source.keyForSpecificItem;
+
                     const pSpecific = updateSearchIndexForItem(itemToIndex, 'preferences')
                         .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
                         .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing preference ${source.keyForSpecificItem}:`, err); overallSuccess = false; });
                     indexingPromises.push(pSpecific);
-                } else {
-                    console.warn(`${LOG_PREFIX_BUILD} Specific preference item not found for key: ${source.keyForSpecificItem}`);
                 }
-            } else {
+            } else if (source.name === 'bookmarks') {
                 const items = await getAllFromIndexedDB(source.name);
-                if (items && items.length > 0) {
-                    console.log(`${LOG_PREFIX_BUILD} [DEBUG] First item from ${source.name} (before loop):`, JSON.parse(JSON.stringify(items[0])));
-                }
                 for (const item of items) {
-
+                    if (item && item.folder === ARCHIVE_FOLDER_ID) {
+                        console.log(`${LOG_PREFIX_BUILD} Skipping archived bookmark ID: ${item.id}`);
+                        processedItems++;
+                        if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
+                        continue;
+                    }
+                    if (item && typeof item.id !== 'undefined') {
+                        const itemWithContext = { ...item };
+                        if (item.folder && bookmarkFoldersMap.has(String(item.folder))) {
+                            itemWithContext._folderNameForIndex = bookmarkFoldersMap.get(String(item.folder));
+                        }
+                        const pItem = updateSearchIndexForItem(itemWithContext, source.type)
+                            .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
+                            .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing item ${item.id || 'N/A'} from ${source.name}:`, err); overallSuccess = false; });
+                        indexingPromises.push(pItem);
+                    }
+                }
+            }
+            else {
+                const items = await getAllFromIndexedDB(source.name);
+                for (const item of items) {
                     if (item && (typeof item.id !== 'undefined' || source.name === 'clientData')) {
-                        console.log(`${LOG_PREFIX_BUILD} [DEBUG] Processing item from ${source.name}. ID: ${item.id || (source.name === 'clientData' ? 'current (implicit)' : 'undefined_id_for_non_clientData')}`);
                         const pItem = updateSearchIndexForItem(item, source.type)
                             .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
                             .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing item ${item.id || 'N/A'} from ${source.name}:`, err); overallSuccess = false; });
                         indexingPromises.push(pItem);
-                    } else if (item) {
-                        console.warn(`${LOG_PREFIX_BUILD} [DEBUG] Skipping item from ${source.name} due to missing ID (and not clientData):`, JSON.parse(JSON.stringify(item)));
-                    } else if (!item) {
-                        console.warn(`${LOG_PREFIX_BUILD} [DEBUG] Skipping null/undefined item from ${source.name}.`);
                     }
                 }
             }
@@ -12006,11 +12071,161 @@ async function buildInitialSearchIndex(progressCallback) {
 
     } catch (error) {
         console.error(`${LOG_PREFIX_BUILD} Error building initial search index:`, error);
-        if (typeof showNotification === 'function') showNotification(`Критическая ошибка при построении поискового индекса: ${error.message || String(error)}`, "error", 10000);
+        if (typeof showNotification === 'function') { showNotification(`Критическая ошибка при построении поискового индекса: ${error.message || String(error)}`, "error", 10000); }
         try {
             await saveToIndexedDB('preferences', { id: 'searchIndexStatus', built: false, error: String(error.message || error), version: DB_VERSION, timestamp: Date.now() });
         } catch (e) { console.error(`${LOG_PREFIX_BUILD} Error saving failed searchIndexStatus after build error:`, e); }
         if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, true);
+    }
+}
+
+
+async function updateSearchIndexForItem(itemData, storeName) {
+    const LOG_PREFIX_USI_ITEM = `[updateSearchIndexForItem V4 - Detailed Ref Logic]`;
+
+    if (!itemData || typeof itemData !== 'object') {
+        console.warn(`${LOG_PREFIX_USI_ITEM} Получены невалидные itemData для ${storeName}. Пропуск индексации.`, itemData);
+        return;
+    }
+
+    const textsByField = getTextForItem(storeName, itemData);
+
+    if (Object.keys(textsByField).length === 0) {
+        console.log(`${LOG_PREFIX_USI_ITEM} Для ${storeName} ID: ${itemData.id || 'N/A'} не найдено текстовых полей для индексации через getTextForItem.`);
+        return;
+    }
+
+    let indexableId;
+    if (storeName === 'clientData' && itemData.id === 'current') {
+        indexableId = 'current';
+    } else if (storeName === 'algorithms' && itemData.id === 'main') {
+        indexableId = 'main';
+    } else if (itemData.id !== undefined && itemData.id !== null) {
+        indexableId = String(itemData.id);
+    } else {
+        console.warn(`${LOG_PREFIX_USI_ITEM} Не удалось определить indexableId для ${storeName}, itemData:`, itemData, `. Пропуск индексации элемента.`);
+        return;
+    }
+
+    const promises = [];
+
+    for (const [fieldKeyFromGetText, textContent] of Object.entries(textsByField)) {
+        if (!textContent || typeof textContent !== 'string' || textContent.trim() === "") {
+            continue;
+        }
+
+        const tokens = tokenize(textContent);
+
+        const storeFieldWeightsConfig = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
+
+        let baseFieldForWeightLookup = fieldKeyFromGetText;
+        if (fieldKeyFromGetText.startsWith('tableCell_') ||
+            fieldKeyFromGetText.startsWith('tableTitle_') ||
+            fieldKeyFromGetText.startsWith('staticListItem_')) {
+            baseFieldForWeightLookup = fieldKeyFromGetText.split('_')[0];
+        } else if (storeName === 'algorithms' && fieldKeyFromGetText.startsWith('step_')) {
+            const stepPart = fieldKeyFromGetText.substring(fieldKeyFromGetText.lastIndexOf('_') + 1);
+            if (storeFieldWeightsConfig && storeFieldWeightsConfig[stepPart] !== undefined) {
+                baseFieldForWeightLookup = stepPart;
+            }
+        } else if (fieldKeyFromGetText === 'mainSedoGlobalContent' && storeName === 'preferences') {
+            baseFieldForWeightLookup = 'mainSedoGlobalContent';
+        }
+
+
+        let fieldWeight = 1.0;
+        if (storeFieldWeightsConfig && storeFieldWeightsConfig[baseFieldForWeightLookup] !== undefined) {
+            fieldWeight = storeFieldWeightsConfig[baseFieldForWeightLookup];
+        } else if (FIELD_WEIGHTS.default && FIELD_WEIGHTS.default[baseFieldForWeightLookup] !== undefined) {
+            fieldWeight = FIELD_WEIGHTS.default[baseFieldForWeightLookup];
+        } else {
+            if (storeFieldWeightsConfig && storeFieldWeightsConfig[fieldKeyFromGetText] !== undefined) {
+                fieldWeight = storeFieldWeightsConfig[fieldKeyFromGetText];
+            } else if (FIELD_WEIGHTS.default && FIELD_WEIGHTS.default[fieldKeyFromGetText] !== undefined) {
+                fieldWeight = FIELD_WEIGHTS.default[fieldKeyFromGetText];
+            }
+        }
+
+        let refDetails = { field: fieldKeyFromGetText };
+
+        if (storeName === 'preferences' && itemData.id === SEDO_CONFIG_KEY) {
+            const parts = fieldKeyFromGetText.split('_');
+            if (parts[0] === 'tableTitle' && parts[1]?.startsWith('t')) {
+                refDetails.tableIndex = parseInt(parts[1].substring(1), 10);
+                refDetails.field = 'tableTitle';
+            } else if (parts[0] === 'tableCell' && parts[1]?.startsWith('t') && parts[2]?.startsWith('r')) {
+                refDetails.tableIndex = parseInt(parts[1].substring(1), 10);
+                refDetails.rowIndex = parseInt(parts[2].substring(1), 10);
+                refDetails.field = parts[3]?.startsWith('f') ? parts[3].substring(1) : parts[3] || fieldKeyFromGetText;
+            } else if (parts[0] === 'staticListItem' && parts[1]?.startsWith('t') && parts[2]?.startsWith('r')) {
+                refDetails.tableIndex = parseInt(parts[1].substring(1), 10);
+                refDetails.rowIndex = parseInt(parts[2].substring(1), 10);
+                refDetails.field = 'staticListItem';
+            } else if (fieldKeyFromGetText === 'mainSedoGlobalContent') {
+                refDetails.field = 'mainSedoGlobalContent';
+            } else {
+                refDetails.field = fieldKeyFromGetText;
+            }
+        } else if (storeName === 'algorithms' && fieldKeyFromGetText.startsWith('step_')) {
+            const parts = fieldKeyFromGetText.split('_');
+            if (parts.length === 3 && !isNaN(parseInt(parts[1]))) {
+                refDetails.stepIndex = parseInt(parts[1]);
+                refDetails.field = parts[2];
+            } else if (fieldKeyFromGetText === 'steps') {
+                refDetails.field = 'steps';
+            } else {
+                const stepIndexMatch = fieldKeyFromGetText.match(/step_(\d+)/);
+                if (stepIndexMatch && stepIndexMatch[1]) {
+                    refDetails.stepIndex = parseInt(stepIndexMatch[1], 10);
+                }
+                refDetails.field = fieldKeyFromGetText;
+            }
+        } else {
+            refDetails.field = fieldKeyFromGetText;
+        }
+
+        for (const token of tokens) {
+            promises.push(
+                addToSearchIndex(token, storeName, indexableId, refDetails.field, fieldWeight, refDetails)
+            );
+        }
+    }
+
+    try {
+        await Promise.all(promises);
+        console.log(`${LOG_PREFIX_USI_ITEM} Индексация для ${storeName} ID: ${indexableId} завершена. Добавлено/обновлено токенов: ${promises.length} (примерно).`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX_USI_ITEM} Ошибка при массовом добавлении токенов для ${storeName} ID: ${indexableId}:`, error);
+    }
+}
+
+
+async function populateBookmarkFoldersForSelect(selectElementId = 'bookmarkFolderFilter') {
+    const folderSelect = document.getElementById(selectElementId);
+    if (!folderSelect) return;
+
+    const currentValue = folderSelect.value;
+    folderSelect.innerHTML = '<option value="">Все папки</option>';
+
+    const archiveOpt = document.createElement('option');
+    archiveOpt.value = ARCHIVE_FOLDER_ID;
+    archiveOpt.textContent = ARCHIVE_FOLDER_NAME;
+    folderSelect.appendChild(archiveOpt);
+
+    const folders = await getAllFromIndexedDB('bookmarkFolders');
+    if (folders && folders.length > 0) {
+        const sortedFolders = [...folders].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        sortedFolders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.id;
+            option.textContent = folder.name;
+            folderSelect.appendChild(option);
+        });
+    }
+    if (currentValue && Array.from(folderSelect.options).some(opt => opt.value === currentValue)) {
+        folderSelect.value = currentValue;
+    } else {
+        folderSelect.value = "";
     }
 }
 
@@ -12400,24 +12615,31 @@ async function createBookmarkElement(bookmark, folderMap = {}) {
     const bookmarkElement = document.createElement('div');
     bookmarkElement.className = 'bookmark-item view-item group relative cursor-pointer flex flex-col justify-between h-full bg-white dark:bg-[#374151] shadow-md hover:shadow-lg transition-shadow duration-200 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
     bookmarkElement.dataset.id = String(bookmark.id);
-    if (bookmark.folder) {
+
+    let folder;
+    if (bookmark.folder === ARCHIVE_FOLDER_ID) {
+        folder = { id: ARCHIVE_FOLDER_ID, name: ARCHIVE_FOLDER_NAME, color: 'gray' };
+        bookmarkElement.dataset.folder = ARCHIVE_FOLDER_ID;
+    } else if (bookmark.folder) {
+        folder = folderMap[bookmark.folder];
         bookmarkElement.dataset.folder = String(bookmark.folder);
     }
 
-    const folder = bookmark.folder ? folderMap[bookmark.folder] : null;
+
     let folderBadgeHTML = '';
     if (folder) {
         const colorName = folder.color || 'gray';
         folderBadgeHTML = `
             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-800 dark:bg-${colorName}-900 dark:text-${colorName}-200" title="Папка: ${escapeHtml(folder.name)}">
-                <i class="fas fa-folder mr-1 opacity-75"></i>${escapeHtml(folder.name)}
+                <i class="fas ${folder.id === ARCHIVE_FOLDER_ID ? 'fa-archive' : 'fa-folder'} mr-1 opacity-75"></i>${escapeHtml(folder.name)}
             </span>`;
-    } else if (bookmark.folder) {
+    } else if (bookmark.folder && bookmark.folder !== ARCHIVE_FOLDER_ID) {
         folderBadgeHTML = `
             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${bookmark.folder} не найдена">
                 <i class="fas fa-question-circle mr-1 opacity-75"></i>Неизв. папка
             </span>`;
     }
+
 
     let externalLinkIconHTML = '';
     let urlHostnameHTML = '';
@@ -12480,11 +12702,27 @@ async function createBookmarkElement(bookmark, folderMap = {}) {
         </button>
     ` : '';
 
+    let archiveButtonHTML = '';
+    if (bookmark.folder === ARCHIVE_FOLDER_ID) {
+        archiveButtonHTML = `
+            <button data-action="restore-from-archive" class="p-1.5 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Восстановить из архива">
+                <i class="fas fa-box-open fa-fw"></i>
+            </button>
+        `;
+    } else {
+        archiveButtonHTML = `
+            <button data-action="move-to-archive" class="p-1.5 text-gray-500 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Переместить в архив">
+                <i class="fas fa-archive fa-fw"></i>
+            </button>
+        `;
+    }
+
     const actionsHTML = `
             <div class="bookmark-actions absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
                 ${screenshotButtonHTML}
                 ${externalLinkIconHTML}
-                <button data-action="edit" class="edit-bookmark p-1 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Редактировать">
+                ${archiveButtonHTML}
+                <button data-action="edit" class="edit-bookmark p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Редактировать">
                     <i class="fas fa-edit fa-fw"></i>
                 </button>
                 <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Удалить">
@@ -12500,7 +12738,7 @@ async function createBookmarkElement(bookmark, folderMap = {}) {
 
     const mainContentHTML = `
             <div class="flex-grow min-w-0 mb-3"> 
-                <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary transition-colors duration-200 truncate pr-10 sm:pr-20" title="${safeTitle}">
+                <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary transition-colors duration-200 truncate pr-10 sm:pr-24" title="${safeTitle}">
                     ${safeTitle}
                 </h3>
                 ${descriptionHTML}
@@ -13116,28 +13354,28 @@ async function handleBookmarkFormSubmit(event) {
     const modal = form.closest('#bookmarkModal');
     const saveButton = modal?.querySelector('#saveBookmarkBtn');
 
-    console.log("[handleBookmarkFormSubmit v5] Function start.");
+    console.log("[handleBookmarkFormSubmit v6 - Archive Logic] Function start.");
 
     if (!form) {
-        console.error("handleBookmarkFormSubmit v5: CRITICAL - event.target is not the form!");
-        showNotification("Критическая ошибка: форма не найдена.", "error");
+        console.error("handleBookmarkFormSubmit v6: CRITICAL - event.target is not the form!");
+        if (typeof showNotification === 'function') showNotification("Критическая ошибка: форма не найдена.", "error");
         return;
     }
     if (!modal) {
-        console.error("handleBookmarkFormSubmit v5: CRITICAL - Could not find parent modal #bookmarkModal.");
-        showNotification("Критическая ошибка интерфейса: не найдено модальное окно.", "error");
+        console.error("handleBookmarkFormSubmit v6: CRITICAL - Could not find parent modal #bookmarkModal.");
+        if (typeof showNotification === 'function') showNotification("Критическая ошибка интерфейса: не найдено модальное окно.", "error");
         if (saveButton) saveButton.disabled = false;
         return;
     }
     if (!saveButton) {
-        console.error("handleBookmarkFormSubmit v5: CRITICAL - Could not find save button #saveBookmarkBtn within modal.");
-        showNotification("Критическая ошибка интерфейса: не найдена кнопка сохранения.", "error");
+        console.error("handleBookmarkFormSubmit v6: CRITICAL - Could not find save button #saveBookmarkBtn within modal.");
+        if (typeof showNotification === 'function') showNotification("Критическая ошибка интерфейса: не найдена кнопка сохранения.", "error");
         const potentialSaveButton = document.getElementById('saveBookmarkBtn');
         if (potentialSaveButton) potentialSaveButton.disabled = false;
         return;
     }
 
-    console.log("[handleBookmarkFormSubmit v5] Modal, form, and save button found. Proceeding...");
+    console.log("[handleBookmarkFormSubmit v6] Modal, form, and save button found. Proceeding...");
 
     saveButton.disabled = true;
     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
@@ -13146,16 +13384,33 @@ async function handleBookmarkFormSubmit(event) {
     const title = form.elements.bookmarkTitle.value.trim();
     const url = form.elements.bookmarkUrl.value.trim();
     const description = form.elements.bookmarkDescription.value.trim();
+
     const folderValue = form.elements.bookmarkFolder.value;
-    const folder = folderValue ? parseInt(folderValue, 10) : null;
+    let folder;
+    if (folderValue === ARCHIVE_FOLDER_ID) {
+        folder = ARCHIVE_FOLDER_ID;
+        console.log("[handleBookmarkFormSubmit v6] Выбрана папка 'Архив'.");
+    } else if (folderValue === "") {
+        folder = null;
+        console.log("[handleBookmarkFormSubmit v6] Папка не выбрана (Без папки).");
+    } else {
+        const parsedFolderId = parseInt(folderValue, 10);
+        if (!isNaN(parsedFolderId)) {
+            folder = parsedFolderId;
+            console.log(`[handleBookmarkFormSubmit v6] Выбрана обычная папка с ID: ${folder}.`);
+        } else {
+            folder = null;
+            console.warn(`[handleBookmarkFormSubmit v6] Некорректный ID папки '${folderValue}'. Установлено 'Без папки'.`);
+        }
+    }
 
     if (!title) {
-        showNotification("Заполните поле 'Название'", "error");
+        if (typeof showNotification === 'function') showNotification("Заполните поле 'Название'", "error");
         saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
         form.elements.bookmarkTitle.focus(); return;
     }
     if (!url && !description) {
-        showNotification("Заполните 'Описание', т.к. URL не указан", "error");
+        if (typeof showNotification === 'function') showNotification("Заполните 'Описание', т.к. URL не указан", "error");
         saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
         form.elements.bookmarkDescription.focus(); return;
     }
@@ -13169,7 +13424,7 @@ async function handleBookmarkFormSubmit(event) {
             }
             new URL(testUrl);
         } catch (_) {
-            showNotification("Введите корректный URL (например, https://example.com)", "error");
+            if (typeof showNotification === 'function') showNotification("Введите корректный URL (например, https://example.com)", "error");
             saveButton.disabled = false; saveButton.innerHTML = id ? '<i class="fas fa-save mr-1"></i> Сохранить изменения' : '<i class="fas fa-plus mr-1"></i> Добавить';
             form.elements.bookmarkUrl.focus(); return;
         }
@@ -13182,13 +13437,13 @@ async function handleBookmarkFormSubmit(event) {
     newScreenshotBlobs.forEach(blob => { if (blob instanceof Blob) screenshotOps.push({ action: 'add', blob }); });
     idsToDeleteStr.split(',').map(idStr => parseInt(idStr.trim(), 10)).filter(idNum => !isNaN(idNum) && idNum > 0)
         .forEach(idToDelete => screenshotOps.push({ action: 'delete', oldScreenshotId: idToDelete }));
-    console.log(`[Save Bookmark v5 TX] Запланировано ${screenshotOps.length} операций со скриншотами.`);
+    console.log(`[Save Bookmark v6 TX] Запланировано ${screenshotOps.length} операций со скриншотами.`);
 
     const isEditing = !!id;
     let finalId = isEditing ? parseInt(id, 10) : null;
     let oldData = null;
     let existingIdsToKeep = [];
-    const newDataBase = { title, url: url || null, description: description || null, folder };
+    const newDataBase = { title, url: url || null, description: description || null, folder: folder };
 
     let transaction;
     let saveSuccessful = false;
@@ -13198,14 +13453,14 @@ async function handleBookmarkFormSubmit(event) {
         transaction = db.transaction(['bookmarks', 'screenshots'], 'readwrite');
         const bookmarksStore = transaction.objectStore('bookmarks');
         const screenshotsStore = transaction.objectStore('screenshots');
-        console.log("[Save Bookmark v5 TX] Транзакция начата.");
+        console.log("[Save Bookmark v6 TX] Транзакция начата.");
 
         const timestamp = new Date().toISOString();
         let bookmarkReadyPromise;
 
         if (isEditing) {
             newDataBase.id = finalId;
-            console.log(`[Save Bookmark v5 TX] Редактирование закладки ID: ${finalId}`);
+            console.log(`[Save Bookmark v6 TX] Редактирование закладки ID: ${finalId}`);
             bookmarkReadyPromise = new Promise(async (resolve, reject) => {
                 try {
                     const request = bookmarksStore.get(finalId);
@@ -13225,7 +13480,7 @@ async function handleBookmarkFormSubmit(event) {
         } else {
             newDataBase.dateAdded = timestamp;
             delete newDataBase.id;
-            console.log("[Save Bookmark v5 TX] Добавление новой закладки...");
+            console.log("[Save Bookmark v6 TX] Добавление новой закладки...");
             bookmarkReadyPromise = new Promise((resolve, reject) => {
                 const request = bookmarksStore.add(newDataBase);
                 request.onsuccess = (e) => {
@@ -13240,14 +13495,14 @@ async function handleBookmarkFormSubmit(event) {
         await bookmarkReadyPromise;
 
         if (finalId === null || finalId === undefined) throw new Error("Не удалось определить ID закладки.");
-        console.log(`[Save Bookmark v5 TX] ID закладки определен: ${finalId}`);
+        console.log(`[Save Bookmark v6 TX] ID закладки определен: ${finalId}`);
 
         const screenshotOpResults = [];
         const screenshotPromises = [];
         const newScreenshotIds = [];
 
         if (screenshotOps.length > 0) {
-            console.log(`[Save Bookmark v5 TX ${finalId}] Обработка ${screenshotOps.length} операций со скриншотами...`);
+            console.log(`[Save Bookmark v6 TX ${finalId}] Обработка ${screenshotOps.length} операций со скриншотами...`);
             screenshotOps.forEach(op => {
                 const { action, blob, oldScreenshotId } = op;
                 screenshotPromises.push(new Promise(async (resolve) => {
@@ -13267,7 +13522,7 @@ async function handleBookmarkFormSubmit(event) {
                 }));
             });
             await Promise.all(screenshotPromises);
-            console.log(`[Save Bookmark v5 TX ${finalId}] Операции со скриншотами завершены.`);
+            console.log(`[Save Bookmark v6 TX ${finalId}] Операции со скриншотами завершены.`);
 
             const failedOps = screenshotOpResults.filter(r => !r.success);
             if (failedOps.length > 0) throw new Error(`Ошибка операции со скриншотом: ${failedOps[0].error?.message || 'Unknown error'}`);
@@ -13276,9 +13531,7 @@ async function handleBookmarkFormSubmit(event) {
         newDataBase.screenshotIds = [...new Set([...existingIdsToKeep, ...newScreenshotIds])];
         if (newDataBase.screenshotIds.length === 0) delete newDataBase.screenshotIds;
 
-        newDataBase.folder = folder === null || folder === '' ? null : folder;
-
-        console.log(`[Save Bookmark v5 TX ${finalId}] Финальный объект закладки для put:`, JSON.parse(JSON.stringify(newDataBase)));
+        console.log(`[Save Bookmark v6 TX ${finalId}] Финальный объект закладки для put:`, JSON.parse(JSON.stringify(newDataBase)));
 
         const putBookmarkReq = bookmarksStore.put(newDataBase);
 
@@ -13290,13 +13543,13 @@ async function handleBookmarkFormSubmit(event) {
         });
 
     } catch (saveError) {
-        console.error(`[Save Bookmark v5 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${finalId || '(новый)'}:`, saveError);
+        console.error(`[Save Bookmark v6 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${finalId || '(новый)'}:`, saveError);
         if (transaction && transaction.abort && transaction.readyState !== 'done') {
-            try { transaction.abort(); console.log("[Save Bookmark v5] Транзакция отменена в catch."); }
-            catch (e) { console.error("[Save Bookmark v5] Ошибка отмены транзакции:", e); }
+            try { transaction.abort(); console.log("[Save Bookmark v6] Транзакция отменена в catch."); }
+            catch (e) { console.error("[Save Bookmark v6] Ошибка отмены транзакции:", e); }
         }
         saveSuccessful = false;
-        showNotification("Ошибка при сохранении закладки: " + (saveError.message || saveError), "error");
+        if (typeof showNotification === 'function') showNotification("Ошибка при сохранении закладки: " + (saveError.message || saveError), "error");
     } finally {
         if (saveButton) {
             saveButton.disabled = false;
@@ -13305,7 +13558,7 @@ async function handleBookmarkFormSubmit(event) {
     }
 
     if (saveSuccessful) {
-        console.log(`[Save Bookmark v5 (Robust TX)] Успешно завершено для ID: ${finalId}`);
+        console.log(`[Save Bookmark v6 (Robust TX)] Успешно завершено для ID: ${finalId}`);
         const finalDataForIndex = { ...newDataBase };
 
         if (typeof updateSearchIndex === 'function') {
@@ -13314,7 +13567,7 @@ async function handleBookmarkFormSubmit(event) {
                 .catch(indexError => console.error(`Ошибка обновления индекса для закладки ${finalId}:`, indexError));
         } else { console.warn("updateSearchIndex не найдена."); }
 
-        showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
+        if (typeof showNotification === 'function') showNotification(isEditing ? "Закладка обновлена" : "Закладка добавлена");
         modal.classList.add('hidden');
         form.reset();
         const bookmarkIdInput = form.querySelector('#bookmarkId'); if (bookmarkIdInput) bookmarkIdInput.value = '';
@@ -13325,25 +13578,21 @@ async function handleBookmarkFormSubmit(event) {
         if (thumbsContainer) thumbsContainer.innerHTML = '';
         initialBookmarkFormState = null;
 
-        loadBookmarks();
+        if (typeof loadBookmarks === 'function') loadBookmarks();
 
         if (typeof getVisibleModals === 'function') {
             const visibleModals = getVisibleModals().filter(m => m.id !== modal.id && !m.classList.contains('hidden'));
             if (visibleModals.length === 0) {
                 document.body.classList.remove('overflow-hidden');
                 document.body.classList.remove('modal-open');
-                console.log("[handleBookmarkFormSubmit] overflow-hidden и modal-open сняты с body (других модальных окон нет).");
-            } else {
-                console.log("[handleBookmarkFormSubmit] overflow-hidden и modal-open НЕ сняты, есть другие видимые модальные окна:", visibleModals.map(m => m.id));
             }
         } else {
             document.body.classList.remove('overflow-hidden');
             document.body.classList.remove('modal-open');
-            console.warn("[handleBookmarkFormSubmit] getVisibleModals не найдена, overflow-hidden и modal-open сняты принудительно.");
         }
 
     } else {
-        console.error(`[Save Bookmark v5 (Robust TX)] Сохранение закладки ${finalId || '(новый)'} НЕ удалось.`);
+        console.error(`[Save Bookmark v6 (Robust TX)] Сохранение закладки ${finalId || '(новый)'} НЕ удалось.`);
     }
 }
 
@@ -13351,8 +13600,8 @@ async function handleBookmarkFormSubmit(event) {
 async function loadBookmarks() {
     if (!db) {
         console.error("База данных не инициализирована. Загрузка закладок невозможна.");
-        showNotification("Ошибка: База данных недоступна.", "error");
-        renderBookmarkFolders([]);
+        if (typeof showNotification === 'function') showNotification("Ошибка: База данных недоступна.", "error");
+        await renderBookmarkFolders([]);
         renderBookmarks([]);
         return false;
     }
@@ -13385,16 +13634,15 @@ async function loadBookmarks() {
             console.log("Папки по умолчанию созданы:", createdFoldersWithIds);
 
             if (typeof updateSearchIndex === 'function') {
-                console.log("[loadBookmarks] Индексация созданных по умолчанию папок...");
-                await Promise.all(createdFoldersWithIds.map(folder => {
-                    console.log(`[loadBookmarks]   Вызов updateSearchIndex для папки ID: ${folder.id}, Имя: ${folder.name}`);
-                    return updateSearchIndex('bookmarkFolders', folder.id, folder, 'add', null)
-                        .catch(err => console.error(`Ошибка индексации папки по умолчанию ${folder.id} ('${folder.name}'):`, err));
-                }));
-                console.log("[loadBookmarks] Папки закладок по умолчанию проиндексированы (или попытка завершена).");
+                await Promise.all(createdFoldersWithIds.map(folder =>
+                    updateSearchIndex('bookmarkFolders', folder.id, folder, 'add', null)
+                        .catch(err => console.error(`Ошибка индексации папки по умолчанию ${folder.id} ('${folder.name}'):`, err))
+                ));
             }
             folders = createdFoldersWithIds;
         }
+
+        await renderBookmarkFolders(folders || []);
 
         if (folders && folders.length > 0) {
             const instructionsFolder = folders.find(f => f.name === 'Инструкции');
@@ -13403,9 +13651,6 @@ async function loadBookmarks() {
             }
             firstFolderId = folders[0]?.id;
         }
-        console.log(`loadBookmarks: Определены ID. Инструкции: ${instructionsFolderId}, Первая папка: ${firstFolderId}`);
-
-        renderBookmarkFolders(folders || []);
 
         bookmarks = await getAllFromIndexedDB('bookmarks');
         console.log(`loadBookmarks: Найдено ${bookmarks?.length || 0} существующих закладок.`);
@@ -13417,7 +13662,6 @@ async function loadBookmarks() {
             }
 
             const targetFolderIdForKB = instructionsFolderId ?? firstFolderId;
-            const targetFolderIdForNote = firstFolderId;
 
             const sampleBookmarksData = [
                 { title: 'База знаний КриптоПро', url: 'https://support.cryptopro.ru/index.php?/Knowledgebase/List', description: 'Официальная база знаний КриптоПро.', folder: targetFolderIdForKB, dateAdded: new Date().toISOString() },
@@ -13434,13 +13678,13 @@ async function loadBookmarks() {
             console.log("Примеры закладок созданы:", bookmarksWithIds);
 
             if (typeof updateSearchIndex === 'function') {
-                console.log("[loadBookmarks] Индексация созданных по умолчанию закладок...");
                 await Promise.all(bookmarksWithIds.map(bookmark => {
-                    console.log(`[loadBookmarks]   Вызов updateSearchIndex для закладки ID: ${bookmark.id}, Title: ${bookmark.title}`);
-                    return updateSearchIndex('bookmarks', bookmark.id, bookmark, 'add', null)
-                        .catch(err => console.error(`Ошибка индексации примера закладки ${bookmark.id} ('${bookmark.title}'):`, err));
+                    if (bookmark.folder !== ARCHIVE_FOLDER_ID) {
+                        return updateSearchIndex('bookmarks', bookmark.id, bookmark, 'add', null)
+                            .catch(err => console.error(`Ошибка индексации примера закладки ${bookmark.id} ('${bookmark.title}'):`, err));
+                    }
+                    return Promise.resolve();
                 }));
-                console.log("[loadBookmarks] Примеры закладок проиндексированы (или попытка завершена).");
             }
             bookmarks = bookmarksWithIds;
         }
@@ -13451,16 +13695,28 @@ async function loadBookmarks() {
             }
             return map;
         }, {});
-        renderBookmarks(bookmarks || [], folderMap);
 
-        console.log(`Загрузка закладок завершена. Загружено ${folders?.length || 0} папок и ${bookmarks?.length || 0} закладок.`);
+        const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
+        let initialBookmarksToRender;
+        if (bookmarkFolderFilter && bookmarkFolderFilter.value === ARCHIVE_FOLDER_ID) {
+            initialBookmarksToRender = (bookmarks || []).filter(bm => bm.folder === ARCHIVE_FOLDER_ID);
+        } else if (bookmarkFolderFilter && bookmarkFolderFilter.value !== "") {
+            initialBookmarksToRender = (bookmarks || []).filter(bm => String(bm.folder) === String(bookmarkFolderFilter.value) && bm.folder !== ARCHIVE_FOLDER_ID);
+        }
+        else {
+            initialBookmarksToRender = (bookmarks || []).filter(bm => bm.folder !== ARCHIVE_FOLDER_ID);
+        }
+
+        renderBookmarks(initialBookmarksToRender, folderMap);
+
+        console.log(`Загрузка закладок завершена. Загружено ${folders?.length || 0} папок и ${bookmarks?.length || 0} закладок (показано ${initialBookmarksToRender.length}).`);
         return true;
 
     } catch (error) {
         console.error("Критическая ошибка при загрузке закладок или папок:", error);
-        renderBookmarkFolders([]);
+        await renderBookmarkFolders([]);
         renderBookmarks([]);
-        showNotification("Критическая ошибка загрузки данных закладок.", "error");
+        if (typeof showNotification === 'function') showNotification("Критическая ошибка загрузки данных закладок.", "error");
         return false;
     }
 }
@@ -13631,22 +13887,49 @@ async function initExternalLinksSystem() {
 }
 
 
-function renderBookmarkFolders(folders) {
+async function renderBookmarkFolders(folders) {
     const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
-    if (!bookmarkFolderFilter) return;
+    if (!bookmarkFolderFilter) {
+        console.warn("renderBookmarkFolders: Элемент #bookmarkFolderFilter не найден.");
+        return;
+    }
+
+    const currentValue = bookmarkFolderFilter.value;
 
     while (bookmarkFolderFilter.options.length > 1) {
         bookmarkFolderFilter.remove(1);
     }
 
     const fragment = document.createDocumentFragment();
-    folders.forEach(folder => {
-        const option = document.createElement('option');
-        option.value = folder.id;
-        option.textContent = folder.name;
-        fragment.appendChild(option);
-    });
+
+    const archiveOption = document.createElement('option');
+    archiveOption.value = ARCHIVE_FOLDER_ID;
+    archiveOption.textContent = ARCHIVE_FOLDER_NAME;
+    fragment.appendChild(archiveOption);
+
+    if (folders && folders.length > 0) {
+        const sortedFolders = [...folders].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        sortedFolders.forEach(folder => {
+            if (folder && typeof folder.id !== 'undefined' && folder.name) {
+                const option = document.createElement('option');
+                option.value = folder.id;
+                option.textContent = folder.name;
+                fragment.appendChild(option);
+            } else {
+                console.warn("renderBookmarkFolders: Пропущена невалидная папка:", folder);
+            }
+        });
+    }
+
     bookmarkFolderFilter.appendChild(fragment);
+
+    if (currentValue && Array.from(bookmarkFolderFilter.options).some(opt => opt.value === currentValue)) {
+        bookmarkFolderFilter.value = currentValue;
+    } else if (bookmarkFolderFilter.options.length > 0 && currentValue !== ARCHIVE_FOLDER_ID) {
+        if (bookmarkFolderFilter.value !== ARCHIVE_FOLDER_ID && bookmarkFolderFilter.value !== "") {
+        }
+    }
+    console.log("renderBookmarkFolders: Список папок в фильтре обновлен, включая 'Архив'.");
 }
 
 
@@ -13853,7 +14136,21 @@ async function handleBookmarkAction(event) {
         }
     }
 
-    if (action === 'edit') {
+    if (action === 'move-to-archive') {
+        if (typeof moveBookmarkToArchive === 'function') {
+            await moveBookmarkToArchive(bookmarkId);
+        } else {
+            console.error("Функция moveBookmarkToArchive не определена.");
+            if (typeof showNotification === 'function') showNotification("Функция архивирования недоступна.", "error");
+        }
+    } else if (action === 'restore-from-archive') {
+        if (typeof restoreBookmarkFromArchive === 'function') {
+            await restoreBookmarkFromArchive(bookmarkId);
+        } else {
+            console.error("Функция restoreBookmarkFromArchive не определена.");
+            if (typeof showNotification === 'function') showNotification("Функция восстановления из архива недоступна.", "error");
+        }
+    } else if (action === 'edit') {
         if (typeof showEditBookmarkModal === 'function') {
             showEditBookmarkModal(bookmarkId);
         } else {
@@ -13925,6 +14222,121 @@ async function handleBookmarkAction(event) {
                 NotificationService.add("Невозможно отобразить детали этой заметки.", "info");
             }
         }
+    }
+}
+
+
+async function restoreBookmarkFromArchive(bookmarkId) {
+    if (typeof bookmarkId !== 'number' || isNaN(bookmarkId)) {
+        console.error("restoreBookmarkFromArchive: Неверный ID закладки.", bookmarkId);
+        if (typeof showNotification === 'function') showNotification("Ошибка: Неверный ID для восстановления.", "error");
+        return;
+    }
+    console.log(`[restoreBookmarkFromArchive] Восстановление закладки ID ${bookmarkId} из архива.`);
+    try {
+        const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
+        if (!bookmark) {
+            if (typeof showNotification === 'function') showNotification("Закладка для восстановления не найдена.", "error");
+            return;
+        }
+
+        if (bookmark.folder !== ARCHIVE_FOLDER_ID) {
+            if (typeof showNotification === 'function') showNotification("Эта закладка не находится в архиве.", "info");
+            return;
+        }
+
+        bookmark.folder = null;
+        bookmark.dateUpdated = new Date().toISOString();
+
+        await saveToIndexedDB('bookmarks', bookmark);
+
+        if (typeof updateSearchIndex === 'function') {
+            const oldDataForIndex = { ...bookmark, folder: ARCHIVE_FOLDER_ID };
+            await updateSearchIndex('bookmarks', bookmarkId, bookmark, 'update', oldDataForIndex);
+            console.log(`Индекс обновлен для закладки ${bookmarkId} (восстановлена из архива).`);
+        } else {
+            console.warn("updateSearchIndex не найдена, индекс для восстановленной закладки может быть не обновлен.");
+        }
+
+        if (typeof showNotification === 'function') showNotification(`Закладка "${bookmark.title || 'ID: ' + bookmarkId}" восстановлена из архива.`, "success");
+
+        const folderFilter = document.getElementById('bookmarkFolderFilter');
+        if (folderFilter && folderFilter.value === ARCHIVE_FOLDER_ID) {
+            const bookmarkItemElement = document.querySelector(`.bookmark-item[data-id="${bookmarkId}"]`);
+            if (bookmarkItemElement) {
+                bookmarkItemElement.remove();
+                const bookmarksContainer = document.getElementById('bookmarksContainer');
+                if (bookmarksContainer && !bookmarksContainer.querySelector('.bookmark-item')) {
+                    bookmarksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Архив пуст.</div>';
+                }
+            } else {
+                if (typeof filterBookmarks === 'function') filterBookmarks();
+                else if (typeof loadBookmarks === 'function') loadBookmarks();
+            }
+        } else {
+            if (typeof filterBookmarks === 'function') filterBookmarks();
+            else if (typeof loadBookmarks === 'function') loadBookmarks();
+        }
+
+    } catch (error) {
+        console.error(`Ошибка при восстановлении закладки ID ${bookmarkId} из архива:`, error);
+        if (typeof showNotification === 'function') showNotification("Ошибка восстановления закладки.", "error");
+    }
+}
+
+
+async function moveBookmarkToArchive(bookmarkId) {
+    if (typeof bookmarkId !== 'number' || isNaN(bookmarkId)) {
+        console.error("moveBookmarkToArchive: Неверный ID закладки.", bookmarkId);
+        if (typeof showNotification === 'function') showNotification("Ошибка: Неверный ID для архивации.", "error");
+        return;
+    }
+    console.log(`[moveBookmarkToArchive] Перемещение закладки ID ${bookmarkId} в архив.`);
+    try {
+        const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
+        if (!bookmark) {
+            if (typeof showNotification === 'function') showNotification("Закладка для архивации не найдена.", "error");
+            return;
+        }
+
+        const oldFolder = bookmark.folder;
+        bookmark.folder = ARCHIVE_FOLDER_ID;
+        bookmark.dateUpdated = new Date().toISOString();
+
+        await saveToIndexedDB('bookmarks', bookmark);
+
+        if (typeof updateSearchIndex === 'function') {
+            const oldDataForIndex = { ...bookmark, folder: oldFolder };
+            await updateSearchIndex('bookmarks', bookmarkId, bookmark, 'update', oldDataForIndex);
+            console.log(`Индекс обновлен для закладки ${bookmarkId} (перемещена в архив).`);
+        } else {
+            console.warn("updateSearchIndex не найдена, индекс для архивированной закладки может быть не обновлен.");
+        }
+
+        if (typeof showNotification === 'function') showNotification(`Закладка "${bookmark.title || 'ID: ' + bookmarkId}" перемещена в архив.`, "success");
+
+        const bookmarkItemElement = document.querySelector(`.bookmark-item[data-id="${bookmarkId}"]`);
+        if (bookmarkItemElement) {
+            const folderFilter = document.getElementById('bookmarkFolderFilter');
+            if (folderFilter && folderFilter.value !== ARCHIVE_FOLDER_ID && folderFilter.value !== "") {
+                bookmarkItemElement.remove();
+                const bookmarksContainer = document.getElementById('bookmarksContainer');
+                if (bookmarksContainer && !bookmarksContainer.querySelector('.bookmark-item')) {
+                    bookmarksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Нет сохраненных закладок</div>';
+                }
+            } else if (folderFilter && (folderFilter.value === ARCHIVE_FOLDER_ID || folderFilter.value === "")) {
+                if (typeof filterBookmarks === 'function') filterBookmarks();
+                else if (typeof loadBookmarks === 'function') loadBookmarks();
+            }
+        } else {
+            if (typeof filterBookmarks === 'function') filterBookmarks();
+            else if (typeof loadBookmarks === 'function') loadBookmarks();
+        }
+
+
+    } catch (error) {
+        console.error(`Ошибка при перемещении закладки ID ${bookmarkId} в архив:`, error);
+        if (typeof showNotification === 'function') showNotification("Ошибка архивации закладки.", "error");
     }
 }
 
@@ -14316,16 +14728,69 @@ function filterItems(options) {
 }
 
 
-function filterBookmarks() {
-    filterItems({
-        containerSelector: '#bookmarksContainer',
-        itemSelector: '.bookmark-item',
-        searchInputSelector: 'bookmarkSearchInput',
-        filterSelectSelector: 'bookmarkFolderFilter',
-        dataAttribute: 'folder',
-        textSelectors: ['h3', 'p.bookmark-description']
-    });
-    ensureBookmarksScroll();
+async function filterBookmarks() {
+    const searchInput = document.getElementById('bookmarkSearchInput');
+    const folderFilter = document.getElementById('bookmarkFolderFilter');
+
+    if (!searchInput || !folderFilter) {
+        console.error("filterBookmarks: Search input or folder filter not found.");
+        if (typeof renderBookmarks === 'function') renderBookmarks([], {});
+        return;
+    }
+
+    const searchValue = searchInput.value.trim().toLowerCase();
+    const selectedFolderValue = folderFilter.value;
+
+    try {
+        const allBookmarks = await getAllBookmarks();
+        const folders = await getAllFromIndexedDB('bookmarkFolders');
+        const folderMap = (folders || []).reduce((map, folder) => {
+            if (folder && typeof folder.id !== 'undefined') {
+                map[folder.id] = folder;
+            }
+            return map;
+        }, {});
+
+        let bookmarksToDisplay = [];
+
+        if (selectedFolderValue === "") {
+            bookmarksToDisplay = allBookmarks.filter(bm => bm.folder !== ARCHIVE_FOLDER_ID);
+        } else if (selectedFolderValue === ARCHIVE_FOLDER_ID) {
+            bookmarksToDisplay = allBookmarks.filter(bm => bm.folder === ARCHIVE_FOLDER_ID);
+        } else {
+            const numericFolderId = parseInt(selectedFolderValue, 10);
+            if (!isNaN(numericFolderId)) {
+                bookmarksToDisplay = allBookmarks.filter(bm => bm.folder === numericFolderId);
+            } else {
+                console.warn(`filterBookmarks: Некорректный ID папки '${selectedFolderValue}'. Показываем неархивированные.`);
+                bookmarksToDisplay = allBookmarks.filter(bm => bm.folder !== ARCHIVE_FOLDER_ID);
+            }
+        }
+
+        if (searchValue) {
+            bookmarksToDisplay = bookmarksToDisplay.filter(bm => {
+                const titleMatch = bm.title && bm.title.toLowerCase().includes(searchValue);
+                const descMatch = bm.description && bm.description.toLowerCase().includes(searchValue);
+                const urlMatch = bm.url && bm.url.toLowerCase().includes(searchValue);
+                return titleMatch || descMatch || urlMatch;
+            });
+        }
+
+        if (typeof renderBookmarks === 'function') {
+            renderBookmarks(bookmarksToDisplay, folderMap);
+        } else {
+            console.error("renderBookmarks function is not defined for filterBookmarks");
+        }
+
+        if (typeof ensureBookmarksScroll === 'function') {
+            ensureBookmarksScroll();
+        }
+
+    } catch (error) {
+        console.error("Ошибка при фильтрации закладок:", error);
+        if (typeof showNotification === 'function') showNotification("Ошибка фильтрации закладок", "error");
+        if (typeof renderBookmarks === 'function') renderBookmarks([], {});
+    }
 }
 
 
@@ -20775,40 +21240,25 @@ function initHotkeysModal() {
 
 function showImageAtIndex(index, blobs, stateManager, elements) {
     const {
-        getCurrentObjectUrl, getCurrentPreloadedUrls,
         updateCurrentIndex, updateCurrentScale, updateTranslate,
         updateObjectUrl, updatePreloadedUrls,
-        updateImageTransform, preloadImage
+        updateImageTransform, preloadImage,
+        getCurrentObjectUrl, getCurrentPreloadedUrls
     } = stateManager;
 
     const { lightboxImage, loadingIndicator, counterElement, prevBtn, nextBtn } = elements;
 
-
     if (!lightboxImage || !loadingIndicator || !counterElement || !prevBtn || !nextBtn) {
-        console.error(`showImageAtIndex(${index}): КРИТИЧЕСКАЯ ОШИБКА! Не все необходимые DOM-элементы были переданы!`, elements);
-        if (typeof showNotification === 'function') showNotification("Критическая ошибка интерфейса лайтбокса при показе изображения (элементы не переданы).", "error");
-
+        console.error(`showImageAtIndex(${index}): КРИТИЧЕСКАЯ ОШИБКА! Не все необходимые DOM-элементы были переданы!`);
         const lightboxRoot = document.getElementById('screenshotLightbox');
-        if (lightboxRoot && !lightboxRoot.classList.contains('hidden')) {
-            const closeBtnFromRoot = lightboxRoot.querySelector('#closeLightboxBtn');
-            if (closeBtnFromRoot && typeof closeBtnFromRoot.click === 'function' && lightboxRoot._closeLightboxFunction) {
-                lightboxRoot._closeLightboxFunction();
-            } else {
-                lightboxRoot.classList.add('hidden');
-                if (typeof getVisibleModals === 'function' && getVisibleModals().length === 0) {
-                    document.body.classList.remove('overflow-hidden');
-                } else if (typeof getVisibleModals !== 'function') {
-                    document.body.classList.remove('overflow-hidden');
-                }
-            }
+        if (lightboxRoot && lightboxRoot._closeLightboxFunction) {
+            lightboxRoot._closeLightboxFunction(true);
         }
         return;
     }
 
-
     const totalImages = blobs?.length ?? 0;
     if (totalImages === 0) {
-        console.error("showImageAtIndex: Массив blobs пуст, отображать нечего.");
         loadingIndicator.innerHTML = "Нет изображений";
         loadingIndicator.classList.remove('hidden');
         lightboxImage.classList.add('hidden');
@@ -20819,17 +21269,14 @@ function showImageAtIndex(index, blobs, stateManager, elements) {
     }
 
     if (typeof index !== 'number' || index < 0 || index >= totalImages) {
-        console.warn(`showImageAtIndex: Неверный индекс ${index}. Используем индекс 0.`);
         index = 0;
     }
 
-    console.log(`Показ изображения с индексом: ${index}`);
-
     const oldObjectUrl = getCurrentObjectUrl();
     const oldPreloadedUrls = getCurrentPreloadedUrls();
-    if (oldObjectUrl) { try { URL.revokeObjectURL(oldObjectUrl); console.log("Освобожден предыдущий currentObjectUrl:", oldObjectUrl); } catch (e) { console.warn("Ошибка освобождения предыдущего currentObjectUrl:", e); } }
-    if (oldPreloadedUrls?.next) { try { URL.revokeObjectURL(oldPreloadedUrls.next); console.log("Освобожден предыдущий preloadedUrls.next:", oldPreloadedUrls.next); } catch (e) { console.warn("Ошибка освобождения предыдущего preloadedUrls.next:", e); } }
-    if (oldPreloadedUrls?.prev) { try { URL.revokeObjectURL(oldPreloadedUrls.prev); console.log("Освобожден предыдущий preloadedUrls.prev:", oldPreloadedUrls.prev); } catch (e) { console.warn("Ошибка освобождения предыдущего preloadedUrls.prev:", e); } }
+    if (oldObjectUrl) { try { URL.revokeObjectURL(oldObjectUrl); } catch (e) { } }
+    if (oldPreloadedUrls?.next) { try { URL.revokeObjectURL(oldPreloadedUrls.next); } catch (e) { } }
+    if (oldPreloadedUrls?.prev) { try { URL.revokeObjectURL(oldPreloadedUrls.prev); } catch (e) { } }
 
     updateCurrentIndex(index);
     updateCurrentScale(1.0);
@@ -20843,62 +21290,50 @@ function showImageAtIndex(index, blobs, stateManager, elements) {
     updateImageTransform();
 
     const blob = blobs[index];
-
     counterElement.textContent = `${index + 1} / ${totalImages}`;
     prevBtn.disabled = totalImages <= 1;
     nextBtn.disabled = totalImages <= 1;
 
     if (!(blob instanceof Blob)) {
-        console.error(`Элемент с индексом ${index} не является Blob:`, blob);
-        loadingIndicator.innerHTML = "Ошибка формата данных";
+        console.error(`Элемент с индексом ${index} не является Blob.`);
+        loadingIndicator.innerHTML = "Ошибка формата";
         return;
     }
 
     let newObjectUrl = null;
     try {
         newObjectUrl = URL.createObjectURL(blob);
-        console.log(`Создан Object URL для индекса ${index}: ${newObjectUrl}`);
 
         lightboxImage.onload = null;
         lightboxImage.onerror = null;
 
         lightboxImage.onload = () => {
-            console.log(`Изображение ${index} успешно загружено.`);
             loadingIndicator.classList.add('hidden');
             lightboxImage.classList.remove('hidden');
         };
         lightboxImage.onerror = () => {
-            console.error(`Ошибка загрузки изображения ${index} по URL ${newObjectUrl}`);
             loadingIndicator.innerHTML = "Ошибка загрузки";
-            loadingIndicator.classList.remove('hidden');
             lightboxImage.classList.add('hidden');
-            if (newObjectUrl) {
-                try { URL.revokeObjectURL(newObjectUrl); console.log("Освобожден URL из-за ошибки загрузки img"); } catch (e) { console.warn("Ошибка освобождения URL при onerror:", e); }
-                updateObjectUrl(null);
-            }
+            if (newObjectUrl) { try { URL.revokeObjectURL(newObjectUrl); } catch (e) { } }
+            updateObjectUrl(null);
         };
         lightboxImage.src = newObjectUrl;
         updateObjectUrl(newObjectUrl);
 
-        let newPreloadedUrls = { next: null, prev: null };
+        let newPreloaded = { next: null, prev: null };
         if (totalImages > 1) {
-            const nextIndex = (index + 1) % totalImages;
-            const prevIndex = (index - 1 + totalImages) % totalImages;
-            if (nextIndex !== index) { newPreloadedUrls.next = preloadImage(nextIndex); }
-            if (prevIndex !== index) { newPreloadedUrls.prev = preloadImage(prevIndex); }
-            console.log(`Предзагрузка: next=${newPreloadedUrls.next ? 'OK' : 'Null'}, prev=${newPreloadedUrls.prev ? 'OK' : 'Null'}`);
+            const nextIdx = (index + 1) % totalImages;
+            const prevIdx = (index - 1 + totalImages) % totalImages;
+            if (nextIdx !== index) { newPreloaded.next = preloadImage(nextIdx); }
+            if (prevIdx !== index) { newPreloaded.prev = preloadImage(prevIdx); }
         }
-        updatePreloadedUrls(newPreloadedUrls);
+        updatePreloadedUrls(newPreloaded);
 
     } catch (error) {
         console.error("Ошибка при создании Object URL или установке src:", error);
         loadingIndicator.innerHTML = "Ошибка отображения";
-        loadingIndicator.classList.remove('hidden');
-        lightboxImage.classList.add('hidden');
-        if (newObjectUrl) {
-            try { URL.revokeObjectURL(newObjectUrl); console.log("Освобожден URL из-за ошибки создания/src"); } catch (e) { console.warn("Ошибка освобождения URL при catch:", e); }
-            updateObjectUrl(null);
-        }
+        if (newObjectUrl) { try { URL.revokeObjectURL(newObjectUrl); } catch (e) { } }
+        updateObjectUrl(null);
     }
 }
 
@@ -20932,56 +21367,142 @@ function openLightbox(blobs, initialIndex) {
     let mousemoveListener = null;
     let mouseupListener = null;
     let mouseleaveListener = null;
+    let dblClickListener = null;
     let originalTriggerElement = null;
     let lightboxBlobs = blobs || [];
 
     if (!lightbox) {
-        console.log("[Lightbox] Элемент #screenshotLightbox не найден, создаем...");
         lightbox = document.createElement('div');
         lightbox.id = 'screenshotLightbox';
         lightbox.setAttribute('tabindex', '-1');
         lightbox.className = 'fixed inset-0 bg-black bg-opacity-75 z-[100] p-0 flex items-center justify-center transition-opacity duration-300 ease-in-out opacity-0 hidden';
         lightbox.innerHTML = LIGHTBOX_HTML_STRUCTURE;
         document.body.appendChild(lightbox);
-        console.log("[Lightbox] Элемент #screenshotLightbox создан и добавлен в DOM.");
     } else {
-
         const requiredSelectors = ['#lightboxImage', '#lightboxLoading', '#lightboxCounter', '#prevLightboxBtn', '#nextLightboxBtn', '#closeLightboxBtn'];
         let isStructureComplete = true;
         for (const selector of requiredSelectors) {
             if (!lightbox.querySelector(selector)) {
                 isStructureComplete = false;
-                console.warn(`[Lightbox] Отсутствует обязательный элемент: ${selector}`);
                 break;
             }
         }
-
         if (!isStructureComplete) {
-            console.warn("[Lightbox] Элемент #screenshotLightbox существует, но его структура неполна или повреждена. Пересоздаем содержимое...");
             lightbox.innerHTML = LIGHTBOX_HTML_STRUCTURE;
-        } else {
-            console.log("[Lightbox] Элемент #screenshotLightbox найден с корректной структурой.");
         }
-
         if (lightbox.getAttribute('tabindex') !== '-1') {
             lightbox.setAttribute('tabindex', '-1');
-            console.log('[Lightbox] Атрибут tabindex="-1" добавлен к существующему #screenshotLightbox.');
         }
     }
 
+    let state = {
+        currentIndex: initialIndex,
+        currentScale: 1.0,
+        translateX: 0,
+        translateY: 0,
+        isPanning: false,
+        startPanX: 0,
+        startPanY: 0,
+        isZoomedByDoubleClick: false,
+        currentObjectUrl: null,
+        preloadedUrls: { next: null, prev: null },
+    };
 
-    let local_currentIndex = initialIndex;
-    let local_currentScale = 1.0;
-    let local_translateX = 0;
-    let local_translateY = 0;
-    let local_currentObjectUrl = null;
-    let local_preloadedUrls = { next: null, prev: null };
+    const elements = {
+        lightboxImage: lightbox.querySelector('#lightboxImage'),
+        loadingIndicator: lightbox.querySelector('#lightboxLoading'),
+        counterElement: lightbox.querySelector('#lightboxCounter'),
+        prevBtn: lightbox.querySelector('#prevLightboxBtn'),
+        nextBtn: lightbox.querySelector('#nextLightboxBtn'),
+        closeBtn: lightbox.querySelector('#closeLightboxBtn'),
+        lightboxContent: lightbox.querySelector('.lightbox-content')
+    };
 
-    const closeLightboxInternal = () => {
+    if (!elements.lightboxImage || !elements.loadingIndicator || !elements.counterElement || !elements.prevBtn || !elements.nextBtn || !elements.closeBtn || !elements.lightboxContent) {
+        console.error("[Lightbox Init Error] Один или несколько ключевых DOM-элементов лайтбокса не найдены. Закрытие лайтбокса.");
+        closeLightboxInternal(true);
+        return;
+    }
+
+    function updateImageTransform() {
+        if (elements.lightboxImage) {
+            const tx = state.currentScale <= 1.001 ? 0 : state.translateX;
+            const ty = state.currentScale <= 1.001 ? 0 : state.translateY;
+            elements.lightboxImage.style.transform = `translate(${tx}px, ${ty}px) scale(${state.currentScale})`;
+            elements.lightboxImage.style.cursor = state.currentScale > 1.001 ? (state.isPanning ? 'grabbing' : 'grab') : 'default';
+        }
+    }
+
+    function checkPanningLimits() {
+        if (state.currentScale <= 1.001) {
+            state.translateX = 0;
+            state.translateY = 0;
+            return;
+        }
+
+        const imgNaturalWidth = elements.lightboxImage.naturalWidth;
+        const imgNaturalHeight = elements.lightboxImage.naturalHeight;
+
+        if (!imgNaturalWidth || !imgNaturalHeight) return;
+
+        const viewportRect = elements.lightboxContent.getBoundingClientRect();
+        const viewportWidth = viewportRect.width;
+        const viewportHeight = viewportRect.height;
+
+        let renderedWidth, renderedHeight;
+        const imgAspectRatio = imgNaturalWidth / imgNaturalHeight;
+        const viewportAspectRatio = viewportWidth / viewportHeight;
+
+        if (imgAspectRatio > viewportAspectRatio) {
+            renderedWidth = viewportWidth;
+            renderedHeight = viewportWidth / imgAspectRatio;
+        } else {
+            renderedHeight = viewportHeight;
+            renderedWidth = viewportHeight * imgAspectRatio;
+        }
+
+        const scaledRenderedWidth = renderedWidth * state.currentScale;
+        const scaledRenderedHeight = renderedHeight * state.currentScale;
+
+        const maxPanX = Math.max(0, (scaledRenderedWidth - viewportWidth) / 2);
+        const maxPanY = Math.max(0, (scaledRenderedHeight - viewportHeight) / 2);
+
+        state.translateX = Math.max(-maxPanX, Math.min(maxPanX, state.translateX));
+        state.translateY = Math.max(-maxPanY, Math.min(maxPanY, state.translateY));
+    }
+
+    const stateManagerForShowImage = {
+        getCurrentIndex: () => state.currentIndex,
+        getCurrentObjectUrl: () => state.currentObjectUrl,
+        getCurrentPreloadedUrls: () => state.preloadedUrls,
+        updateCurrentIndex: (idx) => { state.currentIndex = idx; state.isZoomedByDoubleClick = false; },
+        updateCurrentScale: (s) => { state.currentScale = s; state.isZoomedByDoubleClick = false; },
+        updateTranslate: (x, y) => { state.translateX = x; state.translateY = y; state.isZoomedByDoubleClick = false; },
+        updateObjectUrl: (url) => state.currentObjectUrl = url,
+        updatePreloadedUrls: (urls) => state.preloadedUrls = urls,
+        updateImageTransform: updateImageTransform,
+        preloadImage: (idx) => {
+            if (idx < 0 || idx >= lightboxBlobs.length) return null;
+            const blob = lightboxBlobs[idx];
+            if (!(blob instanceof Blob)) return null;
+            try { const url = URL.createObjectURL(blob); return url; }
+            catch (e) { console.error(`[Lightbox] Ошибка создания URL для предзагрузки индекса ${idx}:`, e); return null; }
+        }
+    };
+
+    const elementsForShowImage = {
+        lightboxImage: elements.lightboxImage,
+        loadingIndicator: elements.loadingIndicator,
+        counterElement: elements.counterElement,
+        prevBtn: elements.prevBtn,
+        nextBtn: elements.nextBtn
+    };
+
+
+    function closeLightboxInternal(force = false) {
         const lbElement = document.getElementById('screenshotLightbox');
-        if (!lbElement || lbElement.classList.contains('hidden')) return;
+        if (!lbElement || (lbElement.classList.contains('hidden') && !force)) return;
 
-        console.log("[Lightbox] Закрытие лайтбокса и очистка ресурсов...");
         lbElement.classList.remove('opacity-100');
         lbElement.classList.add('opacity-0');
 
@@ -20994,206 +21515,188 @@ function openLightbox(blobs, initialIndex) {
             }
         }, 300);
 
-        const imgElement = lbElement.querySelector('#lightboxImage');
-
-
-        const closeBtn = lbElement.querySelector('#closeLightboxBtn');
-        if (closeBtn && closeBtn._clickHandler) {
-            closeBtn.removeEventListener('click', closeBtn._clickHandler);
-            delete closeBtn._clickHandler;
-        }
-
-        if (lbElement._overlayClickHandler) {
-            lbElement.removeEventListener('click', lbElement._overlayClickHandler);
-            delete lbElement._overlayClickHandler;
-        }
-
-        const prevBtn = lbElement.querySelector('#prevLightboxBtn');
-        if (prevBtn && prevBtn._clickHandler) {
-            prevBtn.removeEventListener('click', prevBtn._clickHandler);
-            delete prevBtn._clickHandler;
-        }
-        const nextBtn = lbElement.querySelector('#nextLightboxBtn');
-        if (nextBtn && nextBtn._clickHandler) {
-            nextBtn.removeEventListener('click', nextBtn._clickHandler);
-            delete nextBtn._clickHandler;
-        }
-
-
-        if (local_currentObjectUrl) { try { URL.revokeObjectURL(local_currentObjectUrl); console.log("[Lightbox] Освобожден URL:", local_currentObjectUrl); } catch (e) { console.warn("[Lightbox] Ошибка освобождения currentObjectUrl:", e); } local_currentObjectUrl = null; }
-        if (local_preloadedUrls.next) { try { URL.revokeObjectURL(local_preloadedUrls.next); console.log("[Lightbox] Освобожден preloadedUrls.next:", local_preloadedUrls.next); } catch (e) { console.warn("[Lightbox] Ошибка освобождения preloadedUrls.next:", e); } local_preloadedUrls.next = null; }
-        if (local_preloadedUrls.prev) { try { URL.revokeObjectURL(local_preloadedUrls.prev); console.log("[Lightbox] Освобожден preloadedUrls.prev:", local_preloadedUrls.prev); } catch (e) { console.warn("[Lightbox] Ошибка освобождения preloadedUrls.prev:", e); } local_preloadedUrls.prev = null; }
-
-        if (imgElement) {
-            imgElement.onload = null; imgElement.onerror = null; imgElement.src = '';
-            imgElement.style.transform = 'translate(0px, 0px) scale(1)';
-            imgElement.classList.add('hidden');
-            if (wheelListener) imgElement.removeEventListener('wheel', wheelListener);
-            if (mousedownListener) imgElement.removeEventListener('mousedown', mousedownListener);
-            if (mouseleaveListener) imgElement.removeEventListener('mouseleave', mouseleaveListener);
-            wheelListener = null; mousedownListener = null; mouseleaveListener = null;
+        if (elements.lightboxImage) {
+            if (wheelListener) elements.lightboxImage.removeEventListener('wheel', wheelListener);
+            if (mousedownListener) elements.lightboxImage.removeEventListener('mousedown', mousedownListener);
+            if (dblClickListener) elements.lightboxImage.removeEventListener('dblclick', dblClickListener);
+            if (mouseleaveListener) elements.lightboxImage.removeEventListener('mouseleave', mouseleaveListener);
+            wheelListener = null; mousedownListener = null; dblClickListener = null; mouseleaveListener = null;
+            elements.lightboxImage.onload = null;
+            elements.lightboxImage.onerror = null;
+            elements.lightboxImage.src = '';
+            elements.lightboxImage.style.transform = 'translate(0px, 0px) scale(1)';
+            elements.lightboxImage.classList.add('hidden');
         }
 
         if (mousemoveListener) document.removeEventListener('mousemove', mousemoveListener);
         if (mouseupListener) document.removeEventListener('mouseup', mouseupListener);
         mousemoveListener = null; mouseupListener = null;
 
+        if (state.currentObjectUrl) { try { URL.revokeObjectURL(state.currentObjectUrl); } catch (e) { } state.currentObjectUrl = null; }
+        if (state.preloadedUrls.next) { try { URL.revokeObjectURL(state.preloadedUrls.next); } catch (e) { } state.preloadedUrls.next = null; }
+        if (state.preloadedUrls.prev) { try { URL.revokeObjectURL(state.preloadedUrls.prev); } catch (e) { } state.preloadedUrls.prev = null; }
+
+        if (elements.closeBtn && elements.closeBtn._clickHandler) {
+            elements.closeBtn.removeEventListener('click', elements.closeBtn._clickHandler);
+            delete elements.closeBtn._clickHandler;
+        }
+        if (lightbox._overlayClickHandler) {
+            lightbox.removeEventListener('click', lightbox._overlayClickHandler);
+            delete lightbox._overlayClickHandler;
+        }
+        if (elements.prevBtn && elements.prevBtn._clickHandler) {
+            elements.prevBtn.removeEventListener('click', elements.prevBtn._clickHandler);
+            delete elements.prevBtn._clickHandler;
+        }
+        if (elements.nextBtn && elements.nextBtn._clickHandler) {
+            elements.nextBtn.removeEventListener('click', elements.nextBtn._clickHandler);
+            delete elements.nextBtn._clickHandler;
+        }
+
         if (originalTriggerElement && typeof originalTriggerElement.focus === 'function') {
             setTimeout(() => {
-                try {
-                    originalTriggerElement.focus();
-                    console.log("[Lightbox] Фокус возвращен на:", originalTriggerElement);
-                } catch (focusError) {
-                    console.warn("[Lightbox] Не удалось вернуть фокус (ошибка):", focusError);
-                }
+                try { originalTriggerElement.focus(); } catch (e) { }
             }, 0);
-        } else if (originalTriggerElement) {
-            console.warn("[Lightbox] originalTriggerElement существует, но не имеет метода focus:", originalTriggerElement);
-        } else {
-            console.warn("[Lightbox] originalTriggerElement is null, фокус не возвращен.");
         }
         originalTriggerElement = null;
-        console.log("[Lightbox] Лайтбокс закрыт.");
-    };
+    }
 
-    if (lightbox) lightbox._closeLightboxFunction = closeLightboxInternal;
+    lightbox._closeLightboxFunction = closeLightboxInternal;
 
-    const navigateImageFunction = (direction) => {
+    function navigateImage(direction) {
         if (lightboxBlobs.length <= 1) return;
-        let newIndex = local_currentIndex;
-        if (direction === 'prev') { newIndex = (local_currentIndex - 1 + lightboxBlobs.length) % lightboxBlobs.length; }
-        else if (direction === 'next') { newIndex = (local_currentIndex + 1) % lightboxBlobs.length; }
-
-        const currentLightboxInstanceForNav = document.getElementById('screenshotLightbox');
-        if (!currentLightboxInstanceForNav) {
-            console.error("[Lightbox Nav] screenshotLightbox не найден при навигации.");
-            return;
+        let newIndex = state.currentIndex;
+        if (direction === 'prev') {
+            newIndex = (state.currentIndex - 1 + lightboxBlobs.length) % lightboxBlobs.length;
+        } else if (direction === 'next') {
+            newIndex = (state.currentIndex + 1) % lightboxBlobs.length;
         }
-
-        showImageAtIndex(newIndex, lightboxBlobs, stateManagerForShowImage, {
-            lightboxImage: currentLightboxInstanceForNav.querySelector('#lightboxImage'),
-            loadingIndicator: currentLightboxInstanceForNav.querySelector('#lightboxLoading'),
-            counterElement: currentLightboxInstanceForNav.querySelector('#lightboxCounter'),
-            prevBtn: currentLightboxInstanceForNav.querySelector('#prevLightboxBtn'),
-            nextBtn: currentLightboxInstanceForNav.querySelector('#nextLightboxBtn')
-        });
-    };
-
-    if (lightbox) lightbox._navigateImageFunction = navigateImageFunction;
-
-    const preloadImage = (index) => {
-        if (index < 0 || index >= lightboxBlobs.length) return null;
-        const blob = lightboxBlobs[index];
-        if (!(blob instanceof Blob)) return null;
-        try { const url = URL.createObjectURL(blob); return url; } catch (e) { console.error(`[Lightbox] Ошибка создания URL для предзагрузки индекса ${index}:`, e); return null; }
-    };
-
-    const updateImageTransform = () => {
-        const img = document.getElementById('lightboxImage');
-        if (img) {
-            const finalTranslateX = local_currentScale > 1 ? local_translateX : 0;
-            const finalTranslateY = local_currentScale > 1 ? local_translateY : 0;
-            img.style.transform = `translate(${finalTranslateX}px, ${finalTranslateY}px) scale(${local_currentScale})`;
-        } else { console.warn("[Lightbox] updateImageTransform: Элемент #lightboxImage не найден."); }
-    };
-
-    const stateManagerForShowImage = {
-        getCurrentIndex: () => local_currentIndex,
-        getCurrentObjectUrl: () => local_currentObjectUrl,
-        getCurrentPreloadedUrls: () => local_preloadedUrls,
-        updateCurrentIndex: (idx) => local_currentIndex = idx,
-        updateCurrentScale: (s) => local_currentScale = s,
-        updateTranslate: (x, y) => { local_translateX = x; local_translateY = y; },
-        updateObjectUrl: (url) => local_currentObjectUrl = url,
-        updatePreloadedUrls: (urls) => local_preloadedUrls = urls,
-        updateImageTransform: updateImageTransform,
-        preloadImage: preloadImage
-    };
+        state.isZoomedByDoubleClick = false;
+        showImageAtIndex(newIndex, lightboxBlobs, stateManagerForShowImage, elementsForShowImage);
+    }
+    lightbox._navigateImageFunction = navigateImage;
 
     const MIN_SCALE = 0.2;
     const MAX_SCALE = 5.0;
-    const ZOOM_SENSITIVITY = 0.1;
-    let isPanning = false;
-    let startX = 0, startY = 0;
+    const ZOOM_SENSITIVITY_FACTOR = 0.1;
 
-    const handleWheelZoom = (event) => {
-        const img = document.getElementById('lightboxImage');
-        if (!img) return;
+    wheelListener = (event) => {
+        if (!elements.lightboxImage || elements.lightboxImage.classList.contains('hidden')) return;
         event.preventDefault();
+
         const delta = event.deltaY > 0 ? -1 : 1;
-        let newScale = local_currentScale + delta * ZOOM_SENSITIVITY * local_currentScale;
+        const scaleAmount = state.currentScale * ZOOM_SENSITIVITY_FACTOR * delta;
+        let newScale = state.currentScale + scaleAmount;
         newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-        if (newScale !== local_currentScale) {
-            const rect = img.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
-            const imageX = (mouseX - local_translateX) / local_currentScale;
-            const imageY = (mouseY - local_translateY) / local_currentScale;
-            local_translateX = mouseX - imageX * newScale;
-            local_translateY = mouseY - imageY * newScale;
-            local_currentScale = newScale;
-            if (local_currentScale <= 1.0) { local_translateX = 0; local_translateY = 0; }
-            img.style.cursor = local_currentScale > 1 ? 'grab' : 'default';
-            updateImageTransform();
+
+        if (newScale === state.currentScale) return;
+
+        const rect = elements.lightboxImage.getBoundingClientRect();
+        const mouseXGlobal = event.clientX;
+        const mouseYGlobal = event.clientY;
+
+        const mouseXOnImg = mouseXGlobal - rect.left;
+        const mouseYOnImg = mouseYGlobal - rect.top;
+
+        const imgRenderedWidth = rect.width / state.currentScale;
+        const imgRenderedHeight = rect.height / state.currentScale;
+
+        const pointX = (mouseXOnImg - imgRenderedWidth / 2 - state.translateX) / state.currentScale + imgRenderedWidth / 2;
+        const pointY = (mouseYOnImg - imgRenderedHeight / 2 - state.translateY) / state.currentScale + imgRenderedHeight / 2;
+
+        state.translateX = (mouseXOnImg - imgRenderedWidth / 2) - (pointX - imgRenderedWidth / 2) * newScale;
+        state.translateY = (mouseYOnImg - imgRenderedHeight / 2) - (pointY - imgRenderedHeight / 2) * newScale;
+
+        state.currentScale = newScale;
+        state.isZoomedByDoubleClick = false;
+
+        checkPanningLimits();
+        updateImageTransform();
+    };
+
+    dblClickListener = (event) => {
+        if (!elements.lightboxImage || elements.lightboxImage.classList.contains('hidden')) return;
+        event.preventDefault();
+
+        const prevScale = state.currentScale;
+
+        if (state.isZoomedByDoubleClick) {
+            state.currentScale = 1.0;
+            state.translateX = 0;
+            state.translateY = 0;
+            state.isZoomedByDoubleClick = false;
+        } else {
+            state.currentScale = Math.min(prevScale * 1.2, MAX_SCALE);
+
+            const rect = elements.lightboxImage.getBoundingClientRect();
+            const mouseXGlobal = event.clientX;
+            const mouseYGlobal = event.clientY;
+            const mouseXOnImg = mouseXGlobal - rect.left;
+            const mouseYOnImg = mouseYGlobal - rect.top;
+
+            const imgRenderedWidth = rect.width / prevScale;
+            const imgRenderedHeight = rect.height / prevScale;
+
+            const pointX = (mouseXOnImg - imgRenderedWidth / 2 - state.translateX) / prevScale + imgRenderedWidth / 2;
+            const pointY = (mouseYOnImg - imgRenderedHeight / 2 - state.translateY) / prevScale + imgRenderedHeight / 2;
+
+            state.translateX = (mouseXOnImg - imgRenderedWidth / 2) - (pointX - imgRenderedWidth / 2) * state.currentScale;
+            state.translateY = (mouseYOnImg - imgRenderedHeight / 2) - (pointY - imgRenderedHeight / 2) * state.currentScale;
+
+            state.isZoomedByDoubleClick = true;
+        }
+
+        checkPanningLimits();
+        updateImageTransform();
+    };
+
+    mousedownListener = (event) => {
+        if (state.currentScale <= 1.001 || !elements.lightboxImage || elements.lightboxImage.classList.contains('hidden')) return;
+        event.preventDefault();
+        state.isPanning = true;
+        state.startPanX = event.clientX - state.translateX;
+        state.startPanY = event.clientY - state.translateY;
+        elements.lightboxImage.style.cursor = 'grabbing';
+        elements.lightboxImage.classList.add('panning');
+        state.isZoomedByDoubleClick = false;
+    };
+
+    mousemoveListener = (event) => {
+        if (!state.isPanning || !elements.lightboxImage) return;
+        event.preventDefault();
+        state.translateX = event.clientX - state.startPanX;
+        state.translateY = event.clientY - state.startPanY;
+        checkPanningLimits();
+        updateImageTransform();
+    };
+
+    mouseupListener = (event) => {
+        if (!state.isPanning || !elements.lightboxImage) return;
+        event.preventDefault();
+        state.isPanning = false;
+        elements.lightboxImage.style.cursor = 'grab';
+        elements.lightboxImage.classList.remove('panning');
+    };
+
+    mouseleaveListener = (event) => {
+        if (state.isPanning) {
+            mouseupListener(event);
         }
     };
 
-    const onMouseDown = (event) => { const img = document.getElementById('lightboxImage'); if (img && local_currentScale > 1) { event.preventDefault(); isPanning = true; startX = event.clientX - local_translateX; startY = event.clientY - local_translateY; img.style.cursor = 'grabbing'; img.classList.add('panning'); } };
-    const onMouseMove = (event) => { if (isPanning) { event.preventDefault(); local_translateX = event.clientX - startX; local_translateY = event.clientY - startY; updateImageTransform(); } };
-    const onMouseUpOrLeave = (event) => { const img = document.getElementById('lightboxImage'); if (isPanning && img) { event.preventDefault(); isPanning = false; img.style.cursor = 'grab'; img.classList.remove('panning'); } };
-
-
-    if (!Array.isArray(lightboxBlobs) || lightboxBlobs.length === 0) { console.error("[Lightbox] openLightbox: Требуется массив Blob'ов."); if (typeof showNotification === 'function') showNotification("Ошибка: Нет изображений для отображения.", "error"); return; }
-    if (typeof initialIndex !== 'number' || initialIndex < 0 || initialIndex >= lightboxBlobs.length) { console.warn(`[Lightbox] openLightbox: Некорректный начальный индекс ${initialIndex}. Используем 0.`); local_currentIndex = 0; }
-    else { local_currentIndex = initialIndex; }
-
-    lightbox = document.getElementById('screenshotLightbox');
-    if (!lightbox) {
-        console.error("[Lightbox] КРИТИЧЕСКАЯ ОШИБКА: #screenshotLightbox не найден даже после попытки создания (перед setTimeout).");
-        return;
-    }
-
-    if (!lightbox.classList.contains('hidden')) {
-        console.warn("[Lightbox] openLightbox: Лайтбокс был видим перед открытием, принудительное закрытие старого экземпляра.");
-        if (lightbox._closeLightboxFunction) lightbox._closeLightboxFunction();
-        else closeLightboxInternal();
-    }
-
-    console.log("[Lightbox] Планирование инициализации лайтбокса через setTimeout(0)...");
     setTimeout(() => {
         const currentLightboxInstance = document.getElementById('screenshotLightbox');
         if (!currentLightboxInstance) { console.error("[Lightbox] openLightbox (setTimeout): Лайтбокс исчез!"); return; }
 
-        console.log("[Lightbox] openLightbox (setTimeout): Инициализация лайтбокса...");
-
-        local_currentIndex = initialIndex;
-        local_currentScale = 1.0; local_translateX = 0; local_translateY = 0; isPanning = false;
         originalTriggerElement = document.activeElement;
         currentLightboxInstance._closeLightboxFunction = closeLightboxInternal;
-        currentLightboxInstance._navigateImageFunction = navigateImageFunction;
+        currentLightboxInstance._navigateImageFunction = navigateImage;
 
-
-        const imgElement = currentLightboxInstance.querySelector('#lightboxImage');
-        const prevButton = currentLightboxInstance.querySelector('#prevLightboxBtn');
-        const nextButton = currentLightboxInstance.querySelector('#nextLightboxBtn');
-        const closeButton = currentLightboxInstance.querySelector('#closeLightboxBtn');
-        const loadingIndicator = currentLightboxInstance.querySelector('#lightboxLoading');
-        const counterElement = currentLightboxInstance.querySelector('#lightboxCounter');
-
-        if (!imgElement || !prevButton || !nextButton || !closeButton || !loadingIndicator || !counterElement) {
-            console.error("[Lightbox] openLightbox (setTimeout): Ошибка! Не найдены все необходимые внутренние DOM-элементы лайтбокса ПЕРЕД вызовом showImageAtIndex.", {
-                imgElement, prevButton, nextButton, closeButton, loadingIndicator, counterElement
-            });
-            if (typeof showNotification === 'function') showNotification("Критическая ошибка интерфейса лайтбокса (не найдены элементы).", "error");
-            if (currentLightboxInstance._closeLightboxFunction) {
-                currentLightboxInstance._closeLightboxFunction();
-            }
-            return;
+        if (elements.closeBtn) {
+            if (elements.closeBtn._clickHandler) elements.closeBtn.removeEventListener('click', elements.closeBtn._clickHandler);
+            elements.closeBtn._clickHandler = () => { if (currentLightboxInstance._closeLightboxFunction) currentLightboxInstance._closeLightboxFunction(); };
+            elements.closeBtn.addEventListener('click', elements.closeBtn._clickHandler);
         }
-
-        if (closeButton._clickHandler) closeButton.removeEventListener('click', closeButton._clickHandler);
-        closeButton._clickHandler = () => { if (currentLightboxInstance._closeLightboxFunction) currentLightboxInstance._closeLightboxFunction(); };
-        closeButton.addEventListener('click', closeButton._clickHandler);
 
         if (currentLightboxInstance._overlayClickHandler) currentLightboxInstance.removeEventListener('click', currentLightboxInstance._overlayClickHandler);
         currentLightboxInstance._overlayClickHandler = (event) => {
@@ -21203,36 +21706,41 @@ function openLightbox(blobs, initialIndex) {
         };
         currentLightboxInstance.addEventListener('click', currentLightboxInstance._overlayClickHandler);
 
-        if (prevButton) {
-            if (prevButton._clickHandler) prevButton.removeEventListener('click', prevButton._clickHandler);
-            prevButton._clickHandler = () => { if (currentLightboxInstance._navigateImageFunction) currentLightboxInstance._navigateImageFunction('prev'); };
-            prevButton.addEventListener('click', prevButton._clickHandler);
+
+        if (elements.prevBtn) {
+            if (elements.prevBtn._clickHandler) elements.prevBtn.removeEventListener('click', elements.prevBtn._clickHandler);
+            elements.prevBtn._clickHandler = () => { if (currentLightboxInstance._navigateImageFunction) currentLightboxInstance._navigateImageFunction('prev'); };
+            elements.prevBtn.addEventListener('click', elements.prevBtn._clickHandler);
         }
-        if (nextButton) {
-            if (nextButton._clickHandler) nextButton.removeEventListener('click', nextButton._clickHandler);
-            nextButton._clickHandler = () => { if (currentLightboxInstance._navigateImageFunction) currentLightboxInstance._navigateImageFunction('next'); };
-            nextButton.addEventListener('click', nextButton._clickHandler);
+        if (elements.nextBtn) {
+            if (elements.nextBtn._clickHandler) elements.nextBtn.removeEventListener('click', elements.nextBtn._clickHandler);
+            elements.nextBtn._clickHandler = () => { if (currentLightboxInstance._navigateImageFunction) currentLightboxInstance._navigateImageFunction('next'); };
+            elements.nextBtn.addEventListener('click', elements.nextBtn._clickHandler);
         }
 
-        if (imgElement) {
+        if (elements.lightboxImage) {
+            if (wheelListener && elements.lightboxImage._wheelListenerAttached) elements.lightboxImage.removeEventListener('wheel', wheelListener);
+            if (mousedownListener && elements.lightboxImage._mousedownListenerAttached) elements.lightboxImage.removeEventListener('mousedown', mousedownListener);
+            if (dblClickListener && elements.lightboxImage._dblClickListenerAttached) elements.lightboxImage.removeEventListener('dblclick', dblClickListener);
+            if (mouseleaveListener && elements.lightboxImage._mouseleaveListenerAttached) elements.lightboxImage.removeEventListener('mouseleave', mouseleaveListener);
 
-            if (wheelListener) imgElement.removeEventListener('wheel', wheelListener);
-            wheelListener = handleWheelZoom;
-            imgElement.addEventListener('wheel', wheelListener, { passive: false });
+            elements.lightboxImage.addEventListener('wheel', wheelListener, { passive: false });
+            elements.lightboxImage._wheelListenerAttached = true;
+            elements.lightboxImage.addEventListener('dblclick', dblClickListener);
+            elements.lightboxImage._dblClickListenerAttached = true;
+            elements.lightboxImage.addEventListener('mousedown', mousedownListener);
+            elements.lightboxImage._mousedownListenerAttached = true;
+            elements.lightboxImage.addEventListener('mouseleave', mouseleaveListener);
+            elements.lightboxImage._mouseleaveListenerAttached = true;
+        }
 
-            if (mousedownListener) imgElement.removeEventListener('mousedown', mousedownListener);
-            if (mousemoveListener) document.removeEventListener('mousemove', mousemoveListener);
-            if (mouseupListener) document.removeEventListener('mouseup', mouseupListener);
-            if (mouseleaveListener) imgElement.removeEventListener('mouseleave', mouseleaveListener);
-
-            mousedownListener = onMouseDown;
-            mousemoveListener = onMouseMove;
-            mouseupListener = onMouseUpOrLeave;
-            mouseleaveListener = onMouseUpOrLeave;
-            imgElement.addEventListener('mousedown', mousedownListener);
+        if (mousemoveListener && !document._lightboxMousemoveListenerAttached) {
             document.addEventListener('mousemove', mousemoveListener);
+            document._lightboxMousemoveListenerAttached = true;
+        }
+        if (mouseupListener && !document._lightboxMouseupListenerAttached) {
             document.addEventListener('mouseup', mouseupListener);
-            imgElement.addEventListener('mouseleave', mouseleaveListener);
+            document._lightboxMouseupListenerAttached = true;
         }
 
         currentLightboxInstance.classList.remove('hidden');
@@ -21242,31 +21750,13 @@ function openLightbox(blobs, initialIndex) {
         });
         document.body.classList.add('overflow-hidden');
 
-        showImageAtIndex(local_currentIndex, lightboxBlobs, stateManagerForShowImage, {
-            lightboxImage: imgElement,
-            loadingIndicator: loadingIndicator,
-            counterElement: counterElement,
-            prevBtn: prevButton,
-            nextBtn: nextButton
-        });
+        showImageAtIndex(state.currentIndex, lightboxBlobs, stateManagerForShowImage, elementsForShowImage);
 
         setTimeout(() => {
-            const lightboxContainerToFocus = currentLightboxInstance;
-            if (lightboxContainerToFocus && typeof lightboxContainerToFocus.focus === 'function') {
-                lightboxContainerToFocus.focus();
-                console.log("[Lightbox] Focus set to lightbox container itself (#screenshotLightbox).");
-            } else {
-                console.warn("[Lightbox] Could not set focus, lightbox container not found or not focusable after timeout.", lightboxContainerToFocus);
-
-                const fallbackFocusTarget = currentLightboxInstance.querySelector('#closeLightboxBtn');
-                if (fallbackFocusTarget) {
-                    fallbackFocusTarget.focus();
-                    console.warn("[Lightbox] Fallback: Focus set to close button.");
-                }
+            if (currentLightboxInstance && typeof currentLightboxInstance.focus === 'function') {
+                currentLightboxInstance.focus();
             }
         }, 50);
-
-        console.log(`[Lightbox] Лайтбокс открыт для ${lightboxBlobs.length} изображений, начиная с индекса ${local_currentIndex} (инициализация из setTimeout).`);
     }, 0);
 }
 
