@@ -1193,32 +1193,10 @@
 
         <!-- Закладки -->
         <div id="bookmarksContent" class="tab-content hidden">
-            
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <div
-                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
-                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек">
-                                <i class="fas fa-th-large"></i>
-                            </button>
-                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка">
-                                <i class="fas fa-list"></i>
-                            </button>
-                        </div>
-                        <button id="addBookmarkBtn"
-                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                            <i class="fas fa-plus mr-2"></i>Добавить
-                        </button>
-                        <button id="organizeBookmarksBtn"
-                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
-                            <i class="fas fa-folder mr-2"></i>Управление папками
-                        </button>
-                    </div>
-
-                    <div class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md mb-4">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-
-        <!-- Поле поиска по закладкам -->
-        <div class="relative">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
+                    <h2 class="text-2xl font-bold">Закладки</h2>
+                    <div class="relative">
             <label for="bookmarkSearchInput" class="sr-only">Поиск по закладкам</label>
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <i class="fas fa-search text-gray-400"></i>
@@ -1245,9 +1223,25 @@
                 <!-- Папки будут добавлены сюда динамически из JS -->
             </select>
         </div>
-
-    </div>
-</div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div
+                            class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек">
+                                <i class="fas fa-th-large"></i>
+                            </button>
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                        <button id="addBookmarkBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-plus mr-2"></i>Добавить
+                        </button>
+                        <button id="organizeBookmarksBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
+                            <i class="fas fa-folder mr-2"></i>Управление папками
+                        </button>
+                    </div>
                 </div>
                 <div id="bookmarksContainer" class="grid gap-content" data-section-id="bookmarksContainer"
                     data-default-view="cards">
