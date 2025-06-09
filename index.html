@@ -1196,6 +1196,33 @@
             <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content">
                     <h2 class="text-2xl font-bold">Закладки</h2>
+                    <div class="relative">
+            <label for="bookmarkSearchInput" class="sr-only">Поиск по закладкам</label>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-search text-gray-400"></i>
+            </div>
+            <input type="text" id="bookmarkSearchInput"
+                   class="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                   placeholder="Поиск по названию, URL, описанию...">
+            <button id="clearBookmarkSearchBtn" type="button" 
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hidden" 
+                    title="Очистить поиск">
+                <i class="fas fa-times-circle"></i>
+            </button>
+        </div>
+
+        <!-- Фильтр по папкам -->
+        <div class="relative">
+            <label for="bookmarkFolderFilter" class="sr-only">Фильтр по папкам</label>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-folder-open text-gray-400"></i>
+            </div>
+            <select id="bookmarkFolderFilter"
+                    class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                <option value="">Все папки</option>
+                <!-- Папки будут добавлены сюда динамически из JS -->
+            </select>
+        </div>
                     <div class="flex items-center gap-2 flex-wrap">
                         <div
                             class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
