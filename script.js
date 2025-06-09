@@ -12618,16 +12618,27 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
 
 
 function initBookmarkSystem() {
-    console.log("Вызвана функция initBookmarkSystem (заглушка).");
+    console.log("initBookmarkSystem: Инициализация системы закладок...");
+
     const addBookmarkBtn = document.getElementById('addBookmarkBtn');
     const organizeBookmarksBtn = document.getElementById('organizeBookmarksBtn');
     const bookmarkSearchInput = document.getElementById('bookmarkSearchInput');
+    const clearBookmarkSearchBtn = document.getElementById('clearBookmarkSearchBtn');
     const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
 
+    if (!addBookmarkBtn || !organizeBookmarksBtn || !bookmarkSearchInput || !clearBookmarkSearchBtn || !bookmarkFolderFilter) {
+        console.error("initBookmarkSystem: Один или несколько элементов управления для закладок не найдены. Функциональность может быть ограничена.");
+    }
+
     if (addBookmarkBtn && !addBookmarkBtn.dataset.listenerAttached) {
-        addBookmarkBtn.addEventListener('click', () => showAddBookmarkModal());
+        addBookmarkBtn.addEventListener('click', () => {
+            if (typeof showAddBookmarkModal === 'function') {
+                showAddBookmarkModal();
+            } else {
+                console.error("Функция showAddBookmarkModal не найдена!");
+            }
+        });
         addBookmarkBtn.dataset.listenerAttached = 'true';
-        console.log("Обработчик для addBookmarkBtn добавлен в initBookmarkSystem.");
     }
 
     if (organizeBookmarksBtn && !organizeBookmarksBtn.dataset.listenerAttached) {
@@ -12640,24 +12651,34 @@ function initBookmarkSystem() {
             }
         });
         organizeBookmarksBtn.dataset.listenerAttached = 'true';
-        console.log("Обработчик для organizeBookmarksBtn добавлен в initBookmarkSystem.");
     }
 
     if (bookmarkSearchInput && !bookmarkSearchInput.dataset.listenerAttached) {
-        const debouncedFilter = typeof debounce === 'function' ? debounce(filterBookmarks, 250) : filterBookmarks;
+        const debouncedFilter = typeof debounce === 'function'
+            ? debounce(filterBookmarks, 250)
+            : filterBookmarks;
+        
         bookmarkSearchInput.addEventListener('input', debouncedFilter);
         bookmarkSearchInput.dataset.listenerAttached = 'true';
-        console.log("Обработчик для bookmarkSearchInput добавлен в initBookmarkSystem.");
-        setupClearButton('bookmarkSearchInput', 'clearBookmarkSearchBtn', filterBookmarks);
+        console.log("Обработчик для bookmarkSearchInput успешно добавлен.");
+
+        if (typeof setupClearButton === 'function') {
+            setupClearButton('bookmarkSearchInput', 'clearBookmarkSearchBtn', filterBookmarks);
+        } else {
+            console.warn("Функция setupClearButton не найдена, кнопка очистки для поиска по закладкам не будет работать.");
+        }
     }
 
     if (bookmarkFolderFilter && !bookmarkFolderFilter.dataset.listenerAttached) {
         bookmarkFolderFilter.addEventListener('change', filterBookmarks);
         bookmarkFolderFilter.dataset.listenerAttached = 'true';
-        console.log("Обработчик для bookmarkFolderFilter добавлен в initBookmarkSystem.");
+        console.log("Обработчик для bookmarkFolderFilter успешно добавлен.");
     }
+
     populateBookmarkFolders();
     loadBookmarks();
+    
+    console.log("initBookmarkSystem: Инициализация системы закладок завершена.");
 }
 
 
@@ -14582,10 +14603,16 @@ function filterItems(options) {
 async function filterBookmarks() {
     const searchInput = document.getElementById('bookmarkSearchInput');
     const folderFilter = document.getElementById('bookmarkFolderFilter');
+    const container = document.getElementById('bookmarksContainer');
+
+    if (!container) {
+        console.error("filterBookmarks: Контейнер #bookmarksContainer не найден.");
+        return;
+    }
 
     if (!searchInput || !folderFilter) {
-        console.error("filterBookmarks: Search input or folder filter not found.");
-        if (typeof renderBookmarks === 'function') renderBookmarks([], {});
+        console.error("filterBookmarks: Поле поиска или фильтр по папкам не найдены в DOM.");
+        renderBookmarks([], {});
         return;
     }
 
@@ -14613,7 +14640,7 @@ async function filterBookmarks() {
             if (!isNaN(numericFolderId)) {
                 bookmarksToDisplay = allBookmarks.filter(bm => bm.folder === numericFolderId);
             } else {
-                console.warn(`filterBookmarks: Некорректный ID папки '${selectedFolderValue}'. Показываем неархивированные.`);
+                console.warn(`filterBookmarks: Некорректный ID папки '${selectedFolderValue}'. Показываем все, кроме архива.`);
                 bookmarksToDisplay = allBookmarks.filter(bm => bm.folder !== ARCHIVE_FOLDER_ID);
             }
         }
@@ -14627,20 +14654,12 @@ async function filterBookmarks() {
             });
         }
 
-        if (typeof renderBookmarks === 'function') {
-            renderBookmarks(bookmarksToDisplay, folderMap);
-        } else {
-            console.error("renderBookmarks function is not defined for filterBookmarks");
-        }
-
-        if (typeof ensureBookmarksScroll === 'function') {
-            ensureBookmarksScroll();
-        }
+        renderBookmarks(bookmarksToDisplay, folderMap);
 
     } catch (error) {
         console.error("Ошибка при фильтрации закладок:", error);
-        if (typeof showNotification === 'function') showNotification("Ошибка фильтрации закладок", "error");
-        if (typeof renderBookmarks === 'function') renderBookmarks([], {});
+        showNotification("Ошибка фильтрации закладок", "error");
+        renderBookmarks([], {});
     }
 }
 
