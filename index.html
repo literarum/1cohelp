@@ -1193,43 +1193,46 @@
 
         <!-- Закладки -->
         <div id="bookmarksContent" class="tab-content hidden">
-            <div class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-content rounded-lg shadow-md" style="background-color: #313338;">
+            <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                 <!-- Уровень 1: Заголовок и основные кнопки -->
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold text-white">Закладки</h2>
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+                    <h2 class="text-2xl font-bold">Закладки</h2>
                     <div class="flex items-center gap-2">
-                        <div class="flex items-center space-x-1 border border-gray-600 rounded-md p-0.5" style="border-color: #4E5058; background-color: #383A40;">
-                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек" style="background-color: #4E5058; color: white;">
+                        <div class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5"
+                            role="group">
+                            <button class="view-toggle p-1.5 rounded" data-view="cards" title="Вид карточек">
                                 <i class="fas fa-th-large"></i>
                             </button>
-                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка" style="color: #B5BAC1;">
+                            <button class="view-toggle p-1.5 rounded" data-view="list" title="Вид списка">
                                 <i class="fas fa-list"></i>
                             </button>
                         </div>
-                        <button id="addBookmarkBtn" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition flex items-center" style="background-color: #855BD5;">
+                        <button id="addBookmarkBtn"
+                            class="px-3 py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition flex items-center">
                             <i class="fas fa-plus mr-2"></i>Добавить
                         </button>
-                        <button id="organizeBookmarksBtn" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition flex items-center" style="background-color: #855BD5;">
+                        <button id="organizeBookmarksBtn"
+                            class="px-3 py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition flex items-center">
                             <i class="fas fa-folder mr-2"></i>Управление папками
                         </button>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-4 mb-4">
-                    <div class="relative flex-grow">
+                <div class="flex flex-col md:flex-row items-center gap-4 mb-4">
+                    <div class="relative flex-grow w-full">
                         <label for="bookmarkSearchInput" class="sr-only">Поиск по закладкам</label>
-                        <input type="text" id="bookmarkSearchInput" placeholder="Поиск по закладкам..." 
-                               class="w-full px-3 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base text-gray-100" style="background-color: #383A40; border-color: #242528;">
-                        <button id="clearBookmarkSearchBtn" type="button" 
-                                class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-300 hidden" 
-                                title="Очистить поиск по закладкам">
+                        <input type="text" id="bookmarkSearchInput" placeholder="Поиск по закладкам..."
+                            class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100">
+                        <button id="clearBookmarkSearchBtn" type="button"
+                            class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                            title="Очистить поиск по закладкам">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
-                    <div class="relative">
+                    <div class="relative w-full md:w-auto">
                         <label for="bookmarkFolderFilter" class="sr-only">Фильтр по папкам</label>
-                        <select id="bookmarkFolderFilter" 
-                                class="w-full md:w-auto pl-3 pr-8 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-base bg-gray-700 text-gray-100 appearance-none" style="background-color: #383A40; border-color: #242528;">
+                        <select id="bookmarkFolderFilter"
+                            class="w-full md:w-auto pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 appearance-none">
                             <option value="">Все папки</option>
                             <!-- Папки будут добавлены сюда динамически из JS -->
                         </select>
@@ -1238,10 +1241,11 @@
                         </div>
                     </div>
                 </div>
-                
-                <div id="bookmarksContainer" class="grid gap-content" data-section-id="bookmarksContainer" data-default-view="cards">
+
+                <div id="bookmarksContainer" class="grid gap-content" data-section-id="bookmarksContainer"
+                    data-default-view="cards">
                     <!-- Заглушка, если закладок нет. Будет заменена JS -->
-                    <div class="col-span-full text-center py-10 text-gray-500">
+                    <div class="col-span-full text-center py-10 text-gray-500 dark:text-gray-400">
                         Закладки не найдены.
                     </div>
                 </div>
