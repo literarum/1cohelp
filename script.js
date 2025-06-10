@@ -12813,11 +12813,6 @@ async function ensureBookmarkModal() {
             btn.addEventListener('click', btn._specificClickHandler);
         });
 
-        if (modal._overlayClickHandler) modal.removeEventListener('click', modal._overlayClickHandler);
-        modal._overlayClickHandler = (e) => { if (e.target === modal) handleCloseActions(modal); };
-        modal.addEventListener('click', modal._overlayClickHandler);
-
-
         const fullscreenBtn = modal.querySelector('#' + bookmarkModalConfigGlobal.buttonId);
         if (fullscreenBtn) {
             if (fullscreenBtn._fullscreenToggleHandler) fullscreenBtn.removeEventListener('click', fullscreenBtn._fullscreenToggleHandler);
@@ -12889,6 +12884,7 @@ async function ensureBookmarkModal() {
     console.log(`${LOG_PREFIX} Модальное окно для закладок успешно подготовлено/найдено.`);
     return elements;
 }
+
 
 async function showAddBookmarkModal(bookmarkToEditId = null) {
     const LOG_PREFIX = "[showAddBookmarkModal_V2]";
