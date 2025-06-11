@@ -733,6 +733,23 @@
             opacity: 0;
             transition: none;
         }
+
+        .hotkey-code {
+            background-color: #e5e7eb;
+            color: #1f2937;
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+        }
+
+        .dark .hotkey-code {
+            background-color: #4b5563;
+            color: #e5e7eb;
+            border-color: #4b5563;
+        }
     </style>
 </head>
 
@@ -1194,7 +1211,6 @@
         <!-- Закладки -->
         <div id="bookmarksContent" class="tab-content hidden">
             <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
-                <!-- Уровень 1: Заголовок и основные кнопки -->
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                     <h2 class="text-2xl font-bold">Закладки</h2>
                     <div class="flex items-center gap-2">
@@ -1234,7 +1250,6 @@
                         <select id="bookmarkFolderFilter"
                             class="w-full md:w-auto pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 appearance-none">
                             <option value="">Все папки</option>
-                            <!-- Папки будут добавлены сюда динамически из JS -->
                         </select>
                         <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
                             <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
@@ -1244,7 +1259,6 @@
 
                 <div id="bookmarksContainer" class="grid gap-content" data-section-id="bookmarksContainer"
                     data-default-view="cards">
-                    <!-- Заглушка, если закладок нет. Будет заменена JS -->
                     <div class="col-span-full text-center py-10 text-gray-500 dark:text-gray-400">
                         Закладки не найдены.
                     </div>
@@ -1252,7 +1266,6 @@
             </div>
         </div>
 
-        <!-- Типы сообщений СЭДО -->
         <div id="sedoTypesContent" class="tab-content hidden">
             <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-content">
@@ -1865,11 +1878,11 @@
     <!-- Модальное окно Горячие клавиши -->
     <div id="hotkeysModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto">
         <div class="flex items-center justify-center min-h-full">
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
                 <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
-                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и управление Copilot
+                            <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и управление
                         </h2>
                         <div class="flex items-center flex-shrink-0">
                             <button id="toggleFullscreenHotkeysBtn" type="button"
@@ -1886,185 +1899,112 @@
                     </div>
                 </div>
 
-                <div class="p-6 overflow-y-auto flex-1 text-sm leading-relaxed space-y-5">
-                    <section>
-                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
-                            Навигация и Основные Действия:</h3>
-                        <ul class="space-y-2.5 list-inside">
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Backspace</code>
-                                (вне поля ввода и активных окон деталей/просмотра): Вернуться на предыдущую страницу в
-                                приложении (например, из списка регламентов категории к списку категорий).</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + F</code>
-                                (вне поля ввода): Установить фокус на поле глобального поиска и выделить его содержимое.
-                            </li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + I</code>
-                                (вне поля ввода): Открыть окно настроек приложения.</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + V</code>
-                                (вне поля ввода): Переключить вид отображения элементов (список/плитки) в текущей
-                                активной секции (например, для закладок, ссылок и т.д.).</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + H</code>
-                                (вне поля ввода): Открыть/закрыть это окно "Горячие клавиши и управление Copilot".</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
-                            Работа с окнами деталей и просмотра:</h3>
-                        <p class="mb-2 text-gray-700 dark:text-gray-300">
-                            Действия при открытой карточке элемента (алгоритма, регламента, заметки), списке скриншотов
-                            или полноэкранном просмотре изображения:
-                        </p>
-                        <ul class="space-y-2.5 list-inside">
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Esc</code>:
-                                <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
-                                    <li>В окне деталей элемента (например, карточка алгоритма): Закрыть окно деталей,
-                                        вернуться к списку или предыдущему экрану.</li>
-                                    <li>В окне просмотра списка скриншотов элемента (вьювер): Закрыть список скриншотов,
-                                        а затем и окно деталей элемента.</li>
-                                    <li>При полноэкранном просмотре изображения (лайтбокс): Закрыть изображение, список
-                                        скриншотов (если был) и окно деталей элемента.</li>
-                                    <li>В других модальных окнах (редактирование, настройки и т.д.): Закрыть текущее
-                                        активное модальное окно.</li>
-                                    <li>В любом поле поиска - удалить ввод и выйти из фокуса строки</li>
+                <div class="p-6 overflow-y-auto flex-1 text-sm leading-relaxed">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+                        <div class="space-y-6">
+                            <section>
+                                <h3
+                                    class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
+                                    <i class="fas fa-compass w-6 text-center text-primary mr-2"></i>Общие действия и
+                                    навигация
+                                </h3>
+                                <ul class="space-y-3 list-inside">
+                                    <li><code class="hotkey-code">Alt + F</code> — Установить фокус на поле глобального
+                                        поиска.</li>
+                                    <li><code class="hotkey-code">Alt + S</code> — Открыть/закрыть раздел "Избранное".
+                                    </li>
+                                    <li><code class="hotkey-code">Alt + I</code> — Открыть окно настроек приложения.
+                                    </li>
+                                    <li><code class="hotkey-code">Alt + T</code> — Переключить цветовую тему (Авто /
+                                        Светлая / Темная).</li>
+                                    <li><code class="hotkey-code">Ctrl + Shift + H</code> — Открыть/закрыть это окно
+                                        помощи.</li>
+                                    <li><code class="hotkey-code">Backspace</code> (вне полей ввода) — Вернуться на
+                                        предыдущий экран в приложении (например, из списка регламентов к списку
+                                        категорий).</li>
                                 </ul>
-                            </li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Backspace</code>:
-                                <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
-                                    <li>В окне деталей элемента (например, карточка алгоритма): Закрыть окно деталей,
-                                        вернуться к списку или предыдущему экрану.</li>
-                                    <li>В окне просмотра списка скриншотов (вьювер): Закрыть список скриншотов,
-                                        вернуться к окну деталей элемента.</li>
-                                    <li>При полноэкранном просмотре изображения (лайтбокс): Закрыть изображение,
-                                        вернуться к списку скриншотов (если он был открыт).</li>
+                            </section>
+
+                            <section>
+                                <h3
+                                    class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
+                                    <i class="fas fa-database w-6 text-center text-primary mr-2"></i>Работа с данными и
+                                    формами
+                                </h3>
+                                <ul class="space-y-3 list-inside">
+                                    <li><code class="hotkey-code">Alt + N</code> — Открыть окно добавления нового
+                                        элемента для текущей активной секции (алгоритма, закладки и т.д.).</li>
+                                    <li><code class="hotkey-code">Alt + Shift + S</code> — Экспортировать (сохранить)
+                                        всю базу данных в файл.</li>
+                                    <li><code class="hotkey-code">Alt + Shift + O</code> — Открыть диалог импорта
+                                        (открытия) базы данных из файла.</li>
+                                    <li><b>Поле "Информация по обращению":</b>
+                                        <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                            <li><code class="hotkey-code">Ctrl + Enter</code> (внутри поля) — Вставить
+                                                следующий пункт нумерованного списка.</li>
+                                            <li><code class="hotkey-code">Ctrl + Shift + Backspace</code> (вне полей
+                                                ввода) — Очистить поле (с подтверждением).</li>
+                                        </ul>
+                                    </li>
                                 </ul>
-                            </li>
-                        </ul>
-                    </section>
+                            </section>
+                        </div>
 
-                    <section>
-                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">Работа
-                            с Данными:</h3>
-                        <ul class="space-y-2.5 list-inside">
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + N</code>
-                                (вне поля ввода): Открыть модальное окно добавления нового элемента для текущей секции.
-                            </li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + Shift + S</code>:
-                                Экспорт всех данных приложения в JSON.</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + Shift + O</code>:
-                                Открыть диалог выбора файла для импорта данных из JSON.</li>
-                            <li>Поле "Данные по обращению клиента":
-                                <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
-                                    <li><code
-                                            class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Enter</code>
-                                        (внутри поля): Вставить следующий пункт нумерованного списка.</li>
-                                    <li><code
-                                            class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + Backspace</code>
-                                        (вне поля ввода): Очистить поле (с подтверждением).</li>
-                                    <li><code
-                                            class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl + Shift + D</code>
-                                        (вне поля ввода): Сохранить содержимое поля в .txt файл.</li>
+                        <div class="space-y-6">
+                            <section>
+                                <h3
+                                    class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
+                                    <i class="fas fa-tools w-6 text-center text-primary mr-2"></i>Таймер и Избранное
+                                </h3>
+                                <ul class="space-y-3 list-inside">
+                                    <li><code class="hotkey-code">Alt + K</code> — Добавить/удалить текущий открытый
+                                        элемент в Избранное.</li>
+                                    <li><b>Управление таймером:</b>
+                                        <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                            <li>Нажатие <i class="fas fa-play w-4 text-center"></i> / <i
+                                                    class="fas fa-pause w-4 text-center"></i>: Старт/Пауза.</li>
+                                            <li>Нажатие <i class="fas fa-undo w-4 text-center"></i>: Сброс на
+                                                стандартное время.</li>
+                                            <li><code class="hotkey-code">Ctrl</code> + Нажатие <i
+                                                    class="fas fa-undo w-4 text-center"></i>: Сброс на 00:00.</li>
+                                            <li>Нажатие <i class="fas fa-plus w-4 text-center"></i>: Увеличить на 1
+                                                минуту.</li>
+                                            <li>Нажатие <i class="fas fa-minus w-4 text-center"></i>: Уменьшить на 1
+                                                минуту.</li>
+                                        </ul>
+                                    </li>
                                 </ul>
-                            </li>
-                        </ul>
-                    </section>
+                            </section>
 
-                    <section>
-                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
-                            Интерфейс:</h3>
-                        <ul class="space-y-2.5 list-inside">
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + T</code>
-                                (вне поля ввода): Переключить цветовую тему приложения (Авто / Светлая / Темная).</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
-                            Управление Таймером:
-                        </h3>
-                        <p class="mb-2.5 text-gray-700 dark:text-gray-300">
-                            Взаимодействие с кнопками управления таймером:
-                        </p>
-                        <ul class="space-y-2.5 list-inside">
-                            <li>
-                                Нажатие на кнопку <i class="fas fa-play inline-block w-4 text-center"></i> / <i
-                                    class="fas fa-pause inline-block w-4 text-center"></i> (Старт/Пауза): Запустить или
-                                приостановить таймер.
-                            </li>
-                            <li>
-                                Нажатие на кнопку <i class="fas fa-undo inline-block w-4 text-center"></i> (Сброс):
-                                Сбросить таймер на значение по умолчанию (01:50).
-                            </li>
-                            <li>
-                                <code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl</code>
-                                + Нажатие на кнопку <i class="fas fa-undo inline-block w-4 text-center"></i> (Сброс):
-                                Сбросить таймер на 00:00.
-                            </li>
-                            <li>
-                                Нажатие на кнопку <i class="fas fa-plus-circle inline-block w-4 text-center"></i>
-                                (Увеличить): Увеличить установленное/оставшееся время таймера на 30 секунд.
-                            </li>
-                            <li>
-                                <code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl</code>
-                                + Нажатие на кнопку <i class="fas fa-plus-circle inline-block w-4 text-center"></i>
-                                (Увеличить): Увеличить установленное/оставшееся время таймера на 5 секунд.
-                            </li>
-                            <li>
-                                Нажатие на кнопку <i class="fas fa-minus-circle inline-block w-4 text-center"></i>
-                                (Уменьшить): Уменьшить установленное/оставшееся время таймера на 30 секунд.
-                            </li>
-                            <li>
-                                <code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Ctrl</code>
-                                + Нажатие на кнопку <i class="fas fa-minus-circle inline-block w-4 text-center"></i>
-                                (Уменьшить): Уменьшить установленное/оставшееся время таймера на 5 секунд.
-                            </li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h3 class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1">
-                            Просмотр изображений (Лайтбокс и Вьювер):
-                        </h3>
-                        <p class="mb-1 text-gray-700 dark:text-gray-300">
-                            При полноэкранном просмотре одного изображения (Лайтбокс):
-                        </p>
-                        <ul class="space-y-2.5 list-inside mb-3">
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono"><i class="fas fa-arrow-left inline-block w-3 text-center"></i></code>
-                                / <code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono"><i class="fas fa-arrow-right inline-block w-3 text-center"></i></code>
-                                (клавиши со стрелками): Предыдущее / следующее изображение.</li>
-                            <li>Колесо мыши (или жесты touchpad): Масштабирование изображения.</li>
-                            <li>Перетаскивание мышью (при увеличенном масштабе): Панорамирование изображения.</li>
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Tab</code>
-                                / <code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Shift + Tab</code>:
-                                Переключение между кнопками управления в полноэкранном режиме.</li>
-                        </ul>
-                        <p class="mb-1 text-gray-700 dark:text-gray-300">
-                            В окне просмотра списка скриншотов элемента (Вьювер):
-                        </p>
-                        <ul class="space-y-2.5 list-inside">
-                            <li><code
-                                    class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">Alt + V</code>:
-                                Переключить вид отображения скриншотов (сетка/список).</li>
-                        </ul>
-                    </section>
-
+                            <section>
+                                <h3
+                                    class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
+                                    <i class="fas fa-window-maximize w-6 text-center text-primary mr-2"></i>Работа с
+                                    окнами и изображениями
+                                </h3>
+                                <ul class="space-y-3 list-inside">
+                                    <li><code class="hotkey-code">Esc</code> — Закрыть самое верхнее активное окно
+                                        (детали, редактирование, лайтбокс, настройки и т.д.). В полях поиска — очищает
+                                        ввод.</li>
+                                    <li><code class="hotkey-code">Alt + V</code> — Переключить вид отображения элементов
+                                        (список/плитки) в текущей секции.</li>
+                                    <li><b>Просмотр изображений (Лайтбокс):</b>
+                                        <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                            <li><code
+                                                    class="hotkey-code"><i class="fas fa-arrow-left w-3 text-center"></i></code>
+                                                / <code
+                                                    class="hotkey-code"><i class="fas fa-arrow-right w-3 text-center"></i></code>
+                                                — Предыдущее / следующее изображение.</li>
+                                            <li><code class="hotkey-code">Колесо мыши</code> — Масштабирование
+                                                изображения.</li>
+                                            <li><code class="hotkey-code">Перетаскивание</code> — Перемещение
+                                                увеличенного изображения.</li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </section>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="p-4 border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0 text-right">
