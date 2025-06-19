@@ -23106,7 +23106,6 @@ async function handleFavoriteContainerClick(event) {
     const title = favoriteItemCard.querySelector('h3')?.textContent || "Элемент";
     const description = favoriteItemCard.querySelector('p.line-clamp-3')?.textContent || "";
 
-
     if (button && button.classList.contains('go-to-original-btn')) {
         event.stopPropagation();
         console.log(`Переход к оригиналу: Type=${itemType}, ID=${originalItemId}, Section=${originalItemSection}`);
@@ -23183,14 +23182,78 @@ async function handleFavoriteContainerClick(event) {
             showNotification("Не удалось определить оригинальный раздел для перехода.", "error");
         }
 
-    } else if (button && button.classList.contains('remove-from-favorites-btn')) {
+    } else if (button && button.classList.contains('toggle-favorite-btn')) {
         event.stopPropagation();
-        if (confirm(`Удалить "${title}" из избранного?`)) {
-            await toggleFavorite(originalItemId, itemType, originalItemSection, title, description, button);
-        }
+        await toggleFavorite(originalItemId, itemType, originalItemSection, title, description, button);
+
     } else {
-        const goToOriginalSimulation = favoriteItemCard.querySelector('.go-to-original-btn');
-        if (goToOriginalSimulation) goToOriginalSimulation.click();
+        event.stopPropagation();
+        console.log(`[FIXED] Клик по карточке избранного. Type=${itemType}, ID=${originalItemId}, Section=${originalItemSection}`);
+
+        switch (itemType) {
+            case 'mainAlgorithm':
+                setActiveTab('main');
+                break;
+
+            case 'sedoTypeSection':
+                setActiveTab('sedoTypes');
+                break;
+
+            case 'algorithm':
+                const algoData = algorithms[originalItemSection]?.find(a => String(a.id) === String(originalItemId));
+                if (algoData) {
+                    showAlgorithmDetail(algoData, originalItemSection);
+                } else {
+                    showNotification("Не удалось найти данные для этого алгоритма.", "error");
+                }
+                break;
+
+            case 'bookmark':
+            case 'bookmark_note':
+                const bookmarkId = parseInt(originalItemId, 10);
+                if (!isNaN(bookmarkId)) {
+                    showBookmarkDetailModal(bookmarkId);
+                } else {
+                    showNotification("Некорректный ID закладки.", "error");
+                }
+                break;
+
+            case 'reglament':
+                const reglamentId = parseInt(originalItemId, 10);
+                if (!isNaN(reglamentId)) {
+                    showReglamentDetail(reglamentId);
+                } else {
+                    showNotification("Некорректный ID регламента.", "error");
+                }
+                break;
+
+            case 'extLink':
+                const linkData = await getFromIndexedDB('extLinks', parseInt(originalItemId, 10));
+                if (linkData && linkData.url) {
+                    try {
+                        new URL(linkData.url);
+                        window.open(linkData.url, '_blank', 'noopener,noreferrer');
+                    } catch (e) {
+                        showNotification("Некорректный URL у этого ресурса.", "error");
+                    }
+                } else {
+                    showNotification("URL для этого ресурса не найден.", "error");
+                }
+                break;
+
+            case 'link':
+                const linkDataForCopy = await getFromIndexedDB('links', parseInt(originalItemId, 10));
+                if (linkDataForCopy && linkDataForCopy.link) {
+                    copyToClipboard(linkDataForCopy.link, 'Ссылка 1С скопирована!');
+                } else {
+                    showNotification("Не удалось получить данные ссылки 1С.", "error");
+                }
+                break;
+
+            default:
+                showNotification(`Просмотр деталей для типа "${itemType}" не реализован.`, "info");
+                break;
+        }
     }
 }
 
