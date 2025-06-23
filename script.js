@@ -14021,10 +14021,10 @@ async function handleBookmarkAction(event) {
             if (typeof showNotification === 'function') showNotification("Функция восстановления из архива недоступна.", "error");
         }
     } else if (action === 'edit') {
-        if (typeof showAddBookmarkModal === 'function') {
-            showAddBookmarkModal(bookmarkId);
+        if (typeof showEditBookmarkModal === 'function') {
+            showEditBookmarkModal(bookmarkId);
         } else {
-            console.error("Функция showAddBookmarkModal (для редактирования) не определена.");
+            console.error("Функция showEditBookmarkModal (для редактирования) не определена.");
             if (typeof NotificationService !== 'undefined' && NotificationService.add) {
                 NotificationService.add("Функция редактирования недоступна.", "error");
             }
