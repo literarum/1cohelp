@@ -16226,10 +16226,7 @@ async function handleSaveFolderSubmit(event) {
         }
 
         await populateBookmarkFolders();
-        const folderSelectInAddModal = document.getElementById('bookmarkFolder');
-        if (folderSelectInAddModal) {
-            await populateBookmarkFolders(folderSelectInAddModal);
-        }
+        await loadBookmarks();
 
         showNotification(isEditing ? "Папка обновлена" : "Папка добавлена");
 
@@ -16241,8 +16238,16 @@ async function handleSaveFolderSubmit(event) {
         if (defaultColorInput) defaultColorInput.checked = true;
 
         const modal = document.getElementById('foldersModal');
-        if (modal) modal.classList.add('hidden');
-
+        if (modal) {
+            modal.classList.add('hidden');
+            if (typeof removeEscapeHandler === 'function') {
+                removeEscapeHandler(modal);
+            }
+            if (getVisibleModals().length === 0) {
+                document.body.classList.remove('modal-open');
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
 
     } catch (error) {
         console.error("Ошибка при сохранении папки:", error);
