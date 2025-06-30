@@ -750,6 +750,23 @@
             color: #e5e7eb;
             border-color: #4b5563;
         }
+
+        @keyframes hyper-glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 5px #fef08a, 0 0 10px #fef08a, 0 0 15px #facc15, 0 0 20px #facc15;
+            }
+
+            50% {
+                box-shadow: 0 0 10px #facc15, 0 0 20px #facc15, 0 0 30px #eab308, 0 0 40px #eab308;
+            }
+        }
+
+        .notification-hyper-alert {
+            border-width: 4px;
+            animation: hyper-glow 1.5s ease-in-out infinite;
+        }
     </style>
 </head>
 
@@ -2051,7 +2068,8 @@
             class="hover:underline">@guthleifur</a> - репорт об ошибках и предложения по усовершенстованию
     </div>
 
-    <script defer src="./script.js"></script>
+<script src="./script.js"></script>
 </body>
+
 
 </html>
