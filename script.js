@@ -2,7 +2,7 @@
 
 let db;
 const DB_NAME = 'CopilotDB';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 const CURRENT_SCHEMA_VERSION = "1.5";
 let userPreferences = {
     theme: 'auto',
@@ -81,9 +81,12 @@ let tabsResizeTimeout;
 
 let initialBookmarkFormState = null;
 
-let currentFavoritesCache = [];
+let lastKnownInnCounts = new Map();
+let activeToadNotifications = new Map();
 
-let notifiedInns = new Set();
+let currentBlacklistSort = { criteria: 'level', direction: 'desc' };
+
+let currentFavoritesCache = [];
 
 const FIELD_WEIGHTS = {
     algorithms: {
@@ -483,11 +486,16 @@ const NotificationService = {
         if (isImportant) baseClasses.push('important-notification');
         else baseClasses.push('temporary-notification');
 
-        notificationElement.classList.add(...baseClasses);
-
         let bgColorClassesArr, iconClass, textColorClassesArr, borderColorClass;
 
         switch (type) {
+            case "hyper-alert":
+                bgColorClassesArr = ['bg-red-100', 'dark:bg-red-900/95'];
+                textColorClassesArr = ['text-red-900', 'dark:text-yellow-200'];
+                borderColorClass = 'border-yellow-400 dark:border-yellow-300';
+                iconClass = 'fa-biohazard text-yellow-400 dark:text-yellow-300';
+                baseClasses.push('notification-hyper-alert', 'border-4');
+                break;
             case "error":
                 bgColorClassesArr = ['bg-red-100', 'dark:bg-red-700/90'];
                 textColorClassesArr = ['text-red-700', 'dark:text-red-100'];
@@ -517,7 +525,8 @@ const NotificationService = {
 
         notificationElement.classList.add(
             'p-4', 'rounded-md', 'shadow-lg', 'flex', 'items-center',
-            'justify-between', 'gap-3', 'border-l-4', 'box-border'
+            'justify-between', 'gap-3', 'border-l-4', 'box-border',
+            ...baseClasses
         );
         if (borderColorClass) borderColorClass.split(' ').filter(cls => cls.trim()).forEach(cls => notificationElement.classList.add(cls));
         if (bgColorClassesArr && Array.isArray(bgColorClassesArr)) {
@@ -804,7 +813,9 @@ const storeConfigs = [
         indexes: [
             { name: 'inn', keyPath: 'inn', options: { unique: false } },
             { name: 'phone', keyPath: 'phone', options: { unique: false } },
-            { name: 'organizationName', keyPath: 'organizationNameLc', options: { unique: false } }
+            { name: 'organizationName', keyPath: 'organizationNameLc', options: { unique: false } },
+            { name: 'level', keyPath: 'level', options: { unique: false } },
+            { name: 'dateAdded', keyPath: 'dateAdded', options: { unique: false } }
         ]
     },
     {
@@ -12356,16 +12367,23 @@ function loadClientData(data) {
 
 
 function clearClientData() {
-    const LOG_PREFIX = "[ClearClientData]";
+    const LOG_PREFIX = "[ClearClientData V2]";
     const clientNotes = document.getElementById('clientNotes');
     if (clientNotes) {
         clientNotes.value = '';
         saveClientData();
         showNotification("Данные очищены");
 
-        console.log(`${LOG_PREFIX} Список notifiedInns до очистки:`, [...notifiedInns]);
-        notifiedInns.clear();
-        console.log(`${LOG_PREFIX} Список уведомленных ИНН из черного списка очищен.`);
+        console.log(`${LOG_PREFIX} Очистка состояний черного списка...`);
+
+        for (const notificationId of activeToadNotifications.values()) {
+            NotificationService.dismissImportant(notificationId);
+        }
+
+        lastKnownInnCounts.clear();
+        activeToadNotifications.clear();
+
+        console.log(`${LOG_PREFIX} Состояния 'lastKnownInnCounts' и 'activeToadNotifications' очищены.`);
     }
 }
 
@@ -22145,39 +22163,33 @@ async function showAddModal(section) {
 
 function initBlacklistSystem() {
     const addBlacklistEntryBtn = document.getElementById('addBlacklistEntryBtn');
+    const blacklistTableContainer = document.getElementById('blacklistTableContainer');
+    const searchInput = document.getElementById('blacklistSearchInput');
+    const clearSearchBtn = document.getElementById('clearBlacklistSearchBtn');
+    const actionsContainer = document.querySelector('#blacklistedClientsContent .flex.justify-between.items-center.mb-4');
+
     if (addBlacklistEntryBtn) {
         addBlacklistEntryBtn.addEventListener('click', () => showBlacklistEntryModal());
     } else {
         console.warn("Кнопка #addBlacklistEntryBtn не найдена.");
     }
 
-    const blacklistTableContainer = document.getElementById('blacklistTableContainer');
     if (blacklistTableContainer) {
         blacklistTableContainer.addEventListener('click', handleBlacklistActionClick);
     }
 
-
-    const searchInput = document.getElementById('blacklistSearchInput');
-    const clearSearchBtn = document.getElementById('clearBlacklistSearchBtn');
-
     if (searchInput) {
-
         if (searchInput._debouncedSearchHandler) {
             searchInput.removeEventListener('input', searchInput._debouncedSearchHandler);
         }
         searchInput._debouncedSearchHandler = debounce(handleBlacklistSearchInput, 300);
         searchInput.addEventListener('input', searchInput._debouncedSearchHandler);
-
-
         if (clearSearchBtn) {
             clearSearchBtn.classList.toggle('hidden', searchInput.value.length === 0);
         }
-    } else {
-        console.warn("Поле ввода #blacklistSearchInput не найдено. Поиск по черному списку не будет работать.");
     }
 
     if (clearSearchBtn) {
-
         if (clearSearchBtn._clearClickHandler) {
             clearSearchBtn.removeEventListener('click', clearSearchBtn._clearClickHandler);
         }
@@ -22185,40 +22197,95 @@ function initBlacklistSystem() {
             if (searchInput) {
                 searchInput.value = '';
                 searchInput.focus();
-
                 searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
             }
         };
         clearSearchBtn.addEventListener('click', clearSearchBtn._clearClickHandler);
-    } else {
-        console.warn("Кнопка #clearBlacklistSearchBtn не найдена.");
+    }
+
+    if (actionsContainer) {
+        let sortControls = document.getElementById('blacklistSortControls');
+        if (!sortControls) {
+            sortControls = document.createElement('div');
+            sortControls.id = 'blacklistSortControls';
+            sortControls.className = 'flex items-center gap-2';
+            sortControls.innerHTML = `
+                <button id="sortBlacklistByLevel" class="px-3 py-1 text-sm font-medium rounded-md transition" data-sort="level">По уровню</button>
+                <button id="sortBlacklistByDate" class="px-3 py-1 text-sm font-medium rounded-md transition" data-sort="date">По дате</button>
+            `;
+            const addBtnContainer = addBlacklistEntryBtn ? addBlacklistEntryBtn.parentElement : null;
+            if (addBtnContainer && addBlacklistEntryBtn) {
+                addBtnContainer.insertBefore(sortControls, addBlacklistEntryBtn);
+            } else {
+                actionsContainer.insertBefore(sortControls, actionsContainer.firstChild);
+            }
+        }
+
+        const updateSortButtonsUI = () => {
+            const levelBtn = document.getElementById('sortBlacklistByLevel');
+            const dateBtn = document.getElementById('sortBlacklistByDate');
+            if (!levelBtn || !dateBtn) return;
+
+            [levelBtn, dateBtn].forEach(btn => {
+                btn.className = 'px-3 py-1 text-sm font-medium rounded-md transition bg-gray-200 dark:bg-gray-600 hover:bg-gray-300';
+                const icon = btn.querySelector('i');
+                if (icon) icon.remove();
+            });
+
+            const activeBtn = currentBlacklistSort.criteria === 'level' ? levelBtn : dateBtn;
+            activeBtn.classList.remove('bg-gray-200', 'dark:bg-gray-600', 'hover:bg-gray-300');
+            activeBtn.classList.add('bg-primary', 'text-white');
+
+            const iconEl = document.createElement('i');
+            iconEl.className = `fas ${currentBlacklistSort.direction === 'desc' ? 'fa-arrow-down' : 'fa-arrow-up'} ml-2`;
+            activeBtn.appendChild(iconEl);
+        };
+
+        const handleSortClick = (criteria) => {
+            if (currentBlacklistSort.criteria === criteria) {
+                currentBlacklistSort.direction = currentBlacklistSort.direction === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentBlacklistSort.criteria = criteria;
+                currentBlacklistSort.direction = 'desc';
+            }
+            updateSortButtonsUI();
+            sortAndRenderBlacklist();
+        };
+
+        document.getElementById('sortBlacklistByLevel').addEventListener('click', () => handleSortClick('level'));
+        document.getElementById('sortBlacklistByDate').addEventListener('click', () => handleSortClick('date'));
+
+        updateSortButtonsUI();
     }
 
     loadBlacklistedClients();
-    console.log("Система черного списка инициализирована (с поиском).");
+    console.log("Система черного списка инициализирована (v2, с динамическими контролами и сменой направления сортировки).");
 }
 
 
 async function loadBlacklistedClients() {
     if (!db) {
         console.error("loadBlacklistedClients: DB not ready.");
-        renderBlacklistTable([]);
         allBlacklistEntriesCache = [];
+        sortAndRenderBlacklist();
         return;
     }
     try {
         const entries = await getAllBlacklistEntriesDB();
         allBlacklistEntriesCache = entries || [];
 
-        if (currentBlacklistSearchQuery) {
-            await handleBlacklistSearchInput();
-        } else {
-            renderBlacklistTable(allBlacklistEntriesCache);
-        }
+        allBlacklistEntriesCache.forEach(entry => {
+            if (!entry.dateAdded) {
+                entry.dateAdded = entry.dateUpdated || new Date(0).toISOString();
+            }
+        });
+
+        sortAndRenderBlacklist();
+
     } catch (error) {
         console.error("Ошибка загрузки черного списка:", error);
-        renderBlacklistTable([]);
         allBlacklistEntriesCache = [];
+        sortAndRenderBlacklist();
         showNotification("Ошибка загрузки черного списка", "error");
     }
 }
@@ -22227,52 +22294,19 @@ async function loadBlacklistedClients() {
 async function handleBlacklistSearchInput() {
     const searchInput = document.getElementById('blacklistSearchInput');
     const clearSearchBtn = document.getElementById('clearBlacklistSearchBtn');
-    const container = document.getElementById('blacklistTableContainer');
 
-    if (!searchInput || !container) {
-        console.error("handleBlacklistSearchInput: Отсутствуют необходимые элементы (поле ввода или контейнер).");
+    if (!searchInput) {
+        console.error("handleBlacklistSearchInput: Поле ввода не найдено.");
         return;
     }
 
-    currentBlacklistSearchQuery = searchInput.value.trim();
-    const lowerQuery = currentBlacklistSearchQuery.toLowerCase();
+    currentBlacklistSearchQuery = searchInput.value;
 
     if (clearSearchBtn) {
-        clearSearchBtn.classList.toggle('hidden', currentBlacklistSearchQuery.length === 0);
+        clearSearchBtn.classList.toggle('hidden', currentBlacklistSearchQuery.trim().length === 0);
     }
 
-    let entriesToFilter = allBlacklistEntriesCache;
-    if (currentBlacklistSearchQuery === '' || allBlacklistEntriesCache.length === 0) {
-
-        try {
-            allBlacklistEntriesCache = await getAllBlacklistEntriesDB();
-            entriesToFilter = allBlacklistEntriesCache;
-            console.log("Данные ЧС обновлены из БД для поиска/сброса.");
-        } catch (error) {
-            console.error("Ошибка получения записей ЧС для поиска:", error);
-            container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-4">Ошибка загрузки данных для поиска.</p>';
-            return;
-        }
-    }
-
-    if (!lowerQuery) {
-        renderBlacklistTable(entriesToFilter);
-        return;
-    }
-
-    const filteredEntries = entriesToFilter.filter(entry => {
-        const orgNameMatch = entry.organizationNameLc && entry.organizationNameLc.includes(lowerQuery);
-        const innMatch = entry.inn && entry.inn.toLowerCase().includes(lowerQuery);
-        const phoneMatch = entry.phone && entry.phone.toLowerCase().includes(lowerQuery);
-        const notesMatch = entry.notes && entry.notes.toLowerCase().includes(lowerQuery);
-        return orgNameMatch || innMatch || phoneMatch || notesMatch;
-    });
-
-    if (filteredEntries.length === 0) {
-        container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center py-4">По запросу "${escapeHtml(currentBlacklistSearchQuery)}" ничего не найдено.</p>`;
-    } else {
-        renderBlacklistTable(filteredEntries);
-    }
+    sortAndRenderBlacklist();
 }
 
 
@@ -22285,64 +22319,120 @@ function renderBlacklistTable(entries) {
     container.innerHTML = '';
 
     if (!entries || entries.length === 0) {
-
-        container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">Черный список пуст.</p>';
+        const query = document.getElementById('blacklistSearchInput')?.value || '';
+        if (query.trim()) {
+            container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center py-4">По запросу "${escapeHtml(query)}" ничего не найдено.</p>`;
+        } else {
+            container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">Черный список пуст.</p>';
+        }
         return;
     }
 
     const table = document.createElement('table');
-    table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-600 table-auto';
+
+    table.className = 'w-full divide-y divide-gray-200 dark:divide-gray-600 table-fixed';
+
     table.innerHTML = `
-        <thead class="bg-gray-50 dark:bg-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700/50">
             <tr>
-                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-2/6">Организация</th>
-                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/6">ИНН</th>
-                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/6">Телефон</th>
-                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-2/6">Примечание</th>
-                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-auto">Действия</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[25%]">Организация</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[12%]">ИНН</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[12%]">Телефон</th>
+                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[10%]">Уровень</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[12%]">Дата доб.</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Примечание</th>
+                <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[10%]">Действия</th>
             </tr>
         </thead>
         <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
         </tbody>
     `;
+
     const tbody = table.querySelector('tbody');
-    const lowerQuery = currentBlacklistSearchQuery.toLowerCase();
+    const lowerQuery = (document.getElementById('blacklistSearchInput')?.value || '').trim().toLowerCase();
+
+    const highlight = (text) => {
+        if (!text || !lowerQuery) return escapeHtml(text);
+        const regex = new RegExp(`(${escapeRegExp(lowerQuery)})`, 'gi');
+        return escapeHtml(text).replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-600 rounded-sm px-0.5">$1</mark>');
+    };
 
     entries.forEach(entry => {
         const tr = document.createElement('tr');
         tr.dataset.entryId = entry.id;
+        tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer';
 
-        const highlight = (text) => {
-            if (!text || !lowerQuery) return escapeHtml(text);
-            const regex = new RegExp(`(${escapeRegExp(lowerQuery)})`, 'gi');
-            return escapeHtml(text).replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-600">$1</mark>');
-        };
+        const level = entry.level || 1;
+        let levelHtml = '', levelText = 'Низкий', levelColorClass = 'bg-green-100 text-green-800 dark:bg-green-800/80 dark:text-green-200';
+        switch (level) {
+            case 2: levelText = 'Средний'; levelColorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/80 dark:text-yellow-200'; break;
+            case 3: levelText = 'Высокий'; levelColorClass = 'bg-red-100 text-red-800 dark:bg-red-800/80 dark:text-red-200'; break;
+        }
+        levelHtml = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${levelColorClass}" title="Уровень ${level}: ${levelText}">${level}</span>`;
+
+        const dateAddedStr = entry.dateAdded ? new Date(entry.dateAdded).toLocaleDateString() : 'N/A';
 
         tr.innerHTML = `
-            <td class="px-4 py-3 whitespace-normal break-words text-sm text-gray-700 dark:text-gray-200">${highlight(entry.organizationName)}</td>
-            <td class="px-4 py-3 whitespace-normal break-words text-sm text-gray-500 dark:text-gray-400">${highlight(entry.inn || '-')}</td>
-            <td class="px-4 py-3 whitespace-normal break-words text-sm text-gray-500 dark:text-gray-400">${highlight(entry.phone || '-')}</td>
-            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs whitespace-normal break-words" title="${escapeHtml(entry.notes || '')}">${highlight(truncateText(entry.notes || '', 100))}</td>
-            <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+            <td class="px-4 py-4 text-sm font-medium text-gray-800 dark:text-gray-100">
+                <div class="truncate" title="${escapeHtml(entry.organizationName)}">${highlight(entry.organizationName)}</div>
+            </td>
+            <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono">
+                <div class="truncate" title="${escapeHtml(entry.inn || '-')}">${highlight(entry.inn || '-')}</div>
+            </td>
+            <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono">
+                <div class="truncate" title="${escapeHtml(entry.phone || '-')}">${highlight(entry.phone || '-')}</div>
+            </td>
+            <td class="px-4 py-4 text-sm text-center">${levelHtml}</td>
+            <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">${dateAddedStr}</td>
+            <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
+                <div class="truncate" title="${escapeHtml(entry.notes || '')}">${highlight(entry.notes || '')}</div>
+            </td>
+            <td class="px-4 py-4 text-right text-sm font-medium">
                 <button class="text-primary hover:text-secondary p-1" data-action="edit" title="Редактировать"><i class="fas fa-edit"></i></button>
                 <button class="text-red-600 hover:text-red-800 p-1 ml-2" data-action="delete" title="Удалить"><i class="fas fa-trash"></i></button>
             </td>
         `;
+
+        if (level === 3) {
+            tr.classList.add('bg-red-50/50', 'dark:bg-red-900/40');
+        } else if (level === 2) {
+            tr.classList.add('bg-yellow-50/50', 'dark:bg-yellow-900/30');
+        }
+
         tbody.appendChild(tr);
     });
+
     container.appendChild(table);
+}
+
+
+async function getBlacklistEntriesByInn(inn) {
+    const LOG_PREFIX = "[getBlacklistEntriesByInn]";
+    console.log(`${LOG_PREFIX} Запрос к БД для ИНН: ${inn}`);
+
+    if (!db) {
+        console.warn(`${LOG_PREFIX} База данных недоступна. Возвращаем пустой массив.`);
+        return [];
+    }
+    try {
+        const entries = await getAllFromIndex('blacklistedClients', 'inn', inn);
+        console.log(`${LOG_PREFIX} Результат getAllFromIndex для ИНН ${inn}: найдено ${entries.length} записей.`);
+        return entries || [];
+    } catch (error) {
+        console.error(`${LOG_PREFIX} Ошибка при выполнении getAllFromIndex для ИНН ${inn}:`, error);
+        return [];
+    }
 }
 
 
 function handleBlacklistActionClick(event) {
     const button = event.target.closest('button[data-action]');
-    if (!button) return;
+    const tr = event.target.closest('tr[data-entry-id]');
 
-    const tr = button.closest('tr[data-entry-id]');
     if (!tr) return;
 
     const entryId = parseInt(tr.dataset.entryId, 10);
-    const action = button.dataset.action;
+    const action = button ? button.dataset.action : null;
 
     if (action === 'edit') {
         showBlacklistEntryModal(entryId);
@@ -22351,6 +22441,123 @@ function handleBlacklistActionClick(event) {
         if (confirm(`Вы уверены, что хотите удалить "${orgName}" из черного списка?`)) {
             deleteBlacklistEntry(entryId);
         }
+    } else if (!action) {
+        showBlacklistDetailModal(entryId);
+    }
+}
+
+
+async function showBlacklistDetailModal(entryId) {
+    const modalId = 'blacklistDetailModal';
+    let modal = document.getElementById(modalId);
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-60 p-4 flex items-center justify-center';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <div class="flex justify-between items-center">
+                        <h2 id="blacklistDetailTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100 truncate pr-4">Детали записи</h2>
+                        <button class="close-modal-btn p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Закрыть (Esc)"><i class="fas fa-times text-xl"></i></button>
+                    </div>
+                </div>
+                <div id="blacklistDetailContent" class="p-6 overflow-y-auto">
+                    <!-- Содержимое будет заполнено динамически -->
+                </div>
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3">
+                    <button id="blacklistDetailEditBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium">Редактировать</button>
+                    <button id="blacklistDetailDeleteBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium">Удалить</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            if (getVisibleModals().length === 0) document.body.classList.remove('modal-open');
+        };
+
+        modal.querySelectorAll('.close-modal-btn').forEach(btn => btn.addEventListener('click', closeModal));
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+        });
+
+        modal.querySelector('#blacklistDetailEditBtn').addEventListener('click', () => {
+            const currentId = parseInt(modal.dataset.currentId, 10);
+            if (currentId) {
+                closeModal();
+                showBlacklistEntryModal(currentId);
+            }
+        });
+
+        modal.querySelector('#blacklistDetailDeleteBtn').addEventListener('click', async () => {
+            const currentId = parseInt(modal.dataset.currentId, 10);
+            const entry = await getBlacklistEntryDB(currentId);
+            if (entry && confirm(`Вы уверены, что хотите удалить "${entry.organizationName}" из черного списка?`)) {
+                closeModal();
+                deleteBlacklistEntry(currentId);
+            }
+        });
+    }
+
+    const titleEl = modal.querySelector('#blacklistDetailTitle');
+    const contentEl = modal.querySelector('#blacklistDetailContent');
+
+    titleEl.textContent = 'Загрузка...';
+    contentEl.innerHTML = '<p class="text-center text-gray-500">Загрузка данных...</p>';
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    modal.dataset.currentId = entryId;
+
+    try {
+        const entry = await getFromIndexedDB('blacklistedClients', entryId);
+        if (!entry) {
+            titleEl.textContent = 'Ошибка';
+            contentEl.innerHTML = '<p class="text-center text-red-500">Запись не найдена.</p>';
+            return;
+        }
+
+        titleEl.textContent = entry.organizationName;
+
+        const level = entry.level || 1;
+        let levelText = 'Низкий', levelColorClass = 'bg-green-100 text-green-800 dark:bg-green-800/80 dark:text-green-200';
+        switch (level) {
+            case 2: levelText = 'Средний'; levelColorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/80 dark:text-yellow-200'; break;
+            case 3: levelText = 'Высокий'; levelColorClass = 'bg-red-100 text-red-800 dark:bg-red-800/80 dark:text-red-200'; break;
+        }
+
+        contentEl.innerHTML = `
+            <dl class="space-y-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Уровень</dt>
+                    <dd class="mt-1"><span class="px-2.5 py-1 text-sm font-semibold ${levelColorClass}">${level} - ${levelText}</span></dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">ИНН</dt>
+                    <dd class="mt-1 text-base text-gray-900 dark:text-gray-200 font-mono">${escapeHtml(entry.inn || 'Не указан')}</dd>
+                </div>
+                 <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Телефон</dt>
+                    <dd class="mt-1 text-base text-gray-900 dark:text-gray-200 font-mono">${escapeHtml(entry.phone || 'Не указан')}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Примечание</dt>
+                    <dd class="mt-1 text-base text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/60 p-3 rounded-md whitespace-pre-wrap">${escapeHtml(entry.notes || 'Нет')}</dd>
+                </div>
+                 <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Дата добавления</dt>
+                    <dd class="mt-1 text-base text-gray-900 dark:text-gray-200">${new Date(entry.dateAdded).toLocaleString()}</dd>
+                </div>
+            </dl>
+        `;
+
+    } catch (error) {
+        titleEl.textContent = 'Ошибка';
+        contentEl.innerHTML = `<p class="text-center text-red-500">Не удалось загрузить данные: ${error.message}</p>`;
     }
 }
 
@@ -22358,7 +22565,6 @@ function handleBlacklistActionClick(event) {
 async function showBlacklistEntryModal(entryId = null) {
     const modalId = 'blacklistEntryModal';
     if (blacklistEntryModalInstance && blacklistEntryModalInstance.modal && blacklistEntryModalInstance.modal.id !== modalId) {
-
         blacklistEntryModalInstance = null;
     }
 
@@ -22391,6 +22597,23 @@ async function showBlacklistEntryModal(entryId = null) {
                         <div class="mb-3">
                             <label for="blacklistEntryNotes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Примечание</label>
                             <textarea id="blacklistEntryNotes" rows="3" class="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Уровень опасности</label>
+                            <div class="mt-2 flex items-center space-x-6">
+                                <label class="flex items-center">
+                                    <input type="radio" name="blacklistLevel" value="1" class="form-radio h-4 w-4 text-green-600 focus:ring-green-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">1 (Низкий)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="blacklistLevel" value="2" class="form-radio h-4 w-4 text-yellow-500 focus:ring-yellow-400">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">2 (Средний)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="blacklistLevel" value="3" class="form-radio h-4 w-4 text-red-600 focus:ring-red-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">3 (Высокий)</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <div class="px-6 py-4 bg-gray-50 dark:bg-gray-700 text-right rounded-b-lg">
@@ -22430,6 +22653,9 @@ async function showBlacklistEntryModal(entryId = null) {
     innInput.setCustomValidity('');
     phoneInput.setCustomValidity('');
 
+    const level1Radio = form.querySelector('input[name="blacklistLevel"][value="1"]');
+    if (level1Radio) level1Radio.checked = true;
+
     if (entryId !== null) {
         titleEl.textContent = 'Редактировать запись';
         saveBtn.textContent = 'Сохранить изменения';
@@ -22441,6 +22667,14 @@ async function showBlacklistEntryModal(entryId = null) {
                 innInput.value = entry.inn || '';
                 phoneInput.value = entry.phone || '';
                 notesInput.value = entry.notes || '';
+
+                const level = entry.level || 1;
+                const levelRadio = form.querySelector(`input[name="blacklistLevel"][value="${level}"]`);
+                if (levelRadio) {
+                    levelRadio.checked = true;
+                } else if (level1Radio) {
+                    level1Radio.checked = true;
+                }
             } else {
                 showNotification("Запись для редактирования не найдена", "error");
                 return;
@@ -22470,6 +22704,7 @@ async function handleSaveBlacklistEntry(event) {
     const inn = innInput.value.trim();
     const phone = phoneInput.value.trim();
     const notes = notesInput.value.trim();
+    const level = parseInt(form.querySelector('input[name="blacklistLevel"]:checked')?.value || '1', 10);
     const id = idInput.value ? parseInt(idInput.value, 10) : null;
 
     if (!organizationName) {
@@ -22496,6 +22731,7 @@ async function handleSaveBlacklistEntry(event) {
         inn: inn || null,
         phone: phone || null,
         notes: notes || null,
+        level: level,
         dateUpdated: new Date().toISOString()
     };
 
@@ -22514,9 +22750,8 @@ async function handleSaveBlacklistEntry(event) {
             showNotification("Запись успешно добавлена", "success");
         }
 
-
         allBlacklistEntriesCache = await getAllBlacklistEntriesDB();
-        await handleBlacklistSearchInput();
+        sortAndRenderBlacklist();
 
         if (typeof updateSearchIndex === 'function') {
             await updateSearchIndex('blacklistedClients', entryData.id, entryData, id ? 'update' : 'add', oldData);
@@ -23444,8 +23679,8 @@ async function isInnBlacklisted(inn) {
 
 
 async function checkForBlacklistedInn(text) {
-    const LOG_PREFIX = "[CheckINN]";
-    console.log(`${LOG_PREFIX} Начало проверки текста (длина: ${text.length})...`);
+    const LOG_PREFIX = "[CheckINN_V8_Final_DismissAndReadd]";
+    console.log(`${LOG_PREFIX} Начало проверки текста...`);
 
     if (!db) {
         console.warn(`${LOG_PREFIX} Проверка пропущена: база данных не готова.`);
@@ -23453,46 +23688,211 @@ async function checkForBlacklistedInn(text) {
     }
 
     try {
-        const potentialInns = text.match(/(?<!\d)(\d{9}|\d{10}|\d{12})(?!\d)/g) || [];
-        if (potentialInns.length === 0) {
-            console.log(`${LOG_PREFIX} Потенциальные ИНН (9, 10 или 12 цифр) в тексте не найдены.`);
-            return;
+        const innRegex = /\b(\d{10}|\d{12})\b/g;
+        const currentInnsList = text.match(innRegex) || [];
+
+        const currentInnCounts = new Map();
+        for (const inn of currentInnsList) {
+            currentInnCounts.set(inn, (currentInnCounts.get(inn) || 0) + 1);
         }
-        console.log(`${LOG_PREFIX} Найдены потенциальные ИНН: [${potentialInns.join(', ')}]`);
 
-        const uniqueInnsToCheck = new Set(potentialInns);
-        console.log(`${LOG_PREFIX} Уникальные ИНН для проверки: [${[...uniqueInnsToCheck].join(', ')}]`);
-
-        for (const inn of uniqueInnsToCheck) {
-            if (notifiedInns.has(inn)) {
-                console.log(`${LOG_PREFIX} ИНН ${inn} уже был показан. Пропуск.`);
-                continue;
+        const innsToCheckForNotification = new Set();
+        for (const [inn, currentCount] of currentInnCounts.entries()) {
+            const lastCount = lastKnownInnCounts.get(inn) || 0;
+            if (currentCount > lastCount) {
+                innsToCheckForNotification.add(inn);
             }
+        }
 
-            console.log(`${LOG_PREFIX}   -> Проверка ИНН ${inn} в черном списке...`);
+        const innsToRemoveNotification = new Set();
+        for (const inn of lastKnownInnCounts.keys()) {
+            if (!currentInnCounts.has(inn)) {
+                innsToRemoveNotification.add(inn);
+            }
+        }
+
+        for (const inn of innsToCheckForNotification) {
             const isBlacklisted = await isInnBlacklisted(inn);
-
             if (isBlacklisted) {
-                console.log(`%c${LOG_PREFIX} ОБНАРУЖЕНА ЖАБА! ИНН: ${inn}`, 'color: red; font-weight: bold; font-size: 16px;');
-                notifiedInns.add(inn);
-                console.log(`${LOG_PREFIX} ИНН ${inn} добавлен в notifiedInns. Текущий размер notifiedInns: ${notifiedInns.size}`);
+                const entries = await getBlacklistEntriesByInn(inn);
+                if (entries.length > 0) {
+                    const entry = entries[0];
+                    const level = entry.level || 1;
+                    const notificationId = level === 3 ? `hyper-toad-warning-${inn}` : `blacklist-warning-${inn}`;
+                    const message = level === 3
+                        ? `ОБНАРУЖЕНА ГИПЕРЖАБА (ИНН: ${inn}), ТРЕВОГА! АЛЯРМА!`
+                        : `ВНИМАНИЕ, ПО ИНН ${inn} ОБНАРУЖЕНА ЖАБА (Уровень ${level}), БУДЬТЕ ВНИМАТЕЛЬНЫ!`;
+                    const type = level === 3 ? 'hyper-alert' : 'error';
 
-                console.log(`${LOG_PREFIX} Вызов NotificationService.add...`);
-                NotificationService.add(
-                    "ВНИМАНИЕ, ПО ИНН ОБНАРУЖЕНА ЖАБА, БУДЬТЕ ВНИМАТЕЛЬНЫ!",
-                    'error',
-                    {
-                        id: `blacklist-warning-${inn}`,
-                        important: true,
-                        isDismissible: true
+                    if (activeToadNotifications.has(inn)) {
+                        const existingId = activeToadNotifications.get(inn);
+                        console.log(`${LOG_PREFIX} Повторное срабатывание для ИНН ${inn}. Принудительное скрытие старого уведомления (ID: ${existingId}).`);
+                        NotificationService.dismissImportant(existingId);
+                        await new Promise(resolve => requestAnimationFrame(resolve));
                     }
-                );
-            } else {
-                console.log(`${LOG_PREFIX} ИНН ${inn} не найден в черном списке.`);
+
+                    console.log(`%c${LOG_PREFIX} ОБНАРУЖЕНА ЖАБА! Показ/обновление уведомления для ИНН: ${inn}, Уровень: ${level}`, 'color: red; font-weight: bold; font-size: 16px;');
+
+                    NotificationService.add(message, type, {
+                        id: notificationId,
+                        important: true,
+                        isDismissible: true,
+                        autoDismissDelay: level < 3 ? 30000 : 0,
+                        onClick: () => {
+                            setActiveTab('blacklistedClients');
+                            const searchInput = document.getElementById('blacklistSearchInput');
+                            if (searchInput) {
+                                searchInput.value = inn;
+                                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        }
+                    });
+                    activeToadNotifications.set(inn, notificationId);
+                }
             }
         }
+
+        for (const inn of innsToRemoveNotification) {
+            if (activeToadNotifications.has(inn)) {
+                const notificationId = activeToadNotifications.get(inn);
+                console.log(`${LOG_PREFIX} ИНН ${inn} удален из текста, скрываем уведомление с ID: ${notificationId}.`);
+                NotificationService.dismissImportant(notificationId);
+                activeToadNotifications.delete(inn);
+            }
+        }
+
+        lastKnownInnCounts = new Map(currentInnCounts);
+
     } catch (error) {
         console.error(`${LOG_PREFIX} Произошла ошибка во время проверки ИНН:`, error);
-        NotificationService.add("Ошибка при проверке ИНН в черном списке.", "warning", { important: false });
+        NotificationService.add("Ошибка при проверке ИНН в черном списке.", "warning");
     }
 }
+
+
+function sortAndRenderBlacklist() {
+    let entriesToRender = [...allBlacklistEntriesCache];
+
+    const query = (document.getElementById('blacklistSearchInput')?.value || '').trim().toLowerCase();
+    if (query) {
+        entriesToRender = entriesToRender.filter(entry => {
+            const orgNameMatch = entry.organizationNameLc && entry.organizationNameLc.includes(query);
+            const innMatch = entry.inn && entry.inn.includes(query);
+            const phoneMatch = entry.phone && entry.phone.includes(query);
+            const notesMatch = entry.notes && entry.notes.toLowerCase().includes(query);
+            return orgNameMatch || innMatch || phoneMatch || notesMatch;
+        });
+    }
+
+    entriesToRender.sort((a, b) => {
+        const directionMultiplier = currentBlacklistSort.direction === 'desc' ? -1 : 1;
+
+        const levelA = a.level || 1;
+        const levelB = b.level || 1;
+        const dateA = new Date(a.dateAdded || 0).getTime();
+        const dateB = new Date(b.dateAdded || 0).getTime();
+
+        if (currentBlacklistSort.criteria === 'level') {
+            const levelDifference = levelA - levelB;
+            if (levelDifference !== 0) {
+                return levelDifference * directionMultiplier;
+            }
+            return dateB - dateA;
+        }
+
+        if (currentBlacklistSort.criteria === 'date') {
+            const dateDifference = dateA - dateB;
+            if (dateDifference !== 0) {
+                return dateDifference * directionMultiplier;
+            }
+            return levelB - levelA;
+        }
+        return dateB - dateA;
+    });
+
+    renderBlacklistTable(entriesToRender);
+}
+
+
+function renderBlacklistEntries(entries) {
+    const container = document.getElementById('blacklistTableContainer');
+    if (!container) {
+        console.error("renderBlacklistEntries: Контейнер #blacklistTableContainer не найден.");
+        return;
+    }
+    container.innerHTML = '';
+
+    if (!entries || entries.length === 0) {
+        const query = document.getElementById('blacklistSearchInput')?.value || '';
+        if (query.trim()) {
+            container.innerHTML = `<div class="p-4 text-center text-gray-500 dark:text-gray-400">По запросу "${escapeHtml(query)}" ничего не найдено.</div>`;
+        } else {
+            container.innerHTML = '<div class="p-4 text-center text-gray-500 dark:text-gray-400">Черный список пуст.</div>';
+        }
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const highlight = (text) => {
+        const query = document.getElementById('blacklistSearchInput')?.value.trim().toLowerCase();
+        if (!text || !query) return escapeHtml(text);
+        const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+        return escapeHtml(text).replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-600 rounded-sm px-0.5">$1</mark>');
+    };
+
+    entries.forEach(entry => {
+        const card = document.createElement('div');
+        card.className = 'blacklist-entry-card bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-2 transition-all duration-200';
+        card.dataset.entryId = entry.id;
+
+        const level = entry.level || 1;
+        let levelHtml = '', levelText = 'Низкий', levelColorClass = 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
+        switch (level) {
+            case 2: levelText = 'Средний'; levelColorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'; break;
+            case 3: levelText = 'Высокий'; levelColorClass = 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'; break;
+        }
+        levelHtml = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${levelColorClass}" title="Уровень ${level}: ${levelText}">${level}</span>`;
+
+        const dateAddedStr = entry.dateAdded ? new Date(entry.dateAdded).toLocaleDateString() : 'Неизвестно';
+
+        card.innerHTML = `
+            <div class="card-header grid grid-cols-[1fr,auto,auto] gap-4 items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <div class="font-medium text-gray-900 dark:text-gray-100 truncate" title="${escapeHtml(entry.organizationName)}">${highlight(entry.organizationName)}</div>
+                <div class="text-center">${levelHtml}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400 text-right">${dateAddedStr}</div>
+            </div>
+            <div class="card-details hidden p-4 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50">
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div class="sm:col-span-1">
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">ИНН</dt>
+                        <dd class="mt-1 text-gray-900 dark:text-gray-200">${highlight(entry.inn || '-')}</dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">Телефон</dt>
+                        <dd class="mt-1 text-gray-900 dark:text-gray-200">${highlight(entry.phone || '-')}</dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">Примечание</dt>
+                        <dd class="mt-1 text-gray-900 dark:text-gray-200 whitespace-pre-wrap">${highlight(entry.notes || '-')}</dd>
+                    </div>
+                </dl>
+                <div class="mt-4 text-right">
+                    <button class="text-primary hover:text-secondary p-1" data-action="edit" title="Редактировать"><i class="fas fa-edit"></i> Редактировать</button>
+                    <button class="text-red-600 hover:text-red-800 p-1 ml-4" data-action="delete" title="Удалить"><i class="fas fa-trash"></i> Удалить</button>
+                </div>
+            </div>
+        `;
+
+        card.querySelector('.card-header').addEventListener('click', (e) => {
+            if (e.target.closest('button')) return;
+            card.classList.toggle('is-expanded');
+            card.querySelector('.card-details').classList.toggle('hidden');
+        });
+
+        fragment.appendChild(card);
+    });
+
+    container.appendChild(fragment);
+}
+
+
