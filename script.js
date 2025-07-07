@@ -2,7 +2,7 @@
 
 let db;
 const DB_NAME = 'CopilotDB';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 const CURRENT_SCHEMA_VERSION = "1.5";
 let userPreferences = {
     theme: 'auto',
@@ -31,18 +31,13 @@ const MIN_TOKEN_LEN_FOR_INDEX = 2;
 
 const FAVORITES_STORE_NAME = 'favorites';
 
+const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';
+
 const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
 if (showFavoritesHeaderButton && !showFavoritesHeaderButton.dataset.listenerAttached) {
     showFavoritesHeaderButton.addEventListener('click', () => setActiveTab('favorites'));
     showFavoritesHeaderButton.dataset.listenerAttached = 'true';
 }
-
-const extLinkCategoryInfo = {
-    docs: { name: 'Документация', color: 'blue', icon: 'fa-file-alt' },
-    gov: { name: 'Гос. сайты', color: 'red', icon: 'fa-landmark' },
-    tools: { name: 'Инструменты', color: 'green', icon: 'fa-tools' },
-    other: { name: 'Прочее', color: 'yellow', icon: 'fa-link' }
-};
 
 let originalUISettings = {};
 let currentPreviewSettings = {};
@@ -83,6 +78,8 @@ let initialBookmarkFormState = null;
 
 let lastKnownInnCounts = new Map();
 let activeToadNotifications = new Map();
+
+let extLinkCategoryInfo = {};
 
 let currentBlacklistSort = { criteria: 'level', direction: 'desc' };
 
@@ -138,7 +135,6 @@ const FIELD_WEIGHTS = {
         name: 2.0
     },
     preferences: {
-        name: 1.5,
         mainSedoGlobalContent: 1.0,
         tableTitle: 2.2,
         staticListItem: 1.2,
@@ -755,9 +751,6 @@ const getTopmostModal = (modals) => {
 
 
 
-
-
-
 const storeConfigs = [
     {
         name: 'algorithms',
@@ -794,6 +787,11 @@ const storeConfigs = [
         name: 'extLinks',
         options: { keyPath: 'id', autoIncrement: true },
         indexes: [{ name: 'category', keyPath: 'category', options: { unique: false } }]
+    },
+    {
+        name: 'extLinkCategories',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [{ name: 'name', keyPath: 'name', options: { unique: true } }]
     },
     {
         name: 'searchIndex',
@@ -918,122 +916,125 @@ const loadingOverlayManager = {
         }
 
         const overlayHTML = `
-            <canvas id="loadingCanvas"></canvas>
-            <div class="loading-text" id="loadingText">Загрузка<span id="animated-dots"></span></div>
-            <div class="progress-indicator-container">
-                <div class="progress-bar-line-track">
-                    <div class="progress-bar-line" id="progressBarLine"></div>
-                </div>
-                <div class="progress-percentage-text" id="progressPercentageText">0%</div>
+        <canvas id="loadingCanvas"></canvas>
+        <div class="loading-text" id="loadingText">Загрузка<span id="animated-dots"></span></div>
+        <div class="progress-indicator-container">
+            <div class="progress-bar-line-track">
+                <div class="progress-bar-line" id="progressBarLine"></div>
             </div>
-        `;
+            <div class="progress-percentage-text" id="progressPercentageText">0%</div>
+        </div>
+    `;
 
         const overlayCSS = `
-            #custom-loading-overlay {
-                margin: 0;
-                overflow: hidden;
-                height: 100vh;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                position: relative;
-            }
+        #custom-loading-overlay {
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
+        }
 
-            #loadingCanvas {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                z-index: 1; 
-            }
+        #loadingCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1; 
+        }
 
-            .loading-text {
-                position: absolute;
-                bottom: 12%;
-                left: 50%;
-                transform: translateX(-50%);
-                font-size: 26px;
-                font-weight: 600;
-                letter-spacing: 2px;
-                z-index: 10;
-                background: linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2);
-                background-size: 250% 100%;
-                -webkit-background-clip: text;
-                background-clip: text;
-                -webkit-text-fill-color: transparent;
-                text-fill-color: transparent;
-                animation: gradient-text-flow-smooth 4s linear infinite;
-                text-align: center;
-                min-width: 200px;
-            }
+        .loading-text {
+            position: absolute;
+            bottom: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 90%;
+            padding: 0 20px;
+            box-sizing: border-box;
+            font-size: 20px;
+            letter-spacing: 1px;
+            line-height: 1.4;
+            font-weight: 600;
+            z-index: 10;
+            background: linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2);
+            background-size: 250% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-fill-color: transparent;
+            animation: gradient-text-flow-smooth 4s linear infinite;
+            text-align: center;
+        }
 
-            #animated-dots {
-                display: inline-block;
-                min-width: 25px;
-                text-align: left;
-            }
-            
-            #animated-dots::before {
-                content: ".";
-                animation: ellipsis-content-for-span 1.5s infinite steps(1, end);
-            }
+        #animated-dots {
+            display: inline-block;
+            min-width: 25px;
+            text-align: left;
+        }
+        
+        #animated-dots::before {
+            content: ".";
+            animation: ellipsis-content-for-span 1.5s infinite steps(1, end);
+        }
 
-            .progress-indicator-container {
-                position: absolute;
-                bottom: 5%;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 280px; 
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                z-index: 10;
-            }
+        .progress-indicator-container {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 280px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
 
-            .progress-bar-line-track {
-                width: 100%;
-                height: 6px; 
-                background-color: rgba(138, 43, 226, 0.15); 
-                border-radius: 3px;
-                margin-bottom: 8px; 
-                overflow: hidden;
-                box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-            }
+        .progress-bar-line-track {
+            width: 100%;
+            height: 6px; 
+            background-color: rgba(138, 43, 226, 0.15); 
+            border-radius: 3px;
+            margin-bottom: 8px; 
+            overflow: hidden;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+        }
 
-            .progress-bar-line {
-                width: 0%; 
-                height: 100%;
-                background: linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2); 
-                background-size: 300% 100%; 
-                border-radius: 3px;
-                transition: width 0.15s linear;
-                animation: progress-gradient-flow 2s linear infinite;
-            }
-            
-            @keyframes progress-gradient-flow {
-                0% { background-position: 0% center; }
-                100% { background-position: -300% center; } 
-            }
+        .progress-bar-line {
+            width: 0%; 
+            height: 100%;
+            background: linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2); 
+            background-size: 300% 100%; 
+            border-radius: 3px;
+            transition: width 0.15s linear;
+            animation: progress-gradient-flow 2s linear infinite;
+        }
+        
+        @keyframes progress-gradient-flow {
+            0% { background-position: 0% center; }
+            100% { background-position: -300% center; } 
+        }
 
-            .progress-percentage-text {
-                font-size: 13px; 
-                font-weight: 500; 
-                color: rgba(230, 230, 250, 0.75); 
-                letter-spacing: 0.5px;
-                text-shadow: 0 0 5px rgba(138, 43, 226, 0.5); 
-            }
+        .progress-percentage-text {
+            font-size: 13px; 
+            font-weight: 500; 
+            color: rgba(230, 230, 250, 0.75); 
+            letter-spacing: 0.5px;
+            text-shadow: 0 0 5px rgba(138, 43, 226, 0.5); 
+        }
 
-            @keyframes gradient-text-flow-smooth {
-                0% { background-position: 0% center; }
-                100% { background-position: -250% center; }
-            }
+        @keyframes gradient-text-flow-smooth {
+            0% { background-position: 0% center; }
+            100% { background-position: -250% center; }
+        }
 
-            @keyframes ellipsis-content-for-span {
-                0% { content: "."; }
-                33% { content: ".."; }
-                66% { content: "..."; }
-                100% { content: "."; }
-            }
-        `;
+        @keyframes ellipsis-content-for-span {
+            0% { content: "."; }
+            33% { content: ".."; }
+            66% { content: "..."; }
+            100% { content: "."; }
+        }
+    `;
 
         this.overlayElement = document.createElement('div');
         this.overlayElement.id = 'custom-loading-overlay';
@@ -1410,8 +1411,8 @@ function showOverlayForFixedDuration(duration = 2000) {
 })();
 
 
-async function appInit() {
-    console.log("[appInit V4 - Backup Stage Aware] Начало инициализации приложения...");
+async function appInit(context = 'normal') {
+    console.log(`[appInit V5 - Context-Aware: '${context}'] Начало инициализации приложения...`);
 
     let currentAppInitProgress = 0;
 
@@ -1545,7 +1546,7 @@ async function appInit() {
                     };
 
                     if (typeof checkAndBuildIndex === 'function') {
-                        await checkAndBuildIndex(false, indexProgressCallback);
+                        await checkAndBuildIndex(false, indexProgressCallback, context);
                     } else {
                         console.warn("[appInit V3] Функция checkAndBuildIndex не найдена, вызываем ensureSearchIndexIsBuilt.");
                         await ensureSearchIndexIsBuilt();
@@ -1898,6 +1899,12 @@ function initDB() {
             const transaction = e.target.transaction;
             console.log(`[initDB - onupgradeneeded] Обновление базы данных с версии ${e.oldVersion} до ${e.newVersion}`);
 
+            try {
+                sessionStorage.setItem('dbJustUpgraded', 'true');
+                console.log("[initDB - onupgradeneeded] Установлен флаг 'dbJustUpgraded' в sessionStorage.");
+            } catch (storageError) {
+                console.error("[initDB - onupgradeneeded] Не удалось установить флаг в sessionStorage:", storageError);
+            }
 
             if (!transaction) {
                 console.error("[initDB - onupgradeneeded] КРИТИЧЕСКАЯ ОШИБКА: транзакция (e.target.transaction) недоступна!");
@@ -2728,6 +2735,14 @@ async function saveUISettings() {
         originalUISettings = JSON.parse(JSON.stringify(currentPreviewSettings));
         isUISettingsDirty = false;
 
+        if (typeof applyPreviewSettings === 'function') {
+            await applyPreviewSettings(currentPreviewSettings);
+            console.log("UI settings applied immediately after saving.");
+        } else {
+            console.error("applyPreviewSettings function not found! UI might not update after save.");
+            showNotification("Ошибка: не удалось обновить интерфейс после сохранения.", "error");
+        }
+
         showNotification("Настройки успешно сохранены.", "success");
         return true;
     } catch (error) {
@@ -3059,88 +3074,476 @@ let originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(DEFAULT_SEDO_DATA));
 let isSedoEditing = false;
 
 function initSedoTypesSystem() {
-    const editBtn = document.getElementById('editSedoTypesBtn');
-    const saveBtn = document.getElementById('saveSedoTypesBtn');
-    const cancelBtn = document.getElementById('cancelSedoTypesBtn');
-
-    editBtn?.addEventListener('click', () => toggleSedoEditMode(true));
-    saveBtn?.addEventListener('click', saveSedoChanges);
-    cancelBtn?.addEventListener('click', () => {
-        if (confirm("Отменить изменения и вернуться к сохраненной версии?")) {
-            toggleSedoEditMode(false);
-            loadSedoData().then(data => renderSedoTypesContent(data, false));
+    loadSedoData().then(data => {
+        currentSedoData = data;
+        renderSedoTypesContent(currentSedoData, false, '');
+    }).catch(error => {
+        console.error("Критическая ошибка при загрузке данных СЭДО:", error);
+        if (typeof showNotification === 'function') {
+            showNotification("Не удалось загрузить данные для раздела СЭДО.", "error");
         }
     });
 
-    loadSedoData().then(data => {
-        currentSedoData = data;
-        renderSedoTypesContent(currentSedoData, false);
-    });
-    console.log("Система типов сообщений СЭДО инициализирована.");
+    console.log("Система типов сообщений СЭДО инициализирована (v2, инкапсулированная логика кнопок).");
+}
+
+function toggleSedoEditMode(isEditing) {
+    console.log(`[toggleSedoEditMode Refactored] Переключение режима редактирования на: ${isEditing}`);
+    isSedoEditing = isEditing;
+
+    const searchContainer = document.getElementById('sedoSearchContainer');
+    if (searchContainer) {
+        searchContainer.style.display = isEditing ? 'none' : 'block';
+    }
+
+    if (!currentSedoData || !Array.isArray(currentSedoData.articleLinks)) {
+        currentSedoData.articleLinks = [];
+        console.warn("[toggleSedoEditMode Refactored] currentSedoData.articleLinks был невалидным, инициализирован пустым массивом.");
+    }
+
+    if (isEditing) {
+        originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(currentSedoData));
+        console.log("[toggleSedoEditMode Refactored] Состояние originalSedoDataBeforeEdit обновлено перед редактированием.");
+    }
+
+    renderSedoTypesContent(currentSedoData, isEditing);
+    console.log(`[toggleSedoEditMode Refactored] renderSedoTypesContent вызвана с isEditing=${isEditing}`);
+}
+
+
+function renderSedoTypesContent(data, isEditing, searchQuery = '') {
+    const SEDO_TAB_PANEL_ID = 'sedoTypesContent';
+    const SEDO_RENDER_TARGET_ID = 'sedoTypesRenderContainer';
+    const sedoTabPanel = document.getElementById(SEDO_TAB_PANEL_ID);
+
+    if (!sedoTabPanel) {
+        console.log(`[SedoRender v5] Панель вкладки #${SEDO_TAB_PANEL_ID} не найдена или не активна. Рендеринг пропущен.`);
+        return;
+    }
+
+    let mainContentContainer = sedoTabPanel.querySelector(`#${SEDO_RENDER_TARGET_ID}`);
+
+    if (!mainContentContainer) {
+        console.warn(`[SedoRender v5] Целевой контейнер #${SEDO_RENDER_TARGET_ID} не найден внутри #${SEDO_TAB_PANEL_ID}. Создаем его динамически.`);
+        mainContentContainer = document.createElement('div');
+        mainContentContainer.id = SEDO_RENDER_TARGET_ID;
+        sedoTabPanel.innerHTML = '';
+        sedoTabPanel.appendChild(mainContentContainer);
+    }
+
+    if (!data) {
+        console.error(`[SedoRender Refactored] Ошибка: в функцию переданы невалидные данные (data is ${data}). Рендеринг прерван.`);
+        if (typeof showNotification === 'function') {
+            showNotification('Произошла внутренняя ошибка при отображении данных СЭДО.', 'error');
+        }
+        mainContentContainer.innerHTML = '<p class="text-red-500 text-center p-4">Ошибка загрузки данных для отображения.</p>';
+        return;
+    }
+
+    mainContentContainer.innerHTML = '';
+    mainContentContainer.className = "bg-white dark:bg-slate-800 p-4 md:p-6 rounded-lg shadow-lg flex flex-col h-full";
+    console.log(`[SedoRender Refactored v5] Начало рендеринга. Режим редактирования: ${isEditing}. Поисковый запрос: "${searchQuery}"`);
+
+    const fragment = document.createDocumentFragment();
+
+    const headerContainer = document.createElement('div');
+    headerContainer.className = 'flex flex-wrap gap-y-2 justify-between items-center mb-4 flex-shrink-0';
+
+    const titleHeader = document.createElement('h2');
+    titleHeader.className = 'text-2xl font-bold text-gray-800 dark:text-gray-200';
+    titleHeader.textContent = 'Типы сообщений СЭДО';
+
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'flex items-center gap-2';
+
+    if (isEditing) {
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'sedoMainSaveButton';
+        saveBtn.className = 'bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-baseline text-sm font-medium';
+        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Сохранить';
+        saveBtn.addEventListener('click', saveSedoChanges);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.id = 'sedoMainCancelButton';
+        cancelBtn.className = 'bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors flex items-baseline text-sm font-medium';
+        cancelBtn.innerHTML = '<i class="fas fa-times mr-2"></i>Отмена';
+        cancelBtn.addEventListener('click', () => {
+            if (confirm("Отменить все несохраненные изменения и вернуться к просмотру?")) {
+                currentSedoData = JSON.parse(JSON.stringify(originalSedoDataBeforeEdit));
+                toggleSedoEditMode(false);
+                if (typeof showNotification === 'function') showNotification("Изменения отменены.", "info");
+            }
+        });
+
+        buttonsContainer.appendChild(saveBtn);
+        buttonsContainer.appendChild(cancelBtn);
+
+    } else {
+        const editBtn = document.createElement('button');
+        editBtn.id = 'sedoMainEditButton';
+        editBtn.className = 'bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-baseline text-sm font-medium';
+        editBtn.innerHTML = '<i class="fas fa-edit mr-2"></i>Редактировать';
+        editBtn.addEventListener('click', () => toggleSedoEditMode(true));
+        buttonsContainer.appendChild(editBtn);
+    }
+
+    headerContainer.appendChild(titleHeader);
+    headerContainer.appendChild(buttonsContainer);
+    fragment.appendChild(headerContainer);
+
+    if (!isEditing) {
+        const searchContainer = document.createElement('div');
+        searchContainer.id = 'sedoSearchContainer';
+        searchContainer.className = 'relative mb-4 flex-shrink-0';
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'sedoSearchInput';
+        searchInput.placeholder = 'Поиск по разделу СЭДО...';
+        searchInput.className = 'w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100';
+        searchInput.value = searchQuery;
+
+        const clearSearchBtn = document.createElement('button');
+        clearSearchBtn.id = 'clearSedoSearchBtn';
+        clearSearchBtn.className = 'absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700';
+        clearSearchBtn.title = 'Очистить поиск';
+        clearSearchBtn.innerHTML = '<i class="fas fa-times"></i>';
+        clearSearchBtn.classList.toggle('hidden', !searchQuery);
+
+        searchInput.addEventListener('input', debounce(handleSedoSearch, 300));
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            handleSedoSearch();
+        });
+
+        searchContainer.appendChild(searchInput);
+        searchContainer.appendChild(clearSearchBtn);
+        fragment.appendChild(searchContainer);
+    }
+
+    const infoContainer = document.createElement('div');
+    infoContainer.id = 'sedoTypesInfoContainer';
+    infoContainer.className = "flex-grow min-h-0 overflow-y-auto custom-scrollbar -mr-4 pr-4";
+
+    const highlight = (text) => {
+        if (!searchQuery || !text) return escapeHtml(String(text));
+        return highlightTextInString(String(text), searchQuery);
+    };
+
+    const linksSectionContainer = document.createElement('div');
+    linksSectionContainer.className = 'mb-6';
+    const linksTitleHeader = document.createElement('div');
+    linksTitleHeader.className = 'flex items-center justify-between mb-content-sm';
+    const linksTitleStatic = document.createElement('h3');
+    linksTitleStatic.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
+    linksTitleStatic.textContent = 'Полезные ссылки и информация по СЭДО';
+    linksTitleHeader.appendChild(linksTitleStatic);
+    linksSectionContainer.appendChild(linksTitleHeader);
+    const articles = (data && Array.isArray(data.articleLinks)) ? data.articleLinks : [];
+    if (!isEditing) {
+        const linksDisplayArea = document.createElement('div');
+        linksDisplayArea.className = 'bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow mb-3';
+        if (articles.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-2';
+            articles.forEach((item) => {
+                if (!item || (item.url === undefined && item.text === undefined)) return;
+                const li = document.createElement('li');
+                li.className = 'text-gray-700 dark:text-gray-300 break-words';
+                if (item.url) {
+                    li.classList.add('list-disc', 'list-inside', 'ml-5');
+                    const a = document.createElement('a');
+                    a.href = item.url;
+                    a.innerHTML = highlight(item.url);
+                    a.className = 'text-primary hover:underline break-all';
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    li.appendChild(a);
+                    if (item.text) {
+                        const descSpan = document.createElement('span');
+                        descSpan.className = 'ml-2 text-sm text-gray-500 dark:text-gray-400 italic';
+                        descSpan.innerHTML = `— ${highlight(item.text)}`;
+                        li.appendChild(descSpan);
+                    }
+                } else if (item.text) {
+                    const textSpan = document.createElement('span');
+                    textSpan.innerHTML = linkify(highlight(item.text));
+                    li.appendChild(textSpan);
+                }
+                ul.appendChild(li);
+            });
+            linksDisplayArea.appendChild(ul);
+        } else {
+            linksDisplayArea.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ссылок или дополнительной информации не добавлено.</p>';
+        }
+        linksSectionContainer.appendChild(linksDisplayArea);
+    } else {
+        const linksEditInput = document.createElement('textarea');
+        linksEditInput.id = 'sedoArticleLinksEditInput';
+        linksEditInput.className = 'w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm resize-y min-h-[100px] mb-3';
+        linksEditInput.placeholder = 'Каждая ссылка или текстовая заметка с новой строки.\nФормат для ссылки с пояснением: URL|Пояснение';
+        linksEditInput.value = articles.map(item => {
+            if (item.url && item.text) return `${item.url}|${item.text}`;
+            if (item.url) return item.url;
+            if (item.text) return item.text;
+            return '';
+        }).filter(line => line).join('\n');
+        linksSectionContainer.appendChild(linksEditInput);
+    }
+    infoContainer.appendChild(linksSectionContainer);
+
+    if (data.tables && Array.isArray(data.tables)) {
+        if (data.tables.length === 0 && searchQuery) {
+            const noResultsEl = document.createElement('p');
+            noResultsEl.className = 'text-center text-gray-500 dark:text-gray-400 py-4';
+            noResultsEl.textContent = `По запросу "${searchQuery}" в таблицах ничего не найдено.`;
+            infoContainer.appendChild(noResultsEl);
+        }
+        data.tables.forEach((tableData, tableIndex) => {
+            const tableContainerDiv = document.createElement('div');
+            tableContainerDiv.className = 'sedo-table-container mb-6';
+            tableContainerDiv.dataset.tableIndex = tableIndex;
+            const titleHeaderDiv = document.createElement('div');
+            titleHeaderDiv.className = 'flex items-center justify-between mb-content-sm';
+            if (isEditing) {
+                const tableTitleInput = document.createElement('input');
+                tableTitleInput.type = 'text';
+                tableTitleInput.value = tableData.title || `Таблица ${tableIndex + 1}`;
+                tableTitleInput.className = 'sedo-table-title-edit text-lg font-semibold text-gray-900 dark:text-gray-100 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded px-2 py-1 w-full mr-2 focus:outline-none focus:ring-2 focus:ring-primary';
+                tableTitleInput.dataset.tableIndex = tableIndex;
+                titleHeaderDiv.appendChild(tableTitleInput);
+            } else {
+                const tableTitle = document.createElement('h3');
+                tableTitle.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
+                tableTitle.innerHTML = highlight(tableData.title || `Таблица ${tableIndex + 1}`);
+                titleHeaderDiv.appendChild(tableTitle);
+            }
+            const fullscreenBtn = document.createElement('button');
+            fullscreenBtn.type = 'button';
+            fullscreenBtn.className = 'sedo-table-fullscreen-btn p-1.5 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary-dark rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0';
+            fullscreenBtn.title = 'Развернуть на весь экран';
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            fullscreenBtn.dataset.tableIndex = tableIndex;
+            fullscreenBtn.addEventListener('click', () => {
+                if (typeof handleSedoTableFullscreen === 'function') handleSedoTableFullscreen(tableIndex);
+                else console.error("handleSedoTableFullscreen не определена.");
+            });
+            titleHeaderDiv.appendChild(fullscreenBtn);
+            tableContainerDiv.appendChild(titleHeaderDiv);
+            const tableWrapper = document.createElement('div');
+            tableWrapper.className = 'custom-scrollbar overflow-x-auto bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow';
+            if (tableData.isStaticList) {
+                const listElement = document.createElement('ul');
+                listElement.className = 'list-disc list-inside pl-5 space-y-1 text-sm';
+                listElement.dataset.tableIndex = tableIndex;
+                if (Array.isArray(tableData.items)) {
+                    tableData.items.forEach((itemText, itemIndex) => {
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = highlight(String(itemText));
+                        if (isEditing) {
+                            listItem.contentEditable = 'true';
+                            listItem.className = 'editing-cell p-1 my-0.5 bg-yellow-50 dark:bg-yellow-900/30 outline-yellow-300 focus:outline rounded min-h-[1.5em]';
+                            listItem.dataset.itemIndex = itemIndex;
+                        }
+                        listElement.appendChild(listItem);
+                    });
+                } else {
+                    listElement.innerHTML = '<li>Данные списка отсутствуют или некорректны.</li>';
+                }
+                tableWrapper.appendChild(listElement);
+            } else {
+                const table = document.createElement('table');
+                table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-600 sedo-table';
+                table.dataset.tableIndex = tableIndex;
+                const thead = document.createElement('thead');
+                thead.className = 'bg-gray-50 dark:bg-gray-800';
+                const headerRow = document.createElement('tr');
+                if (Array.isArray(tableData.columns)) {
+                    tableData.columns.forEach((colName, colIndex) => {
+                        const th = document.createElement('th');
+                        th.scope = 'col';
+                        th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider';
+                        if (isEditing) {
+                            const colNameInput = document.createElement('input');
+                            colNameInput.type = 'text';
+                            colNameInput.value = String(colName);
+                            colNameInput.className = 'sedo-column-header-edit bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded px-1 py-0.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-primary placeholder-gray-400 dark:placeholder-gray-500';
+                            colNameInput.placeholder = "Заголовок";
+                            colNameInput.dataset.colIndex = colIndex;
+                            th.appendChild(colNameInput);
+                        } else {
+                            th.innerHTML = highlight(String(colName));
+                        }
+                        headerRow.appendChild(th);
+                    });
+                }
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                tbody.className = 'bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600';
+                if (Array.isArray(tableData.items)) {
+                    tableData.items.forEach((item, rowIndex) => {
+                        if (typeof item !== 'object' || item === null) return;
+                        const row = document.createElement('tr');
+                        row.dataset.rowIndex = rowIndex;
+                        const itemKeys = Object.keys(item);
+                        (tableData.columns || []).forEach((_colNameFromConfig, colIndex) => {
+                            const td = document.createElement('td');
+                            td.className = 'px-4 py-4 text-sm text-gray-700 dark:text-gray-200 align-top';
+                            let cellValue = '';
+                            let currentItemKeyUsed = null;
+                            if (tableData.codeField && colIndex === 0 && item.hasOwnProperty(tableData.codeField)) {
+                                currentItemKeyUsed = tableData.codeField;
+                            } else if (itemKeys[colIndex] !== undefined && item.hasOwnProperty(itemKeys[colIndex])) {
+                                currentItemKeyUsed = itemKeys[colIndex];
+                            }
+                            if (currentItemKeyUsed) {
+                                cellValue = item[currentItemKeyUsed] === null || item[currentItemKeyUsed] === undefined ? '' : item[currentItemKeyUsed];
+                                td.dataset.colKey = currentItemKeyUsed;
+                            } else {
+                                td.dataset.colKey = `col_${colIndex}_fallback`;
+                            }
+                            td.innerHTML = highlight(String(cellValue));
+                            if (isEditing && currentItemKeyUsed) {
+                                td.contentEditable = 'true';
+                                td.classList.add('editing-cell', 'bg-yellow-50', 'dark:bg-yellow-900/30', 'outline-yellow-300', 'focus:outline', 'min-w-[50px]');
+                            } else {
+                                td.contentEditable = 'false';
+                            }
+                            row.appendChild(td);
+                        });
+                        tbody.appendChild(row);
+                    });
+                }
+                table.appendChild(tbody);
+                tableWrapper.appendChild(table);
+            }
+            tableContainerDiv.appendChild(tableWrapper);
+            infoContainer.appendChild(tableContainerDiv);
+        });
+    }
+
+    fragment.appendChild(infoContainer);
+
+    mainContentContainer.appendChild(fragment);
 }
 
 
 async function saveSedoChanges() {
-    console.log("[SedoSave Refactored V2] Попытка сохранить изменения СЭДО...");
-    if (!currentSedoData || !currentSedoData.tables) {
-        console.error("[SedoSave Refactored V2] Ошибка: currentSedoData не инициализированы или не содержат таблиц.");
-        showNotification("Ошибка: Не удалось сохранить данные СЭДО (внутренние данные не готовы).", "error");
+    console.log("[SedoSave Refactored V4 - DOM READ] Попытка сохранить изменения СЭДО...");
+    const saveBtn = document.getElementById('sedoMainSaveButton');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Сохранение...';
+    }
+
+    const mainContentContainer = document.getElementById('sedoTypesContent');
+    if (!mainContentContainer) {
+        console.error("[SedoSave V4] Не найден главный контейнер #sedoTypesContent.");
+        showNotification("Ошибка: Не найден контейнер для сохранения данных.", "error");
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Сохранить'; }
         return false;
     }
 
-    for (const table of currentSedoData.tables) {
-        if (!table.title || table.title.trim() === "") {
-            showNotification(`Заголовок одной из таблиц пуст. Пожалуйста, заполните все заголовки.`, "warning");
+    const newData = JSON.parse(JSON.stringify(originalSedoDataBeforeEdit));
+
+    const linksEditInput = mainContentContainer.querySelector('#sedoArticleLinksEditInput');
+    if (linksEditInput) {
+        const lines = linksEditInput.value.split('\n');
+        newData.articleLinks = lines.map(lineOriginal => {
+            const line = lineOriginal.trim();
+            if (!line) return null;
+            const parts = line.split('|');
+            const firstPart = parts[0].trim();
+            const textPart = parts.length > 1 ? parts.slice(1).join('|').trim() : '';
+            let isUrlValid = false, validatedUrlString = null;
+            if (firstPart) {
+                let urlToTest = firstPart.startsWith('www.') ? 'http://' + firstPart : firstPart;
+                try {
+                    const urlObj = new URL(urlToTest);
+                    if (urlObj.protocol && urlObj.hostname) { isUrlValid = true; validatedUrlString = urlObj.href; }
+                } catch (_) { }
+            }
+            return isUrlValid ? { url: validatedUrlString, text: textPart } : { text: line };
+        }).filter(Boolean);
+    }
+
+    const tableContainers = mainContentContainer.querySelectorAll('.sedo-table-container');
+    for (const tableContainer of tableContainers) {
+        const tableIndex = parseInt(tableContainer.dataset.tableIndex, 10);
+        if (isNaN(tableIndex) || !newData.tables[tableIndex]) continue;
+
+        const titleInput = tableContainer.querySelector('.sedo-table-title-edit');
+        if (titleInput && titleInput.value.trim()) {
+            newData.tables[tableIndex].title = titleInput.value.trim();
+        } else if (titleInput) {
+            showNotification(`Заголовок таблицы ${tableIndex + 1} не может быть пустым.`, "warning");
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Сохранить'; }
             return false;
         }
-        if (!table.isStaticList && table.columns) {
-            for (const colName of table.columns) {
-                if (!colName || colName.trim() === "") {
-                    showNotification(`Заголовок одной из колонок в таблице "${table.title}" пуст.`, "warning");
-                    return false;
+
+        const table = tableContainer.querySelector('table.sedo-table');
+        if (table) {
+            const headerInputs = table.querySelectorAll('.sedo-column-header-edit');
+            headerInputs.forEach((input, colIndex) => {
+                if (input.value.trim()) {
+                    newData.tables[tableIndex].columns[colIndex] = input.value.trim();
+                } else {
+                    showNotification(`Заголовок колонки ${colIndex + 1} в таблице "${newData.tables[tableIndex].title}" не может быть пустым.`, "warning");
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Сохранить'; }
+                    throw new Error("Пустой заголовок колонки");
                 }
-            }
+            });
+
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach((row, rowIndex) => {
+                const cells = row.querySelectorAll('td.editing-cell');
+                cells.forEach(cell => {
+                    const colKey = cell.dataset.colKey;
+                    if (colKey && newData.tables[tableIndex].items[rowIndex]) {
+                        newData.tables[tableIndex].items[rowIndex][colKey] = cell.textContent;
+                    }
+                });
+            });
+        } else {
+            const listItems = tableContainer.querySelectorAll('ul li.editing-cell');
+            const newItems = [];
+            listItems.forEach(li => {
+                newItems.push(li.textContent.trim());
+            });
+            newData.tables[tableIndex].items = newItems;
         }
     }
 
+
     try {
-        const dataToSave = { ...currentSedoData };
-        if (!dataToSave.id) dataToSave.id = SEDO_CONFIG_KEY;
-        else if (dataToSave.id !== SEDO_CONFIG_KEY) dataToSave.id = SEDO_CONFIG_KEY;
-
-
-        let logDataPreview = dataToSave;
-        if (JSON.stringify(dataToSave).length > 1000) {
-            logDataPreview = { id: dataToSave.id, articleLinksCount: dataToSave.articleLinks?.length, tablesCount: dataToSave.tables?.length, firstTableTitle: dataToSave.tables?.[0]?.title };
-        }
-        console.log("[SedoSave Refactored V2] Финальные данные для сохранения (превью):", JSON.parse(JSON.stringify(logDataPreview)));
+        const dataToSave = { ...newData, id: SEDO_CONFIG_KEY };
+        console.log("[SedoSave V4] Финальные данные для сохранения:", JSON.parse(JSON.stringify(dataToSave)));
 
         await saveToIndexedDB('preferences', dataToSave);
-        console.log("[SedoSave Refactored V2] Данные СЭДО успешно сохранены в IndexedDB.");
+        console.log("[SedoSave V4] Данные СЭДО успешно сохранены в IndexedDB.");
 
         if (typeof updateSearchIndex === 'function') {
-            if (!originalSedoDataBeforeEdit) {
-                console.warn("[SedoSave Refactored V2] originalSedoDataBeforeEdit не найдено! Это может привести к некорректному обновлению поискового индекса. Попытка использовать null.");
-                originalSedoDataBeforeEdit = null;
-            }
-
-
             await updateSearchIndex('preferences', SEDO_CONFIG_KEY, dataToSave, 'update', originalSedoDataBeforeEdit);
-            console.log("[SedoSave Refactored V2] Поисковый индекс для СЭДО успешно обновлен.");
-        } else {
-            console.warn("[SedoSave Refactored V2] Функция updateSearchIndex не найдена, индекс СЭДО не будет обновлен.");
+            console.log("[SedoSave V4] Поисковый индекс для СЭДО успешно обновлен.");
         }
 
-
-        originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(currentSedoData));
+        currentSedoData = JSON.parse(JSON.stringify(dataToSave));
+        originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(dataToSave));
 
         toggleSedoEditMode(false);
         showNotification("Изменения в типах сообщений СЭДО сохранены.", "success");
         return true;
     } catch (error) {
-        console.error("[SedoSave Refactored V2] Ошибка сохранения данных СЭДО в IndexedDB или в последующих операциях:", error);
+        if (error.message === "Пустой заголовок колонки") return false;
+        console.error("[SedoSave V4] Ошибка сохранения данных СЭДО:", error);
         showNotification("Ошибка при сохранении данных СЭДО.", "error");
         return false;
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Сохранить';
+        }
     }
 }
 
@@ -3497,325 +3900,85 @@ async function loadSedoData() {
 }
 
 
+function filterSedoData(query) {
+    const lowerCaseQuery = query.toLowerCase().trim();
+    if (!lowerCaseQuery) {
+        return currentSedoData;
+    }
+
+    const filteredData = {
+        ...JSON.parse(JSON.stringify(currentSedoData)),
+        tables: []
+    };
+
+    if (currentSedoData.articleLinks && Array.isArray(currentSedoData.articleLinks)) {
+        filteredData.articleLinks = currentSedoData.articleLinks.filter(link => {
+            const textToSearch = `${link.text || ''} ${link.url || ''}`.toLowerCase();
+            return textToSearch.includes(lowerCaseQuery);
+        });
+    }
+
+    if (currentSedoData.tables && Array.isArray(currentSedoData.tables)) {
+        currentSedoData.tables.forEach(table => {
+            const tableTitleMatches = table.title && table.title.toLowerCase().includes(lowerCaseQuery);
+
+            let filteredItems = [];
+            if (table.items && Array.isArray(table.items)) {
+                filteredItems = table.items.filter(item => {
+                    return Object.values(item).some(value =>
+                        String(value).toLowerCase().includes(lowerCaseQuery)
+                    );
+                });
+            }
+
+            if (tableTitleMatches || filteredItems.length > 0) {
+                const newTable = { ...table };
+                if (!tableTitleMatches) {
+                    newTable.items = filteredItems;
+                }
+                filteredData.tables.push(newTable);
+            }
+        });
+    }
+    return filteredData;
+}
+
+
+function handleSedoSearch() {
+    const searchInput = document.getElementById('sedoSearchInput');
+    if (!searchInput) return;
+
+    const query = searchInput.value;
+    const filteredData = filterSedoData(query);
+    renderSedoTypesContent(filteredData, false, query);
+}
+
+
 function toggleSedoEditMode(isEditing) {
     console.log(`[toggleSedoEditMode Refactored] Переключение режима редактирования на: ${isEditing}`);
     isSedoEditing = isEditing;
     const editBtn = document.getElementById('editSedoTypesBtn');
     const saveBtn = document.getElementById('saveSedoTypesBtn');
     const cancelBtn = document.getElementById('cancelSedoTypesBtn');
+    const searchContainer = document.getElementById('sedoSearchContainer');
 
-    if (editBtn) editBtn.style.display = isEditing ? 'none' : 'inline-flex';
-    if (saveBtn) saveBtn.style.display = isEditing ? 'inline-flex' : 'none';
-    if (cancelBtn) cancelBtn.style.display = isEditing ? 'inline-flex' : 'none';
+    if (editBtn) editBtn.style.display = isEditing ? 'none' : 'flex';
+    if (saveBtn) saveBtn.style.display = isEditing ? 'flex' : 'none';
+    if (cancelBtn) cancelBtn.style.display = isEditing ? 'flex' : 'none';
+    if (searchContainer) searchContainer.style.display = isEditing ? 'none' : 'block';
 
-    if (!currentSedoData.articleLinks || !Array.isArray(currentSedoData.articleLinks)) {
+    if (!currentSedoData || !Array.isArray(currentSedoData.articleLinks)) {
         currentSedoData.articleLinks = [];
         console.warn("[toggleSedoEditMode Refactored] currentSedoData.articleLinks был невалидным, инициализирован пустым массивом.");
     }
 
     if (isEditing) {
-
         originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(currentSedoData));
         console.log("[toggleSedoEditMode Refactored] Состояние originalSedoDataBeforeEdit обновлено перед редактированием.");
     }
 
     renderSedoTypesContent(currentSedoData, isEditing);
     console.log(`[toggleSedoEditMode Refactored] renderSedoTypesContent вызвана с isEditing=${isEditing}`);
-}
-
-
-function renderSedoTypesContent(data, isEditing) {
-    const container = document.getElementById('sedoTypesInfoContainer');
-    if (!container) {
-        console.error("[SedoRender Refactored] Контейнер #sedoTypesInfoContainer не найден.");
-        return;
-    }
-    console.log(`[SedoRender Refactored] Начало рендеринга. Режим редактирования: ${isEditing}.`);
-
-    container.innerHTML = '';
-
-    const linksSectionContainer = document.createElement('div');
-    linksSectionContainer.className = 'mb-6';
-
-    const linksTitleHeader = document.createElement('div');
-    linksTitleHeader.className = 'flex items-center justify-between mb-content-sm';
-    const linksTitleStatic = document.createElement('h3');
-    linksTitleStatic.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
-    linksTitleStatic.textContent = 'Полезные ссылки и информация по СЭДО';
-    linksTitleHeader.appendChild(linksTitleStatic);
-    linksSectionContainer.appendChild(linksTitleHeader);
-
-    const linksDisplayArea = document.createElement('div');
-    linksDisplayArea.id = 'sedoArticleLinksViewContainer';
-    linksDisplayArea.className = 'bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow mb-3';
-
-    const articles = (data && Array.isArray(data.articleLinks)) ? data.articleLinks : [];
-
-    if (!isEditing) {
-        if (articles.length > 0) {
-            const ul = document.createElement('ul');
-            ul.className = 'space-y-2';
-            articles.forEach((item) => {
-                if (!item || (item.url === undefined && item.text === undefined)) return;
-                const li = document.createElement('li');
-                li.className = 'text-gray-700 dark:text-gray-300 break-words';
-                if (item.url) {
-                    li.classList.add('list-disc', 'list-inside', 'ml-5');
-                    const a = document.createElement('a');
-                    a.href = item.url; a.textContent = item.url;
-                    a.className = 'text-primary hover:underline break-all';
-                    a.target = '_blank'; a.rel = 'noopener noreferrer';
-                    li.appendChild(a);
-                    if (item.text) {
-                        const descSpan = document.createElement('span');
-                        descSpan.className = 'ml-2 text-sm text-gray-500 dark:text-gray-400 italic';
-                        descSpan.textContent = `— ${typeof escapeHtml === 'function' ? escapeHtml(item.text) : item.text}`;
-                        li.appendChild(descSpan);
-                    }
-                } else if (item.text) {
-                    const textSpan = document.createElement('span');
-                    textSpan.innerHTML = typeof linkify === 'function' ? linkify(item.text) : (typeof escapeHtml === 'function' ? escapeHtml(item.text) : item.text);
-                    li.appendChild(textSpan);
-                }
-                ul.appendChild(li);
-            });
-            linksDisplayArea.appendChild(ul);
-        } else {
-            linksDisplayArea.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ссылок или дополнительной информации не добавлено.</p>';
-        }
-        linksDisplayArea.style.display = 'block';
-        linksSectionContainer.appendChild(linksDisplayArea);
-    } else {
-        const linksEditInput = document.createElement('textarea');
-        linksEditInput.id = 'sedoArticleLinksEditInput';
-        linksEditInput.className = 'w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm resize-y min-h-[100px] mb-3';
-        linksEditInput.placeholder = 'Каждая ссылка или текстовая заметка с новой строки.\nФормат для ссылки с пояснением: URL|Пояснение';
-        linksEditInput.value = articles.map(item => {
-            if (item.url && item.text) return `${item.url}|${item.text}`;
-            else if (item.url) return item.url;
-            else if (item.text) return item.text;
-            return '';
-        }).filter(line => line).join('\n');
-
-
-        linksEditInput.addEventListener('input', () => {
-            const newArticleLinksText = linksEditInput.value;
-            const lines = newArticleLinksText.split('\n');
-            const parsedArticleLinks = lines.map(lineOriginal => {
-                const line = lineOriginal.trim();
-                if (!line) return null;
-                const parts = line.split('|');
-                const firstPart = parts[0].trim();
-                const textDescriptionPart = parts.length > 1 ? parts.slice(1).join('|').trim() : '';
-                let isUrlValid = false; let validatedUrlString = null;
-                if (firstPart) {
-                    let urlToTest = firstPart;
-                    if (urlToTest.startsWith('www.') && !urlToTest.startsWith('http://') && !urlToTest.startsWith('https://')) {
-                        urlToTest = 'http://' + urlToTest;
-                    }
-                    try {
-                        const urlObject = new URL(urlToTest);
-                        if (urlObject.protocol && urlObject.hostname) { isUrlValid = true; validatedUrlString = urlObject.href; }
-                    } catch (_) { isUrlValid = false; }
-                }
-                if (isUrlValid && validatedUrlString) return { url: validatedUrlString, text: textDescriptionPart };
-                else return { text: line };
-            }).filter(item => item !== null && ((item.url && item.url.trim() !== "") || (item.text && item.text.trim() !== "")));
-
-            currentSedoData.articleLinks = parsedArticleLinks;
-            console.log("[SedoRender Refactored] currentSedoData.articleLinks обновлены в памяти.");
-        });
-        linksDisplayArea.style.display = 'none';
-        linksSectionContainer.appendChild(linksDisplayArea);
-        linksSectionContainer.appendChild(linksEditInput);
-    }
-    container.appendChild(linksSectionContainer);
-
-
-    if (data.tables && Array.isArray(data.tables)) {
-        data.tables.forEach((tableData, tableIndex) => {
-            if (!tableData || typeof tableData !== 'object') {
-                console.warn(`[SedoRender Refactored] Пропуск невалидных данных для таблицы с индексом ${tableIndex}:`, tableData);
-                return;
-            }
-
-            const tableContainerDiv = document.createElement('div');
-            tableContainerDiv.className = 'sedo-table-container mb-6';
-            tableContainerDiv.dataset.tableIndex = tableIndex;
-
-            const titleHeaderDiv = document.createElement('div');
-            titleHeaderDiv.className = 'flex items-center justify-between mb-content-sm';
-
-            if (isEditing) {
-                const tableTitleInput = document.createElement('input');
-                tableTitleInput.type = 'text';
-                tableTitleInput.value = tableData.title || `Таблица ${tableIndex + 1}`;
-                tableTitleInput.className = 'sedo-table-title-edit text-lg font-semibold text-gray-900 dark:text-gray-100 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded px-2 py-1 w-full mr-2 focus:outline-none focus:ring-2 focus:ring-primary';
-                tableTitleInput.dataset.tableIndex = tableIndex;
-                tableTitleInput.addEventListener('input', () => {
-                    const tIdx = parseInt(tableTitleInput.dataset.tableIndex, 10);
-                    if (!isNaN(tIdx) && currentSedoData.tables[tIdx]) {
-                        currentSedoData.tables[tIdx].title = tableTitleInput.value.trim();
-                    }
-                });
-                titleHeaderDiv.appendChild(tableTitleInput);
-            } else {
-                const tableTitle = document.createElement('h3');
-                tableTitle.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
-                tableTitle.textContent = tableData.title || `Таблица ${tableIndex + 1}`;
-                titleHeaderDiv.appendChild(tableTitle);
-            }
-
-            const fullscreenBtn = document.createElement('button');
-
-            fullscreenBtn.type = 'button';
-            fullscreenBtn.className = 'sedo-table-fullscreen-btn p-1.5 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary-dark rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0';
-            fullscreenBtn.title = 'Развернуть на весь экран';
-            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
-            fullscreenBtn.dataset.tableIndex = tableIndex;
-            fullscreenBtn.addEventListener('click', () => {
-                if (typeof handleSedoTableFullscreen === 'function') handleSedoTableFullscreen(tableIndex);
-                else console.error("handleSedoTableFullscreen не определена.");
-            });
-            titleHeaderDiv.appendChild(fullscreenBtn);
-            tableContainerDiv.appendChild(titleHeaderDiv);
-
-            const tableWrapper = document.createElement('div');
-            tableWrapper.className = 'custom-scrollbar overflow-x-auto overflow-y-hidden bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow';
-
-            if (tableData.isStaticList) {
-                const listElement = document.createElement('ul');
-                listElement.className = 'list-disc list-inside pl-5 space-y-1 text-sm';
-                listElement.dataset.tableIndex = tableIndex;
-                if (Array.isArray(tableData.items)) {
-                    tableData.items.forEach((itemText, itemIndex) => {
-                        const listItem = document.createElement('li');
-                        listItem.textContent = String(itemText);
-                        if (isEditing) {
-                            listItem.contentEditable = 'true';
-                            listItem.className = 'editing-cell p-1 my-0.5 bg-yellow-50 dark:bg-yellow-900/30 outline-yellow-300 focus:outline rounded min-h-[1.5em]';
-                            listItem.dataset.itemIndex = itemIndex;
-                            listItem.addEventListener('input', (e) => {
-                                const tIdx = parseInt(listElement.dataset.tableIndex, 10);
-                                const iIdx = parseInt(e.target.dataset.itemIndex, 10);
-                                if (!isNaN(tIdx) && !isNaN(iIdx) && currentSedoData.tables[tIdx] && currentSedoData.tables[tIdx].isStaticList && currentSedoData.tables[tIdx].items[iIdx] !== undefined) {
-                                    currentSedoData.tables[tIdx].items[iIdx] = e.target.textContent.trim();
-                                }
-                            });
-                        }
-                        listElement.appendChild(listItem);
-                    });
-                } else {
-                    listElement.innerHTML = '<li>Данные списка отсутствуют или некорректны.</li>';
-                }
-                tableWrapper.appendChild(listElement);
-            } else {
-                const table = document.createElement('table');
-                table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-600 sedo-table';
-                table.dataset.tableIndex = tableIndex;
-
-                const thead = document.createElement('thead');
-                thead.className = 'bg-gray-50 dark:bg-gray-800';
-                const headerRow = document.createElement('tr');
-                if (Array.isArray(tableData.columns)) {
-                    tableData.columns.forEach((colName, colIndex) => {
-                        const th = document.createElement('th');
-                        th.scope = 'col';
-                        th.className = 'px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider';
-                        if (isEditing) {
-                            const colNameInput = document.createElement('input');
-                            colNameInput.type = 'text';
-                            colNameInput.value = String(colName);
-                            colNameInput.className = 'sedo-column-header-edit bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded px-1 py-0.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-primary placeholder-gray-400 dark:placeholder-gray-500';
-                            colNameInput.placeholder = "Заголовок";
-                            colNameInput.dataset.colIndex = colIndex;
-                            colNameInput.addEventListener('input', () => {
-                                const tIdx = parseInt(table.dataset.tableIndex, 10);
-                                const cIdx = parseInt(colNameInput.dataset.colIndex, 10);
-                                if (!isNaN(tIdx) && !isNaN(cIdx) && currentSedoData.tables[tIdx] && currentSedoData.tables[tIdx].columns[cIdx] !== undefined) {
-                                    currentSedoData.tables[tIdx].columns[cIdx] = colNameInput.value.trim();
-                                }
-                            });
-                            th.appendChild(colNameInput);
-                        } else {
-                            th.textContent = String(colName);
-                        }
-                        headerRow.appendChild(th);
-                    });
-                }
-                thead.appendChild(headerRow);
-                table.appendChild(thead);
-
-                const tbody = document.createElement('tbody');
-                tbody.className = 'bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600';
-                if (Array.isArray(tableData.items)) {
-                    tableData.items.forEach((item, rowIndex) => {
-                        if (typeof item !== 'object' || item === null) return;
-                        const row = document.createElement('tr');
-                        row.dataset.rowIndex = rowIndex;
-
-                        const itemKeys = Object.keys(item);
-                        (tableData.columns || []).forEach((_colNameFromConfig, colIndex) => {
-                            const td = document.createElement('td');
-                            td.className = 'px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200';
-                            let cellValue = '';
-                            let currentItemKeyUsed = null;
-
-
-
-                            if (tableData.codeField && colIndex === 0 && item.hasOwnProperty(tableData.codeField)) {
-                                currentItemKeyUsed = tableData.codeField;
-                            }
-
-
-                            else if (itemKeys[colIndex] !== undefined && item.hasOwnProperty(itemKeys[colIndex])) {
-                                currentItemKeyUsed = itemKeys[colIndex];
-                            }
-
-                            if (currentItemKeyUsed) {
-                                cellValue = item[currentItemKeyUsed] === null || item[currentItemKeyUsed] === undefined ? '' : item[currentItemKeyUsed];
-                                td.dataset.colKey = currentItemKeyUsed;
-                            } else {
-
-                                td.dataset.colKey = `col_${colIndex}_fallback`;
-                                console.warn(`[SedoRender Refactored] Не удалось определить ключ данных для колонки ${colIndex}, таблица ${tableIndex}, ряд ${rowIndex}`);
-                            }
-
-                            td.textContent = String(cellValue);
-                            const canEditCell = isEditing && tableData.editableCells?.[colIndex] !== false && currentItemKeyUsed;
-
-                            if (canEditCell) {
-                                td.contentEditable = 'true';
-                                td.classList.add('editing-cell', 'bg-yellow-50', 'dark:bg-yellow-900/30', 'outline-yellow-300', 'focus:outline', 'min-w-[50px]');
-                                td.addEventListener('input', (e) => {
-                                    const tIdx = parseInt(table.dataset.tableIndex, 10);
-                                    const rIdx = parseInt(row.dataset.rowIndex, 10);
-                                    const cKey = e.target.dataset.colKey;
-                                    if (!isNaN(tIdx) && !isNaN(rIdx) && cKey &&
-                                        currentSedoData.tables[tIdx] && currentSedoData.tables[tIdx].items[rIdx] &&
-                                        currentSedoData.tables[tIdx].items[rIdx].hasOwnProperty(cKey)) {
-                                        currentSedoData.tables[tIdx].items[rIdx][cKey] = e.target.textContent;
-                                    } else {
-                                        console.warn(`[SedoRender Refactored] Ошибка обновления ячейки: tIdx=${tIdx}, rIdx=${rIdx}, cKey=${cKey}`);
-                                    }
-                                });
-                            } else {
-                                td.contentEditable = 'false';
-                            }
-                            row.appendChild(td);
-                        });
-                        tbody.appendChild(row);
-                    });
-                } else { }
-                table.appendChild(tbody);
-                tableWrapper.appendChild(table);
-            }
-            tableContainerDiv.appendChild(tableWrapper);
-            container.appendChild(tableContainerDiv);
-            const spacer = document.createElement('div'); spacer.className = 'h-4'; container.appendChild(spacer);
-        });
-    } else { }
-    console.log("[SedoRender Refactored] Рендеринг контента СЭДО завершен.");
 }
 
 
@@ -4552,7 +4715,7 @@ if (importDataBtn && importFileInput) {
 
 
 async function _processActualImport(jsonString) {
-    console.log("[_processActualImport V4 - Reglament Persistance Debug] Начало фактической обработки импортируемых данных...");
+    console.log("[_processActualImport V8 - Context-Aware] Начало фактической обработки импортируемых данных...");
 
     const STAGE_WEIGHTS_ACTUAL_IMPORT = {
         PARSE_JSON: 5,
@@ -4587,7 +4750,7 @@ async function _processActualImport(jsonString) {
     };
 
     if (typeof loadingOverlayManager !== 'undefined' && !loadingOverlayManager.overlayElement) {
-        console.warn("[_processActualImport V4] Оверлей не был показан. Показываем сейчас.");
+        console.warn("[_processActualImport V7] Оверлей не был показан. Показываем сейчас.");
         if (typeof loadingOverlayManager.createAndShow === 'function') loadingOverlayManager.createAndShow();
     }
     currentImportProgress = 0;
@@ -4605,15 +4768,15 @@ async function _processActualImport(jsonString) {
 
     try {
         if (!db || (typeof db.objectStoreNames === 'undefined') || (db.connections !== undefined && db.connections === 0) || db.objectStoreNames.length === 0) {
-            console.warn("[_processActualImport V4] DB is null, closed, or in an invalid state. Attempting re-initialization...");
+            console.warn("[_processActualImport V7] DB is null, closed, or in an invalid state. Attempting re-initialization...");
             await initDB();
             if (!db || !db.objectStoreNames || db.objectStoreNames.length === 0) {
-                console.error("[_processActualImport V4] База данных не доступна или пуста после повторной попытки инициализации.");
+                console.error("[_processActualImport V7] База данных не доступна или пуста после повторной попытки инициализации.");
                 throw new Error("База данных не доступна или пуста после повторной попытки инициализации.");
             }
-            console.log("[_processActualImport V4] DB re-initialized successfully.");
+            console.log("[_processActualImport V7] DB re-initialized successfully.");
         } else {
-            console.log("[_processActualImport V4] DB connection seems active and valid.");
+            console.log("[_processActualImport V7] DB connection seems active and valid.");
         }
         updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.DB_CHECK_REINIT, "Проверка БД");
 
@@ -4623,7 +4786,7 @@ async function _processActualImport(jsonString) {
         let importData;
         try {
             importData = JSON.parse(jsonString);
-            console.log("[_processActualImport V4] JSON успешно распарсен.");
+            console.log("[_processActualImport V7] JSON успешно распарсен.");
             updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.PARSE_JSON, "Парсинг JSON");
         } catch (error) {
             throw new Error("Некорректный формат JSON файла.");
@@ -4632,7 +4795,7 @@ async function _processActualImport(jsonString) {
         if (!importData || typeof importData.data !== 'object' || !importData.schemaVersion) {
             throw new Error("Некорректный формат файла импорта (отсутствует data или schemaVersion)");
         }
-        console.log(`[_processActualImport V4] Импорт данных версии схемы файла: ${importData.schemaVersion}. Ожидаемая версия приложения: ${CURRENT_SCHEMA_VERSION}`);
+        console.log(`[_processActualImport V7] Импорт данных версии схемы файла: ${importData.schemaVersion}. Ожидаемая версия приложения: ${CURRENT_SCHEMA_VERSION}`);
         const [fileMajorStr, fileMinorStr] = importData.schemaVersion.split('.');
         const [appMajorStr, appMinorStr] = CURRENT_SCHEMA_VERSION.split('.');
         const fileMajor = parseInt(fileMajorStr, 10); const fileMinor = parseInt(fileMinorStr, 10);
@@ -4652,14 +4815,71 @@ async function _processActualImport(jsonString) {
         }
         updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.VALIDATE_SCHEMA, "Валидация схемы");
 
+        if (importData.data.extLinks && Array.isArray(importData.data.extLinks) && importData.data.extLinks.some(link => typeof link.category === 'string') && importData.data.extLinkCategories) {
+            console.log("[_processActualImport V7] Обнаружены extLinks со строковыми категориями. Запуск надежной миграции категорий на лету.");
+
+            const legacyCategoryKeyToDefaultName = {
+                docs: 'Документация',
+                gov: 'Гос. сайты',
+                tools: 'Инструменты',
+                other: 'Прочее'
+            };
+
+            const oldKeyToNewIdMap = new Map();
+
+            if (Array.isArray(importData.data.extLinkCategories)) {
+                const defaultNameToNewId = new Map();
+                importData.data.extLinkCategories.forEach(cat => {
+                    if (cat && cat.name && cat.id !== undefined) {
+                        for (const key in legacyCategoryKeyToDefaultName) {
+                            if (legacyCategoryKeyToDefaultName[key] === cat.name) {
+                                defaultNameToNewId.set(cat.name, cat.id);
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                for (const oldKey in legacyCategoryKeyToDefaultName) {
+                    const defaultName = legacyCategoryKeyToDefaultName[oldKey];
+                    if (defaultNameToNewId.has(defaultName)) {
+                        oldKeyToNewIdMap.set(oldKey, defaultNameToNewId.get(defaultName));
+                    }
+                }
+            }
+
+            console.log("[_processActualImport V7] Карта миграции 'Старый ключ -> Новый ID':", oldKeyToNewIdMap);
+
+            let migrationCount = 0;
+            importData.data.extLinks.forEach(link => {
+                if (link && typeof link.category === 'string') {
+                    const oldCatKey = link.category;
+                    if (oldKeyToNewIdMap.has(oldCatKey)) {
+                        const newId = oldKeyToNewIdMap.get(oldCatKey);
+                        console.log(`[Migration] Замена категории для ссылки "${link.title || 'Без названия'}": с ключа '${oldCatKey}' на новый ID '${newId}'`);
+                        link.category = newId;
+                        migrationCount++;
+                    } else {
+                        console.warn(`[Migration] Не удалось найти новый ID для старого ключа категории '${oldCatKey}'. Ссылка "${link.title || 'Без названия'}" останется без категории.`);
+                        link.category = null;
+                    }
+                }
+            });
+
+            if (migrationCount > 0) {
+                console.log(`[_processActualImport V7] Миграция категорий на лету завершена. Обновлено ${migrationCount} ссылок.`);
+            } else {
+                console.log(`[_processActualImport V7] Миграция категорий на лету не потребовалась (ссылки уже в новом формате или не найдено соответствий).`);
+            }
+        }
 
         storesToImport = Object.keys(importData.data).filter(storeName => {
             if (!db.objectStoreNames.contains(storeName)) {
-                console.warn(`[_processActualImport V4] Хранилище '${storeName}' из файла импорта не найдено в текущей схеме БД. Пропускается.`);
+                console.warn(`[_processActualImport V7] Хранилище '${storeName}' из файла импорта не найдено в текущей схеме БД. Пропускается.`);
                 return false;
             }
             if (storeName === 'searchIndex') {
-                console.log(`[_processActualImport V4] Хранилище 'searchIndex' будет пропущено при импорте данных, оно перестраивается отдельно.`);
+                console.log(`[_processActualImport V7] Хранилище 'searchIndex' будет пропущено при импорте данных, оно перестраивается отдельно.`);
                 return false;
             }
             return true;
@@ -4667,11 +4887,11 @@ async function _processActualImport(jsonString) {
         if (storesToImport.length === 0) {
             throw new Error("Нет данных для импорта в текущую структуру БД (после фильтрации по существующим хранилищам).");
         }
-        console.log("[_processActualImport V4] Хранилища для импорта:", storesToImport);
+        console.log("[_processActualImport V7] Хранилища для импорта:", storesToImport);
 
         let importTransactionSuccessful = false;
         try {
-            console.log("[_processActualImport V4] Попытка начать основную транзакцию импорта...");
+            console.log("[_processActualImport V7] Попытка начать основную транзакцию импорта...");
             importTransactionSuccessful = await new Promise(async (resolvePromise, rejectPromise) => {
                 let transaction;
                 try {
@@ -4679,28 +4899,28 @@ async function _processActualImport(jsonString) {
                     if (!transaction) throw new Error("db.transaction вернула null/undefined.");
                 } catch (txError) { errorsOccurred.push({ storeName: storesToImport.join(', '), error: `Ошибка создания транзакции: ${txError.message}`, item: null }); return rejectPromise(txError); }
 
-                transaction.oncomplete = () => { console.log("[_processActualImport V4] Транзакция импорта успешно завершена (oncomplete)."); resolvePromise(true); };
-                transaction.onerror = (e) => { const errorMsg = `Критическая ошибка транзакции: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.error(`[_processActualImport V4] Transaction error:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
-                transaction.onabort = (e) => { const errorMsg = `Транзакция прервана: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.warn(`[_processActualImport V4] Transaction aborted:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
+                transaction.oncomplete = () => { console.log("[_processActualImport V7] Транзакция импорта успешно завершена (oncomplete)."); resolvePromise(true); };
+                transaction.onerror = (e) => { const errorMsg = `Критическая ошибка транзакции: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.error(`[_processActualImport V7] Transaction error:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
+                transaction.onabort = (e) => { const errorMsg = `Транзакция прервана: ${e.target.error?.message || e.target.error || 'Неизвестно'}`; console.warn(`[_processActualImport V7] Transaction aborted:`, e.target.error); errorsOccurred.push({ storeName: storesToImport.join(', '), error: errorMsg, item: null }); rejectPromise(e.target.error || new Error(errorMsg)); };
 
                 const clearPromises = []; const baseProgressForClear = currentImportProgress;
-                console.log(`[_processActualImport V4] Начало очистки ${storesToImport.length} хранилищ...`);
+                console.log(`[_processActualImport V7] Начало очистки ${storesToImport.length} хранилищ...`);
                 for (let i = 0; i < storesToImport.length; i++) {
                     const storeName = storesToImport[i];
                     clearPromises.push(new Promise((resolveClear, rejectClear) => {
                         try {
                             const store = transaction.objectStore(storeName); const clearRequest = store.clear();
-                            clearRequest.onsuccess = () => { console.log(`[_processActualImport V4] Хранилище ${storeName} успешно очищено.`); updateFineGrainedProgressForImport(baseProgressForClear, STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES, i + 1, storesToImport.length, "Очистка хранилищ"); resolveClear(); };
+                            clearRequest.onsuccess = () => { console.log(`[_processActualImport V7] Хранилище ${storeName} успешно очищено.`); updateFineGrainedProgressForImport(baseProgressForClear, STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES, i + 1, storesToImport.length, "Очистка хранилищ"); resolveClear(); };
                             clearRequest.onerror = (e_clear) => { const errorMsg_clear = `Ошибка очистки ${storeName}: ${e_clear.target.error?.message || 'Неизвестно'}`; console.error(errorMsg_clear, e_clear.target.error); errorsOccurred.push({ storeName, error: errorMsg_clear, item: null }); rejectClear(new Error(errorMsg_clear)); };
                         } catch (storeError) { errorsOccurred.push({ storeName, error: `Ошибка доступа к ${storeName} для очистки: ${storeError.message}`, item: null }); rejectClear(storeError); }
                     }));
                 }
-                try { await Promise.all(clearPromises); currentImportProgress = Math.max(currentImportProgress, baseProgressForClear + STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES); if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Очистка завершена"); console.log('[_processActualImport V4] Все хранилища успешно очищены.'); }
-                catch (clearAllError) { console.error('[_processActualImport V4] Ошибка во время очистки хранилищ:', clearAllError); return rejectPromise(new Error(`Не удалось очистить хранилища: ${clearAllError.message || clearAllError}`)); }
+                try { await Promise.all(clearPromises); currentImportProgress = Math.max(currentImportProgress, baseProgressForClear + STAGE_WEIGHTS_ACTUAL_IMPORT.CLEAR_STORES); if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Очистка завершена"); console.log('[_processActualImport V7] Все хранилища успешно очищены.'); }
+                catch (clearAllError) { console.error('[_processActualImport V7] Ошибка во время очистки хранилищ:', clearAllError); return rejectPromise(new Error(`Не удалось очистить хранилища: ${clearAllError.message || clearAllError}`)); }
 
                 let putPromises = []; let totalItemsToPut = 0; storesToImport.forEach(storeName => { totalItemsToPut += (importData.data[storeName] || []).length; });
                 let processedItemsPut = 0; const baseProgressForImportData = currentImportProgress;
-                console.log(`[_processActualImport V4] Начало записи ${totalItemsToPut} элементов...`);
+                console.log(`[_processActualImport V7] Начало записи ${totalItemsToPut} элементов...`);
                 for (const storeName of storesToImport) {
                     let itemsToImportOriginal = importData.data[storeName];
                     if (!Array.isArray(itemsToImportOriginal)) { errorsOccurred.push({ storeName, error: 'Данные не являются массивом', item: null }); if (totalItemsToPut > 0) { totalItemsToPut = Math.max(0, totalItemsToPut - (importData.data[storeName]?.length || 0)); } continue; }
@@ -4748,11 +4968,11 @@ async function _processActualImport(jsonString) {
                 Promise.all(putPromises).then(putResults => {
                     currentImportProgress = Math.max(currentImportProgress, baseProgressForImportData + STAGE_WEIGHTS_ACTUAL_IMPORT.IMPORT_DATA);
                     if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) loadingOverlayManager.updateProgress(Math.min(currentImportProgress, 99), "Запись данных завершена");
-                    console.log('[_processActualImport V4] Все элементы успешно записаны.');
+                    console.log('[_processActualImport V7] Все элементы успешно записаны.');
                 }).catch(promiseAllError => {
-                    console.error('[_processActualImport V4] Ошибка в Promise.all(putPromises), одна или несколько записей не удались:', promiseAllError);
+                    console.error('[_processActualImport V7] Ошибка в Promise.all(putPromises), одна или несколько записей не удались:', promiseAllError);
                     if (transaction.abort) {
-                        console.log('[_processActualImport V4] Отмена транзакции из-за ошибки записи.');
+                        console.log('[_processActualImport V7] Отмена транзакции из-за ошибки записи.');
                         transaction.abort();
                     } else {
                         rejectPromise(promiseAllError);
@@ -4760,7 +4980,7 @@ async function _processActualImport(jsonString) {
                 });
             });
         } catch (transactionError) {
-            console.error("[_processActualImport V4] Ошибка на уровне транзакции импорта:", transactionError);
+            console.error("[_processActualImport V7] Ошибка на уровне транзакции импорта:", transactionError);
             notificationMessageOnError = `Ошибка транзакции при импорте: ${transactionError.message || transactionError}. Данные не были изменены.`;
             throw transactionError;
         }
@@ -4774,12 +4994,12 @@ async function _processActualImport(jsonString) {
             }
 
             if (reglamentsWereImportedFromFile && (!preferencesWereInFile || !categoryInfoWasInImportedPreferences)) {
-                console.warn(`[_processActualImport V4] Регламенты импортированы, но ${CATEGORY_INFO_KEY} отсутствует в импортированных preferences или preferences не импортировались. Удаление старой ${CATEGORY_INFO_KEY} из БД...`);
+                console.warn(`[_processActualImport V7] Регламенты импортированы, но ${CATEGORY_INFO_KEY} отсутствует в импортированных preferences или preferences не импортировались. Удаление старой ${CATEGORY_INFO_KEY} из БД...`);
                 try {
                     await deleteFromIndexedDB('preferences', CATEGORY_INFO_KEY);
-                    console.log(`[_processActualImport V4] Старая запись ${CATEGORY_INFO_KEY} удалена из 'preferences'.`);
+                    console.log(`[_processActualImport V7] Старая запись ${CATEGORY_INFO_KEY} удалена из 'preferences'.`);
                 } catch (deleteError) {
-                    console.error(`[_processActualImport V4] Ошибка при удалении ${CATEGORY_INFO_KEY} из 'preferences':`, deleteError);
+                    console.error(`[_processActualImport V7] Ошибка при удалении ${CATEGORY_INFO_KEY} из 'preferences':`, deleteError);
                     errorsOccurred.push({ storeName: 'preferences', error: `Ошибка очистки старых категорий (${CATEGORY_INFO_KEY}): ${deleteError.message}`, item: CATEGORY_INFO_KEY });
                 }
             }
@@ -4787,15 +5007,15 @@ async function _processActualImport(jsonString) {
 
 
         if (importTransactionSuccessful) {
-            console.log("[_processActualImport V4] Импорт данных в IndexedDB завершен. Обновление приложения...");
+            console.log("[_processActualImport V8] Импорт данных в IndexedDB завершен. Обновление приложения...");
             if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
                 loadingOverlayManager.updateProgress(Math.min(currentImportProgress + 1, 99), "Инициализация приложения");
             }
             try {
                 if (typeof algorithms !== 'undefined') algorithms = { main: {}, program: [], skzi: [], lk1c: [], webReg: [] };
-                console.log("[_processActualImport V4] Предполагаемые кэши данных в памяти сброшены перед appInit.");
+                console.log("[_processActualImport V8] Предполагаемые кэши данных в памяти сброшены перед appInit.");
 
-                const dbReadyAfterImport = await appInit();
+                const dbReadyAfterImport = await appInit('import');
                 if (!dbReadyAfterImport && db === null) {
                     throw new Error("Не удалось переинициализировать приложение после импорта (БД стала null).");
                 }
@@ -4815,14 +5035,14 @@ async function _processActualImport(jsonString) {
 
                     const currentCategoryId = reglamentsListDiv.dataset.currentCategory;
                     if (currentCategoryId) {
-                        console.log(`[_processActualImport V4 - FIX] Обновление отображения регламентов для активной категории: ${currentCategoryId}`);
+                        console.log(`[_processActualImport V7 - FIX] Обновление отображения регламентов для активной категории: ${currentCategoryId}`);
                         if (typeof showReglamentsForCategory === 'function') {
                             try {
                                 await showReglamentsForCategory(currentCategoryId);
-                                console.log(`[_processActualImport V4 - FIX] showReglamentsForCategory для ${currentCategoryId} вызвана после импорта.`);
+                                console.log(`[_processActualImport V7 - FIX] showReglamentsForCategory для ${currentCategoryId} вызвана после импорта.`);
                                 updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.RENDER_ACTIVE_REGLAMENTS, "Обновление регламентов");
                             } catch (e) {
-                                console.error(`[_processActualImport V4 - FIX] Ошибка при вызове showReglamentsForCategory для категории ${currentCategoryId}:`, e);
+                                console.error(`[_processActualImport V7 - FIX] Ошибка при вызове showReglamentsForCategory для категории ${currentCategoryId}:`, e);
                                 if (typeof NotificationService !== 'undefined' && NotificationService.add) {
                                     NotificationService.add(`Ошибка обновления списка регламентов для категории. Попробуйте выбрать категорию заново.`, "warning");
                                 }
@@ -4835,13 +5055,13 @@ async function _processActualImport(jsonString) {
                                 }
                             }
                         } else {
-                            console.warn('[_processActualImport V4 - FIX] Функция showReglamentsForCategory не найдена для обновления UI регламентов.');
+                            console.warn('[_processActualImport V7 - FIX] Функция showReglamentsForCategory не найдена для обновления UI регламентов.');
                             if (typeof NotificationService !== 'undefined' && NotificationService.add) {
                                 NotificationService.add("Ошибка: не удалось обновить список регламентов (функция не найдена).", "error");
                             }
                         }
                     } else {
-                        console.warn('[_processActualImport V4 - FIX] reglamentsListDiv активен, но currentCategory не найден в dataset. Не удалось обновить список регламентов.');
+                        console.warn('[_processActualImport V7 - FIX] reglamentsListDiv активен, но currentCategory не найден в dataset. Не удалось обновить список регламентов.');
                         if (typeof NotificationService !== 'undefined' && NotificationService.add) {
                             NotificationService.add("Не удалось определить активную категорию регламентов для обновления.", "warning");
                         }
@@ -4853,7 +5073,7 @@ async function _processActualImport(jsonString) {
                 if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
                     loadingOverlayManager.updateProgress(100, "FinalizeImportSuccess");
                 }
-                console.log("[_processActualImport V4] Финальный прогресс импорта установлен на 100%.");
+                console.log("[_processActualImport V7] Финальный прогресс импорта установлен на 100%.");
 
                 const nonFatalErrors = errorsOccurred.filter(e => !e.error.includes('Критическая ошибка транзакции') && !e.error.includes('Транзакция прервана'));
                 if (nonFatalErrors.length > 0 || skippedPuts > 0) {
@@ -4869,12 +5089,12 @@ async function _processActualImport(jsonString) {
                     return { success: true };
                 }
             } catch (postImportError) {
-                console.error("[_processActualImport V4] Критическая ошибка во время обновления приложения после импорта:", postImportError);
+                console.error("[_processActualImport V8] Критическая ошибка во время обновления приложения после импорта:", postImportError);
                 notificationMessageOnError = `Критическая ошибка после импорта: ${postImportError.message}. Пожалуйста, обновите страницу (F5).`;
                 throw postImportError;
             }
         } else {
-            console.error("[_processActualImport V4] Транзакция импорта НЕ УДАЛАСЬ (importTransactionSuccessful is false).");
+            console.error("[_processActualImport V7] Транзакция импорта НЕ УДАЛАСЬ (importTransactionSuccessful is false).");
             if (!errorsOccurred.some(e => e.error.includes('Критическая ошибка транзакции') || e.error.includes('Транзакция прервана'))) {
                 notificationMessageOnError = "Импорт данных не удался из-за ошибок при записи или очистке. Данные не были изменены.";
             } else if (errorsOccurred.length > 0) {
@@ -4885,7 +5105,7 @@ async function _processActualImport(jsonString) {
             throw new Error(notificationMessageOnError);
         }
     } catch (error) {
-        console.error("[_processActualImport V4] Общая ошибка выполнения импорта:", error);
+        console.error("[_processActualImport V7] Общая ошибка выполнения импорта:", error);
         if (notificationMessageOnError === "Произошла ошибка во время импорта." || (error.message && !notificationMessageOnError.includes(error.message))) {
             notificationMessageOnError = `Ошибка импорта: ${error.message || "Неизвестная ошибка"}`;
         }
@@ -5300,22 +5520,6 @@ function handleMoreTabsBtnClick(e) {
         currentDropdown.classList.toggle('hidden');
     } else {
         console.error("[handleMoreTabsBtnClick v10.1 - FINAL] Не удалось найти #moreTabsDropdown.");
-    }
-}
-
-function clickOutsideTabsHandler(e) {
-    const currentDropdown = document.getElementById('moreTabsDropdown');
-    const currentMoreBtn = document.getElementById('moreTabsBtn');
-    if (!currentDropdown || currentDropdown.classList.contains('hidden')) {
-        return;
-    }
-    const isClickOnMoreBtnOrChild = currentMoreBtn && currentMoreBtn.contains(e.target);
-    const isClickInsideDropdown = currentDropdown.contains(e.target);
-    if (isClickOnMoreBtnOrChild) {
-        return;
-    }
-    if (!isClickInsideDropdown) {
-        currentDropdown.classList.add('hidden');
     }
 }
 
@@ -5894,40 +6098,23 @@ async function setActiveTab(tabId, warningJustAccepted = false) {
 
     const allTabButtons = document.querySelectorAll('.tab-btn');
     const allTabContents = document.querySelectorAll('.tab-content');
-
     const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
 
-    console.log(`[setActiveTab] Попытка активации вкладки: ${tabId}`);
+    const FADE_DURATION = 150;
+
+    console.log(`[setActiveTab V.Animation] Активация вкладки: ${tabId}`);
 
     if (tabId === 'blacklistedClients' && userPreferences.showBlacklistUsageWarning && !warningJustAccepted) {
-        if (currentBlacklistWarningOverlay && document.body.contains(currentBlacklistWarningOverlay)) {
-            return;
-        } else if (getVisibleModals().some(modal => modal.id !== 'blacklistWarningOverlay')) {
-            return;
-        } else {
+        if (typeof showBlacklistWarning === 'function') {
             showBlacklistWarning();
-            const clickedButton = document.getElementById(targetTabId);
-            if (clickedButton && clickedButton.classList.contains('border-primary')) {
-                allTabButtons.forEach(button => {
-                    if (button.id === targetTabId) {
-                        button.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400', 'hover:border-gray-300', 'dark:hover:border-gray-600', 'hover:text-gray-700', 'dark:hover:text-gray-300');
-                        button.classList.remove('border-primary', 'text-primary');
-                    } else if (button.id === (currentSection + 'Tab') && currentSection !== tabId) {
-                        button.classList.add('border-primary', 'text-primary');
-                        button.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400', 'hover:border-gray-300', 'dark:hover:border-gray-600', 'hover:text-gray-700', 'dark:hover:text-gray-300');
-                    }
-                });
-            }
-            return;
+        } else {
+            console.error("Функция showBlacklistWarning не найдена!");
         }
+        return;
     }
 
     if (showFavoritesHeaderButton) {
-        if (tabId === 'favorites') {
-            showFavoritesHeaderButton.classList.add('text-primary');
-        } else {
-            showFavoritesHeaderButton.classList.remove('text-primary');
-        }
+        showFavoritesHeaderButton.classList.toggle('text-primary', tabId === 'favorites');
     }
 
     allTabButtons.forEach(button => {
@@ -5941,70 +6128,61 @@ async function setActiveTab(tabId, warningJustAccepted = false) {
         }
     });
 
-    if (tabId === currentSection && !warningJustAccepted) {
+    if (currentSection === tabId && !warningJustAccepted) {
+        console.log(`[setActiveTab V.Animation] Вкладка ${tabId} уже активна. Выход.`);
         return;
     }
 
+    const previousSection = currentSection;
     currentSection = tabId;
     localStorage.setItem('lastActiveTabCopilot1CO', tabId);
 
-    let currentlyVisibleContentElement = null;
+    const targetContent = document.getElementById(targetContentId);
+    let currentActiveContent = null;
+
     allTabContents.forEach(content => {
         if (!content.classList.contains('hidden')) {
-            currentlyVisibleContentElement = content;
-            content.classList.add('fade-out');
-            content.classList.remove('fade-in');
+            currentActiveContent = content;
         }
     });
 
-    const showNewContent = async () => {
-        const targetContent = document.getElementById(targetContentId);
-        if (targetContent) {
-            targetContent.classList.add('fade-out');
-            targetContent.classList.remove('hidden');
+    if (currentActiveContent && currentActiveContent !== targetContent) {
+        currentActiveContent.classList.add('is-hiding');
 
-            if (tabId === 'favorites') {
-                if (typeof renderFavoritesPage === 'function') {
-                    await renderFavoritesPage();
-                } else {
-                    console.error("setActiveTab: Функция renderFavoritesPage не найдена!");
-                }
-            }
-
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    targetContent.classList.remove('fade-out');
-                    targetContent.classList.add('fade-in');
-                    if (typeof setupTabsOverflow === 'function') {
-                        setupTabsOverflow();
-                    }
-                });
-            });
-        }
-    };
-
-    if (currentlyVisibleContentElement) {
-        const oldContentElement = currentlyVisibleContentElement;
-        const transitionEndHandler = (event) => {
-            if (event.target === oldContentElement && event.propertyName === 'opacity') {
-                oldContentElement.removeEventListener('transitionend', transitionEndHandler);
-                oldContentElement.classList.add('hidden');
-                oldContentElement.classList.remove('fade-out');
-                showNewContent();
-            }
-        };
-        oldContentElement.addEventListener('transitionend', transitionEndHandler);
         setTimeout(() => {
-            oldContentElement.removeEventListener('transitionend', transitionEndHandler);
-            if (!oldContentElement.classList.contains('hidden')) {
-                oldContentElement.classList.add('hidden');
-                oldContentElement.classList.remove('fade-out');
-                showNewContent();
+            currentActiveContent.classList.add('hidden');
+            currentActiveContent.classList.remove('is-hiding');
+
+            if (targetContent) {
+                targetContent.classList.add('is-hiding');
+                targetContent.classList.remove('hidden');
+
+                requestAnimationFrame(() => {
+                    targetContent.classList.remove('is-hiding');
+                });
             }
-        }, 200);
-    } else {
-        showNewContent();
+        }, FADE_DURATION);
+    } else if (targetContent) {
+        targetContent.classList.add('is-hiding');
+        targetContent.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            targetContent.classList.remove('is-hiding');
+        });
     }
+
+    if (targetContent && tabId === 'favorites') {
+        if (typeof renderFavoritesPage === 'function') {
+            await renderFavoritesPage();
+        } else {
+            console.error("setActiveTab: Функция renderFavoritesPage не найдена!");
+        }
+    }
+
+    if (typeof updateVisibleTabs === 'function') {
+        requestAnimationFrame(updateVisibleTabs);
+    }
+
+    console.log(`[setActiveTab V.Animation] Вкладка ${tabId} успешно активирована с анимацией.`);
 }
 
 
@@ -11497,8 +11675,6 @@ function getTextForItem(storeName, itemData) {
             if (itemData.description) textsByField.description = cleanHtml(itemData.description);
             if (itemData.category && typeof extLinkCategoryInfo === 'object' && extLinkCategoryInfo[itemData.category]) {
                 textsByField.categoryName = cleanHtml(extLinkCategoryInfo[itemData.category].name);
-            } else if (itemData.category) {
-                textsByField.categoryName = cleanHtml(itemData.category);
             }
             break;
         case 'clientData':
@@ -11782,19 +11958,42 @@ async function cleanAndRebuildSearchIndex() {
 }
 
 
-async function checkAndBuildIndex(forceRebuild = false, externalProgressCallback = null) {
+async function checkAndBuildIndex(forceRebuild = false, externalProgressCallback = null, context = 'normal') {
     if (!db) {
         console.warn("checkAndBuildIndex: DB not initialized.");
         if (externalProgressCallback) externalProgressCallback(0, 0, true);
         return;
     }
-    console.log("checkAndBuildIndex: Проверка состояния поискового индекса...");
+    console.log(`checkAndBuildIndex: Проверка состояния поискового индекса. Контекст: ${context}`);
+
+    const REINDEX_MESSAGE = "Выполняется повторная индексация базы данных после обновления, загрузка может быть чуть дольше обычного";
 
     try {
         const indexStatus = await getFromIndexedDB('preferences', 'searchIndexStatus');
         const needsRebuild = !indexStatus || !indexStatus.built || indexStatus.version !== DB_VERSION || indexStatus.error || forceRebuild;
 
         if (needsRebuild) {
+            const dbJustUpgraded = sessionStorage.getItem('dbJustUpgraded') === 'true';
+
+            if (context === 'import') {
+                console.log("[checkAndBuildIndex] Контекст 'import'. Отображается специальное сообщение.");
+                if (loadingOverlayManager && loadingOverlayManager.updateProgress) {
+                    loadingOverlayManager.updateProgress(
+                        loadingOverlayManager.currentProgressValue || 45,
+                        REINDEX_MESSAGE
+                    );
+                }
+            } else if (dbJustUpgraded) {
+                console.log("[checkAndBuildIndex] Обнаружен флаг обновления БД. Отображается специальное сообщение.");
+                if (loadingOverlayManager && loadingOverlayManager.updateProgress) {
+                    loadingOverlayManager.updateProgress(
+                        loadingOverlayManager.currentProgressValue || 45,
+                        REINDEX_MESSAGE
+                    );
+                }
+                sessionStorage.removeItem('dbJustUpgraded');
+            }
+
             if (forceRebuild) console.log("Принудительное перестроение индекса.");
             else if (!indexStatus) console.log("Статус поискового индекса не найден.");
             else if (!indexStatus.built) console.log("Поисковый индекс не был построен или построен с ошибкой: " + (indexStatus.error || 'N/A'));
@@ -12500,23 +12699,25 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
     const bookmarkElement = document.createElement('div');
     bookmarkElement.dataset.id = String(bookmark.id);
 
-    let folder;
-    if (bookmark.folder === ARCHIVE_FOLDER_ID) {
-        folder = { id: ARCHIVE_FOLDER_ID, name: ARCHIVE_FOLDER_NAME, color: 'gray' };
-        bookmarkElement.dataset.folder = ARCHIVE_FOLDER_ID;
-    } else if (bookmark.folder) {
-        folder = folderMap[bookmark.folder];
+    const folder = bookmark.folder ? folderMap[bookmark.folder] : null;
+
+    if (bookmark.folder) {
         bookmarkElement.dataset.folder = String(bookmark.folder);
     }
 
     let folderBadgeHTML = '';
-    if (folder) {
+    if (bookmark.folder === ARCHIVE_FOLDER_ID) {
+        folderBadgeHTML = `
+            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" title="Папка: ${escapeHtml(ARCHIVE_FOLDER_NAME)}">
+                <i class="fas fa-archive mr-1 opacity-75"></i>${escapeHtml(ARCHIVE_FOLDER_NAME)}
+            </span>`;
+    } else if (folder) {
         const colorName = folder.color || 'gray';
         folderBadgeHTML = `
             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-800 dark:bg-${colorName}-900 dark:text-${colorName}-200" title="Папка: ${escapeHtml(folder.name)}">
-                <i class="fas ${folder.id === ARCHIVE_FOLDER_ID ? 'fa-archive' : 'fa-folder'} mr-1 opacity-75"></i>${escapeHtml(folder.name)}
+                <i class="fas fa-folder mr-1 opacity-75"></i>${escapeHtml(folder.name)}
             </span>`;
-    } else if (bookmark.folder && bookmark.folder !== ARCHIVE_FOLDER_ID) {
+    } else if (bookmark.folder) {
         folderBadgeHTML = `
             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${bookmark.folder} не найдена">
                 <i class="fas fa-question-circle mr-1 opacity-75"></i>Неизв. папка
@@ -12558,7 +12759,6 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
     }
 
     bookmarkElement.dataset.opensUrl = String(viewMode === 'cards' && cardClickOpensUrl);
-
 
     const hasScreenshots = bookmark.screenshotIds && Array.isArray(bookmark.screenshotIds) && bookmark.screenshotIds.length > 0;
     const screenshotButtonHTML = hasScreenshots ? `
@@ -13625,156 +13825,496 @@ async function getAllBookmarks() {
 
 
 async function initExternalLinksSystem() {
-    console.log("[initExternalLinksSystem] Начало инициализации системы внешних ссылок...");
+    const LOG_PREFIX = "[initExternalLinksSystem v2.1_FINAL]";
+    console.log(`${LOG_PREFIX} --- START ---`);
 
-    const addExtLinkBtn = document.getElementById('addExtLinkBtn');
-    const extLinksContainer = document.getElementById('extLinksContainer');
-    const extLinkSearchInput = document.getElementById('extLinkSearchInput');
-    const extLinkCategoryFilter = document.getElementById('extLinkCategoryFilter');
-    const clearExtLinkSearchBtn = document.getElementById('clearSearchInputBtn');
-
-    if (!extLinksContainer) {
-        console.error("initExternalLinksSystem: Критически важный элемент #extLinksContainer не найден в DOM. Инициализация системы внешних ссылок прервана.");
+    const panel = document.getElementById('extLinksContent');
+    if (!panel) {
+        console.error(`${LOG_PREFIX} CRITICAL FAILURE: Панель #extLinksContent отсутствует в HTML.`);
         return;
     }
 
-    if (!addExtLinkBtn) {
-        console.warn("initExternalLinksSystem: Элемент #addExtLinkBtn не найден. Функционал добавления новых ссылок будет недоступен.");
-    }
-    if (!extLinkSearchInput) {
-        console.warn("initExternalLinksSystem: Элемент #extLinkSearchInput не найден. Функционал поиска по ссылкам будет недоступен.");
-    }
-    if (!extLinkCategoryFilter) {
-        console.warn("initExternalLinksSystem: Элемент #extLinkCategoryFilter не найден. Функционал фильтрации по категориям будет недоступен.");
+    const structureHTML = `
+        <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+            <div class="flex flex-wrap gap-x-4 gap-y-2 justify-between items-center mb-4 flex-shrink-0">
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Внешние ресурсы</h2>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+                            <button class="view-toggle p-1.5 rounded bg-primary text-white" data-view="cards" title="Вид карточек"> <i class="fas fa-th-large"></i> </button>
+                            <button class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300" data-view="list" title="Вид списка"> <i class="fas fa-list"></i> </button>
+                        </div>
+                    <button id="addExtLinkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm font-medium flex items-center">
+                        <i class="fas fa-plus mr-2"></i>Добавить ресурс
+                    </button>
+                    <button id="organizeExtLinkCategoriesBtn" class="px-3 py-2 bg-primary hover:bg-secondary text-white dark:text-gray-200 rounded-md transition text-sm font-medium flex items-center">
+                        <i class="fas fa-folder-open mr-2"></i>Категории
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 mb-4 flex-shrink-0">
+                <div class="relative flex-grow">
+                    <input type="text" id="extLinkSearchInput" placeholder="Поиск по ресурсам..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
+                    <button id="clearExtLinkSearchBtn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 hidden" title="Очистить поиск">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <select id="extLinkCategoryFilter" class="w-auto py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
+                    <option value="">Все категории</option>
+                </select>
+            </div>
+            <div id="extLinksContainer" class="flex-grow min-h-0 overflow-y-auto custom-scrollbar -mr-content-sm pr-content-sm view-section" data-section-id="extLinksContainer" data-default-view="cards">
+            </div>
+        </div>
+    `;
+    panel.innerHTML = structureHTML;
+
+    const addBtn = panel.querySelector('#addExtLinkBtn');
+    const organizeBtn = panel.querySelector('#organizeExtLinkCategoriesBtn');
+    const searchInput = panel.querySelector('#extLinkSearchInput');
+    const categoryFilter = panel.querySelector('#extLinkCategoryFilter');
+    const clearSearchBtn = panel.querySelector('#clearExtLinkSearchBtn');
+    const viewToggles = panel.querySelectorAll('.view-toggle');
+    const contentContainer = panel.querySelector('#extLinksContainer');
+
+    if (!addBtn || !organizeBtn || !searchInput || !categoryFilter || !clearSearchBtn || !contentContainer) {
+        console.error(`${LOG_PREFIX} CRITICAL: Не удалось найти все элементы управления после рендеринга HTML.`);
+        return;
     }
 
-    const LISTENER_KEYS = {
-        ADD_BTN: 'extLinkAddBtnListener',
-        SEARCH_INPUT: 'extLinkSearchInputListener',
-        CATEGORY_FILTER: 'extLinkCategoryFilterListener',
-        CONTAINER_CLICK: '_extLinksClickHandler'
-    };
+    addBtn.addEventListener('click', () => showAddEditExtLinkModal());
+    organizeBtn.addEventListener('click', () => showOrganizeExtLinkCategoriesModal());
 
-    if (addExtLinkBtn && !addExtLinkBtn.dataset[LISTENER_KEYS.ADD_BTN]) {
-        const handleAddLinkClick = () => {
-            if (typeof showAddExtLinkModal === 'function') {
-                try {
-                    showAddExtLinkModal();
-                } catch (error) {
-                    console.error("initExternalLinksSystem: Ошибка при вызове showAddExtLinkModal:", error);
-                    if (typeof showNotification === 'function') {
-                        showNotification("Ошибка при попытке открыть окно добавления ресурса.", "error");
-                    }
-                }
-            } else {
-                console.error("initExternalLinksSystem: Функция showAddExtLinkModal не определена! Невозможно открыть окно добавления.");
-                if (typeof showNotification === 'function') {
-                    showNotification("Функция добавления внешнего ресурса в данный момент недоступна.", "error");
+    const debouncedFilter = debounce(filterExtLinks, 250);
+    searchInput.addEventListener('input', debouncedFilter);
+    setupClearButton('extLinkSearchInput', 'clearExtLinkSearchBtn', filterExtLinks);
+
+    categoryFilter.addEventListener('change', filterExtLinks);
+    contentContainer.addEventListener('click', handleExtLinkAction);
+
+    viewToggles.forEach(button => button.addEventListener('click', handleViewToggleClick));
+
+    await loadExtLinks();
+    const allLinks = await getAllExtLinks();
+    renderExtLinks(allLinks, extLinkCategoryInfo);
+
+    console.log(`${LOG_PREFIX} --- END --- Система внешних ресурсов успешно инициализирована.`);
+}
+
+
+function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards') {
+    if (!link || typeof link !== 'object' || typeof link.id === 'undefined') {
+        console.warn('createExtLinkElement: передан невалидный объект link.', link);
+        return null;
+    }
+
+    const linkElement = document.createElement('div');
+    linkElement.dataset.id = String(link.id);
+    linkElement.dataset.category = link.category || '';
+
+    let categoryData = null;
+    if (link.category !== null && link.category !== undefined) {
+        categoryData = categoryMap[link.category] || null;
+
+        if (!categoryData && typeof link.category === 'string') {
+            const legacyKey = link.category.toLowerCase();
+            const legacyKeyToNameMap = {
+                'docs': 'документация',
+                'gov': 'гос. сайты',
+                'tools': 'инструменты',
+                'other': 'прочее'
+            };
+            const targetName = legacyKeyToNameMap[legacyKey] || legacyKey;
+
+            for (const key in categoryMap) {
+                if (categoryMap[key].name && categoryMap[key].name.toLowerCase() === targetName) {
+                    categoryData = categoryMap[key];
+                    break;
                 }
             }
-        };
-        addExtLinkBtn.addEventListener('click', handleAddLinkClick);
-        addExtLinkBtn.dataset[LISTENER_KEYS.ADD_BTN] = 'true';
-    }
-
-    if (extLinkSearchInput) {
-        const performFilterAction = () => {
-            if (typeof filterExtLinks === 'function') {
-                try {
-                    filterExtLinks();
-                } catch (error) {
-                    console.error("initExternalLinksSystem: Ошибка во время выполнения filterExtLinks:", error);
-                }
-            } else {
-                console.warn("initExternalLinksSystem: Функция filterExtLinks не определена. Фильтрация не будет выполнена.");
-            }
-        };
-
-        const debouncedFilter = (typeof debounce === 'function' && typeof filterExtLinks === 'function')
-            ? debounce(performFilterAction, 250)
-            : performFilterAction;
-
-        if (!extLinkSearchInput.dataset[LISTENER_KEYS.SEARCH_INPUT]) {
-            extLinkSearchInput.addEventListener('input', debouncedFilter);
-            extLinkSearchInput.dataset[LISTENER_KEYS.SEARCH_INPUT] = 'true';
         }
+    }
 
-        if (clearExtLinkSearchBtn) {
-            if (typeof setupClearButton === 'function') {
+    let categoryBadgeHTML = '';
+    if (categoryData) {
+        const colorName = categoryData.color || 'gray';
+        categoryBadgeHTML = `
+            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-800 dark:bg-${colorName}-900 dark:text-${colorName}-200" title="Папка: ${escapeHtml(categoryData.name)}">
+                <i class="fas fa-tag mr-1 opacity-75"></i>${escapeHtml(categoryData.name)}
+            </span>`;
+    } else if (link.category) {
+        categoryBadgeHTML = `
+             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${escapeHtml(String(link.category))} не найдена">
+                <i class="fas fa-question-circle mr-1 opacity-75"></i>Неизв. папка
+            </span>`;
+    }
 
-                setupClearButton(extLinkSearchInput.id, clearExtLinkSearchBtn.id, performFilterAction);
-            } else {
-                console.warn(`initExternalLinksSystem: Функция setupClearButton не найдена. Кнопка очистки #${clearExtLinkSearchBtn.id} для поля #${extLinkSearchInput.id} не будет настроена.`);
-
-                clearExtLinkSearchBtn.style.display = 'none';
+    let urlHostnameHTML = '';
+    let cardClickOpensUrl = false;
+    let urlForHref = '#';
+    try {
+        let fixedUrl = String(link.url).trim();
+        if (fixedUrl && !fixedUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fixedUrl.includes('.')) {
+            if (!fixedUrl.startsWith('//')) {
+                fixedUrl = "https://" + fixedUrl;
             }
-        } else {
-
-            console.warn(`initExternalLinksSystem: Кнопка очистки #clearExtLinkSearchBtn не найдена в DOM. Функционал очистки для поля #${extLinkSearchInput.id} не будет настроен.`);
         }
+        urlForHref = new URL(fixedUrl).href;
+        const hostnameForDisplay = new URL(urlForHref).hostname.replace('www.', '');
+        urlHostnameHTML = `<a href="${urlForHref}" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 text-xs inline-flex items-center hover:underline" title="Перейти: ${escapeHtml(link.url)}"><i class="fas fa-link mr-1 opacity-75"></i>${escapeHtml(hostnameForDisplay)}</a>`;
+        cardClickOpensUrl = true;
+    } catch (e) {
+        urlHostnameHTML = `<span class="text-red-500 text-xs inline-flex items-center" title="Некорректный URL: ${escapeHtml(String(link.url))}"><i class="fas fa-exclamation-triangle mr-1"></i>Некорр. URL</span>`;
+        cardClickOpensUrl = false;
     }
 
-    if (extLinkCategoryFilter && !extLinkCategoryFilter.dataset[LISTENER_KEYS.CATEGORY_FILTER]) {
-        const handleCategoryChange = () => {
-            if (typeof filterExtLinks === 'function') {
-                try {
-                    filterExtLinks();
-                } catch (error) {
-                    console.error("initExternalLinksSystem: Ошибка при вызове filterExtLinks из фильтра категорий:", error);
-                }
-            } else {
-                console.warn("initExternalLinksSystem: Функция filterExtLinks не определена. Фильтрация по категориям не сработает.");
-            }
-        };
-        extLinkCategoryFilter.addEventListener('change', handleCategoryChange);
-        extLinkCategoryFilter.dataset[LISTENER_KEYS.CATEGORY_FILTER] = 'true';
+    const isFav = isFavorite('extLink', String(link.id));
+    const favButtonHTML = getFavoriteButtonHTML(link.id, 'extLink', 'extLinks', link.title, link.description, isFav);
+    const safeTitle = escapeHtml(link.title);
+    const safeDescription = escapeHtml(link.description || 'Нет описания');
+
+    if (viewMode === 'cards') {
+        linkElement.className = 'ext-link-item view-item group relative flex flex-col justify-between p-4 rounded-lg shadow-sm hover:shadow-md bg-white dark:bg-gray-700 transition-shadow duration-200 border border-gray-200 dark:border-gray-700 h-full';
+
+        const mainContentHTML = `
+            <div class="flex-grow min-w-0 cursor-pointer" data-action="open-link">
+                <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 mb-1 truncate" title="${safeTitle}">${safeTitle}</h3>
+                <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mb-2 line-clamp-2" title="${safeDescription}">${safeDescription}</p>
+            </div>
+            <div class="ext-link-meta mt-auto pt-2 border-t border-gray-200 dark:border-gray-600 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                ${categoryBadgeHTML}
+                ${urlHostnameHTML}
+            </div>
+        `;
+        const actionsHTML = `
+            <div class="ext-link-actions absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+                ${favButtonHTML}
+                <button data-action="edit" class="p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Редактировать">
+                    <i class="fas fa-edit fa-fw text-sm"></i>
+                </button>
+                <button data-action="delete" class="p-1.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Удалить">
+                    <i class="fas fa-trash fa-fw text-sm"></i>
+                </button>
+            </div>
+        `;
+        linkElement.innerHTML = mainContentHTML + actionsHTML;
+    } else {
+        linkElement.className = 'ext-link-item view-item group flex items-center p-3 border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-150 ease-in-out';
+        const mainContentHTML = `
+            <div class="flex-grow min-w-0 flex items-center cursor-pointer" data-action="open-link">
+                <i class="fas fa-link text-gray-400 dark:text-gray-500 mr-4"></i>
+                <div class="min-w-0">
+                    <h3 class="font-medium text-gray-900 dark:text-gray-100 truncate" title="${safeTitle}">${safeTitle}</h3>
+                    <p class="ext-link-description text-sm text-gray-500 dark:text-gray-400 truncate" title="${safeDescription}">${safeDescription}</p>
+                </div>
+            </div>
+        `;
+        const actionsHTML = `
+             <div class="ext-link-actions flex-shrink-0 ml-4 flex items-center gap-1">
+                ${categoryBadgeHTML}
+                ${favButtonHTML}
+                <button data-action="edit" class="p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Редактировать">
+                    <i class="fas fa-edit fa-fw text-sm"></i>
+                </button>
+                <button data-action="delete" class="p-1.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Удалить">
+                    <i class="fas fa-trash fa-fw text-sm"></i>
+                </button>
+            </div>
+        `;
+        linkElement.innerHTML = `
+            <div class="flex-grow min-w-0 flex items-center cursor-pointer" data-action="open-link">
+                <i class="fas fa-link text-gray-400 dark:text-gray-500 mr-4"></i>
+                <div class="min-w-0 flex-1">
+                    <h3 class="font-medium text-gray-900 dark:text-gray-100 truncate" title="${safeTitle}">${safeTitle}</h3>
+                    <p class="ext-link-description text-sm text-gray-500 dark:text-gray-400 truncate" title="${safeDescription}">${safeDescription}</p>
+                </div>
+            </div>
+             <div class="ext-link-actions flex-shrink-0 ml-4 flex items-center gap-2">
+                ${categoryBadgeHTML}
+                ${favButtonHTML}
+                <button data-action="edit" class="p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Редактировать">
+                    <i class="fas fa-edit fa-fw text-sm"></i>
+                </button>
+                <button data-action="delete" class="p-1.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Удалить">
+                    <i class="fas fa-trash fa-fw text-sm"></i>
+                </button>
+            </div>
+        `;
     }
+
+    linkElement.dataset.url = cardClickOpensUrl ? urlForHref : '';
+    return linkElement;
+}
+
+
+async function renderExtLinks(links, categoryInfoMap = {}) {
+    const extLinksContainer = document.getElementById('extLinksContainer');
+    if (!extLinksContainer) {
+        console.error("Контейнер #extLinksContainer не найден для рендеринга.");
+        return;
+    }
+
+    const currentView = viewPreferences['extLinksContainer'] || extLinksContainer.dataset.defaultView || 'cards';
+    extLinksContainer.innerHTML = '';
+
+    if (!links || links.length === 0) {
+        extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Нет сохраненных внешних ресурсов.</div>';
+    } else {
+        const fragment = document.createDocumentFragment();
+        for (const link of links) {
+            const linkElement = createExtLinkElement(link, categoryInfoMap, currentView);
+            if (linkElement) {
+                fragment.appendChild(linkElement);
+            }
+        }
+        extLinksContainer.appendChild(fragment);
+    }
+
+    if (typeof applyCurrentView === 'function') {
+        applyCurrentView('extLinksContainer');
+    }
+}
+
+
+async function showAddEditExtLinkModal(id = null, categoryId = null) {
+    const { modal, form, titleEl, idInput, titleInput, urlInput, descriptionInput, categoryInput, saveButton } = ensureExtLinkModal();
+    if (!modal) return;
+
+    form.reset();
+    idInput.value = id ? id : '';
 
     try {
-        if (typeof loadExtLinks === 'function') {
-            await loadExtLinks();
-            console.log("initExternalLinksSystem: Данные внешних ссылок успешно загружены (или процесс загрузки инициирован).");
+        const categories = await getAllFromIndexedDB('extLinkCategories');
+        categoryInput.innerHTML = '<option value="">Без категории</option>';
+        if (categories && categories.length > 0) {
+            const fragment = document.createDocumentFragment();
+            categories.sort((a, b) => a.name.localeCompare(b.name)).forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                fragment.appendChild(option);
+            });
+            categoryInput.appendChild(fragment);
+        }
+    } catch (e) {
+        console.error("Не удалось загрузить категории для модального окна", e);
+    }
 
-
-            if (typeof populateExtLinkCategoryFilter === 'function') {
-                try {
-                    populateExtLinkCategoryFilter();
-                    console.log("initExternalLinksSystem: Фильтр категорий успешно заполнен.");
-                } catch (error) {
-                    console.error("initExternalLinksSystem: Ошибка при вызове populateExtLinkCategoryFilter:", error);
-                }
+    if (id !== null) {
+        titleEl.textContent = 'Редактировать ресурс';
+        saveButton.innerHTML = '<i class="fas fa-save mr-1"></i> Сохранить изменения';
+        try {
+            const link = await getFromIndexedDB('extLinks', id);
+            if (link) {
+                titleInput.value = link.title || '';
+                urlInput.value = link.url || '';
+                descriptionInput.value = link.description || '';
+                categoryInput.value = link.category || '';
             } else {
-
-                console.warn("initExternalLinksSystem: Функция populateExtLinkCategoryFilter не определена. Фильтр категорий не будет заполнен автоматически.");
+                showNotification("Ресурс не найден", "error");
+                modal.classList.add('hidden');
+                return;
             }
-        } else {
-            console.error("initExternalLinksSystem: Функция loadExtLinks не определена! Внешние ссылки не могут быть загружены.");
-
-            if (typeof showNotification === 'function') {
-                showNotification("Не удалось загрузить список внешних ресурсов.", "error");
-            }
+        } catch (error) {
+            showNotification("Ошибка загрузки ресурса", "error");
+            modal.classList.add('hidden');
+            return;
         }
-    } catch (error) {
-        console.error("initExternalLinksSystem: Произошла ошибка во время асинхронной загрузки данных (loadExtLinks):", error);
-        if (typeof showNotification === 'function') {
-            showNotification("Ошибка при загрузке данных для внешних ресурсов.", "error");
-        }
-    }
-
-    if (extLinksContainer[LISTENER_KEYS.CONTAINER_CLICK]) {
-        extLinksContainer.removeEventListener('click', extLinksContainer[LISTENER_KEYS.CONTAINER_CLICK]);
-    }
-
-    if (typeof handleExtLinkContainerClick === 'function') {
-
-        extLinksContainer[LISTENER_KEYS.CONTAINER_CLICK] = handleExtLinkContainerClick;
-        extLinksContainer.addEventListener('click', extLinksContainer[LISTENER_KEYS.CONTAINER_CLICK]);
-        console.log("initExternalLinksSystem: Обработчик кликов по карточкам внешних ресурсов успешно добавлен/обновлен.");
     } else {
-        console.error("initExternalLinksSystem: Функция handleExtLinkContainerClick не определена! Взаимодействие с карточками ссылок может не работать.");
+        titleEl.textContent = 'Добавить внешний ресурс';
+        saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
+        if (categoryId) {
+            categoryInput.value = categoryId;
+        }
     }
 
-    console.log("[initExternalLinksSystem] Инициализация системы внешних ссылок завершена.");
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    titleInput.focus();
+}
+
+
+function showOrganizeExtLinkCategoriesModal() {
+    let modal = document.getElementById('extLinkCategoriesModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'extLinkCategoriesModal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
+        modal.innerHTML = `
+            <div class="flex items-center justify-center min-h-full">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Управление папками</h2>
+                            <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"><i class="fas fa-times text-xl"></i></button>
+                        </div>
+                        <div id="extLinkCategoriesList" class="max-h-60 overflow-y-auto mb-4 border-y border-gray-200 dark:border-gray-700 -mx-6 px-6"></div>
+                        <form id="extLinkCategoryForm" class="border-t border-gray-200 dark:border-gray-700 pt-4 -mx-6 px-6">
+                            <h3 class="text-lg font-semibold mb-2" id="extLinkCategoryFormTitle">Добавить новую папку</h3>
+                            <input type="hidden" name="editingCategoryId">
+                            <div class="mb-4">
+                                <label for="extLinkCategoryName" class="block text-sm font-medium mb-1">Название <span class="text-red-500">*</span></label>
+                                <input type="text" id="extLinkCategoryName" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium mb-1">Цвет</label>
+                                <div class="flex gap-2 flex-wrap" id="extLinkCategoryColorPicker">
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" id="cancelEditExtLinkCategoryBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md hidden">Отмена</button>
+                                <button type="submit" id="extLinkCategorySubmitBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md">Добавить папку</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#extLinkCategoryForm').addEventListener('submit', handleSaveExtLinkCategorySubmit);
+        modal.querySelectorAll('.close-modal').forEach(btn => btn.addEventListener('click', () => modal.classList.add('hidden')));
+        modal.querySelector('#cancelEditExtLinkCategoryBtn').addEventListener('click', () => {
+            const form = modal.querySelector('#extLinkCategoryForm');
+            form.reset();
+            form.elements.editingCategoryId.value = '';
+            modal.querySelector('#extLinkCategorySubmitBtn').textContent = 'Добавить папку';
+            modal.querySelector('#extLinkCategoryFormTitle').textContent = 'Добавить новую папку';
+            modal.querySelector('#cancelEditExtLinkCategoryBtn').classList.add('hidden');
+            const defaultColor = form.querySelector('input[name="extLinkCategoryColor"][value="blue"]');
+            if (defaultColor) defaultColor.checked = true;
+        });
+
+        const colors = ['gray', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink', 'rose'];
+        const colorPickerContainer = modal.querySelector('#extLinkCategoryColorPicker');
+        colorPickerContainer.innerHTML = colors.map((color, index) => `
+            <label class="inline-flex items-center">
+                <input type="radio" name="extLinkCategoryColor" value="${color}" class="form-radio text-${color}-600 focus:ring-${color}-500" ${index === 6 ? 'checked' : ''}>
+                <span class="ml-2 w-5 h-5 rounded-full bg-${color}-${color === 'gray' ? 500 : 600} border border-gray-300 dark:border-gray-600"></span>
+            </label>
+        `).join('');
+    }
+
+    const listEl = modal.querySelector('#extLinkCategoriesList');
+    listEl.innerHTML = '<p class="p-4 text-center text-gray-500">Загрузка...</p>';
+    getAllFromIndexedDB('extLinkCategories').then(categories => {
+        listEl.innerHTML = '';
+        if (!categories || categories.length === 0) {
+            listEl.innerHTML = '<p class="p-4 text-center text-gray-500">Нет созданных папок.</p>';
+            return;
+        }
+        categories.sort((a, b) => a.name.localeCompare(b.name)).forEach(cat => {
+            const colorClass = cat.color ? `bg-${cat.color}-${cat.color === 'gray' ? 500 : 600}` : 'bg-gray-500';
+            const item = document.createElement('div');
+            item.className = 'flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
+            item.innerHTML = `
+                <div class="flex items-center">
+                    <span class="w-4 h-4 rounded-full ${colorClass} mr-3 flex-shrink-0"></span>
+                    <span class="truncate" title="${escapeHtml(cat.name)}">${escapeHtml(cat.name)}</span>
+                </div>
+                <div>
+                    <button data-id="${cat.id}" class="edit-cat-btn p-1 text-gray-500 hover:text-primary"><i class="fas fa-edit"></i></button>
+                    <button data-id="${cat.id}" class="delete-cat-btn p-1 text-red-500 hover:text-red-700 ml-1"><i class="fas fa-trash"></i></button>
+                </div>`;
+            listEl.appendChild(item);
+        });
+    });
+
+    listEl.addEventListener('click', e => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+
+        const id = parseInt(btn.dataset.id, 10);
+        if (isNaN(id)) return;
+
+        if (btn.classList.contains('delete-cat-btn')) {
+            handleDeleteExtLinkCategoryClick(id);
+        } else if (btn.classList.contains('edit-cat-btn')) {
+            const form = modal.querySelector('#extLinkCategoryForm');
+            const category = extLinkCategoryInfo[id];
+            if (category) {
+                form.elements.editingCategoryId.value = id;
+                form.elements.extLinkCategoryName.value = category.name;
+                const colorInput = form.querySelector(`input[name="extLinkCategoryColor"][value="${category.color || 'blue'}"]`);
+                if (colorInput) colorInput.checked = true;
+
+                modal.querySelector('#extLinkCategorySubmitBtn').textContent = 'Сохранить';
+                modal.querySelector('#extLinkCategoryFormTitle').textContent = 'Редактировать папку';
+                modal.querySelector('#cancelEditExtLinkCategoryBtn').classList.remove('hidden');
+            }
+        }
+    });
+
+    modal.classList.remove('hidden');
+}
+
+
+async function handleSaveExtLinkCategorySubmit(event) {
+    event.preventDefault();
+    const form = event.target;
+    const name = form.elements.extLinkCategoryName.value.trim();
+    const editingId = form.elements.editingCategoryId.value;
+
+    if (!name) {
+        showNotification("Название папки не может быть пустым.", "error");
+        return;
+    }
+
+    const colorInput = form.querySelector('input[name="extLinkCategoryColor"]:checked');
+    const categoryData = {
+        name,
+        color: colorInput ? colorInput.value : 'blue'
+    };
+
+    try {
+        if (editingId) {
+            categoryData.id = parseInt(editingId, 10);
+            await saveToIndexedDB('extLinkCategories', categoryData);
+        } else {
+            await saveToIndexedDB('extLinkCategories', categoryData);
+        }
+
+        showNotification("Папка сохранена.");
+        form.reset();
+        form.elements.editingCategoryId.value = '';
+        document.getElementById('extLinkCategorySubmitBtn').textContent = 'Добавить папку';
+        document.getElementById('extLinkCategoryFormTitle').textContent = 'Добавить новую папку';
+        document.getElementById('cancelEditExtLinkCategoryBtn').classList.add('hidden');
+        const defaultColor = form.querySelector('input[name="extLinkCategoryColor"][value="blue"]');
+        if (defaultColor) defaultColor.checked = true;
+
+
+        await loadExtLinks();
+        showOrganizeExtLinkCategoriesModal();
+
+    } catch (e) {
+        showNotification("Ошибка сохранения папки.", "error");
+        console.error("Ошибка сохранения папки:", e);
+    }
+}
+
+
+async function handleDeleteExtLinkCategoryClick(categoryId) {
+    if (isNaN(categoryId)) return;
+
+    const linksInCategory = await getAllFromIndex('extLinks', 'category', categoryId);
+    const categoryInfo = extLinkCategoryInfo[categoryId];
+    const categoryName = categoryInfo ? categoryInfo.name : `ID ${categoryId}`;
+
+    if (linksInCategory.length > 0) {
+        showNotification(`Нельзя удалить категорию "${categoryName}", так как она используется в ${linksInCategory.length} ссылках.`, 'error');
+        return;
+    }
+
+    if (confirm(`Вы уверены, что хотите удалить категорию "${categoryName}"?`)) {
+        try {
+            await deleteFromIndexedDB('extLinkCategories', categoryId);
+            showNotification("Категория удалена.");
+
+            await loadExtLinks();
+            showOrganizeExtLinkCategoriesModal();
+        } catch (e) {
+            showNotification("Ошибка удаления категории.", "error");
+            console.error("Ошибка удаления категории:", e);
+        }
+    }
 }
 
 
@@ -15889,11 +16429,11 @@ function initReglamentsSystem() {
         const categoryId = categoryElement.dataset.category;
 
         if (event.target.closest('.delete-category-btn')) {
-            // Функционал удаления категорий был убран по ТЗ
+            // Функционал удаления категорий убран
             // if (typeof handleDeleteCategoryClick === 'function') handleDeleteCategoryClick(event);
             // else console.error("Функция handleDeleteCategoryClick не найдена!");
         } else if (event.target.closest('.edit-category-btn')) {
-            // Функционал редактирования категорий был убран
+            // Функционал редактирования категорий убран
             // event.stopPropagation();
             // if (typeof showAddCategoryModal === 'function') showAddCategoryModal(categoryId);
             // else console.error("Функция showAddCategoryModal (для редактирования) не найдена!");
@@ -15952,7 +16492,7 @@ async function showReglamentDetail(reglamentId) {
     }
 
     const modalId = 'reglamentDetailModal';
-    const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4';
+    const modalClassName = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 flex items-center justify-center';
 
     const modalHTML = `
         <div class="flex items-center justify-center min-h-full">
@@ -15961,6 +16501,7 @@ async function showReglamentDetail(reglamentId) {
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100" id="reglamentDetailTitle">Детали регламента</h2>
                         <div class="flex items-center">
+                            <div class="fav-btn-placeholder-modal-reglament mr-1"></div>
                             <button id="toggleFullscreenReglamentDetailBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                 <i class="fas fa-expand"></i>
                             </button>
@@ -16051,6 +16592,8 @@ async function showReglamentDetail(reglamentId) {
     const metaElement = modal.querySelector('#reglamentDetailMeta');
     const editButton = modal.querySelector('#editReglamentFromDetailBtn');
 
+    const favoriteButtonContainer = modal.querySelector('.fav-btn-placeholder-modal-reglament');
+
     if (titleElement) titleElement.textContent = 'Загрузка регламента...';
     if (contentElement) contentElement.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Загрузка данных...</p>';
     if (metaElement) metaElement.textContent = '';
@@ -16071,12 +16614,19 @@ async function showReglamentDetail(reglamentId) {
             return;
         }
 
+        if (favoriteButtonContainer) {
+            const isFav = isFavorite('reglament', String(reglament.id));
+            const favButtonHTML = getFavoriteButtonHTML(reglament.id, 'reglament', 'reglaments', reglament.title, reglament.content?.substring(0, 100) + "...", isFav);
+            favoriteButtonContainer.innerHTML = favButtonHTML;
+        }
+
         if (titleElement) titleElement.textContent = reglament.title || 'Без заголовка';
 
         if (contentElement) {
             try {
                 const preElement = document.createElement('pre');
                 preElement.className = 'whitespace-pre-wrap break-words text-sm font-sans';
+                preElement.style.fontSize = '102%';
                 preElement.textContent = reglament.content || 'Содержимое отсутствует.';
                 contentElement.innerHTML = '';
                 contentElement.appendChild(preElement);
@@ -16627,7 +17177,7 @@ async function handleExtLinkFormSubmit(e) {
         }
 
         const updatedLinks = await getAllExtLinks();
-        renderExtLinks(updatedLinks);
+        renderExtLinks(updatedLinks, extLinkCategoryInfo);
         showNotification(isEditing ? "Ресурс обновлен" : "Ресурс добавлен");
         modal.classList.add('hidden');
 
@@ -17276,64 +17826,92 @@ async function editReglament(id) {
 
 
 async function loadExtLinks() {
-    const extLinksContainer = document.getElementById('extLinksContainer');
-    if (!extLinksContainer) {
-        console.error("loadExtLinks: Контейнер #extLinksContainer не найден.");
-        return;
+    const LOG_PREFIX = "[loadExtLinks V.Fix]";
+    console.log(`${LOG_PREFIX} Запуск...`);
+    try {
+        const migrationStatus = await getFromIndexedDB('preferences', EXT_LINKS_MIGRATION_KEY);
+
+        if (db && (!migrationStatus || !migrationStatus.done)) {
+            console.log(`${LOG_PREFIX} ЗАПУСК МИГРАЦИИ: Категории для внешних ссылок будут проверены и, при необходимости, перенесены в новую структуру.`);
+
+            const defaultCategoriesRaw = {
+                docs: { name: 'Документация', color: 'blue', icon: 'fa-file-alt' },
+                gov: { name: 'Гос. сайты', color: 'red', icon: 'fa-landmark' },
+                tools: { name: 'Инструменты', color: 'green', icon: 'fa-tools' },
+                other: { name: 'Прочее', color: 'yellow', icon: 'fa-link' }
+            };
+
+            const existingCategories = await getAllFromIndexedDB('extLinkCategories');
+            const existingCategoryNames = new Set(existingCategories.map(cat => cat.name));
+            console.log(`${LOG_PREFIX} Найдено существующих категорий:`, existingCategoryNames);
+
+            const oldToNewIdMap = {};
+            existingCategories.forEach(cat => {
+                for (const [legacyKey, legacyData] of Object.entries(defaultCategoriesRaw)) {
+                    if (legacyData.name === cat.name) {
+                        oldToNewIdMap[legacyKey] = cat.id;
+                    }
+                }
+            });
+
+            for (const [key, catData] of Object.entries(defaultCategoriesRaw)) {
+                if (!existingCategoryNames.has(catData.name)) {
+                    console.log(`${LOG_PREFIX} Добавление новой категории по умолчанию: "${catData.name}"`);
+                    const newId = await saveToIndexedDB('extLinkCategories', catData);
+                    oldToNewIdMap[key] = newId;
+                } else {
+                    console.log(`${LOG_PREFIX} Категория "${catData.name}" уже существует, пропуск добавления.`);
+                }
+            }
+
+            const allLinks = await getAllExtLinks();
+            if (allLinks.length > 0) {
+                const updatePromises = allLinks.map(link => {
+                    if (link.category && typeof link.category === 'string' && oldToNewIdMap[link.category]) {
+                        console.log(`${LOG_PREFIX} Миграция ссылки "${link.title}" со старой категории "${link.category}" на новый ID ${oldToNewIdMap[link.category]}`);
+                        link.category = oldToNewIdMap[link.category];
+                        return saveToIndexedDB('extLinks', link);
+                    }
+                    return Promise.resolve();
+                });
+                await Promise.all(updatePromises);
+            }
+
+            await saveToIndexedDB('preferences', { id: EXT_LINKS_MIGRATION_KEY, done: true });
+            console.log(`${LOG_PREFIX} МИГРАЦИЯ ЗАВЕРШЕНА. Флаг установлен.`);
+        } else if (!db) {
+            console.warn(`${LOG_PREFIX} База данных не инициализирована, миграция и загрузка пропущены.`);
+        }
+    } catch (migrationError) {
+        console.error(`${LOG_PREFIX} Критическая ошибка во время миграции категорий внешних ссылок:`, migrationError);
+        if (typeof showNotification === 'function') {
+            showNotification(`Критическая ошибка миграции: ${migrationError.message}`, "error");
+        }
     }
 
-    extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500">Загрузка ресурсов...</div>';
-
     try {
-        let extLinks = await getAllExtLinks();
-        let linksToRender = [];
-
-        if (!extLinks || extLinks.length === 0) {
-            console.log("База внешних ссылок пуста. Добавляем стартовый набор.");
-            const sampleExtLinksData = [
-                { title: 'ЕГРЮЛ', url: 'https:https://egrul.nalog.ru/index.html', category: 'gov', dateAdded: new Date().toISOString() },
-                { title: 'Портал ИТС 1С', url: 'https://its.1c.ru/', description: 'Инфа по 1ЭС', category: 'docs', dateAdded: new Date().toISOString() },
-                { title: 'Track Astral', url: 'https://track.astral.ru/support/display/Support1CO', description: 'Знания древних...', category: 'docs', dateAdded: new Date().toISOString() },
-                { title: 'База (знаний) Astral', url: 'https://astral.ru/help/1s-otchetnost/', description: 'Инфа для обычных людишек...', category: 'docs', dateAdded: new Date().toISOString() }
-            ];
-
-            const savedExtLinkIds = await Promise.all(sampleExtLinksData.map(link => saveToIndexedDB('extLinks', link)));
-            console.log("Стартовые внешние ссылки добавлены в IndexedDB. ID:", savedExtLinkIds);
-
-            const extLinksWithIds = sampleExtLinksData.map((link, index) => ({ ...link, id: savedExtLinkIds[index] }));
-            linksToRender = extLinksWithIds;
-
-            if (typeof updateSearchIndex === 'function') {
-                console.log("[loadExtLinks] Индексация созданных по умолчанию внешних ссылок...");
-                await Promise.all(extLinksWithIds.map(link => {
-                    console.log(`[loadExtLinks]   Вызов updateSearchIndex для extLink ID: ${link.id}, Title: ${link.title}`);
-                    return updateSearchIndex('extLinks', link.id, link, 'add', null)
-                        .catch(err => console.error(`Error indexing default external link ${link.id} ('${link.title}'):`, err));
-                }));
-                console.log("[loadExtLinks] Default external links indexed (or attempt finished).");
-            } else {
-                console.warn("updateSearchIndex function not available for default external links.");
+        const categories = await getAllFromIndexedDB('extLinkCategories');
+        extLinkCategoryInfo = categories.reduce((acc, cat) => {
+            if (cat && cat.id !== undefined) {
+                acc[cat.id] = cat;
             }
-        } else {
-            linksToRender = extLinks;
-            console.log(`Загружено ${linksToRender.length} существующих внешних ссылок.`);
-        }
-        renderExtLinks(linksToRender);
+            return acc;
+        }, {});
+        console.log(`${LOG_PREFIX} Кэш 'extLinkCategoryInfo' успешно обновлен.`);
+
+        await populateExtLinkCategoryFilter();
+        console.log(`${LOG_PREFIX} Фильтр категорий внешних ссылок заполнен актуальными данными.`);
     } catch (error) {
-        console.error('Ошибка при загрузке внешних ресурсов:', error);
-        extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-red-500">Не удалось загрузить ресурсы.</div>';
-        if (typeof applyCurrentView === 'function') {
-            applyCurrentView('extLinksContainer');
-        } else if (typeof applyView === 'function') {
-            applyView(extLinksContainer, extLinksContainer.dataset.defaultView || 'cards');
-        } else {
-            console.error("Ни applyCurrentView, ни applyView не найдены для установки вида при ошибке.");
+        console.error(`${LOG_PREFIX} Ошибка при загрузке категорий внешних ресурсов:`, error);
+        extLinkCategoryInfo = {};
+        if (typeof showNotification === 'function') {
+            showNotification("Не удалось загрузить категории для внешних ресурсов.", "error");
         }
     }
 }
 
 
-function populateExtLinkCategoryFilter() {
+async function populateExtLinkCategoryFilter() {
     const filterSelect = document.getElementById('extLinkCategoryFilter');
     if (!filterSelect) {
         console.error("Не найден select для фильтра категорий внешних ссылок (#extLinkCategoryFilter)");
@@ -17341,31 +17919,33 @@ function populateExtLinkCategoryFilter() {
     }
 
     const currentValue = filterSelect.value;
+    filterSelect.innerHTML = '<option value="">Все категории</option>';
 
+    try {
+        const categories = await getAllFromIndexedDB('extLinkCategories');
+        if (categories && categories.length > 0) {
+            const fragment = document.createDocumentFragment();
+            const sortedCategories = categories.sort((a, b) => a.name.localeCompare(b.name));
 
-    while (filterSelect.options.length > 1) {
-        filterSelect.remove(1);
+            sortedCategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                fragment.appendChild(option);
+            });
+            filterSelect.appendChild(fragment);
+        }
+
+        if (currentValue && filterSelect.querySelector(`option[value="${currentValue}"]`)) {
+            filterSelect.value = currentValue;
+        } else {
+            filterSelect.value = "";
+        }
+        console.log("Фильтр категорий внешних ресурсов обновлен из БД.");
+
+    } catch (error) {
+        console.error("Ошибка при заполнении фильтра категорий внешних ресурсов:", error);
     }
-
-    const fragment = document.createDocumentFragment();
-
-    Object.entries(extLinkCategoryInfo).forEach(([key, info]) => {
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = info.name;
-        fragment.appendChild(option);
-    });
-
-    filterSelect.appendChild(fragment);
-
-
-    if (currentValue && filterSelect.querySelector(`option[value="${currentValue}"]`)) {
-        filterSelect.value = currentValue;
-    } else if (filterSelect.options.length > 0) {
-
-        filterSelect.value = "";
-    }
-    console.log("Фильтр категорий внешних ресурсов обновлен.");
 }
 
 
@@ -17411,114 +17991,73 @@ async function handleExtLinkContainerClick(event) {
 }
 
 
-async function renderExtLinks(links) {
-    const extLinksContainer = document.getElementById('extLinksContainer');
-    if (!extLinksContainer) {
-        console.error("Контейнер #extLinksContainer не найден для рендеринга.");
+async function handleExtLinkAction(event) {
+    const target = event.target;
+    const linkItem = target.closest('.ext-link-item[data-id]');
+    if (!linkItem) return;
+
+    const linkId = parseInt(linkItem.dataset.id, 10);
+    if (isNaN(linkId)) {
+        console.error("Невалидный ID внешнего ресурса:", linkItem.dataset.id);
         return;
     }
 
-    extLinksContainer.innerHTML = '';
+    const actionButton = target.closest('button[data-action]');
+    const action = actionButton ? actionButton.dataset.action : (target.closest('[data-action="open-link"]') ? 'open-link' : null);
 
-    if (!links || links.length === 0) {
-        extLinksContainer.innerHTML = '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Нет сохраненных внешних ресурсов.</div>';
-        if (typeof applyCurrentView === 'function') {
-            applyCurrentView('extLinksContainer');
-        } else if (typeof applyView === 'function') {
-            applyView(extLinksContainer, extLinksContainer.dataset.defaultView || 'cards');
-        }
-        return;
-    }
+    if (!action) return;
 
-    const categoryMap = {
-        ...extLinkCategoryInfo,
-        default: { name: 'Без категории', color: 'gray', icon: 'fa-question-circle' }
-    };
+    event.stopPropagation();
 
-    const fragment = document.createDocumentFragment();
-
-    links.forEach(link => {
-        if (!link || typeof link !== 'object' || !link.id) {
-            console.warn("Пропущен невалидный элемент link при рендеринге:", link);
-            return;
-        }
-
-        const linkElement = document.createElement('div');
-        linkElement.className = 'ext-link-item view-item group relative flex flex-col justify-between p-4 rounded-lg shadow-sm hover:shadow-md bg-[#374151] transition cursor-pointer';
-        linkElement.dataset.id = link.id;
-        linkElement.dataset.category = link.category || '';
-
-        const categoryKey = link.category && categoryMap[link.category] ? link.category : 'default';
-        const categoryData = categoryMap[categoryKey];
-        const badgeColorName = categoryData.color || 'gray';
-        const badgeColorClasses = `bg-${badgeColorName}-100 text-${badgeColorName}-800 dark:bg-${badgeColorName}-900 dark:text-${badgeColorName}-300`;
-
-        const categoryBadge = link.category
-            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeColorClasses} whitespace-nowrap"><i class="fas ${categoryData.icon || 'fa-tag'} mr-1.5"></i>${categoryData.name}</span>`
-            : '';
-
-        const isFav = isFavorite('extLink', String(link.id));
-        const favButtonHTML = getFavoriteButtonHTML(link.id, 'extLink', 'extLinks', link.title, link.description, isFav);
-
-        const mainContentHTML = `
-            <div class="flex-grow min-w-0 mr-3"> 
-                <h3 class="font-semibold text-base text-gray-100 group-hover:text-primary dark:group-hover:text-primary truncate" title="${link.title || ''}">${link.title || 'Без названия'}</h3>
-                <p class="ext-link-description text-gray-300 text-sm mt-1 truncate">${link.description || 'Нет описания'}</p>
-                <div class="ext-link-meta mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    ${categoryBadge}
-                    <span class="text-gray-400 text-xs"><i class="far fa-clock mr-1"></i>${link.dateAdded ? new Date(link.dateAdded).toLocaleDateString() : 'Неизвестно'}</span>
-                </div>
-            </div>
-        `;
-
-        const actionsHTML = `
-            <div class="ext-link-actions absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
-                ${favButtonHTML}
-                <button class="edit-ext-link p-1.5 text-gray-300 hover:text-green-400 rounded-full hover:bg-gray-500/20 transition-colors" title="Редактировать">
-                    <i class="fas fa-edit fa-fw text-sm"></i>
-                </button>
-                <button class="delete-ext-link p-1.5 text-gray-300 hover:text-red-400 rounded-full hover:bg-gray-500/20 transition-colors" title="Удалить">
-                    <i class="fas fa-trash fa-fw text-sm"></i>
-                </button>
-            </div>
-        `;
-
-        linkElement.innerHTML = mainContentHTML + actionsHTML;
-
-        linkElement.querySelector('.edit-ext-link')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showEditExtLinkModal(link.id);
-        });
-
-        linkElement.querySelector('.delete-ext-link')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm(`Вы уверены, что хотите удалить ресурс "${link.title || 'Без названия'}"?`)) {
-                deleteExtLink(link.id);
+    switch (action) {
+        case 'open-link':
+            const urlToOpen = linkItem.dataset.url;
+            if (urlToOpen) {
+                window.open(urlToOpen, '_blank', 'noopener,noreferrer');
+            } else {
+                showNotification("Некорректный или отсутствующий URL.", "warning");
             }
-        });
-
-        fragment.appendChild(linkElement);
-    });
-
-    extLinksContainer.appendChild(fragment);
-    if (typeof applyCurrentView === 'function') {
-        applyCurrentView('extLinksContainer');
-    } else {
-        console.warn("Функция applyCurrentView не найдена, вид для extLinksContainer может быть некорректным.");
+            break;
+        case 'edit':
+            showAddEditExtLinkModal(linkId);
+            break;
+        case 'delete':
+            const title = linkItem.querySelector('h3')?.title || `ресурс ID ${linkId}`;
+            if (confirm(`Вы уверены, что хотите удалить "${title}"?`)) {
+                deleteExtLink(linkId);
+            }
+            break;
     }
-    console.log("[renderExtLinks] Рендеринг внешних ссылок завершен с обновленными стилями и кнопками 'В избранное'.");
 }
 
 
 function filterExtLinks() {
-    console.log("Вызвана функция filterExtLinks (использует filterItems)");
-    filterItems({
-        containerSelector: '#extLinksContainer',
-        itemSelector: '.ext-link-item',
-        searchInputSelector: 'extLinkSearchInput',
-        filterSelectSelector: 'extLinkCategoryFilter',
-        dataAttribute: 'category',
-        textSelectors: ['h3', 'p.ext-link-description']
+    const container = document.getElementById('extLinksContainer');
+    const searchInput = document.getElementById('extLinkSearchInput');
+    const categoryFilter = document.getElementById('extLinkCategoryFilter');
+
+    if (!container || !searchInput || !categoryFilter) {
+        console.error("filterExtLinks: один из элементов (контейнер, поиск или фильтр) не найден.");
+        return;
+    }
+
+    const items = container.querySelectorAll('.ext-link-item');
+    const searchValue = searchInput.value.trim().toLowerCase();
+    const categoryValue = categoryFilter.value;
+
+    items.forEach(item => {
+        const title = item.querySelector('h3')?.textContent?.toLowerCase() || '';
+        const description = item.querySelector('p.ext-link-description')?.textContent?.toLowerCase() || '';
+        const itemCategory = item.dataset.category || '';
+
+        const matchesSearch = !searchValue || title.includes(searchValue) || description.includes(searchValue);
+        const matchesCategory = !categoryValue || itemCategory === categoryValue;
+
+        if (matchesSearch && matchesCategory) {
+            item.classList.remove('hidden');
+        } else {
+            item.classList.add('hidden');
+        }
     });
 }
 
@@ -17721,14 +18260,13 @@ async function deleteExtLink(id) {
                 console.error(`Error updating search index for external link deletion ${numericId}:`, indexError);
             }
         } else if (!linkToDelete) {
-
         } else {
             console.warn("updateSearchIndex function is not available for external link deletion.");
         }
 
         await deleteFromIndexedDB('extLinks', numericId);
         const links = await getAllExtLinks();
-        renderExtLinks(links);
+        renderExtLinks(links, extLinkCategoryInfo);
         showNotification("Внешний ресурс удален");
 
     } catch (error) {
@@ -19044,7 +19582,6 @@ function applyPanelOrderAndVisibility(order, visibility) {
     });
 
     if (moreTabsBtnParent) {
-
         let currentChild = tabNav.firstChild;
         while (currentChild) {
             let nextSibling = currentChild.nextSibling;
@@ -19057,7 +19594,6 @@ function applyPanelOrderAndVisibility(order, visibility) {
         tabNav.insertBefore(fragment, moreTabsBtnParent);
         console.log("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] DOM order applied before 'more' button.");
     } else {
-
         tabNav.innerHTML = '';
         tabNav.appendChild(fragment);
         console.log("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] DOM order applied (moreTabsBtnParent not found, full replace).");
@@ -19391,15 +19927,17 @@ document.addEventListener('click', (event) => {
     }
 
     if (event.target === topmostModal) {
-        if (topmostModal.id === 'customizeUIModal') {
-            console.log(`[Global Click Handler] Click on overlay for modal "${topmostModal.id}" detected. Closing is PREVENTED for settings modal.`);
+        if (topmostModal.id === 'customizeUIModal' || topmostModal.id === 'bookmarkModal' || topmostModal.id === 'extLinkModal') {
+            console.log(`[Global Click Handler] Click on overlay for modal "${topmostModal.id}" detected. Closing is PREVENTED for this modal type.`);
+
+            const innerContainer = topmostModal.querySelector('.modal-inner-container, .bg-white');
+            if (innerContainer) {
+                innerContainer.classList.add('shake-animation');
+                setTimeout(() => innerContainer.classList.remove('shake-animation'), 500);
+            }
             return;
         }
 
-        if (topmostModal.id === 'bookmarkModal' || topmostModal.id === 'bookmarkDetailModal') {
-            console.log(`[Global Click Handler] Click on overlay for modal "${topmostModal.id}" detected, but closing is prevented for bookmark modals.`);
-            return;
-        }
 
         console.log(`[Global Click Handler] Closing modal "${topmostModal.id}" due to click on overlay.`);
 
@@ -19419,8 +19957,7 @@ document.addEventListener('click', (event) => {
             topmostModal.id === 'foldersModal' ||
             topmostModal.id === 'hotkeysModal' ||
             topmostModal.id === 'confirmClearDataModal' ||
-            topmostModal.id === 'cibLinkModal' ||
-            topmostModal.id === 'extLinkModal') {
+            topmostModal.id === 'cibLinkModal') {
             topmostModal.classList.add('hidden');
             if (typeof removeEscapeHandler === 'function') {
                 removeEscapeHandler(topmostModal);
@@ -22464,7 +23001,6 @@ async function showBlacklistDetailModal(entryId) {
                     </div>
                 </div>
                 <div id="blacklistDetailContent" class="p-6 overflow-y-auto">
-                    <!-- Содержимое будет заполнено динамически -->
                 </div>
                 <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3">
                     <button id="blacklistDetailEditBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium">Редактировать</button>
@@ -23143,63 +23679,33 @@ async function toggleFavorite(originalItemId, itemType, originalItemSection, tit
 }
 
 
-async function updateFavoriteStatusUI(originalItemId, itemType, isFavorite, specificButton = null) {
+async function updateFavoriteStatusUI(originalItemId, itemType, isFavorite) {
     const stringOriginalItemId = String(originalItemId);
+    console.log(`[updateFavoriteStatusUI v2] Updating UI for item ${itemType}:${stringOriginalItemId} to isFavorite=${isFavorite}`);
 
     const updateButtonAppearance = (button) => {
         if (!button) return;
         const icon = button.querySelector('i');
         if (icon) {
             icon.className = isFavorite ? 'fas fa-star text-yellow-400' : 'far fa-star';
+            icon.style.color = isFavorite ? 'var(--color-yellow-400)' : '';
         }
         button.title = isFavorite ? "Удалить из избранного" : "Добавить в избранное";
+        button.dataset.isFavorite = String(isFavorite);
     };
 
-    if (specificButton instanceof HTMLElement) {
-        updateButtonAppearance(specificButton);
-    }
+    const allRelatedButtons = document.querySelectorAll(
+        `.toggle-favorite-btn[data-item-id="${stringOriginalItemId}"][data-item-type="${itemType}"]`
+    );
 
-    let cardFavoriteButton;
-    const mainAlgoEditBtnContainer = document.getElementById('editMainBtn')?.parentElement;
-
-    if (itemType === 'mainAlgorithm') {
-        cardFavoriteButton = mainAlgoEditBtnContainer?.querySelector(`.toggle-favorite-btn[data-item-id="main"]`);
-    } else if (itemType === 'sedoTypeSection') {
-        const sedoEditBtnContainer = document.getElementById('editSedoTypesBtn')?.parentElement;
-        cardFavoriteButton = sedoEditBtnContainer?.querySelector(`.toggle-favorite-btn[data-item-id="sedoTypesConfigGlobal"]`);
+    if (allRelatedButtons.length > 0) {
+        console.log(`[updateFavoriteStatusUI v2] Found ${allRelatedButtons.length} buttons to update for ${itemType}:${stringOriginalItemId}.`);
+        allRelatedButtons.forEach(button => {
+            updateButtonAppearance(button);
+        });
     } else {
-        const cardElement = document.querySelector(`.view-item[data-id="${stringOriginalItemId}"]`);
-        if (cardElement) {
-            const buttonsInCard = cardElement.querySelectorAll(`.toggle-favorite-btn[data-item-id="${stringOriginalItemId}"][data-item-type="${itemType}"]`);
-            buttonsInCard.forEach(btn => {
-                if (btn !== specificButton) updateButtonAppearance(btn);
-            });
-        }
+        console.warn(`[updateFavoriteStatusUI v2] No favorite buttons found anywhere in the DOM for item ${itemType}:${stringOriginalItemId}.`);
     }
-    if (cardFavoriteButton && cardFavoriteButton !== specificButton) {
-        updateButtonAppearance(cardFavoriteButton);
-    }
-
-    const activeModal = getTopmostModal(getVisibleModals().filter(m => !m.classList.contains('hidden')));
-    if (activeModal) {
-        let modalRepresentsThisItem = false;
-        if (activeModal.id === 'algorithmModal' && activeModal.dataset.currentAlgorithmId === stringOriginalItemId &&
-            (activeModal.dataset.currentSection && (itemType === 'algorithm' || (itemType === 'mainAlgorithm' && activeModal.dataset.currentSection === 'main')))) {
-            modalRepresentsThisItem = true;
-        } else if (activeModal.id === 'bookmarkDetailModal' && activeModal.dataset.currentBookmarkId === stringOriginalItemId && itemType === 'bookmark') {
-            modalRepresentsThisItem = true;
-        } else if (activeModal.id === 'reglamentDetailModal' && activeModal.dataset.currentReglamentId === stringOriginalItemId && itemType === 'reglament') {
-            modalRepresentsThisItem = true;
-        }
-
-        if (modalRepresentsThisItem) {
-            const modalFavoriteButton = activeModal.querySelector(`.toggle-favorite-btn[data-item-id="${stringOriginalItemId}"][data-item-type="${itemType}"]`);
-            if (modalFavoriteButton && modalFavoriteButton !== specificButton) {
-                updateButtonAppearance(modalFavoriteButton);
-            }
-        }
-    }
-    console.log(`UI updated for ${itemType}:${stringOriginalItemId}, isFavorite: ${isFavorite}`);
 }
 
 
