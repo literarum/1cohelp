@@ -23681,14 +23681,14 @@ async function toggleFavorite(originalItemId, itemType, originalItemSection, tit
 
 async function updateFavoriteStatusUI(originalItemId, itemType, isFavorite) {
     const stringOriginalItemId = String(originalItemId);
-    console.log(`[updateFavoriteStatusUI v2] Updating UI for item ${itemType}:${stringOriginalItemId} to isFavorite=${isFavorite}`);
+    console.log(`[updateFavoriteStatusUI] Обновление UI для элемента ${itemType}:${stringOriginalItemId} на isFavorite=${isFavorite}`);
 
     const updateButtonAppearance = (button) => {
         if (!button) return;
         const icon = button.querySelector('i');
         if (icon) {
+            // Устанавливаем правильные классы для иконки
             icon.className = isFavorite ? 'fas fa-star text-yellow-400' : 'far fa-star';
-            icon.style.color = isFavorite ? 'var(--color-yellow-400)' : '';
         }
         button.title = isFavorite ? "Удалить из избранного" : "Добавить в избранное";
         button.dataset.isFavorite = String(isFavorite);
@@ -23699,12 +23699,12 @@ async function updateFavoriteStatusUI(originalItemId, itemType, isFavorite) {
     );
 
     if (allRelatedButtons.length > 0) {
-        console.log(`[updateFavoriteStatusUI v2] Found ${allRelatedButtons.length} buttons to update for ${itemType}:${stringOriginalItemId}.`);
+        console.log(`[updateFavoriteStatusUI] Найдено ${allRelatedButtons.length} кнопок для обновления для ${itemType}:${stringOriginalItemId}.`);
         allRelatedButtons.forEach(button => {
             updateButtonAppearance(button);
         });
     } else {
-        console.warn(`[updateFavoriteStatusUI v2] No favorite buttons found anywhere in the DOM for item ${itemType}:${stringOriginalItemId}.`);
+        console.warn(`[updateFavoriteStatusUI] Кнопки "в избранное" не найдены в DOM для элемента ${itemType}:${stringOriginalItemId}.`);
     }
 }
 
