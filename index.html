@@ -401,18 +401,6 @@
             pointer-events: auto;
         }
 
-        .tab-content {
-            transition: opacity 150ms ease-in-out;
-        }
-
-        .tab-content.fade-out {
-            opacity: 0;
-        }
-
-        .tab-content.fade-in {
-            opacity: 1;
-        }
-
 
         /* ======================================== */
         /*          Стили для кнопок табов          */
@@ -442,6 +430,32 @@
             .tab-btn i {
                 margin-right: 0.35rem;
             }
+        }
+
+
+        /* ======================================== */
+        /*      Переходы для Табов и Поиска       */
+        /* ======================================== */
+        #searchResults {
+            transition: opacity 150ms ease-out, transform 150ms ease-out;
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none;
+        }
+
+        #searchResults:not(.hidden) {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        /* Новые стили для плавной смены вкладок */
+        .tab-content {
+            transition: opacity 200ms ease-in-out;
+        }
+
+        .tab-content.is-hiding {
+            opacity: 0;
         }
 
         #mainTab,
@@ -2068,8 +2082,8 @@
             class="hover:underline">@guthleifur</a> - репорт об ошибках и предложения по усовершенстованию
     </div>
 
+
 <script src="./script.js"></script>
 </body>
-
 
 </html>
