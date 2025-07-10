@@ -1936,47 +1936,33 @@
                             <section>
                                 <h3
                                     class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
-                                    <i class="fas fa-compass w-6 text-center text-primary mr-2"></i>Общие действия и
-                                    навигация
+                                    <i class="fas fa-compass w-6 text-center text-primary mr-2"></i>Навигация по
+                                    приложению
                                 </h3>
                                 <ul class="space-y-3 list-inside">
+                                    <li><code class="hotkey-code">Alt + H</code> — Перейти в раздел Главная.</li>
+                                    <li><code class="hotkey-code">Alt + L</code> — Перейти в раздел Избранное.</li>
                                     <li><code class="hotkey-code">Alt + F</code> — Установить фокус на поле глобального
                                         поиска.</li>
-                                    <li><code class="hotkey-code">Alt + S</code> — Открыть/закрыть раздел "Избранное".
-                                    </li>
-                                    <li><code class="hotkey-code">Alt + I</code> — Открыть окно настроек приложения.
-                                    </li>
-                                    <li><code class="hotkey-code">Alt + T</code> — Переключить цветовую тему (Авто /
-                                        Светлая / Темная).</li>
-                                    <li><code class="hotkey-code">Ctrl + Shift + H</code> — Открыть/закрыть это окно
-                                        помощи.</li>
                                     <li><code class="hotkey-code">Backspace</code> (вне полей ввода) — Вернуться на
-                                        предыдущий экран в приложении (например, из списка регламентов к списку
-                                        категорий).</li>
+                                        предыдущий экран (например, из списка регламентов к категориям).</li>
                                 </ul>
                             </section>
 
                             <section>
                                 <h3
                                     class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
-                                    <i class="fas fa-database w-6 text-center text-primary mr-2"></i>Работа с данными и
-                                    формами
+                                    <i class="fas fa-database w-6 text-center text-primary mr-2"></i>Работа с данными
                                 </h3>
                                 <ul class="space-y-3 list-inside">
+                                    <li><code class="hotkey-code">Alt + S</code> — Сохранить изменения в активном окне
+                                        создания/редактирования.</li>
                                     <li><code class="hotkey-code">Alt + N</code> — Открыть окно добавления нового
                                         элемента для текущей активной секции (алгоритма, закладки и т.д.).</li>
                                     <li><code class="hotkey-code">Alt + Shift + S</code> — Экспортировать (сохранить)
                                         всю базу данных в файл.</li>
                                     <li><code class="hotkey-code">Alt + Shift + O</code> — Открыть диалог импорта
                                         (открытия) базы данных из файла.</li>
-                                    <li><b>Поле "Информация по обращению":</b>
-                                        <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
-                                            <li><code class="hotkey-code">Ctrl + Enter</code> (внутри поля) — Вставить
-                                                следующий пункт нумерованного списка.</li>
-                                            <li><code class="hotkey-code">Ctrl + Shift + Backspace</code> (вне полей
-                                                ввода) — Очистить поле (с подтверждением).</li>
-                                        </ul>
-                                    </li>
                                 </ul>
                             </section>
                         </div>
@@ -1985,12 +1971,44 @@
                             <section>
                                 <h3
                                     class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
-                                    <i class="fas fa-tools w-6 text-center text-primary mr-2"></i>Таймер и Избранное
+                                    <i class="fas fa-window-maximize w-6 text-center text-primary mr-2"></i>Окна и
+                                    интерфейс
                                 </h3>
                                 <ul class="space-y-3 list-inside">
-                                    <li><code class="hotkey-code">Alt + K</code> — Добавить/удалить текущий открытый
-                                        элемент в Избранное.</li>
-                                    <li><b>Управление таймером:</b>
+                                    <li><code class="hotkey-code">Alt + I</code> — Открыть окно настроек приложения.
+                                    </li>
+                                    <li><code class="hotkey-code">Alt + T</code> — Переключить тему (Авто /
+                                        Светлая / Темная).</li>
+                                    <li><code class="hotkey-code">Alt + V</code> — Переключить вид отображения элементов
+                                        (список/плитки) в текущей секции.</li>
+                                    <li><code class="hotkey-code">Ctrl + Shift + H</code> — Открыть/закрыть это окно
+                                        помощи.</li>
+                                    <li><code class="hotkey-code">Esc</code> — Закрыть самое верхнее активное окно. В
+                                        полях поиска — очищает ввод.</li>
+                                </ul>
+                            </section>
+
+                            <section>
+                                <h3
+                                    class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
+                                    <i class="fas fa-tasks w-6 text-center text-primary mr-2"></i>Контекстные действия
+                                </h3>
+                                <ul class="space-y-3 list-inside">
+                                    <li><b>Избранное:</b>
+                                        <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                            <li><code class="hotkey-code">Alt + K</code> — Добавить/удалить текущий
+                                                открытый элемент в Избранное (в окне просмотра деталей).</li>
+                                        </ul>
+                                    </li>
+                                    <li><b>Поле "Информация по обращению":</b>
+                                        <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
+                                            <li><code class="hotkey-code">Ctrl + Enter</code> — Вставить следующий пункт
+                                                нумерованного списка.</li>
+                                            <li><code class="hotkey-code">Ctrl + Shift + Backspace</code> — Очистить
+                                                поле (с подтверждением).</li>
+                                        </ul>
+                                    </li>
+                                    <li><b>Таймер:</b>
                                         <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
                                             <li>Нажатие <i class="fas fa-play w-4 text-center"></i> / <i
                                                     class="fas fa-pause w-4 text-center"></i>: Старт/Пауза.</li>
@@ -1998,27 +2016,12 @@
                                                 стандартное время.</li>
                                             <li><code class="hotkey-code">Ctrl</code> + Нажатие <i
                                                     class="fas fa-undo w-4 text-center"></i>: Сброс на 00:00.</li>
-                                            <li>Нажатие <i class="fas fa-plus w-4 text-center"></i>: Увеличить на 1
-                                                минуту.</li>
-                                            <li>Нажатие <i class="fas fa-minus w-4 text-center"></i>: Уменьшить на 1
-                                                минуту.</li>
+                                            <li>Нажатие <i class="fas fa-plus w-4 text-center"></i>: Увеличить время.
+                                            </li>
+                                            <li>Нажатие <i class="fas fa-minus w-4 text-center"></i>: Уменьшить время.
+                                            </li>
                                         </ul>
                                     </li>
-                                </ul>
-                            </section>
-
-                            <section>
-                                <h3
-                                    class="text-lg font-semibold mb-3 border-b border-gray-300 dark:border-gray-600 pb-1.5 flex items-center">
-                                    <i class="fas fa-window-maximize w-6 text-center text-primary mr-2"></i>Работа с
-                                    окнами и изображениями
-                                </h3>
-                                <ul class="space-y-3 list-inside">
-                                    <li><code class="hotkey-code">Esc</code> — Закрыть самое верхнее активное окно
-                                        (детали, редактирование, лайтбокс, настройки и т.д.). В полях поиска — очищает
-                                        ввод.</li>
-                                    <li><code class="hotkey-code">Alt + V</code> — Переключить вид отображения элементов
-                                        (список/плитки) в текущей секции.</li>
                                     <li><b>Просмотр изображений (Лайтбокс):</b>
                                         <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
                                             <li><code
