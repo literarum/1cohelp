@@ -12900,7 +12900,6 @@ async function ensureBookmarkModal() {
         if (innerContainer && normalInnerClasses.length > 0) innerContainer.classList.add(...normalInnerClasses);
         if (contentArea && normalContentClasses.length > 0) contentArea.classList.add(...normalContentClasses);
 
-
         const handleCloseActions = (targetModal) => {
             const form = targetModal.querySelector('#bookmarkForm');
             let doClose = true;
@@ -12929,7 +12928,14 @@ async function ensureBookmarkModal() {
                     initialBookmarkFormState = null;
                 }
                 if (typeof removeEscapeHandler === 'function') removeEscapeHandler(targetModal);
-                if (getVisibleModals().length === 0) document.body.classList.remove('overflow-hidden');
+
+                requestAnimationFrame(() => {
+                    if (getVisibleModals().length === 0) {
+                        document.body.classList.remove('overflow-hidden');
+                        document.body.classList.remove('modal-open');
+                        console.log("Body overflow и modal-open сняты после закрытия окна закладки.");
+                    }
+                });
             }
         };
 
@@ -15193,217 +15199,6 @@ async function showAddBookmarkModal(bookmarkToEditId = null) {
             try { titleInput.focus(); }
             catch (focusError) { console.warn("Не удалось установить фокус на поле заголовка (add bookmark):", focusError); }
         }, 50);
-    }
-}
-
-
-async function showBookmarkDetailModal(bookmarkId) {
-    const modalId = 'bookmarkDetailModal';
-    let modal = document.getElementById(modalId);
-    const isNewModal = !modal;
-
-    if (isNewModal) {
-        modal = document.createElement('div');
-        modal.id = modalId;
-        modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center';
-        modal.innerHTML = `
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                            <div class="flex justify-between items-center">
-                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
-                                <div class="flex items-center flex-shrink-0">
-                                    <button id="${bookmarkDetailModalConfigGlobal.buttonId}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-                                        <i class="fas fa-expand"></i>
-                                    </button>
-                                    <button type="button" class="close-modal ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть (Esc)">
-                                        <i class="fas fa-times text-xl"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="p-6 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
-                            <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
-                                <p>Загрузка...</p>
-                            </div>
-                            <div id="bookmarkDetailScreenshotsContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
-                                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
-                                <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
-                            <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
-                                <i class="fas fa-edit mr-1"></i> Редактировать
-                            </button>
-                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
-                                Закрыть
-                            </button>
-                        </div>
-                    </div>
-                `;
-        document.body.appendChild(modal);
-
-        modal.addEventListener('click', (e) => {
-            const currentModal = document.getElementById(modalId);
-            if (!currentModal || currentModal.classList.contains('hidden')) return;
-
-            if (e.target.closest('.close-modal, .cancel-modal')) {
-                currentModal.classList.add('hidden');
-
-                const images = currentModal.querySelectorAll('#bookmarkDetailScreenshotsGrid img[data-object-url]');
-                images.forEach(img => {
-                    if (img.dataset.objectUrl) {
-                        try { URL.revokeObjectURL(img.dataset.objectUrl); } catch (revokeError) { console.warn("Error revoking URL on close:", revokeError); }
-                        delete img.dataset.objectUrl;
-                    }
-                });
-
-                requestAnimationFrame(() => {
-                    const otherVisibleModals = getVisibleModals().filter(m => m.id !== modalId);
-                    if (otherVisibleModals.length === 0) {
-                        document.body.classList.remove('overflow-hidden');
-                        document.body.classList.remove('modal-open');
-                        console.log(`[bookmarkDetailModal Close - BUTTON] overflow-hidden и modal-open сняты с body (через rAF).`);
-                    } else {
-                        console.log(`[bookmarkDetailModal Close - BUTTON] overflow-hidden и modal-open НЕ сняты, т.к. есть другие видимые модальные окна (через rAF). Count: ${otherVisibleModals.length}, Other modals:`, otherVisibleModals.map(m => m.id));
-                    }
-                });
-
-            } else if (e.target.closest('#editBookmarkFromDetailBtn')) {
-                const currentId = parseInt(currentModal.dataset.currentBookmarkId, 10);
-                if (!isNaN(currentId)) {
-                    currentModal.classList.add('hidden');
-
-                    requestAnimationFrame(() => {
-                        const otherVisibleModals = getVisibleModals().filter(m => m.id !== modalId);
-                        if (otherVisibleModals.length === 0) {
-                            document.body.classList.remove('overflow-hidden');
-                            document.body.classList.remove('modal-open');
-                        }
-                    });
-
-                    if (typeof showEditBookmarkModal === 'function') {
-                        showEditBookmarkModal(currentId);
-                    } else {
-                        console.error("Функция showEditBookmarkModal не определена!");
-                        showNotification("Ошибка: функция редактирования недоступна.", "error");
-                    }
-                } else {
-                    console.error("Не удалось получить ID закладки для редактирования из dataset");
-                    showNotification("Ошибка: не удалось определить ID для редактирования", "error");
-                }
-            }
-        });
-    }
-
-    const fullscreenBtn = modal.querySelector('#' + bookmarkDetailModalConfigGlobal.buttonId);
-    if (fullscreenBtn) {
-        if (!fullscreenBtn.dataset.fullscreenListenerAttached) {
-            fullscreenBtn.addEventListener('click', () => {
-                if (typeof toggleModalFullscreen === 'function') {
-                    toggleModalFullscreen(
-                        bookmarkDetailModalConfigGlobal.modalId,
-                        bookmarkDetailModalConfigGlobal.buttonId,
-                        bookmarkDetailModalConfigGlobal.classToggleConfig,
-                        bookmarkDetailModalConfigGlobal.innerContainerSelector,
-                        bookmarkDetailModalConfigGlobal.contentAreaSelector
-                    );
-                } else {
-                    console.error("Функция toggleModalFullscreen не найдена!");
-                    showNotification("Ошибка: Функция переключения полноэкранного режима недоступна.", "error");
-                }
-            });
-            fullscreenBtn.dataset.fullscreenListenerAttached = 'true';
-            console.log(`Fullscreen listener attached to ${bookmarkDetailModalConfigGlobal.buttonId} (modal: ${isNewModal ? 'new' : 'existing'})`);
-        }
-    } else {
-        console.error("Кнопка #" + bookmarkDetailModalConfigGlobal.buttonId + " не найдена в модальном окне деталей закладки!");
-    }
-
-    const titleEl = modal.querySelector('#bookmarkDetailTitle');
-    const textContentEl = modal.querySelector('#bookmarkDetailTextContent');
-    const screenshotsContainer = modal.querySelector('#bookmarkDetailScreenshotsContainer');
-    const screenshotsGridEl = modal.querySelector('#bookmarkDetailScreenshotsGrid');
-    const editButton = modal.querySelector('#editBookmarkFromDetailBtn');
-
-    if (!titleEl || !textContentEl || !screenshotsContainer || !screenshotsGridEl || !editButton) {
-        console.error("Не найдены необходимые элементы в модальном окне деталей закладки.");
-        if (modal) modal.classList.add('hidden');
-        return;
-    }
-
-    modal.dataset.currentBookmarkId = String(bookmarkId);
-    titleEl.textContent = 'Загрузка...';
-    textContentEl.innerHTML = '<p>Загрузка...</p>';
-    screenshotsGridEl.innerHTML = '';
-    screenshotsContainer.classList.add('hidden');
-    editButton.classList.add('hidden');
-
-    modal.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-    document.body.classList.add('modal-open');
-
-    try {
-        const bookmark = await getFromIndexedDB('bookmarks', bookmarkId);
-
-        if (bookmark) {
-            titleEl.textContent = bookmark.title || 'Без названия';
-            const preElement = document.createElement('pre');
-            preElement.className = 'whitespace-pre-wrap break-words text-sm font-sans';
-            preElement.style.fontSize = '102%';
-            preElement.textContent = bookmark.description || 'Нет описания.';
-            textContentEl.innerHTML = '';
-            textContentEl.appendChild(preElement);
-
-            editButton.classList.remove('hidden');
-
-            if (bookmark.screenshotIds && bookmark.screenshotIds.length > 0) {
-                console.log(`Загрузка ${bookmark.screenshotIds.length} скриншотов для деталей закладки ${bookmarkId}...`);
-                screenshotsContainer.classList.remove('hidden');
-                screenshotsGridEl.innerHTML = '<p class="col-span-full text-xs text-gray-500">Загрузка скриншотов...</p>';
-
-                try {
-                    const allParentScreenshots = await getAllFromIndex('screenshots', 'parentId', bookmarkId);
-                    const bookmarkScreenshots = allParentScreenshots.filter(s => s.parentType === 'bookmark');
-
-                    if (bookmarkScreenshots.length > 0) {
-                        if (typeof renderScreenshotThumbnails === 'function') {
-                            renderScreenshotThumbnails(screenshotsGridEl, bookmarkScreenshots, openLightbox);
-                            console.log(`Отрисовано ${bookmarkScreenshots.length} миниатюр в деталях закладки.`);
-                        } else {
-                            console.error("Функция renderScreenshotThumbnails не найдена!");
-                            screenshotsGridEl.innerHTML = '<p class="col-span-full text-red-500 text-xs">Ошибка рендеринга скриншотов.</p>';
-                        }
-                    } else {
-                        screenshotsGridEl.innerHTML = '';
-                        screenshotsContainer.classList.add('hidden');
-                        console.log("Скриншоты не найдены в БД (по parentType='bookmark'), хотя ID были в закладке.");
-                    }
-                } catch (screenshotError) {
-                    console.error("Ошибка загрузки скриншотов для деталей закладки:", screenshotError);
-                    screenshotsGridEl.innerHTML = '<p class="col-span-full text-red-500 text-xs">Ошибка загрузки скриншотов.</p>';
-                    screenshotsContainer.classList.remove('hidden');
-                }
-            } else {
-                screenshotsGridEl.innerHTML = '';
-                screenshotsContainer.classList.add('hidden');
-                console.log("Скриншоты для деталей закладки отсутствуют.");
-            }
-
-        } else {
-            titleEl.textContent = 'Ошибка';
-            textContentEl.innerHTML = `<p class="text-red-500">Не удалось загрузить данные закладки (ID: ${bookmarkId}). Возможно, она была удалена.</p>`;
-            showNotification("Закладка не найдена", "error");
-            editButton.classList.add('hidden');
-            screenshotsContainer.classList.add('hidden');
-        }
-    } catch (error) {
-        console.error("Ошибка при загрузке деталей закладки:", error);
-        titleEl.textContent = 'Ошибка загрузки';
-        textContentEl.innerHTML = '<p class="text-red-500">Произошла ошибка при загрузке данных.</p>';
-        showNotification("Ошибка загрузки деталей закладки", "error");
-        editButton.classList.add('hidden');
-        screenshotsContainer.classList.add('hidden');
     }
 }
 
@@ -20830,6 +20625,56 @@ function handleGlobalHotkey(event) {
         activeElement.isContentEditable
     );
 
+    if (alt && !ctrlOrMeta && !shift) {
+        switch (event.code) {
+            case 'KeyS': // Alt + S
+                console.log("[Hotkey] Обнаружена комбинация Alt + S (Сохранить)");
+                event.preventDefault();
+                event.stopPropagation();
+                const topModalForSave = getTopmostModal(getVisibleModals());
+                if (topModalForSave) {
+                    console.log(`[Hotkey Alt+S] Найдено верхнее модальное окно: #${topModalForSave.id}`);
+                    const SAVE_BUTTON_SELECTORS = [
+                        '#saveAlgorithmBtn', '#saveNewAlgorithmBtn', '#saveBookmarkBtn',
+                        '#saveCibLinkBtn', '#saveReglamentBtn', '#saveUISettingsBtn',
+                        '#saveExtLinkBtn', '#saveBlacklistEntryBtn'
+                    ];
+
+                    for (const selector of SAVE_BUTTON_SELECTORS) {
+                        const saveBtn = topModalForSave.querySelector(selector);
+                        if (saveBtn && !saveBtn.disabled && (saveBtn.offsetWidth > 0 || saveBtn.offsetHeight > 0 || saveBtn.getClientRects().length > 0)) {
+                            console.log(`[Hotkey Alt+S] Найдена активная кнопка сохранения: ${selector}. Вызов click().`);
+                            saveBtn.click();
+                            return;
+                        }
+                    }
+                    console.log(`[Hotkey Alt+S] В окне #${topModalForSave.id} не найдено активных кнопок сохранения.`);
+                } else {
+                    console.log(`[Hotkey Alt+S] Не найдено активных модальных окон для сохранения.`);
+                }
+                return;
+
+            case 'KeyK': // Alt + K
+                console.log("[Hotkey] Обнаружена комбинация Alt + K (В избранное)");
+                event.preventDefault();
+                event.stopPropagation();
+                const topModalForFavorite = getTopmostModal(getVisibleModals());
+                if (topModalForFavorite) {
+                    const favButton = topModalForFavorite.querySelector('.toggle-favorite-btn');
+                    if (favButton && (favButton.offsetWidth > 0 || favButton.offsetHeight > 0 || favButton.getClientRects().length > 0)) {
+                        console.log(`[Hotkey Alt+K] Найдена кнопка "В избранное" в окне #${topModalForFavorite.id}. Вызов click().`);
+                        favButton.click();
+                        return;
+                    } else {
+                        console.log(`[Hotkey Alt+K] Кнопка "В избранное" не найдена или невидима в окне #${topModalForFavorite.id}.`);
+                    }
+                } else {
+                    console.log(`[Hotkey Alt+K] Не найдено активных модальных окон для добавления в избранное.`);
+                }
+                return;
+        }
+    }
+
     if (event.key === 'Escape') {
         const activeSearchInputIds = new Set([
             'searchInput', 'bookmarkSearchInput', 'linkSearchInput',
@@ -21046,6 +20891,16 @@ function handleGlobalHotkey(event) {
 
     if (alt && !ctrlOrMeta && !isInputFocused) {
         switch (code) {
+            case 'KeyH': // Alt + H
+                console.log("[Hotkey] Обнаружена комбинация Alt + KeyH (Главная)");
+                event.preventDefault();
+                setActiveTab('main');
+                return;
+            case 'KeyL': // Alt + L
+                console.log("[Hotkey] Обнаружена комбинация Alt + KeyL (Избранное)");
+                event.preventDefault();
+                setActiveTab('favorites');
+                return;
             case 'KeyN': // Alt + N
                 if (!shift) {
                     console.log("[Hotkey] Обнаружена комбинация Alt + KeyN");
@@ -21236,6 +21091,8 @@ async function showBookmarkDetailModal(bookmarkId) {
                             <div class="flex justify-between items-center">
                                 <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
                                 <div class="flex items-center flex-shrink-0">
+                                    <!-- НОВЫЙ ПЛЕЙСХОЛДЕР -->
+                                    <div class="fav-btn-placeholder-modal-bookmark mr-1"></div>
                                     <button id="${bookmarkDetailModalConfigGlobal.buttonId}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                         <i class="fas fa-expand"></i>
                                     </button>
@@ -21349,8 +21206,10 @@ async function showBookmarkDetailModal(bookmarkId) {
     const screenshotsContainer = modal.querySelector('#bookmarkDetailScreenshotsContainer');
     const screenshotsGridEl = modal.querySelector('#bookmarkDetailScreenshotsGrid');
     const editButton = modal.querySelector('#editBookmarkFromDetailBtn');
+    const favoriteButtonContainer = modal.querySelector('.fav-btn-placeholder-modal-bookmark');
 
-    if (!titleEl || !textContentEl || !screenshotsContainer || !screenshotsGridEl || !editButton) {
+
+    if (!titleEl || !textContentEl || !screenshotsContainer || !screenshotsGridEl || !editButton || !favoriteButtonContainer) {
         console.error("Не найдены необходимые элементы в модальном окне деталей закладки.");
         if (modal) modal.classList.add('hidden');
         return;
@@ -21362,6 +21221,7 @@ async function showBookmarkDetailModal(bookmarkId) {
     screenshotsGridEl.innerHTML = '';
     screenshotsContainer.classList.add('hidden');
     editButton.classList.add('hidden');
+    favoriteButtonContainer.innerHTML = '';
 
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
@@ -21380,6 +21240,11 @@ async function showBookmarkDetailModal(bookmarkId) {
             textContentEl.appendChild(preElement);
 
             editButton.classList.remove('hidden');
+
+            const itemType = bookmark.url ? 'bookmark' : 'bookmark_note';
+            const isFav = isFavorite(itemType, String(bookmark.id));
+            const favButtonHTML = getFavoriteButtonHTML(bookmark.id, itemType, 'bookmarks', bookmark.title, bookmark.description, isFav);
+            favoriteButtonContainer.innerHTML = favButtonHTML;
 
             if (bookmark.screenshotIds && bookmark.screenshotIds.length > 0) {
                 console.log(`Загрузка ${bookmark.screenshotIds.length} скриншотов для деталей закладки ${bookmarkId}...`);
