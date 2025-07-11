@@ -3117,42 +3117,37 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
     const sedoTabPanel = document.getElementById(SEDO_TAB_PANEL_ID);
 
     if (!sedoTabPanel) {
-        console.log(`[SedoRender v5] Панель вкладки #${SEDO_TAB_PANEL_ID} не найдена или не активна. Рендеринг пропущен.`);
+        console.log(`[SedoRender v6 Fixed] Панель вкладки #${SEDO_TAB_PANEL_ID} не найдена. Рендеринг пропущен.`);
         return;
     }
 
     let mainContentContainer = sedoTabPanel.querySelector(`#${SEDO_RENDER_TARGET_ID}`);
-
-    if (!mainContentContainer) {
-        console.warn(`[SedoRender v5] Целевой контейнер #${SEDO_RENDER_TARGET_ID} не найден внутри #${SEDO_TAB_PANEL_ID}. Создаем его динамически.`);
+    if (!mainContentContainer || sedoTabPanel.dataset.isEditing !== String(isEditing)) {
+        sedoTabPanel.innerHTML = '';
         mainContentContainer = document.createElement('div');
         mainContentContainer.id = SEDO_RENDER_TARGET_ID;
-        sedoTabPanel.innerHTML = '';
         sedoTabPanel.appendChild(mainContentContainer);
+        sedoTabPanel.dataset.isEditing = String(isEditing);
+    } else {
+        return;
     }
 
     if (!data) {
-        console.error(`[SedoRender Refactored] Ошибка: в функцию переданы невалидные данные (data is ${data}). Рендеринг прерван.`);
-        if (typeof showNotification === 'function') {
-            showNotification('Произошла внутренняя ошибка при отображении данных СЭДО.', 'error');
-        }
+        console.error(`[SedoRender v6 Fixed] Ошибка: в функцию переданы невалидные данные (data is ${data}).`);
         mainContentContainer.innerHTML = '<p class="text-red-500 text-center p-4">Ошибка загрузки данных для отображения.</p>';
         return;
     }
 
-    mainContentContainer.innerHTML = '';
     mainContentContainer.className = "bg-white dark:bg-slate-800 p-4 md:p-6 rounded-lg shadow-lg flex flex-col h-full";
-    console.log(`[SedoRender Refactored v5] Начало рендеринга. Режим редактирования: ${isEditing}. Поисковый запрос: "${searchQuery}"`);
+    console.log(`[SedoRender v6 Fixed] Начало полного рендеринга. Режим редактирования: ${isEditing}.`);
 
     const fragment = document.createDocumentFragment();
 
     const headerContainer = document.createElement('div');
     headerContainer.className = 'flex flex-wrap gap-y-2 justify-between items-center mb-4 flex-shrink-0';
-
     const titleHeader = document.createElement('h2');
     titleHeader.className = 'text-2xl font-bold text-gray-800 dark:text-gray-200';
     titleHeader.textContent = 'Типы сообщений СЭДО';
-
     const buttonsContainer = document.createElement('div');
     buttonsContainer.className = 'flex items-center gap-2';
 
@@ -3186,7 +3181,6 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
         editBtn.addEventListener('click', () => toggleSedoEditMode(true));
         buttonsContainer.appendChild(editBtn);
     }
-
     headerContainer.appendChild(titleHeader);
     headerContainer.appendChild(buttonsContainer);
     fragment.appendChild(headerContainer);
@@ -3195,7 +3189,6 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
         const searchContainer = document.createElement('div');
         searchContainer.id = 'sedoSearchContainer';
         searchContainer.className = 'relative mb-4 flex-shrink-0';
-
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
         searchInput.id = 'sedoSearchInput';
@@ -3211,6 +3204,7 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
         clearSearchBtn.classList.toggle('hidden', !searchQuery);
 
         searchInput.addEventListener('input', debounce(handleSedoSearch, 300));
+
         clearSearchBtn.addEventListener('click', () => {
             searchInput.value = '';
             handleSedoSearch();
@@ -3225,206 +3219,9 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
     infoContainer.id = 'sedoTypesInfoContainer';
     infoContainer.className = "flex-grow min-h-0 overflow-y-auto custom-scrollbar -mr-4 pr-4";
 
-    const highlight = (text) => {
-        if (!searchQuery || !text) return escapeHtml(String(text));
-        return highlightTextInString(String(text), searchQuery);
-    };
-
-    const linksSectionContainer = document.createElement('div');
-    linksSectionContainer.className = 'mb-6';
-    const linksTitleHeader = document.createElement('div');
-    linksTitleHeader.className = 'flex items-center justify-between mb-content-sm';
-    const linksTitleStatic = document.createElement('h3');
-    linksTitleStatic.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
-    linksTitleStatic.textContent = 'Полезные ссылки и информация по СЭДО';
-    linksTitleHeader.appendChild(linksTitleStatic);
-    linksSectionContainer.appendChild(linksTitleHeader);
-    const articles = (data && Array.isArray(data.articleLinks)) ? data.articleLinks : [];
-    if (!isEditing) {
-        const linksDisplayArea = document.createElement('div');
-        linksDisplayArea.className = 'bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow mb-3';
-        if (articles.length > 0) {
-            const ul = document.createElement('ul');
-            ul.className = 'space-y-2';
-            articles.forEach((item) => {
-                if (!item || (item.url === undefined && item.text === undefined)) return;
-                const li = document.createElement('li');
-                li.className = 'text-gray-700 dark:text-gray-300 break-words';
-                if (item.url) {
-                    li.classList.add('list-disc', 'list-inside', 'ml-5');
-                    const a = document.createElement('a');
-                    a.href = item.url;
-                    a.innerHTML = highlight(item.url);
-                    a.className = 'text-primary hover:underline break-all';
-                    a.target = '_blank';
-                    a.rel = 'noopener noreferrer';
-                    li.appendChild(a);
-                    if (item.text) {
-                        const descSpan = document.createElement('span');
-                        descSpan.className = 'ml-2 text-sm text-gray-500 dark:text-gray-400 italic';
-                        descSpan.innerHTML = `— ${highlight(item.text)}`;
-                        li.appendChild(descSpan);
-                    }
-                } else if (item.text) {
-                    const textSpan = document.createElement('span');
-                    textSpan.innerHTML = linkify(highlight(item.text));
-                    li.appendChild(textSpan);
-                }
-                ul.appendChild(li);
-            });
-            linksDisplayArea.appendChild(ul);
-        } else {
-            linksDisplayArea.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ссылок или дополнительной информации не добавлено.</p>';
-        }
-        linksSectionContainer.appendChild(linksDisplayArea);
-    } else {
-        const linksEditInput = document.createElement('textarea');
-        linksEditInput.id = 'sedoArticleLinksEditInput';
-        linksEditInput.className = 'w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm resize-y min-h-[100px] mb-3';
-        linksEditInput.placeholder = 'Каждая ссылка или текстовая заметка с новой строки.\nФормат для ссылки с пояснением: URL|Пояснение';
-        linksEditInput.value = articles.map(item => {
-            if (item.url && item.text) return `${item.url}|${item.text}`;
-            if (item.url) return item.url;
-            if (item.text) return item.text;
-            return '';
-        }).filter(line => line).join('\n');
-        linksSectionContainer.appendChild(linksEditInput);
-    }
-    infoContainer.appendChild(linksSectionContainer);
-
-    if (data.tables && Array.isArray(data.tables)) {
-        if (data.tables.length === 0 && searchQuery) {
-            const noResultsEl = document.createElement('p');
-            noResultsEl.className = 'text-center text-gray-500 dark:text-gray-400 py-4';
-            noResultsEl.textContent = `По запросу "${searchQuery}" в таблицах ничего не найдено.`;
-            infoContainer.appendChild(noResultsEl);
-        }
-        data.tables.forEach((tableData, tableIndex) => {
-            const tableContainerDiv = document.createElement('div');
-            tableContainerDiv.className = 'sedo-table-container mb-6';
-            tableContainerDiv.dataset.tableIndex = tableIndex;
-            const titleHeaderDiv = document.createElement('div');
-            titleHeaderDiv.className = 'flex items-center justify-between mb-content-sm';
-            if (isEditing) {
-                const tableTitleInput = document.createElement('input');
-                tableTitleInput.type = 'text';
-                tableTitleInput.value = tableData.title || `Таблица ${tableIndex + 1}`;
-                tableTitleInput.className = 'sedo-table-title-edit text-lg font-semibold text-gray-900 dark:text-gray-100 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded px-2 py-1 w-full mr-2 focus:outline-none focus:ring-2 focus:ring-primary';
-                tableTitleInput.dataset.tableIndex = tableIndex;
-                titleHeaderDiv.appendChild(tableTitleInput);
-            } else {
-                const tableTitle = document.createElement('h3');
-                tableTitle.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
-                tableTitle.innerHTML = highlight(tableData.title || `Таблица ${tableIndex + 1}`);
-                titleHeaderDiv.appendChild(tableTitle);
-            }
-            const fullscreenBtn = document.createElement('button');
-            fullscreenBtn.type = 'button';
-            fullscreenBtn.className = 'sedo-table-fullscreen-btn p-1.5 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary-dark rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0';
-            fullscreenBtn.title = 'Развернуть на весь экран';
-            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
-            fullscreenBtn.dataset.tableIndex = tableIndex;
-            fullscreenBtn.addEventListener('click', () => {
-                if (typeof handleSedoTableFullscreen === 'function') handleSedoTableFullscreen(tableIndex);
-                else console.error("handleSedoTableFullscreen не определена.");
-            });
-            titleHeaderDiv.appendChild(fullscreenBtn);
-            tableContainerDiv.appendChild(titleHeaderDiv);
-            const tableWrapper = document.createElement('div');
-            tableWrapper.className = 'custom-scrollbar overflow-x-auto bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow';
-            if (tableData.isStaticList) {
-                const listElement = document.createElement('ul');
-                listElement.className = 'list-disc list-inside pl-5 space-y-1 text-sm';
-                listElement.dataset.tableIndex = tableIndex;
-                if (Array.isArray(tableData.items)) {
-                    tableData.items.forEach((itemText, itemIndex) => {
-                        const listItem = document.createElement('li');
-                        listItem.innerHTML = highlight(String(itemText));
-                        if (isEditing) {
-                            listItem.contentEditable = 'true';
-                            listItem.className = 'editing-cell p-1 my-0.5 bg-yellow-50 dark:bg-yellow-900/30 outline-yellow-300 focus:outline rounded min-h-[1.5em]';
-                            listItem.dataset.itemIndex = itemIndex;
-                        }
-                        listElement.appendChild(listItem);
-                    });
-                } else {
-                    listElement.innerHTML = '<li>Данные списка отсутствуют или некорректны.</li>';
-                }
-                tableWrapper.appendChild(listElement);
-            } else {
-                const table = document.createElement('table');
-                table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-600 sedo-table';
-                table.dataset.tableIndex = tableIndex;
-                const thead = document.createElement('thead');
-                thead.className = 'bg-gray-50 dark:bg-gray-800';
-                const headerRow = document.createElement('tr');
-                if (Array.isArray(tableData.columns)) {
-                    tableData.columns.forEach((colName, colIndex) => {
-                        const th = document.createElement('th');
-                        th.scope = 'col';
-                        th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider';
-                        if (isEditing) {
-                            const colNameInput = document.createElement('input');
-                            colNameInput.type = 'text';
-                            colNameInput.value = String(colName);
-                            colNameInput.className = 'sedo-column-header-edit bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded px-1 py-0.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-primary placeholder-gray-400 dark:placeholder-gray-500';
-                            colNameInput.placeholder = "Заголовок";
-                            colNameInput.dataset.colIndex = colIndex;
-                            th.appendChild(colNameInput);
-                        } else {
-                            th.innerHTML = highlight(String(colName));
-                        }
-                        headerRow.appendChild(th);
-                    });
-                }
-                thead.appendChild(headerRow);
-                table.appendChild(thead);
-                const tbody = document.createElement('tbody');
-                tbody.className = 'bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600';
-                if (Array.isArray(tableData.items)) {
-                    tableData.items.forEach((item, rowIndex) => {
-                        if (typeof item !== 'object' || item === null) return;
-                        const row = document.createElement('tr');
-                        row.dataset.rowIndex = rowIndex;
-                        const itemKeys = Object.keys(item);
-                        (tableData.columns || []).forEach((_colNameFromConfig, colIndex) => {
-                            const td = document.createElement('td');
-                            td.className = 'px-4 py-4 text-sm text-gray-700 dark:text-gray-200 align-top';
-                            let cellValue = '';
-                            let currentItemKeyUsed = null;
-                            if (tableData.codeField && colIndex === 0 && item.hasOwnProperty(tableData.codeField)) {
-                                currentItemKeyUsed = tableData.codeField;
-                            } else if (itemKeys[colIndex] !== undefined && item.hasOwnProperty(itemKeys[colIndex])) {
-                                currentItemKeyUsed = itemKeys[colIndex];
-                            }
-                            if (currentItemKeyUsed) {
-                                cellValue = item[currentItemKeyUsed] === null || item[currentItemKeyUsed] === undefined ? '' : item[currentItemKeyUsed];
-                                td.dataset.colKey = currentItemKeyUsed;
-                            } else {
-                                td.dataset.colKey = `col_${colIndex}_fallback`;
-                            }
-                            td.innerHTML = highlight(String(cellValue));
-                            if (isEditing && currentItemKeyUsed) {
-                                td.contentEditable = 'true';
-                                td.classList.add('editing-cell', 'bg-yellow-50', 'dark:bg-yellow-900/30', 'outline-yellow-300', 'focus:outline', 'min-w-[50px]');
-                            } else {
-                                td.contentEditable = 'false';
-                            }
-                            row.appendChild(td);
-                        });
-                        tbody.appendChild(row);
-                    });
-                }
-                table.appendChild(tbody);
-                tableWrapper.appendChild(table);
-            }
-            tableContainerDiv.appendChild(tableWrapper);
-            infoContainer.appendChild(tableContainerDiv);
-        });
-    }
+    _renderSedoContentInner(infoContainer, data, searchQuery);
 
     fragment.appendChild(infoContainer);
-
     mainContentContainer.appendChild(fragment);
 }
 
@@ -3946,11 +3743,193 @@ function filterSedoData(query) {
 
 function handleSedoSearch() {
     const searchInput = document.getElementById('sedoSearchInput');
-    if (!searchInput) return;
+    if (!searchInput) {
+        console.error("handleSedoSearch: Поле ввода #sedoSearchInput не найдено.");
+        return;
+    }
 
     const query = searchInput.value;
+
+    const clearSearchBtn = document.getElementById('clearSedoSearchBtn');
+    if (clearSearchBtn) {
+        clearSearchBtn.classList.toggle('hidden', !query);
+    }
+
+    const infoContainer = document.getElementById('sedoTypesInfoContainer');
+    if (!infoContainer) {
+        console.error("handleSedoSearch: Контейнер результатов #sedoTypesInfoContainer не найден.");
+        return;
+    }
+
     const filteredData = filterSedoData(query);
-    renderSedoTypesContent(filteredData, false, query);
+
+    _renderSedoContentInner(infoContainer, filteredData, query);
+}
+
+
+function _renderSedoContentInner(container, data, searchQuery) {
+    if (!container || !data) {
+        console.error("_renderSedoContentInner: Не передан контейнер или данные.");
+        return;
+    }
+
+    container.innerHTML = '';
+
+    const highlight = (text) => {
+        if (!searchQuery || !text) return escapeHtml(String(text));
+        return highlightTextInString(String(text), searchQuery);
+    };
+
+    const linksSectionContainer = document.createElement('div');
+    linksSectionContainer.className = 'mb-6';
+    const linksTitleHeader = document.createElement('div');
+    linksTitleHeader.className = 'flex items-center justify-between mb-content-sm';
+    const linksTitleStatic = document.createElement('h3');
+    linksTitleStatic.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
+    linksTitleStatic.textContent = 'Полезные ссылки и информация по СЭДО';
+    linksTitleHeader.appendChild(linksTitleStatic);
+    linksSectionContainer.appendChild(linksTitleHeader);
+    const articles = (data && Array.isArray(data.articleLinks)) ? data.articleLinks : [];
+
+    const linksDisplayArea = document.createElement('div');
+    linksDisplayArea.className = 'bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow mb-3';
+    if (articles.length > 0) {
+        const ul = document.createElement('ul');
+        ul.className = 'space-y-2';
+        articles.forEach((item) => {
+            if (!item || (item.url === undefined && item.text === undefined)) return;
+            const li = document.createElement('li');
+            li.className = 'text-gray-700 dark:text-gray-300 break-words';
+            if (item.url) {
+                li.classList.add('list-disc', 'list-inside', 'ml-5');
+                const a = document.createElement('a');
+                a.href = item.url;
+                a.innerHTML = highlight(item.url);
+                a.className = 'text-primary hover:underline break-all';
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                li.appendChild(a);
+                if (item.text) {
+                    const descSpan = document.createElement('span');
+                    descSpan.className = 'ml-2 text-sm text-gray-500 dark:text-gray-400 italic';
+                    descSpan.innerHTML = `— ${highlight(item.text)}`;
+                    li.appendChild(descSpan);
+                }
+            } else if (item.text) {
+                const textSpan = document.createElement('span');
+                textSpan.innerHTML = linkify(highlight(item.text));
+                li.appendChild(textSpan);
+            }
+            ul.appendChild(li);
+        });
+        linksDisplayArea.appendChild(ul);
+    } else {
+        linksDisplayArea.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ссылок или дополнительной информации не добавлено.</p>';
+    }
+    linksSectionContainer.appendChild(linksDisplayArea);
+    container.appendChild(linksSectionContainer);
+
+    if (data.tables && Array.isArray(data.tables)) {
+        if (data.tables.length === 0 && searchQuery) {
+            const noResultsEl = document.createElement('p');
+            noResultsEl.className = 'text-center text-gray-500 dark:text-gray-400 py-4';
+            noResultsEl.textContent = `По запросу "${searchQuery}" в таблицах ничего не найдено.`;
+            container.appendChild(noResultsEl);
+        }
+        data.tables.forEach((tableData, tableIndex) => {
+            const tableContainerDiv = document.createElement('div');
+            tableContainerDiv.className = 'sedo-table-container mb-6';
+            tableContainerDiv.dataset.tableIndex = tableIndex;
+            const titleHeaderDiv = document.createElement('div');
+            titleHeaderDiv.className = 'flex items-center justify-between mb-content-sm';
+
+            const tableTitle = document.createElement('h3');
+            tableTitle.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
+            tableTitle.innerHTML = highlight(tableData.title || `Таблица ${tableIndex + 1}`);
+            titleHeaderDiv.appendChild(tableTitle);
+
+            const fullscreenBtn = document.createElement('button');
+            fullscreenBtn.type = 'button';
+            fullscreenBtn.className = 'sedo-table-fullscreen-btn p-1.5 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary-dark rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0';
+            fullscreenBtn.title = 'Развернуть на весь экран';
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            fullscreenBtn.dataset.tableIndex = tableIndex;
+            fullscreenBtn.addEventListener('click', () => {
+                if (typeof handleSedoTableFullscreen === 'function') handleSedoTableFullscreen(tableIndex);
+                else console.error("handleSedoTableFullscreen не определена.");
+            });
+            titleHeaderDiv.appendChild(fullscreenBtn);
+            tableContainerDiv.appendChild(titleHeaderDiv);
+            const tableWrapper = document.createElement('div');
+            tableWrapper.className = 'custom-scrollbar overflow-x-auto bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow';
+
+            if (tableData.isStaticList) {
+                const listElement = document.createElement('ul');
+                listElement.className = 'list-disc list-inside pl-5 space-y-1 text-sm';
+                listElement.dataset.tableIndex = tableIndex;
+                if (Array.isArray(tableData.items)) {
+                    tableData.items.forEach((itemText, itemIndex) => {
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = highlight(String(itemText));
+                        listElement.appendChild(listItem);
+                    });
+                }
+                tableWrapper.appendChild(listElement);
+            } else {
+                const table = document.createElement('table');
+                table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-600 sedo-table';
+                table.dataset.tableIndex = tableIndex;
+                const thead = document.createElement('thead');
+                thead.className = 'bg-gray-50 dark:bg-gray-800';
+                const headerRow = document.createElement('tr');
+                if (Array.isArray(tableData.columns)) {
+                    tableData.columns.forEach((colName, colIndex) => {
+                        const th = document.createElement('th');
+                        th.scope = 'col';
+                        th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider';
+                        th.innerHTML = highlight(String(colName));
+                        headerRow.appendChild(th);
+                    });
+                }
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                tbody.className = 'bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600';
+                if (Array.isArray(tableData.items)) {
+                    tableData.items.forEach((item, rowIndex) => {
+                        if (typeof item !== 'object' || item === null) return;
+                        const row = document.createElement('tr');
+                        row.dataset.rowIndex = rowIndex;
+                        const itemKeys = Object.keys(item);
+                        (tableData.columns || []).forEach((_colNameFromConfig, colIndex) => {
+                            const td = document.createElement('td');
+                            td.className = 'px-4 py-4 text-sm text-gray-700 dark:text-gray-200 align-top';
+                            let cellValue = '';
+                            let currentItemKeyUsed = null;
+                            if (tableData.codeField && colIndex === 0 && item.hasOwnProperty(tableData.codeField)) {
+                                currentItemKeyUsed = tableData.codeField;
+                            } else if (itemKeys[colIndex] !== undefined && item.hasOwnProperty(itemKeys[colIndex])) {
+                                currentItemKeyUsed = itemKeys[colIndex];
+                            }
+                            if (currentItemKeyUsed) {
+                                cellValue = item[currentItemKeyUsed] === null || item[currentItemKeyUsed] === undefined ? '' : item[currentItemKeyUsed];
+                                td.dataset.colKey = currentItemKeyUsed;
+                            } else {
+                                td.dataset.colKey = `col_${colIndex}_fallback`;
+                            }
+                            td.innerHTML = highlight(String(cellValue));
+                            row.appendChild(td);
+                        });
+                        tbody.appendChild(row);
+                    });
+                }
+                table.appendChild(tbody);
+                tableWrapper.appendChild(table);
+            }
+            tableContainerDiv.appendChild(tableWrapper);
+            container.appendChild(tableContainerDiv);
+        });
+    }
 }
 
 
@@ -7144,273 +7123,63 @@ async function showAlgorithmDetail(algorithm, section) {
 }
 
 
-async function editAlgorithm(algorithmId, section = 'main') {
-    let algorithm = null;
-    initialEditState = null;
 
-    const isMainAlgorithm = section === 'main';
-    console.log(`[editAlgorithm v8 Исправленная] Попытка редактирования: ID=${algorithmId}, Секция=${section}, isMainAlgorithm=${isMainAlgorithm}`);
 
-    try {
-        console.log(`[editAlgorithm v8] Поиск/загрузка данных для ID ${algorithmId} в секции ${section}...`);
-        if (isMainAlgorithm) {
-            if (algorithms?.main?.id === 'main') {
-                algorithm = algorithms.main;
-            } else {
-                const savedAlgoContainer = await getFromIndexedDB('algorithms', 'all');
-                if (savedAlgoContainer?.data?.main?.id === 'main') {
-                    algorithm = savedAlgoContainer.data.main;
-                    if (typeof algorithms !== 'undefined') {
-                        algorithms.main = JSON.parse(JSON.stringify(algorithm));
-                    }
-                }
-            }
-        } else {
-            let foundInMemory = false;
-            if (algorithms?.[section] && Array.isArray(algorithms[section])) {
-                algorithm = algorithms[section].find(a => String(a?.id) === String(algorithmId));
-                if (algorithm) foundInMemory = true;
-            }
-            if (!foundInMemory) {
-                const savedAlgoContainer = await getFromIndexedDB('algorithms', 'all');
-                const savedAlgoData = savedAlgoContainer?.data;
-                if (savedAlgoData?.[section] && Array.isArray(savedAlgoData[section])) {
-                    algorithm = savedAlgoData[section].find(a => String(a?.id) === String(algorithmId));
-                    if (algorithm) {
 
-                        if (algorithms && algorithms[section]) {
-                            const indexInMemory = algorithms[section].findIndex(a => String(a?.id) === String(algorithmId));
-                            if (indexInMemory > -1) algorithms[section][indexInMemory] = JSON.parse(JSON.stringify(algorithm));
-                            else algorithms[section].push(JSON.parse(JSON.stringify(algorithm)));
-                        } else {
-                            if (!algorithms) algorithms = {};
-                            algorithms[section] = [JSON.parse(JSON.stringify(algorithm))];
-                        }
-                    }
-                }
-            }
-        }
-        if (!algorithm || typeof algorithm !== 'object') {
-            throw new Error(`Алгоритм с ID ${algorithmId} не найден в секции ${section} после всех проверок.`);
-        }
+function initStepInteractions(stepElement) {
+    const header = stepElement.querySelector('.step-header');
+    const titleInput = stepElement.querySelector('.step-title');
+    const titlePreview = stepElement.querySelector('.step-title-preview');
 
-        if (algorithm.steps && Array.isArray(algorithm.steps)) {
-            algorithm.steps = algorithm.steps.map(step => ({
-                additionalInfoText: '',
-                additionalInfoShowTop: false,
-                additionalInfoShowBottom: false,
-                isCopyable: false,
-                showNoInnHelp: false,
-                ...step
-            }));
-        } else {
-            algorithm.steps = [];
-        }
-    } catch (error) {
-        console.error(`[editAlgorithm v8 Исправленная] Ошибка при получении данных алгоритма:`, error);
-        showNotification(`Ошибка при поиске данных алгоритма: ${error.message || error}`, "error");
-        initialEditState = null;
+    if (!header || !titleInput || !titlePreview) {
+        console.warn("initStepInteractions: Не найдены все необходимые элементы в шаге для инициализации.", stepElement);
         return;
     }
 
-    if (!algorithm || typeof algorithm !== 'object') {
-        console.error(`[editAlgorithm v8 FATAL] 'algorithm' все еще не объект после блока try/catch! ID=${algorithmId}, Section=${section}`);
-        showNotification("Критическая ошибка: не удалось получить данные алгоритма.", "error");
-        initialEditState = null;
-        return;
-    }
+    const updateTitlePreview = () => {
+        titlePreview.value = titleInput.value || `Шаг ${stepElement.querySelector('.step-number-label').textContent.replace('Шаг ', '')}`;
+    };
 
+    titleInput.addEventListener('input', updateTitlePreview);
+    updateTitlePreview();
 
-    const editModal = document.getElementById('editModal');
-    const editModalTitle = document.getElementById('editModalTitle');
-    const algorithmTitleInput = document.getElementById('algorithmTitle');
-    const descriptionContainer = document.getElementById('algorithmDescriptionContainer');
-    const algorithmDescriptionInput = document.getElementById('algorithmDescription');
-    const editStepsContainerElement = document.getElementById('editSteps');
-    const addStepBtn = document.getElementById('addStepBtn');
-    const saveAlgorithmBtn = document.getElementById('saveAlgorithmBtn');
-
-    if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainerElement || !addStepBtn || !saveAlgorithmBtn || !descriptionContainer) {
-        console.error("[editAlgorithm v8 Исправленная] КРИТИЧЕСКАЯ ОШИБКА: Не найдены ОБЯЗАТЕЛЬНЫЕ элементы модального окна редактирования.");
-        showNotification("Критическая ошибка интерфейса: не найдены элементы окна редактирования.", "error");
-        if (editModal && !editModal.classList.contains('hidden')) { editModal.classList.add('hidden'); }
-        initialEditState = null;
-        return;
-    }
-    if (!isMainAlgorithm && !algorithmDescriptionInput) {
-        console.error("[editAlgorithm v8 Исправленная] КРИТИЧЕСКАЯ ОШИБКА: Не найдено поле описания (#algorithmDescription) для не-главного алгоритма.");
-        showNotification("Критическая ошибка интерфейса: не найдено поле описания.", "error");
-        if (editModal && !editModal.classList.contains('hidden')) editModal.classList.add('hidden');
-        initialEditState = null;
-        return;
-    }
-
-    const stepsOuterContainer = document.getElementById('editStepsContainer');
-    if (stepsOuterContainer) {
-        stepsOuterContainer.classList.add('min-h-0');
-    }
-
-    try {
-        descriptionContainer.style.display = isMainAlgorithm ? 'none' : 'block';
-        editModalTitle.textContent = `Редактирование: ${algorithm.title ?? 'Без названия'}`;
-        algorithmTitleInput.value = algorithm.title ?? '';
-        if (!isMainAlgorithm && algorithmDescriptionInput) {
-            algorithmDescriptionInput.value = algorithm.description ?? '';
+    header.addEventListener('click', (event) => {
+        if (event.target.closest('.step-drag-handle, .delete-step')) {
+            return;
         }
-
-        editStepsContainerElement.innerHTML = '';
-        if (!Array.isArray(algorithm.steps)) {
-            console.error(`[editAlgorithm v8 Исправленная] Алгоритм (ID: ${algorithm.id || algorithmId}) имеет невалидные 'steps'.`);
-            editStepsContainerElement.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки шагов: данные некорректны.</p>';
-        } else if (algorithm.steps.length === 0) {
-            const message = isMainAlgorithm
-                ? "В главном алгоритме пока нет шагов. Добавьте первый шаг."
-                : "У этого алгоритма еще нет шагов. Добавьте первый шаг.";
-            editStepsContainerElement.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center p-4">${message}</p>`;
-        } else {
-            const fragment = document.createDocumentFragment();
-            for (const [index, step] of algorithm.steps.entries()) {
-                if (!step || typeof step !== 'object') {
-                    console.warn(`Пропуск невалидного шага на индексе ${index} при заполнении формы.`);
-                    continue;
-                }
-                const stepDiv = document.createElement('div');
-                stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 shadow-sm mb-4';
-                stepDiv.dataset.stepIndex = index;
-                if (step.type) { stepDiv.dataset.stepType = step.type; }
-
-                try {
-
-                    stepDiv.innerHTML = createStepElementHTML(index + 1, isMainAlgorithm, !isMainAlgorithm);
-                } catch (htmlError) {
-                    console.error(`[editAlgorithm v8] Ошибка при вызове createStepElementHTML для шага ${index + 1}:`, htmlError);
-                    stepDiv.innerHTML = `<p class="text-red-500">Ошибка рендеринга шага ${index + 1}</p>`;
-                    fragment.appendChild(stepDiv);
-                    continue;
-                }
+        stepElement.classList.toggle('is-collapsed');
+    });
+}
 
 
-                const titleInput = stepDiv.querySelector('.step-title');
-                const descInput = stepDiv.querySelector('.step-desc');
-                const exampleTextarea = stepDiv.querySelector('.step-example');
-                const additionalInfoTextarea = stepDiv.querySelector('.step-additional-info');
-                const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
-                const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
-                const isCopyableCheckbox = stepDiv.querySelector('.step-is-copyable');
-                const noInnHelpCheckbox = stepDiv.querySelector('.step-no-inn-help-checkbox');
+function initCollapseAllButtons(container, stepsContainerSelector) {
+    const titleElement = container.querySelector('.text-xl.font-bold');
+    if (!titleElement) return;
 
-                if (titleInput) { titleInput.value = step.title ?? ''; }
-                if (descInput) { descInput.value = step.description ?? ''; }
-                if (exampleTextarea) { exampleTextarea.value = formatExampleForTextarea(step.example); }
-                if (additionalInfoTextarea) { additionalInfoTextarea.value = step.additionalInfoText || ''; }
-                if (additionalInfoPosTopCheckbox) { additionalInfoPosTopCheckbox.checked = step.additionalInfoShowTop || false; }
-                if (additionalInfoPosBottomCheckbox) { additionalInfoPosBottomCheckbox.checked = step.additionalInfoShowBottom || false; }
-                if (isMainAlgorithm && isCopyableCheckbox) { isCopyableCheckbox.checked = step.isCopyable || false; }
+    let controlsContainer = titleElement.parentElement.querySelector('.collapse-controls');
+    if (!controlsContainer) {
+        controlsContainer = document.createElement('div');
+        controlsContainer.className = 'collapse-controls flex items-center gap-2 ml-4';
+        titleElement.parentElement.insertBefore(controlsContainer, titleElement.nextSibling);
+    }
 
+    controlsContainer.innerHTML = `
+        <button type="button" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-action="collapse-all">Свернуть все</button>
+        <button type="button" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-action="expand-all">Развернуть все</button>
+    `;
 
-                if (isMainAlgorithm && noInnHelpCheckbox) {
-                    const defaultInnStepTitle = "Уточнение ИНН";
-
-
-
-                    const isThisTheDefaultInnStep = (step.title === defaultInnStepTitle &&
-                        DEFAULT_MAIN_ALGORITHM.steps.some(s => s.title === defaultInnStepTitle && s.showNoInnHelp === true));
-
-                    if (isThisTheDefaultInnStep) {
-                        noInnHelpCheckbox.checked = false;
-                    } else {
-                        noInnHelpCheckbox.checked = step.showNoInnHelp || false;
-                    }
-                }
-
-                if (!isMainAlgorithm) {
-                    const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
-                    if (thumbsContainer) {
-                        const existingIds = Array.isArray(step.screenshotIds) ? step.screenshotIds.filter(id => id !== null && id !== undefined) : [];
-                        stepDiv.dataset.existingScreenshotIds = existingIds.join(',');
-
-                        if (existingIds.length > 0) {
-                            if (typeof renderExistingThumbnail === 'function') {
-                                const renderPromises = existingIds.map(screenshotId =>
-                                    renderExistingThumbnail(screenshotId, thumbsContainer, stepDiv)
-                                        .catch(err => console.error(`[editAlgorithm v8 - Step ${index}] Ошибка рендеринга миниатюры ID ${screenshotId}:`, err))
-                                );
-                                await Promise.allSettled(renderPromises);
-                            } else { console.warn(`[editAlgorithm v8 - Step ${index}] renderExistingThumbnail is not a function.`); }
-                        }
-                        stepDiv.dataset.existingRendered = 'true';
-                        stepDiv._tempScreenshotBlobs = [];
-                        stepDiv.dataset.screenshotsToDelete = '';
-                        if (typeof attachScreenshotHandlers === 'function') {
-                            attachScreenshotHandlers(stepDiv);
-                        } else { console.warn(`[editAlgorithm v8 - Step ${index}] attachScreenshotHandlers is not a function.`); }
-                    } else { console.warn(`[editAlgorithm v8 - Step ${index}] #screenshotThumbnailsContainer not found.`); }
-                }
-
-                const deleteStepBtn = stepDiv.querySelector('.delete-step');
-                if (deleteStepBtn) {
-                    if (typeof attachStepDeleteHandler === 'function') {
-                        attachStepDeleteHandler(deleteStepBtn, stepDiv, editStepsContainerElement, section, 'edit', isMainAlgorithm);
-                    } else { console.warn(`[editAlgorithm v8 - Step ${index}] attachStepDeleteHandler is not a function.`); }
-                } else { console.warn(`[editAlgorithm v8 - Step ${index}] .delete-step button not found.`); }
-
-                fragment.appendChild(stepDiv);
-            }
-            editStepsContainerElement.appendChild(fragment);
-
-            if (typeof updateStepNumbers === 'function') {
-                updateStepNumbers(editStepsContainerElement);
-            } else {
-                console.error("[editAlgorithm v8 Исправленная] Функция updateStepNumbers не найдена!");
+    controlsContainer.addEventListener('click', (event) => {
+        const action = event.target.dataset.action;
+        if (action === 'collapse-all' || action === 'expand-all') {
+            const stepsContainer = container.querySelector(stepsContainerSelector);
+            if (stepsContainer) {
+                const steps = stepsContainer.querySelectorAll('.edit-step');
+                steps.forEach(step => {
+                    step.classList.toggle('is-collapsed', action === 'collapse-all');
+                });
             }
         }
-
-        if (typeof captureInitialEditState === 'function') {
-            captureInitialEditState(algorithm);
-        } else {
-            console.warn("[editAlgorithm v8 Исправленная] Функция captureInitialEditState не найдена.");
-            initialEditState = null;
-        }
-
-    } catch (error) {
-        console.error("[editAlgorithm v8 Исправленная] Ошибка при заполнении формы данными:", error);
-        showNotification("Произошла ошибка при подготовке формы редактирования.", "error");
-        if (editStepsContainerElement) editStepsContainerElement.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки данных в форму.</p>';
-        if (saveAlgorithmBtn) saveAlgorithmBtn.disabled = true;
-        initialEditState = null;
-        return;
-    }
-
-    if (algorithm && (typeof algorithm.id === 'string' || typeof algorithm.id === 'number') && algorithm.id !== '' && algorithm.id !== null && algorithm.id !== undefined) {
-        editModal.dataset.algorithmId = String(algorithm.id);
-    } else {
-        console.error(`[editAlgorithm v8 FATAL] Не удалось получить валидный algorithm.id для установки dataset! algorithm:`, algorithm);
-        showNotification("Критическая ошибка: не удалось определить ID редактируемого алгоритма.", "error");
-        if (editModal && !editModal.classList.contains('hidden')) editModal.classList.add('hidden');
-        initialEditState = null;
-        return;
-    }
-    editModal.dataset.section = section;
-
-    const algorithmModalView = document.getElementById('algorithmModal');
-    if (algorithmModalView) { algorithmModalView.classList.add('hidden'); }
-
-    openAnimatedModal(editModal);
-
-    setTimeout(() => {
-        try {
-            const titleInputForFocus = document.getElementById('algorithmTitle');
-            if (titleInputForFocus && titleInputForFocus.offsetParent !== null) {
-                titleInputForFocus.focus();
-            } else {
-                console.warn("[editAlgorithm v8] Не удалось установить фокус: поле заголовка не найдено или не видимо.");
-            }
-        } catch (focusError) {
-            console.warn("[editAlgorithm v8] Ошибка при попытке установить фокус на поле заголовка:", focusError);
-        }
-    }, 50);
-
-    console.log(`[editAlgorithm v8 Исправленная] Успешно открыто окно редактирования для Algorithm ID: ${algorithm.id}, Секция: ${section}. Начальное состояние захвачено.`);
+    });
 }
 
 
@@ -7707,7 +7476,6 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
     const commonInputClasses = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
     const commonTextareaClasses = `${commonInputClasses} resize-y`;
 
-
     const exampleInputHTML = isMainAlgorithm ? `
     <div class="mt-2">
         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (опционально)</label>
@@ -7715,7 +7483,6 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
         <p class="text-xs text-gray-500 mt-1">Для списка используйте дефис (-) или звездочку (*) в начале каждой строки. Первая строка без дефиса/звездочки будет вступлением.</p>
     </div>
 ` : '';
-
 
     const additionalInfoHTML = `
         <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
@@ -7734,7 +7501,6 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
         </div>
     `;
 
-
     const screenshotHTML = includeScreenshotsField ? `
         <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
@@ -7750,7 +7516,6 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
         </div>
     ` : '';
 
-
     const isCopyableCheckboxHTML = isMainAlgorithm ? `
         <div class="mt-2">
             <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
@@ -7759,7 +7524,6 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
             </label>
         </div>
     ` : '';
-
 
     const noInnHelpCheckboxHTML = isMainAlgorithm ? `
         <div class="mt-2">
@@ -7770,14 +7534,21 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
         </div>
     ` : '';
 
-
     return `
-            <div class="flex justify-between items-start mb-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label">Шаг ${stepNumber}</label>
-                <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2 flex-shrink-0" aria-label="Удалить шаг ${stepNumber}">
+        <div class="step-header flex justify-between items-center mb-2 cursor-pointer bg-gray-100 dark:bg-gray-700/50 p-2 -m-2 rounded-t-lg">
+            <div class="flex items-center flex-grow min-w-0">
+                <i class="fas fa-grip-lines step-drag-handle text-gray-400 dark:text-gray-500 mr-3 cursor-grab" title="Перетащить шаг"></i>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 step-number-label mr-2">Шаг ${stepNumber}</label>
+                <span class="step-title-preview text-sm text-gray-800 dark:text-gray-200 truncate font-medium"></span>
+            </div>
+            <div class="flex items-center flex-shrink-0">
+                <button type="button" class="delete-step text-red-500 hover:text-red-700 transition-colors duration-150 p-1 ml-2" aria-label="Удалить шаг ${stepNumber}">
                     <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                 </button>
+                <i class="fas fa-chevron-down step-toggle-icon ml-2 text-gray-500 dark:text-gray-400 transition-transform"></i>
             </div>
+        </div>
+        <div class="step-body pt-2">
             <div class="mb-2">
                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
                 <input type="text" class="step-title ${commonInputClasses}" placeholder="Введите заголовок...">
@@ -7791,7 +7562,236 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
             ${noInnHelpCheckboxHTML}
             ${additionalInfoHTML}
             ${screenshotHTML}
+        </div>
+    `;
+}
+
+
+async function editAlgorithm(algorithmId, section = 'main') {
+    let algorithm = null;
+    initialEditState = null;
+
+    const isMainAlgorithm = section === 'main';
+    console.log(`[editAlgorithm v9 - Collapse Feature] Попытка редактирования: ID=${algorithmId}, Секция=${section}`);
+
+    try {
+        if (isMainAlgorithm) {
+            algorithm = algorithms.main;
+        } else {
+            algorithm = algorithms[section]?.find(a => String(a?.id) === String(algorithmId));
+        }
+        if (!algorithm) throw new Error(`Алгоритм с ID ${algorithmId} не найден в секции ${section}.`);
+        algorithm.steps = algorithm.steps?.map(step => ({ ...step })) || [];
+    } catch (error) {
+        console.error(`[editAlgorithm v9] Ошибка при получении данных алгоритма:`, error);
+        showNotification(`Ошибка при поиске данных алгоритма: ${error.message}`, "error");
+        return;
+    }
+
+    const editModal = document.getElementById('editModal');
+    const editModalTitle = document.getElementById('editModalTitle');
+    const algorithmTitleInput = document.getElementById('algorithmTitle');
+    const descriptionContainer = document.getElementById('algorithmDescriptionContainer');
+    const algorithmDescriptionInput = document.getElementById('algorithmDescription');
+    const editStepsContainerElement = document.getElementById('editSteps');
+    const saveAlgorithmBtn = document.getElementById('saveAlgorithmBtn');
+
+    if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainerElement || !saveAlgorithmBtn || !descriptionContainer) {
+        console.error("[editAlgorithm v9] КРИТИЧЕСКАЯ ОШИБКА: Не найдены ОБЯЗАТЕЛЬНЫЕ элементы модального окна.");
+        return;
+    }
+
+    const actionsContainer = editModal.querySelector('.flex.justify-end.items-center');
+    if (actionsContainer && !actionsContainer.querySelector('.collapse-all-btn')) {
+        const collapseControls = document.createElement('div');
+        collapseControls.className = 'mr-auto';
+        collapseControls.innerHTML = `
+            <button type="button" class="collapse-all-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300">Свернуть все</button>
+            <button type="button" class="expand-all-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 ml-1">Развернуть все</button>
         `;
+        actionsContainer.insertBefore(collapseControls, actionsContainer.firstChild);
+
+        actionsContainer.querySelector('.collapse-all-btn').addEventListener('click', () => {
+            editStepsContainerElement.querySelectorAll('.edit-step').forEach(step => toggleStepCollapse(step, true));
+        });
+        actionsContainer.querySelector('.expand-all-btn').addEventListener('click', () => {
+            editStepsContainerElement.querySelectorAll('.edit-step').forEach(step => toggleStepCollapse(step, false));
+        });
+    }
+
+    try {
+        descriptionContainer.style.display = isMainAlgorithm ? 'none' : 'block';
+        editModalTitle.textContent = `Редактирование: ${algorithm.title ?? 'Без названия'}`;
+        algorithmTitleInput.value = algorithm.title ?? '';
+        if (!isMainAlgorithm && algorithmDescriptionInput) {
+            algorithmDescriptionInput.value = algorithm.description ?? '';
+        }
+        editStepsContainerElement.innerHTML = '';
+
+        if (!Array.isArray(algorithm.steps) || algorithm.steps.length === 0) {
+            const message = isMainAlgorithm
+                ? "В главном алгоритме пока нет шагов. Добавьте первый шаг."
+                : "У этого алгоритма еще нет шагов. Добавьте первый шаг.";
+            editStepsContainerElement.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center p-4">${message}</p>`;
+        } else {
+            const fragment = document.createDocumentFragment();
+            for (const [index, step] of algorithm.steps.entries()) {
+                if (!step || typeof step !== 'object') {
+                    console.warn(`Пропуск невалидного шага на индексе ${index} при заполнении формы.`);
+                    continue;
+                }
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 shadow-sm mb-4';
+                stepDiv.dataset.stepIndex = index;
+                if (step.type) { stepDiv.dataset.stepType = step.type; }
+
+                stepDiv.innerHTML = createStepElementHTML(index + 1, isMainAlgorithm, !isMainAlgorithm);
+
+                const titleInput = stepDiv.querySelector('.step-title');
+                const titlePreview = stepDiv.querySelector('.step-title-preview');
+                const descInput = stepDiv.querySelector('.step-desc');
+                const exampleTextarea = stepDiv.querySelector('.step-example');
+                const additionalInfoTextarea = stepDiv.querySelector('.step-additional-info');
+                const additionalInfoPosTopCheckbox = stepDiv.querySelector('.step-additional-info-pos-top');
+                const additionalInfoPosBottomCheckbox = stepDiv.querySelector('.step-additional-info-pos-bottom');
+                const isCopyableCheckbox = stepDiv.querySelector('.step-is-copyable');
+                const noInnHelpCheckbox = stepDiv.querySelector('.step-no-inn-help-checkbox');
+
+                if (titleInput) {
+                    titleInput.value = step.title ?? '';
+                    if (titlePreview) titlePreview.textContent = step.title || 'Без заголовка';
+                    titleInput.addEventListener('input', () => {
+                        if (titlePreview) titlePreview.textContent = titleInput.value || 'Без заголовка';
+                    });
+                }
+                if (descInput) { descInput.value = step.description ?? ''; }
+                if (exampleTextarea) { exampleTextarea.value = formatExampleForTextarea(step.example); }
+                if (additionalInfoTextarea) { additionalInfoTextarea.value = step.additionalInfoText || ''; }
+                if (additionalInfoPosTopCheckbox) { additionalInfoPosTopCheckbox.checked = step.additionalInfoShowTop || false; }
+                if (additionalInfoPosBottomCheckbox) { additionalInfoPosBottomCheckbox.checked = step.additionalInfoShowBottom || false; }
+                if (isMainAlgorithm && isCopyableCheckbox) { isCopyableCheckbox.checked = step.isCopyable || false; }
+
+                if (isMainAlgorithm && noInnHelpCheckbox) {
+                    const defaultInnStepTitle = "Уточнение ИНН";
+                    const isThisTheDefaultInnStep = (step.title === defaultInnStepTitle &&
+                        DEFAULT_MAIN_ALGORITHM.steps.some(s => s.title === defaultInnStepTitle && s.showNoInnHelp === true));
+                    if (isThisTheDefaultInnStep) {
+                        noInnHelpCheckbox.checked = false;
+                    } else {
+                        noInnHelpCheckbox.checked = step.showNoInnHelp || false;
+                    }
+                }
+
+                if (!isMainAlgorithm) {
+                    const thumbsContainer = stepDiv.querySelector('#screenshotThumbnailsContainer');
+                    if (thumbsContainer) {
+                        const existingIds = Array.isArray(step.screenshotIds) ? step.screenshotIds.filter(id => id !== null && id !== undefined) : [];
+                        stepDiv.dataset.existingScreenshotIds = existingIds.join(',');
+
+                        if (existingIds.length > 0 && typeof renderExistingThumbnail === 'function') {
+                            const renderPromises = existingIds.map(screenshotId =>
+                                renderExistingThumbnail(screenshotId, thumbsContainer, stepDiv)
+                                    .catch(err => console.error(`[editAlgorithm v9] Ошибка рендеринга миниатюры ID ${screenshotId}:`, err))
+                            );
+                            await Promise.allSettled(renderPromises);
+                        }
+                        stepDiv._tempScreenshotBlobs = [];
+                        stepDiv.dataset.screenshotsToDelete = '';
+                        if (typeof attachScreenshotHandlers === 'function') {
+                            attachScreenshotHandlers(stepDiv);
+                        }
+                    }
+                }
+
+                const deleteStepBtn = stepDiv.querySelector('.delete-step');
+                if (deleteStepBtn && typeof attachStepDeleteHandler === 'function') {
+                    attachStepDeleteHandler(deleteStepBtn, stepDiv, editStepsContainerElement, section, 'edit', isMainAlgorithm);
+                }
+
+                if (index > 0) {
+                    toggleStepCollapse(stepDiv, true);
+                }
+
+                fragment.appendChild(stepDiv);
+            }
+            editStepsContainerElement.appendChild(fragment);
+            updateStepNumbers(editStepsContainerElement);
+        }
+
+        editStepsContainerElement.querySelectorAll('.step-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('.delete-step, .step-drag-handle')) return;
+                toggleStepCollapse(header.closest('.edit-step'));
+            });
+        });
+
+        initStepSorting(editStepsContainerElement);
+        captureInitialEditState(algorithm);
+
+    } catch (error) {
+        console.error("[editAlgorithm v9] Ошибка при заполнении формы:", error);
+        showNotification("Произошла ошибка при подготовке формы редактирования.", "error");
+        if (editStepsContainerElement) editStepsContainerElement.innerHTML = '<p class="text-red-500 p-4 text-center">Ошибка загрузки данных в форму.</p>';
+        if (saveAlgorithmBtn) saveAlgorithmBtn.disabled = true;
+        initialEditState = null;
+        return;
+    }
+
+    editModal.dataset.algorithmId = String(algorithm.id);
+    editModal.dataset.section = section;
+    const algorithmModalView = document.getElementById('algorithmModal');
+    if (algorithmModalView) { algorithmModalView.classList.add('hidden'); }
+    openAnimatedModal(editModal);
+    setTimeout(() => algorithmTitleInput.focus(), 50);
+}
+
+
+function initStepSorting(containerElement) {
+    if (!containerElement) {
+        console.error("initStepSorting: Контейнер для сортировки не предоставлен.");
+        return;
+    }
+    if (typeof Sortable === 'undefined') {
+        console.error("SortableJS не найден. Функционал перетаскивания не будет работать.");
+        showNotification("Ошибка: Библиотека для сортировки не загружена.", "error");
+        return;
+    }
+
+    if (containerElement.sortableInstance) {
+        try {
+            containerElement.sortableInstance.destroy();
+        } catch (e) {
+            console.warn("Ошибка при уничтожении предыдущего экземпляра SortableJS:", e);
+        }
+    }
+
+    containerElement.sortableInstance = new Sortable(containerElement, {
+        animation: 150,
+        handle: '.step-drag-handle',
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+
+        onEnd: function (evt) {
+            if (typeof updateStepNumbers === 'function') {
+                updateStepNumbers(containerElement);
+            } else {
+                console.error("Функция updateStepNumbers не найдена!");
+            }
+            const modal = containerElement.closest('#editModal, #addModal');
+            if (modal) {
+                if (modal.id === 'editModal') {
+                    isUISettingsDirty = true;
+                } else if (modal.id === 'addModal') {
+                    if (typeof hasChanges === 'function' && hasChanges('add')) {
+                        console.log("Изменения в окне добавления после перетаскивания.");
+                    }
+                }
+            }
+        },
+    });
+
+    console.log(`SortableJS инициализирован для контейнера #${containerElement.id}`);
 }
 
 
@@ -8320,29 +8320,21 @@ function getSectionName(section) {
 }
 
 
-function addNewStep() {
+function addNewStep(isFirstStep = false) {
     const containerId = 'newSteps';
     const newStepsContainer = document.getElementById(containerId);
     if (!newStepsContainer) {
         console.error("Контейнер #newSteps не найден для добавления шага.");
-        showNotification("Ошибка: Не удалось найти контейнер для нового шага.", "error");
         return;
     }
     const addModal = document.getElementById('addModal');
-    if (!addModal) {
-        console.error("Модальное окно добавления #addModal не найдено.");
-        showNotification("Ошибка: Не найдено окно добавления.", "error");
-        return;
-    }
-    const section = addModal.dataset.section;
+    const section = addModal?.dataset.section;
     if (!section) {
-        console.error("Не удалось определить секцию в addNewStep (dataset.section отсутствует).");
-        showNotification("Ошибка: Не удалось определить раздел для нового шага.", "error");
+        console.error("Не удалось определить секцию в addNewStep.");
         return;
     }
 
     const stepCount = newStepsContainer.children.length;
-    const isMainAlgorithm = false;
 
     const placeholder = newStepsContainer.querySelector('p.text-gray-500');
     if (placeholder) {
@@ -8350,44 +8342,66 @@ function addNewStep() {
     }
 
     const stepDiv = document.createElement('div');
-    stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
-    stepDiv.innerHTML = createStepElementHTML(stepCount + 1, isMainAlgorithm, true);
+    stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
+    stepDiv.innerHTML = createStepElementHTML(stepCount + 1, false, true);
     stepDiv.dataset.stepIndex = stepCount;
+
+    const header = stepDiv.querySelector('.step-header');
+    if (header) {
+        header.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-step, .step-drag-handle')) return;
+            toggleStepCollapse(stepDiv);
+        });
+    }
+
+    const titleInput = stepDiv.querySelector('.step-title');
+    const titlePreview = stepDiv.querySelector('.step-title-preview');
+    if (titleInput && titlePreview) {
+        titlePreview.textContent = "Новый шаг";
+        titleInput.addEventListener('input', () => {
+            titlePreview.textContent = titleInput.value || "Новый шаг";
+        });
+    }
 
     const deleteBtn = stepDiv.querySelector('.delete-step');
     if (deleteBtn) {
-        if (typeof attachStepDeleteHandler === 'function') {
-            attachStepDeleteHandler(deleteBtn, stepDiv, newStepsContainer, section, 'add', false);
-        } else {
-            console.error("Функция attachStepDeleteHandler не найдена в addNewStep!");
-            deleteBtn.disabled = true;
-            deleteBtn.title = "Функция удаления недоступна";
-        }
-    } else {
-        console.warn("Не удалось найти кнопку удаления для нового шага в addNewStep.");
+        attachStepDeleteHandler(deleteBtn, stepDiv, newStepsContainer, section, 'add', false);
     }
 
     if (typeof attachScreenshotHandlers === 'function') {
         attachScreenshotHandlers(stepDiv);
+    }
+
+    if (!isFirstStep) {
+        toggleStepCollapse(stepDiv, true);
     } else {
-        console.error("Функция attachScreenshotHandlers не найдена в addNewStep!");
+        toggleStepCollapse(stepDiv, false);
     }
 
     newStepsContainer.appendChild(stepDiv);
 
-    if (typeof updateStepNumbers === 'function') {
-        updateStepNumbers(newStepsContainer);
+    updateStepNumbers(newStepsContainer);
+
+    if (!isFirstStep) {
+        stepDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else if (titleInput) {
+        titleInput.focus();
+    }
+
+    console.log(`addNewStep (v2): Добавлен шаг ${stepCount + 1} в секцию ${section}.`);
+}
+
+
+function toggleStepCollapse(stepElement, forceCollapse) {
+    if (!stepElement) {
+        console.warn('toggleStepCollapse: stepElement не предоставлен.');
+        return;
+    }
+    if (typeof forceCollapse === 'boolean') {
+        stepElement.classList.toggle('is-collapsed', forceCollapse);
     } else {
-        console.error("Функция updateStepNumbers не найдена в addNewStep!");
+        stepElement.classList.toggle('is-collapsed');
     }
-
-    stepDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    const newTitleInput = stepDiv.querySelector('.step-title');
-    if (newTitleInput) {
-        setTimeout(() => newTitleInput.focus(), 100);
-    }
-
-    console.log(`addNewStep: Добавлен шаг ${stepCount + 1} в секцию ${section}. Отслеживание изменений через hasChanges('add').`);
 }
 
 
@@ -22390,27 +22404,33 @@ async function showAddModal(section) {
     initialAddState = null;
 
     const addModal = document.getElementById('addModal');
-    if (!addModal) {
-        console.error("Модальное окно добавления #addModal не найдено.");
-        showNotification("Ошибка: Не найдено окно добавления.", "error");
-        return;
-    }
-
     const addModalTitle = document.getElementById('addModalTitle');
     const newAlgorithmTitle = document.getElementById('newAlgorithmTitle');
     const newAlgorithmDesc = document.getElementById('newAlgorithmDesc');
     const newStepsContainerElement = document.getElementById('newSteps');
     const saveButton = document.getElementById('saveNewAlgorithmBtn');
 
-    if (!addModalTitle || !newAlgorithmTitle || !newAlgorithmDesc || !newStepsContainerElement || !saveButton) {
-        console.error("Show Add Modal failed: Missing required elements (#addModalTitle, #newAlgorithmTitle, #newAlgorithmDesc, #newSteps, #saveNewAlgorithmBtn).");
-        showNotification("Ошибка интерфейса: не найдены элементы окна добавления.", "error");
+    if (!addModal || !addModalTitle || !newAlgorithmTitle || !newAlgorithmDesc || !newStepsContainerElement || !saveButton) {
+        console.error("showAddModal (v2 - Collapse): Отсутствуют необходимые элементы.");
         return;
     }
 
-    const stepsOuterContainer = document.getElementById('newStepsContainer');
-    if (stepsOuterContainer) {
-        stepsOuterContainer.classList.add('min-h-0');
+    const actionsContainer = addModal.querySelector('.flex.justify-end.items-center');
+    if (actionsContainer && !actionsContainer.querySelector('.collapse-all-btn')) {
+        const collapseControls = document.createElement('div');
+        collapseControls.className = 'mr-auto';
+        collapseControls.innerHTML = `
+            <button type="button" class="collapse-all-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300">Свернуть все</button>
+            <button type="button" class="expand-all-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 ml-1">Развернуть все</button>
+        `;
+        actionsContainer.insertBefore(collapseControls, actionsContainer.firstChild);
+
+        actionsContainer.querySelector('.collapse-all-btn').addEventListener('click', () => {
+            newStepsContainerElement.querySelectorAll('.edit-step').forEach(step => toggleStepCollapse(step, true));
+        });
+        actionsContainer.querySelector('.expand-all-btn').addEventListener('click', () => {
+            newStepsContainerElement.querySelectorAll('.edit-step').forEach(step => toggleStepCollapse(step, false));
+        });
     }
 
     addModalTitle.textContent = 'Новый алгоритм для раздела: ' + getSectionName(section);
@@ -22418,39 +22438,18 @@ async function showAddModal(section) {
     newAlgorithmDesc.value = '';
     newStepsContainerElement.innerHTML = '';
 
-    const firstStepDiv = document.createElement('div');
-    firstStepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm mb-4';
-    firstStepDiv.innerHTML = createStepElementHTML(1, false, true);
-    firstStepDiv.dataset.stepIndex = 0;
-    newStepsContainerElement.appendChild(firstStepDiv);
-
-    const firstDeleteBtn = firstStepDiv.querySelector('.delete-step');
-    if (firstDeleteBtn) {
-        if (typeof attachStepDeleteHandler === 'function') {
-            attachStepDeleteHandler(firstDeleteBtn, firstStepDiv, newStepsContainerElement, section, 'add', false);
-        } else {
-            console.error("Функция attachStepDeleteHandler не найдена в showAddModal!");
-            firstDeleteBtn.disabled = true;
-        }
-    } else {
-        console.warn("Не удалось найти кнопку удаления для первого шага в showAddModal.");
-    }
-
-    if (typeof attachScreenshotHandlers === 'function') {
-        attachScreenshotHandlers(firstStepDiv);
-    } else {
-        console.error("Функция attachScreenshotHandlers не найдена в showAddModal!");
-    }
+    addNewStep(true);
 
     addModal.dataset.section = section;
     saveButton.disabled = false;
     saveButton.innerHTML = 'Сохранить';
 
+    initStepSorting(newStepsContainerElement);
     captureInitialAddState();
     openAnimatedModal(addModal);
 
     setTimeout(() => newAlgorithmTitle.focus(), 50);
-    console.log(`showAddModal: Окно для секции '${section}' открыто.`);
+    console.log(`showAddModal (v2 - Collapse): Окно для секции '${section}' открыто.`);
 }
 
 
