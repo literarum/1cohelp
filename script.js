@@ -23941,7 +23941,8 @@ async function isInnBlacklisted(inn) {
 
 async function checkForBlacklistedInn(text) {
     const LOG_PREFIX = "[CheckINN_V8_Final_DismissAndReadd]";
-    console.log(`${LOG_PREFIX} Начало проверки текста...`);
+    const lastLine = text.trim().split('\n').pop() || '';
+    console.log(`${LOG_PREFIX} Начало проверки. Анализируется только последняя строка: "${lastLine}"`);
 
     if (!db) {
         console.warn(`${LOG_PREFIX} Проверка пропущена: база данных не готова.`);
@@ -23950,7 +23951,7 @@ async function checkForBlacklistedInn(text) {
 
     try {
         const innRegex = /\b(\d{10}|\d{12})\b/g;
-        const currentInnsList = text.match(innRegex) || [];
+        const currentInnsList = lastLine.match(innRegex) || [];
 
         const currentInnCounts = new Map();
         for (const inn of currentInnsList) {
