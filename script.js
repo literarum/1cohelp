@@ -31,6 +31,10 @@ const MIN_TOKEN_LEN_FOR_INDEX = 2;
 
 const FAVORITES_STORE_NAME = 'favorites';
 
+const CLIENT_NOTES_MIN_FONT_SIZE = 70;
+const CLIENT_NOTES_MAX_FONT_SIZE = 200;
+const CLIENT_NOTES_FONT_SIZE_STEP = 5;
+
 const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';
 
 const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
@@ -589,6 +593,145 @@ const NotificationService = {
         return notificationElement;
     }
 };
+
+
+const ExportService = {
+    isExporting: false,
+    styleElement: null,
+
+    init() {
+        if (this.styleElement) return;
+
+        this.styleElement = document.createElement('style');
+        this.styleElement.id = 'export-pdf-styles';
+        this.styleElement.textContent = `
+            @media print {
+                .export-to-pdf-content, .export-to-pdf-content * {
+                    -webkit-print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                }
+            }
+            body > .export-pdf-container {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+                width: 210mm; /* A4 width */
+                background-color: #ffffff;
+                visibility: hidden;
+                z-index: -1;
+            }
+            .export-to-pdf-content {
+                color: #111827; /* dark gray text */
+                background-color: #ffffff;
+                font-family: 'Times New Roman', serif;
+                padding: 20mm 15mm;
+                box-sizing: border-box;
+            }
+            .export-to-pdf-content .dark, .export-to-pdf-content .dark\\:bg-gray-800 {
+                 background-color: #ffffff !important;
+            }
+            .export-to-pdf-content h1, .export-to-pdf-content h2, .export-to-pdf-content h3, .export-to-pdf-content h4 {
+                color: #000000 !important;
+                page-break-after: avoid;
+            }
+            .export-to-pdf-content p, .export-to-pdf-content li, .export-to-pdf-content span, .export-to-pdf-content div {
+                 color: #111827 !important;
+            }
+            .export-to-pdf-content a {
+                color: #5858da !important;
+                text-decoration: underline !important;
+            }
+            .export-to-pdf-content .algorithm-step, .export-to-pdf-content .reglament-item {
+                page-break-inside: avoid;
+                border: 1px solid #e5e7eb;
+                box-shadow: none;
+                background-color: #f9fafb !important;
+            }
+            .export-to-pdf-content code, .export-to-pdf-content pre {
+                 background-color: #f3f4f6 !important;
+                 border: 1px solid #d1d5db !important;
+                 color: #1f2937 !important;
+            }
+            /* Скрыть все ненужные для печати элементы */
+            .export-to-pdf-content button,
+            .export-to-pdf-content .fav-btn-placeholder-modal-reglament,
+            .export-to-pdf-content .toggle-favorite-btn,
+            .export-to-pdf-content .view-screenshot-btn,
+            .export-to-pdf-content #noInnLink_main_1,
+            .export-to-pdf-content .copyable-step-active {
+                display: none !important;
+            }
+        `;
+        document.head.appendChild(this.styleElement);
+        console.log("ExportService initialized with print styles.");
+    },
+
+    async exportElementToPdf(element, filename = 'document') {
+        if (this.isExporting) {
+            NotificationService.add("Экспорт уже выполняется.", "warning");
+            return;
+        }
+        if (!element) {
+            NotificationService.add("Ошибка: элемент для экспорта не найден.", "error");
+            console.error("exportElementToPdf: 'element' is null or undefined.");
+            return;
+        }
+        if (typeof html2pdf === 'undefined') {
+            NotificationService.add("Ошибка: Библиотека для экспорта в PDF не загружена.", "error", { important: true });
+            console.error("html2pdf library is not available.");
+            return;
+        }
+
+        this.isExporting = true;
+        loadingOverlayManager.createAndShow();
+        loadingOverlayManager.updateProgress(10, "Подготовка документа к экспорту...");
+
+        const cleanFilename = filename.replace(/[^a-zа-я0-9\s-_]/gi, '').trim() || 'export';
+        const finalFilename = `${cleanFilename}.pdf`;
+
+        const container = document.createElement('div');
+        container.className = 'export-pdf-container';
+
+        const clone = element.cloneNode(true);
+        clone.classList.add('export-to-pdf-content');
+        container.appendChild(clone);
+
+        try {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            loadingOverlayManager.updateProgress(30, "Генерация PDF...");
+
+            document.body.appendChild(container);
+
+            const opt = {
+                margin: 0,
+                filename: finalFilename,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['css', 'avoid-all'], before: '.page-break-before' }
+            };
+
+            await html2pdf().from(clone).set(opt).save();
+
+            loadingOverlayManager.updateProgress(90, "Экспорт завершен.");
+            NotificationService.add("Документ успешно экспортирован в PDF.", "success");
+
+        } catch (error) {
+            console.error("Ошибка при экспорте в PDF:", error);
+            NotificationService.add("Произошла ошибка при экспорте в PDF.", "error", { important: true });
+        } finally {
+            document.body.removeChild(container);
+            loadingOverlayManager.updateProgress(100);
+            await loadingOverlayManager.hideAndDestroy();
+            this.isExporting = false;
+        }
+    }
+};
+
+ExportService.init();
+
+
+
 
 
 const UNIFIED_FULLSCREEN_MODAL_CLASSES = {
@@ -1756,7 +1899,8 @@ async function loadUserPreferences() {
         theme: DEFAULT_UI_SETTINGS.themeMode,
         showBlacklistUsageWarning: true,
         disableForcedBackupOnImport: false,
-        welcomeTextShownInitially: false
+        welcomeTextShownInitially: false,
+        clientNotesFontSize: 100
     };
 
     if (!db) {
@@ -1799,6 +1943,11 @@ async function loadUserPreferences() {
     if (typeof userPreferences.welcomeTextShownInitially !== 'boolean') {
         console.warn(`[loadUserPreferences] welcomeTextShownInitially имеет неверный тип (${typeof userPreferences.welcomeTextShownInitially}). Сброс к ${defaultPreferences.welcomeTextShownInitially}.`);
         userPreferences.welcomeTextShownInitially = defaultPreferences.welcomeTextShownInitially;
+    }
+
+    if (typeof userPreferences.clientNotesFontSize !== 'number' || userPreferences.clientNotesFontSize < CLIENT_NOTES_MIN_FONT_SIZE || userPreferences.clientNotesFontSize > CLIENT_NOTES_MAX_FONT_SIZE) {
+        console.warn(`[loadUserPreferences] Некорректный clientNotesFontSize (${userPreferences.clientNotesFontSize}). Сброс к значению по умолчанию.`);
+        userPreferences.clientNotesFontSize = defaultPreferences.clientNotesFontSize;
     }
 
     console.log("[loadUserPreferences] Загрузка пользовательских настроек завершена. Итоговые userPreferences.theme:", userPreferences.theme, "welcomeTextShownInitially:", userPreferences.welcomeTextShownInitially);
@@ -6162,23 +6311,25 @@ async function renderAlgorithmCards(section) {
         card.dataset.id = algorithm.id;
 
         const titleText = algorithm.title || 'Без заголовка';
+
         let descriptionText = algorithm.description;
         if (!descriptionText && algorithm.steps && algorithm.steps.length > 0) {
             descriptionText = algorithm.steps[0].description || algorithm.steps[0].title || '';
         }
-        descriptionText = descriptionText || 'Нет описания';
+
+        const descriptionHTML = descriptionText
+            ? `<p class="text-gray-600 dark:text-gray-400 text-sm mt-1 line-clamp-2 flex-grow">${safeEscapeHtml(descriptionText)}</p>`
+            : '';
 
         const isFav = isFavorite('algorithm', String(algorithm.id));
-        const favButtonHTML = getFavoriteButtonHTML(algorithm.id, 'algorithm', section, titleText, descriptionText, isFav);
+        const favButtonHTML = getFavoriteButtonHTML(algorithm.id, 'algorithm', section, titleText, descriptionText || '', isFav);
 
         card.innerHTML = `
             <div class="flex justify-between items-start mb-2">
                 <h3 class="font-bold text-gray-900 dark:text-gray-100 truncate flex-grow pr-2" title="${safeEscapeHtml(titleText)}">${safeEscapeHtml(titleText)}</h3>
                 <div class="flex-shrink-0">${favButtonHTML}</div>
             </div>
-            <p class="text-gray-600 dark:text-gray-400 text-sm mt-1 line-clamp-2 flex-grow">
-               ${safeEscapeHtml(descriptionText)}
-            </p>
+            ${descriptionHTML}
         `;
 
         card.addEventListener('click', (event) => {
@@ -6995,6 +7146,38 @@ async function showAlgorithmDetail(algorithm, section) {
 
     const headerControlsContainer = modalTitleElement.parentElement.querySelector('.flex.flex-wrap.gap-2.justify-end');
     if (headerControlsContainer) {
+        let exportButtonContainer = headerControlsContainer.querySelector('.export-btn-placeholder-modal');
+        if (!exportButtonContainer) {
+            exportButtonContainer = document.createElement('div');
+            exportButtonContainer.className = 'export-btn-placeholder-modal';
+            const exportButton = document.createElement('button');
+            exportButton.id = 'exportAlgorithmToPdfBtn';
+            exportButton.type = 'button';
+            exportButton.className = 'inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle';
+            exportButton.title = 'Экспорт в PDF';
+            exportButton.innerHTML = '<i class="fas fa-file-pdf"></i>';
+            exportButtonContainer.appendChild(exportButton);
+            if (editAlgorithmBtnModal) {
+                editAlgorithmBtnModal.insertAdjacentElement('beforebegin', exportButtonContainer);
+            } else if (deleteAlgorithmBtn) {
+                deleteAlgorithmBtn.insertAdjacentElement('beforebegin', exportButtonContainer);
+            } else {
+                headerControlsContainer.insertBefore(exportButtonContainer, headerControlsContainer.firstChild);
+            }
+        }
+        const exportBtn = headerControlsContainer.querySelector('#exportAlgorithmToPdfBtn');
+        if (exportBtn) {
+            if (exportBtn._clickHandler) {
+                exportBtn.removeEventListener('click', exportBtn._clickHandler);
+            }
+            exportBtn._clickHandler = () => {
+                const content = document.getElementById('algorithmSteps');
+                const title = document.getElementById('modalTitle').textContent;
+                ExportService.exportElementToPdf(content, title);
+            };
+            exportBtn.addEventListener('click', exportBtn._clickHandler);
+        }
+
         let favButtonContainer = headerControlsContainer.querySelector('.fav-btn-placeholder-modal');
         if (!favButtonContainer) {
             favButtonContainer = document.createElement('div');
@@ -16202,6 +16385,9 @@ async function showReglamentDetail(reglamentId) {
                         <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100" id="reglamentDetailTitle">Детали регламента</h2>
                         <div class="flex items-center">
                             <div class="fav-btn-placeholder-modal-reglament mr-1"></div>
+                            <button id="exportReglamentToPdfBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Экспорт в PDF">
+                                <i class="fas fa-file-pdf"></i>
+                            </button>
                             <button id="toggleFullscreenReglamentDetailBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                 <i class="fas fa-expand"></i>
                             </button>
@@ -16283,6 +16469,15 @@ async function showReglamentDetail(reglamentId) {
             console.log(`Fullscreen listener attached to ${reglamentDetailModalConfig.buttonId} for ${reglamentDetailModalConfig.modalId}.`);
         } else {
             console.error("Кнопка #toggleFullscreenReglamentDetailBtn не найдена в модальном окне деталей регламента!");
+        }
+
+        const exportBtn = modalElement.querySelector('#exportReglamentToPdfBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const content = document.getElementById('reglamentDetailContent');
+                const title = document.getElementById('reglamentDetailTitle').textContent;
+                ExportService.exportElementToPdf(content, title);
+            });
         }
     };
 
@@ -19627,17 +19822,27 @@ document.addEventListener('click', (event) => {
     }
 
     if (event.target === topmostModal) {
-        if (topmostModal.id === 'customizeUIModal' || topmostModal.id === 'bookmarkModal' || topmostModal.id === 'extLinkModal') {
+        const nonClosableModals = [
+            'customizeUIModal',
+            'bookmarkModal',
+            'extLinkModal',
+            'foldersModal',
+            'bookmarkDetailModal',
+            'reglamentModal',
+            'blacklistEntryModal',
+            'blacklistDetailModal'
+        ];
+
+        if (nonClosableModals.includes(topmostModal.id)) {
             console.log(`[Global Click Handler] Click on overlay for modal "${topmostModal.id}" detected. Closing is PREVENTED for this modal type.`);
 
-            const innerContainer = topmostModal.querySelector('.modal-inner-container, .bg-white');
+            const innerContainer = topmostModal.querySelector('.modal-inner-container, .bg-white.dark\\:bg-gray-800');
             if (innerContainer) {
                 innerContainer.classList.add('shake-animation');
                 setTimeout(() => innerContainer.classList.remove('shake-animation'), 500);
             }
             return;
         }
-
 
         console.log(`[Global Click Handler] Closing modal "${topmostModal.id}" due to click on overlay.`);
 
@@ -19654,7 +19859,6 @@ document.addEventListener('click', (event) => {
         } else if (topmostModal.id === 'reglamentDetailModal' ||
             topmostModal.id === 'screenshotViewerModal' ||
             topmostModal.id === 'noInnModal' ||
-            topmostModal.id === 'foldersModal' ||
             topmostModal.id === 'hotkeysModal' ||
             topmostModal.id === 'confirmClearDataModal' ||
             topmostModal.id === 'cibLinkModal') {
@@ -20638,6 +20842,36 @@ function handleGlobalHotkey(event) {
         activeElement.tagName === 'TEXTAREA' ||
         activeElement.isContentEditable
     );
+
+    const clientNotes = document.getElementById('clientNotes');
+    const isClientNotesVisible = clientNotes && clientNotes.offsetParent !== null;
+
+    if (alt && !ctrlOrMeta && !shift && isClientNotesVisible && (event.key === '=' || event.key === '+' || event.key === '-' || event.code === 'NumpadAdd' || event.code === 'NumpadSubtract')) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!userPreferences) {
+            console.warn('[Hotkey] userPreferences не доступны для изменения размера шрифта.');
+            return;
+        }
+
+        const isIncrease = event.key === '=' || event.key === '+' || event.code === 'NumpadAdd';
+        const currentSize = userPreferences.clientNotesFontSize || 100;
+        let newSize;
+
+        if (isIncrease) {
+            newSize = Math.min(CLIENT_NOTES_MAX_FONT_SIZE, currentSize + CLIENT_NOTES_FONT_SIZE_STEP);
+        } else {
+            newSize = Math.max(CLIENT_NOTES_MIN_FONT_SIZE, currentSize - CLIENT_NOTES_FONT_SIZE_STEP);
+        }
+
+        if (newSize !== currentSize) {
+            userPreferences.clientNotesFontSize = newSize;
+            applyClientNotesFontSize();
+            saveUserPreferences().catch(err => console.error("Не удалось сохранить настройку размера шрифта:", err));
+        }
+        return; // Горячая клавиша обработана, выходим.
+    }
 
     if (alt && !ctrlOrMeta && !shift) {
         switch (event.code) {
@@ -22399,6 +22633,16 @@ editMainBtn?.addEventListener('click', async () => {
     }
 });
 
+const exportMainBtn = document.getElementById('exportMainBtn');
+if (exportMainBtn) {
+    exportMainBtn.addEventListener('click', () => {
+        const mainAlgorithmContainer = document.getElementById('mainAlgorithm');
+        const mainTitleElement = document.querySelector('#mainContent h2');
+        const title = mainTitleElement ? mainTitleElement.textContent : 'Главный алгоритм';
+        ExportService.exportElementToPdf(mainAlgorithmContainer, title);
+    });
+}
+
 
 async function showAddModal(section) {
     initialAddState = null;
@@ -22750,9 +22994,11 @@ async function showBlacklistDetailModal(entryId) {
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                    <div class="flex justify-between items-center">
-                        <h2 id="blacklistDetailTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100 truncate pr-4">Детали записи</h2>
-                        <button class="close-modal-btn p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Закрыть (Esc)"><i class="fas fa-times text-xl"></i></button>
+                    <div class="flex justify-between items-start gap-4">
+                        <h2 id="blacklistDetailTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100 break-words min-w-0">Детали записи</h2>
+                        <div class="flex-shrink-0">
+                            <button class="close-modal-btn p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Закрыть (Esc)"><i class="fas fa-times text-xl"></i></button>
+                        </div>
                     </div>
                 </div>
                 <div id="blacklistDetailContent" class="p-6 overflow-y-auto">
@@ -22771,7 +23017,6 @@ async function showBlacklistDetailModal(entryId) {
         };
 
         modal.querySelectorAll('.close-modal-btn').forEach(btn => btn.addEventListener('click', closeModal));
-        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
@@ -23135,6 +23380,21 @@ function showBlacklistWarning() {
 }
 
 
+function applyClientNotesFontSize() {
+    const clientNotes = document.getElementById('clientNotes');
+    if (clientNotes && userPreferences && typeof userPreferences.clientNotesFontSize === 'number') {
+        const fontSize = userPreferences.clientNotesFontSize;
+        clientNotes.style.fontSize = `${fontSize}%`;
+        console.log(`[applyClientNotesFontSize] Font size for client notes set to ${fontSize}%.`);
+    } else {
+        if (!clientNotes) console.warn('[applyClientNotesFontSize] Could not apply font size: #clientNotes element not found.');
+        if (!userPreferences || typeof userPreferences.clientNotesFontSize !== 'number') {
+            console.warn('[applyClientNotesFontSize] Could not apply font size: userPreferences.clientNotesFontSize is missing or invalid.');
+        }
+    }
+}
+
+
 async function initClientDataSystem() {
     const LOG_PREFIX = "[ClientDataSystem]";
     console.log(`${LOG_PREFIX} Запуск инициализации...`);
@@ -23258,6 +23518,9 @@ async function initClientDataSystem() {
         }
         clientNotes.value = clientDataNotesValue;
         console.log(`${LOG_PREFIX} Данные загружены. clientNotes.value установлен.`);
+
+        applyClientNotesFontSize();
+
     } catch (error) {
         console.error(`${LOG_PREFIX} Ошибка при загрузке данных клиента:`, error);
     }
@@ -24156,5 +24419,3 @@ function renderBlacklistEntries(entries) {
 
     container.appendChild(fragment);
 }
-
-
