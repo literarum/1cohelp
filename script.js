@@ -3223,6 +3223,8 @@ let originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(DEFAULT_SEDO_DATA));
 let isSedoEditing = false;
 
 function initSedoTypesSystem() {
+    injectSedoEditStyles();
+
     loadSedoData().then(data => {
         currentSedoData = data;
         renderSedoTypesContent(currentSedoData, false, '');
@@ -3236,27 +3238,18 @@ function initSedoTypesSystem() {
     console.log("Система типов сообщений СЭДО инициализирована (v2, инкапсулированная логика кнопок).");
 }
 
+
 function toggleSedoEditMode(isEditing) {
-    console.log(`[toggleSedoEditMode Refactored] Переключение режима редактирования на: ${isEditing}`);
+    console.log(`[toggleSedoEditMode V.Fixed] Переключение режима редактирования на: ${isEditing}`);
     isSedoEditing = isEditing;
-
-    const searchContainer = document.getElementById('sedoSearchContainer');
-    if (searchContainer) {
-        searchContainer.style.display = isEditing ? 'none' : 'block';
-    }
-
-    if (!currentSedoData || !Array.isArray(currentSedoData.articleLinks)) {
-        currentSedoData.articleLinks = [];
-        console.warn("[toggleSedoEditMode Refactored] currentSedoData.articleLinks был невалидным, инициализирован пустым массивом.");
-    }
 
     if (isEditing) {
         originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(currentSedoData));
-        console.log("[toggleSedoEditMode Refactored] Состояние originalSedoDataBeforeEdit обновлено перед редактированием.");
+        console.log("[toggleSedoEditMode V.Fixed] Состояние originalSedoDataBeforeEdit обновлено перед редактированием.");
     }
 
     renderSedoTypesContent(currentSedoData, isEditing);
-    console.log(`[toggleSedoEditMode Refactored] renderSedoTypesContent вызвана с isEditing=${isEditing}`);
+    console.log(`[toggleSedoEditMode V.Fixed] renderSedoTypesContent вызвана с isEditing=${isEditing}`);
 }
 
 
@@ -3266,29 +3259,27 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
     const sedoTabPanel = document.getElementById(SEDO_TAB_PANEL_ID);
 
     if (!sedoTabPanel) {
-        console.log(`[SedoRender v6 Fixed] Панель вкладки #${SEDO_TAB_PANEL_ID} не найдена. Рендеринг пропущен.`);
+        console.log(`[SedoRender V.Fixed] Панель вкладки #${SEDO_TAB_PANEL_ID} не найдена. Рендеринг пропущен.`);
         return;
     }
 
-    let mainContentContainer = sedoTabPanel.querySelector(`#${SEDO_RENDER_TARGET_ID}`);
-    if (!mainContentContainer || sedoTabPanel.dataset.isEditing !== String(isEditing)) {
-        sedoTabPanel.innerHTML = '';
-        mainContentContainer = document.createElement('div');
-        mainContentContainer.id = SEDO_RENDER_TARGET_ID;
-        sedoTabPanel.appendChild(mainContentContainer);
-        sedoTabPanel.dataset.isEditing = String(isEditing);
-    } else {
-        return;
-    }
+    sedoTabPanel.innerHTML = '';
+    let mainContentContainer = document.createElement('div');
+    mainContentContainer.id = SEDO_RENDER_TARGET_ID;
+    sedoTabPanel.appendChild(mainContentContainer);
+    sedoTabPanel.dataset.isEditing = String(isEditing);
+
 
     if (!data) {
-        console.error(`[SedoRender v6 Fixed] Ошибка: в функцию переданы невалидные данные (data is ${data}).`);
+        console.error(`[SedoRender V.Fixed] Ошибка: в функцию переданы невалидные данные (data is ${data}).`);
         mainContentContainer.innerHTML = '<p class="text-red-500 text-center p-4">Ошибка загрузки данных для отображения.</p>';
         return;
     }
 
     mainContentContainer.className = "bg-white dark:bg-slate-800 p-4 md:p-6 rounded-lg shadow-lg flex flex-col h-full";
-    console.log(`[SedoRender v6 Fixed] Начало полного рендеринга. Режим редактирования: ${isEditing}.`);
+    mainContentContainer.classList.toggle('sedo-is-editing', isEditing);
+
+    console.log(`[SedoRender V.Fixed] Начало полного рендеринга. Режим редактирования: ${isEditing}.`);
 
     const fragment = document.createDocumentFragment();
 
@@ -3368,7 +3359,7 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
     infoContainer.id = 'sedoTypesInfoContainer';
     infoContainer.className = "flex-grow min-h-0 overflow-y-auto custom-scrollbar -mr-4 pr-4";
 
-    _renderSedoContentInner(infoContainer, data, searchQuery);
+    _renderSedoContentInner(infoContainer, data, isEditing, searchQuery);
 
     fragment.appendChild(infoContainer);
     mainContentContainer.appendChild(fragment);
@@ -3393,76 +3384,78 @@ async function saveSedoChanges() {
 
     const newData = JSON.parse(JSON.stringify(originalSedoDataBeforeEdit));
 
-    const linksEditInput = mainContentContainer.querySelector('#sedoArticleLinksEditInput');
-    if (linksEditInput) {
-        const lines = linksEditInput.value.split('\n');
-        newData.articleLinks = lines.map(lineOriginal => {
-            const line = lineOriginal.trim();
-            if (!line) return null;
-            const parts = line.split('|');
-            const firstPart = parts[0].trim();
-            const textPart = parts.length > 1 ? parts.slice(1).join('|').trim() : '';
-            let isUrlValid = false, validatedUrlString = null;
-            if (firstPart) {
-                let urlToTest = firstPart.startsWith('www.') ? 'http://' + firstPart : firstPart;
-                try {
-                    const urlObj = new URL(urlToTest);
-                    if (urlObj.protocol && urlObj.hostname) { isUrlValid = true; validatedUrlString = urlObj.href; }
-                } catch (_) { }
-            }
-            return isUrlValid ? { url: validatedUrlString, text: textPart } : { text: line };
-        }).filter(Boolean);
-    }
-
-    const tableContainers = mainContentContainer.querySelectorAll('.sedo-table-container');
-    for (const tableContainer of tableContainers) {
-        const tableIndex = parseInt(tableContainer.dataset.tableIndex, 10);
-        if (isNaN(tableIndex) || !newData.tables[tableIndex]) continue;
-
-        const titleInput = tableContainer.querySelector('.sedo-table-title-edit');
-        if (titleInput && titleInput.value.trim()) {
-            newData.tables[tableIndex].title = titleInput.value.trim();
-        } else if (titleInput) {
-            showNotification(`Заголовок таблицы ${tableIndex + 1} не может быть пустым.`, "warning");
-            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Сохранить'; }
-            return false;
+    try {
+        const linksEditInput = mainContentContainer.querySelector('#sedoArticleLinksEditInput');
+        if (linksEditInput) {
+            const lines = linksEditInput.value.split('\n');
+            newData.articleLinks = lines.map(lineOriginal => {
+                const line = lineOriginal.trim();
+                if (!line) return null;
+                const parts = line.split('|');
+                const firstPart = parts[0].trim();
+                const textPart = parts.length > 1 ? parts.slice(1).join('|').trim() : '';
+                let isUrlValid = false, validatedUrlString = null;
+                if (firstPart) {
+                    let urlToTest = firstPart.startsWith('www.') ? 'http://' + firstPart : firstPart;
+                    try {
+                        const urlObj = new URL(urlToTest);
+                        if (urlObj.protocol && urlObj.hostname) { isUrlValid = true; validatedUrlString = urlObj.href; }
+                    } catch (_) { }
+                }
+                return isUrlValid ? { url: validatedUrlString, text: textPart } : { text: line };
+            }).filter(Boolean);
         }
 
-        const table = tableContainer.querySelector('table.sedo-table');
-        if (table) {
-            const headerInputs = table.querySelectorAll('.sedo-column-header-edit');
-            headerInputs.forEach((input, colIndex) => {
-                if (input.value.trim()) {
-                    newData.tables[tableIndex].columns[colIndex] = input.value.trim();
-                } else {
-                    showNotification(`Заголовок колонки ${colIndex + 1} в таблице "${newData.tables[tableIndex].title}" не может быть пустым.`, "warning");
-                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Сохранить'; }
-                    throw new Error("Пустой заголовок колонки");
-                }
-            });
+        const tableContainers = mainContentContainer.querySelectorAll('.sedo-table-container');
+        for (const tableContainer of tableContainers) {
+            const tableIndex = parseInt(tableContainer.dataset.tableIndex, 10);
+            if (isNaN(tableIndex) || !newData.tables[tableIndex]) continue;
 
-            const rows = table.querySelectorAll('tbody tr');
-            rows.forEach((row, rowIndex) => {
-                const cells = row.querySelectorAll('td.editing-cell');
-                cells.forEach(cell => {
-                    const colKey = cell.dataset.colKey;
-                    if (colKey && newData.tables[tableIndex].items[rowIndex]) {
-                        newData.tables[tableIndex].items[rowIndex][colKey] = cell.textContent;
+            const titleInput = tableContainer.querySelector('.sedo-table-title-edit');
+            if (titleInput && titleInput.value.trim()) {
+                newData.tables[tableIndex].title = titleInput.value.trim();
+            } else if (titleInput) {
+                showNotification(`Заголовок таблицы ${tableIndex + 1} не может быть пустым.`, "warning");
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Сохранить'; }
+                return false;
+            }
+
+            const table = tableContainer.querySelector('table.sedo-table');
+            if (table) {
+                const headerInputs = table.querySelectorAll('.sedo-column-header-edit');
+                headerInputs.forEach((input, colIndex) => {
+                    const colName = input.value.trim();
+                    if (colName) {
+                        newData.tables[tableIndex].columns[colIndex] = colName;
+                    } else {
+                        const errorMsg = `Заголовок колонки ${colIndex + 1} в таблице "${newData.tables[tableIndex].title}" не может быть пустым.`;
+                        showNotification(errorMsg, "warning");
+                        throw new Error(errorMsg);
                     }
                 });
-            });
-        } else {
-            const listItems = tableContainer.querySelectorAll('ul li.editing-cell');
-            const newItems = [];
-            listItems.forEach(li => {
-                newItems.push(li.textContent.trim());
-            });
-            newData.tables[tableIndex].items = newItems;
+
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach((row, rowIndex) => {
+                    if (!newData.tables[tableIndex].items[rowIndex]) newData.tables[tableIndex].items[rowIndex] = {};
+                    const cells = row.querySelectorAll('td.editing-cell');
+                    cells.forEach(cell => {
+                        const colKey = cell.dataset.colKey;
+                        if (colKey) {
+                            newData.tables[tableIndex].items[rowIndex][colKey] = cell.textContent.trim();
+                        }
+                    });
+                });
+            } else {
+                const listElement = tableContainer.querySelector('ul.editing-cell');
+                if (listElement) {
+                    const newItems = Array.from(listElement.querySelectorAll('li'))
+                        .map(li => li.textContent.trim())
+                        .filter(Boolean);
+                    newData.tables[tableIndex].items = newItems;
+                }
+            }
         }
-    }
 
-
-    try {
         const dataToSave = { ...newData, id: SEDO_CONFIG_KEY };
         console.log("[SedoSave V4] Финальные данные для сохранения:", JSON.parse(JSON.stringify(dataToSave)));
 
@@ -3481,16 +3474,66 @@ async function saveSedoChanges() {
         showNotification("Изменения в типах сообщений СЭДО сохранены.", "success");
         return true;
     } catch (error) {
-        if (error.message === "Пустой заголовок колонки") return false;
+        if (error.message.includes("не может быть пустым")) {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Сохранить'; }
+            return false;
+        }
         console.error("[SedoSave V4] Ошибка сохранения данных СЭДО:", error);
         showNotification("Ошибка при сохранении данных СЭДО.", "error");
         return false;
     } finally {
-        if (saveBtn) {
+        if (saveBtn && !saveBtn.disabled) {
             saveBtn.disabled = false;
-            saveBtn.innerHTML = 'Сохранить';
+            saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Сохранить';
         }
     }
+}
+
+
+function injectSedoEditStyles() {
+    const styleId = 'sedo-edit-mode-styles';
+    if (document.getElementById(styleId)) {
+        return;
+    }
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+        .sedo-is-editing .editing-cell {
+            color: #ff0000 !important;
+            padding: 8px 10px !important;
+            line-height: 1.5;
+            padding: 15px !important;
+        }
+
+        .sedo-table-title-edit {
+            color: #ff0000 !important;
+        }
+
+        .sedo-is-editing th {
+            color: #ff0000 !important;
+            padding: 8px 10px !important;
+            font-size: 105%;
+        }
+
+        .sedo-is-editing tr {
+            color: #ff0000 !important;
+            padding: 8px 10px !important;
+            font-size: 105%;
+        }
+
+        .sedo-is-editing ul.editing-cell {
+            padding: 15px !important;
+            line-height: 1.6;
+        }
+
+        .sedo-is-editing #sedoArticleLinksEditInput{
+            padding: 15px !important;
+            line-height: 1.6;
+        }
+    `;
+    document.head.appendChild(style);
+    console.log("Стили для режима редактирования СЭДО успешно добавлены.");
 }
 
 
@@ -3912,20 +3955,18 @@ function handleSedoSearch() {
 
     const filteredData = filterSedoData(query);
 
-    _renderSedoContentInner(infoContainer, filteredData, query);
+    _renderSedoContentInner(infoContainer, filteredData, isSedoEditing, query);
 }
 
 
-function _renderSedoContentInner(container, data, searchQuery) {
+function _renderSedoContentInner(container, data, isEditing, searchQuery) {
     if (!container || !data) {
         console.error("_renderSedoContentInner: Не передан контейнер или данные.");
         return;
     }
-
     container.innerHTML = '';
-
     const highlight = (text) => {
-        if (!searchQuery || !text) return escapeHtml(String(text));
+        if (!searchQuery || isEditing || !text) return escapeHtml(String(text));
         return highlightTextInString(String(text), searchQuery);
     };
 
@@ -3939,47 +3980,55 @@ function _renderSedoContentInner(container, data, searchQuery) {
     linksTitleHeader.appendChild(linksTitleStatic);
     linksSectionContainer.appendChild(linksTitleHeader);
     const articles = (data && Array.isArray(data.articleLinks)) ? data.articleLinks : [];
-
     const linksDisplayArea = document.createElement('div');
     linksDisplayArea.className = 'bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow mb-3';
-    if (articles.length > 0) {
-        const ul = document.createElement('ul');
-        ul.className = 'space-y-2';
-        articles.forEach((item) => {
-            if (!item || (item.url === undefined && item.text === undefined)) return;
-            const li = document.createElement('li');
-            li.className = 'text-gray-700 dark:text-gray-300 break-words';
-            if (item.url) {
-                li.classList.add('list-disc', 'list-inside', 'ml-5');
-                const a = document.createElement('a');
-                a.href = item.url;
-                a.innerHTML = highlight(item.url);
-                a.className = 'text-primary hover:underline break-all';
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
-                li.appendChild(a);
-                if (item.text) {
-                    const descSpan = document.createElement('span');
-                    descSpan.className = 'ml-2 text-sm text-gray-500 dark:text-gray-400 italic';
-                    descSpan.innerHTML = `— ${highlight(item.text)}`;
-                    li.appendChild(descSpan);
-                }
-            } else if (item.text) {
-                const textSpan = document.createElement('span');
-                textSpan.innerHTML = linkify(highlight(item.text));
-                li.appendChild(textSpan);
-            }
-            ul.appendChild(li);
-        });
-        linksDisplayArea.appendChild(ul);
+    if (isEditing) {
+        const textarea = document.createElement('textarea');
+        textarea.id = 'sedoArticleLinksEditInput';
+        textarea.className = 'w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700/80 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100 min-h-[100px] text-sm';
+        textarea.placeholder = 'Каждая ссылка с новой строки. Для добавления описания используйте | (вертикальная черта) после URL. Пример: https://site.com|Описание сайта';
+        textarea.value = articles.map(item => (item.url ? `${item.url}${item.text ? `|${item.text}` : ''}` : item.text)).join('\n');
+        linksDisplayArea.appendChild(textarea);
     } else {
-        linksDisplayArea.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ссылок или дополнительной информации не добавлено.</p>';
+        if (articles.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-2';
+            articles.forEach((item) => {
+                if (!item || (item.url === undefined && item.text === undefined)) return;
+                const li = document.createElement('li');
+                li.className = 'text-gray-700 dark:text-gray-300 break-words';
+                if (item.url) {
+                    li.classList.add('list-disc', 'list-inside', 'ml-5');
+                    const a = document.createElement('a');
+                    a.href = item.url;
+                    a.innerHTML = highlight(item.url);
+                    a.className = 'text-primary hover:underline break-all';
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    li.appendChild(a);
+                    if (item.text) {
+                        const descSpan = document.createElement('span');
+                        descSpan.className = 'ml-2 text-sm text-gray-500 dark:text-gray-400 italic';
+                        descSpan.innerHTML = `— ${highlight(item.text)}`;
+                        li.appendChild(descSpan);
+                    }
+                } else if (item.text) {
+                    const textSpan = document.createElement('span');
+                    textSpan.innerHTML = linkify(highlight(item.text));
+                    li.appendChild(textSpan);
+                }
+                ul.appendChild(li);
+            });
+            linksDisplayArea.appendChild(ul);
+        } else {
+            linksDisplayArea.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ссылок или дополнительной информации не добавлено.</p>';
+        }
     }
     linksSectionContainer.appendChild(linksDisplayArea);
     container.appendChild(linksSectionContainer);
 
     if (data.tables && Array.isArray(data.tables)) {
-        if (data.tables.length === 0 && searchQuery) {
+        if (data.tables.length === 0 && searchQuery && !isEditing) {
             const noResultsEl = document.createElement('p');
             noResultsEl.className = 'text-center text-gray-500 dark:text-gray-400 py-4';
             noResultsEl.textContent = `По запросу "${searchQuery}" в таблицах ничего не найдено.`;
@@ -3991,23 +4040,31 @@ function _renderSedoContentInner(container, data, searchQuery) {
             tableContainerDiv.dataset.tableIndex = tableIndex;
             const titleHeaderDiv = document.createElement('div');
             titleHeaderDiv.className = 'flex items-center justify-between mb-content-sm';
-
-            const tableTitle = document.createElement('h3');
-            tableTitle.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
-            tableTitle.innerHTML = highlight(tableData.title || `Таблица ${tableIndex + 1}`);
-            titleHeaderDiv.appendChild(tableTitle);
-
-            const fullscreenBtn = document.createElement('button');
-            fullscreenBtn.type = 'button';
-            fullscreenBtn.className = 'sedo-table-fullscreen-btn p-1.5 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary-dark rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0';
-            fullscreenBtn.title = 'Развернуть на весь экран';
-            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
-            fullscreenBtn.dataset.tableIndex = tableIndex;
-            fullscreenBtn.addEventListener('click', () => {
-                if (typeof handleSedoTableFullscreen === 'function') handleSedoTableFullscreen(tableIndex);
-                else console.error("handleSedoTableFullscreen не определена.");
-            });
-            titleHeaderDiv.appendChild(fullscreenBtn);
+            if (isEditing) {
+                const titleInput = document.createElement('input');
+                titleInput.type = 'text';
+                titleInput.value = tableData.title || `Таблица ${tableIndex + 1}`;
+                titleInput.className = 'sedo-table-title-edit text-lg font-semibold bg-transparent border-b-2 border-dashed border-red-500/50 focus:border-red-500/100 focus:outline-none w-full text-gray-900 dark:text-gray-100';
+                titleHeaderDiv.appendChild(titleInput);
+            } else {
+                const tableTitle = document.createElement('h3');
+                tableTitle.className = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
+                tableTitle.innerHTML = highlight(tableData.title || `Таблица ${tableIndex + 1}`);
+                titleHeaderDiv.appendChild(tableTitle);
+            }
+            if (!isEditing) {
+                const fullscreenBtn = document.createElement('button');
+                fullscreenBtn.type = 'button';
+                fullscreenBtn.className = 'sedo-table-fullscreen-btn p-1.5 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary-dark rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary flex-shrink-0';
+                fullscreenBtn.title = 'Развернуть на весь экран';
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                fullscreenBtn.dataset.tableIndex = tableIndex;
+                fullscreenBtn.addEventListener('click', () => {
+                    if (typeof handleSedoTableFullscreen === 'function') handleSedoTableFullscreen(tableIndex);
+                    else console.error("handleSedoTableFullscreen не определена.");
+                });
+                titleHeaderDiv.appendChild(fullscreenBtn);
+            }
             tableContainerDiv.appendChild(titleHeaderDiv);
             const tableWrapper = document.createElement('div');
             tableWrapper.className = 'custom-scrollbar overflow-x-auto bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow';
@@ -4016,8 +4073,12 @@ function _renderSedoContentInner(container, data, searchQuery) {
                 const listElement = document.createElement('ul');
                 listElement.className = 'list-disc list-inside pl-5 space-y-1 text-sm';
                 listElement.dataset.tableIndex = tableIndex;
+                if (isEditing) {
+                    listElement.contentEditable = 'true';
+                    listElement.classList.add('editing-cell', 'min-h-[5rem]', 'focus:outline-none', 'focus:ring-1', 'focus:ring-primary', 'p-2', 'border', 'border-dashed');
+                }
                 if (Array.isArray(tableData.items)) {
-                    tableData.items.forEach((itemText, itemIndex) => {
+                    tableData.items.forEach((itemText) => {
                         const listItem = document.createElement('li');
                         listItem.innerHTML = highlight(String(itemText));
                         listElement.appendChild(listItem);
@@ -4036,7 +4097,16 @@ function _renderSedoContentInner(container, data, searchQuery) {
                         const th = document.createElement('th');
                         th.scope = 'col';
                         th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider';
-                        th.innerHTML = highlight(String(colName));
+                        if (isEditing) {
+                            const headerInput = document.createElement('input');
+                            headerInput.type = 'text';
+                            headerInput.value = String(colName);
+                            headerInput.className = 'sedo-column-header-edit bg-transparent border-b border-dashed border-gray-400 focus:border-gray-500 focus:outline-none w-full border-red-500/50 focus:border-red-500/100';
+                            headerInput.dataset.colIndex = colIndex;
+                            th.appendChild(headerInput);
+                        } else {
+                            th.innerHTML = highlight(String(colName));
+                        }
                         headerRow.appendChild(th);
                     });
                 }
@@ -4044,12 +4114,17 @@ function _renderSedoContentInner(container, data, searchQuery) {
                 table.appendChild(thead);
                 const tbody = document.createElement('tbody');
                 tbody.className = 'bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600';
+                const editableCellsConfig = (isEditing || !tableData.editableCells)
+                    ? (tableData.columns || []).map(() => true)
+                    : tableData.editableCells;
+
                 if (Array.isArray(tableData.items)) {
                     tableData.items.forEach((item, rowIndex) => {
                         if (typeof item !== 'object' || item === null) return;
                         const row = document.createElement('tr');
                         row.dataset.rowIndex = rowIndex;
                         const itemKeys = Object.keys(item);
+
                         (tableData.columns || []).forEach((_colNameFromConfig, colIndex) => {
                             const td = document.createElement('td');
                             td.className = 'px-4 py-4 text-sm text-gray-700 dark:text-gray-200 align-top';
@@ -4066,7 +4141,13 @@ function _renderSedoContentInner(container, data, searchQuery) {
                             } else {
                                 td.dataset.colKey = `col_${colIndex}_fallback`;
                             }
-                            td.innerHTML = highlight(String(cellValue));
+                            if (isEditing && editableCellsConfig[colIndex]) {
+                                td.contentEditable = 'true';
+                                td.className += ' editing-cell focus:outline-none focus:bg-yellow-100 dark:focus:bg-yellow-900/50 focus:ring-1 focus:ring-primary rounded';
+                                td.textContent = String(cellValue);
+                            } else {
+                                td.innerHTML = highlight(String(cellValue));
+                            }
                             row.appendChild(td);
                         });
                         tbody.appendChild(row);
@@ -4079,34 +4160,6 @@ function _renderSedoContentInner(container, data, searchQuery) {
             container.appendChild(tableContainerDiv);
         });
     }
-}
-
-
-function toggleSedoEditMode(isEditing) {
-    console.log(`[toggleSedoEditMode Refactored] Переключение режима редактирования на: ${isEditing}`);
-    isSedoEditing = isEditing;
-    const editBtn = document.getElementById('editSedoTypesBtn');
-    const saveBtn = document.getElementById('saveSedoTypesBtn');
-    const cancelBtn = document.getElementById('cancelSedoTypesBtn');
-    const searchContainer = document.getElementById('sedoSearchContainer');
-
-    if (editBtn) editBtn.style.display = isEditing ? 'none' : 'flex';
-    if (saveBtn) saveBtn.style.display = isEditing ? 'flex' : 'none';
-    if (cancelBtn) cancelBtn.style.display = isEditing ? 'flex' : 'none';
-    if (searchContainer) searchContainer.style.display = isEditing ? 'none' : 'block';
-
-    if (!currentSedoData || !Array.isArray(currentSedoData.articleLinks)) {
-        currentSedoData.articleLinks = [];
-        console.warn("[toggleSedoEditMode Refactored] currentSedoData.articleLinks был невалидным, инициализирован пустым массивом.");
-    }
-
-    if (isEditing) {
-        originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(currentSedoData));
-        console.log("[toggleSedoEditMode Refactored] Состояние originalSedoDataBeforeEdit обновлено перед редактированием.");
-    }
-
-    renderSedoTypesContent(currentSedoData, isEditing);
-    console.log(`[toggleSedoEditMode Refactored] renderSedoTypesContent вызвана с isEditing=${isEditing}`);
 }
 
 
@@ -24419,3 +24472,4 @@ function renderBlacklistEntries(entries) {
 
     container.appendChild(fragment);
 }
+
