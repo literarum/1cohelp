@@ -713,8 +713,7 @@
 
         /* --- ФОНЫ И ПОВЕРХНОСТИ (КОРРЕКТНАЯ ДВУХСЛОЙНАЯ СИСТЕМА) --- */
         /* --- СЛОЙ 1: Подложки, заголовки и менее важные фоны --- */
-        /* Для светлых и темных тем: используется семантическая переменная для подложки.
-           Класс .dark:bg-gray-700 перемещен сюда из Слоя 2 для корректного отображения вложенных элементов. */
+        /* Для светлых и темных тем: используется семантическая переменная для подложки */
         body.custom-background-active :is(.bg-gray-100, .bg-gray-50, .dark\:bg-gray-700, .dark\:bg-gray-700\/50, .dark\:bg-gray-700\/60,
             .dark\:bg-gray-800, #timerDisplay, .cib-link-item code, .edit-step .step-header,
             .bg-gray-50.dark\:bg-gray-700, #addModal .bg-gray-100.dark\:bg-gray-700,
@@ -734,6 +733,10 @@
             #hotkeysModal .bg-white.dark\:bg-gray-800, #noInnModal .bg-white.dark\:bg-gray-800,
             #reglamentDetailModal .bg-white.dark\:bg-gray-800,
             #bookmarkDetailModal .bg-white.dark\:bg-gray-800, #extLinkModal .bg-white.dark\:bg-gray-800) {
+            background-color: var(--color-surface-2) !important;
+        }
+
+        .reglament-category {
             background-color: var(--color-surface-2) !important;
         }
 
