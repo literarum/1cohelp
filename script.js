@@ -2,7 +2,7 @@
 
 let db;
 const DB_NAME = 'CopilotDB';
-const DB_VERSION = 9;
+const DB_VERSION = 11;
 const CURRENT_SCHEMA_VERSION = "1.5";
 let userPreferences = {
     theme: 'auto',
@@ -35,6 +35,9 @@ const CLIENT_NOTES_MIN_FONT_SIZE = 70;
 const CLIENT_NOTES_MAX_FONT_SIZE = 200;
 const CLIENT_NOTES_FONT_SIZE_STEP = 5;
 
+const TELEFONY_DOC_ID = '1lDCKpFcBIB4gRCI7_Ppsepy140YWdFtziut67xr6GTw';
+const SHABLONY_DOC_ID = '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4';
+
 const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';
 
 const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
@@ -46,6 +49,8 @@ if (showFavoritesHeaderButton && !showFavoritesHeaderButton.dataset.listenerAtta
 let originalUISettings = {};
 let currentPreviewSettings = {};
 let isUISettingsDirty = false;
+
+let uiModalState = {};
 
 let clientNotesInputHandler = null;
 let clientNotesKeydownHandler = null;
@@ -88,6 +93,9 @@ let extLinkCategoryInfo = {};
 let currentBlacklistSort = { criteria: 'level', direction: 'desc' };
 
 let currentFavoritesCache = [];
+
+let googleDocTimestamps = new Map();
+let timestampUpdateInterval = null;
 
 const FIELD_WEIGHTS = {
     algorithms: {
@@ -163,6 +171,16 @@ const FIELD_WEIGHTS = {
         text: 1.0,
         url: 0.7,
         notes: 1.0
+    },
+    telefony: {
+        header: 1.5,
+        cell: 1.0
+    },
+    shablony: {
+        h1: 3.0,
+        h2: 2.5,
+        h3: 2.0,
+        content: 1.0
     }
 };
 
@@ -605,68 +623,81 @@ const ExportService = {
         this.styleElement = document.createElement('style');
         this.styleElement.id = 'export-pdf-styles';
         this.styleElement.textContent = `
-            @media print {
-                .export-to-pdf-content, .export-to-pdf-content * {
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
+        @media print {
+            .export-to-pdf-content, .export-to-pdf-content * {
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
             }
-            body > .export-pdf-container {
-                position: absolute;
-                top: -9999px;
-                left: -9999px;
-                width: 210mm; /* A4 width */
-                background-color: #ffffff;
-                visibility: hidden;
-                z-index: -1;
-            }
-            .export-to-pdf-content {
-                color: #111827; /* dark gray text */
-                background-color: #ffffff;
-                font-family: 'Times New Roman', serif;
-                padding: 20mm 15mm;
-                box-sizing: border-box;
-            }
-            .export-to-pdf-content .dark, .export-to-pdf-content .dark\\:bg-gray-800 {
-                 background-color: #ffffff !important;
-            }
-            .export-to-pdf-content h1, .export-to-pdf-content h2, .export-to-pdf-content h3, .export-to-pdf-content h4 {
-                color: #000000 !important;
-                page-break-after: avoid;
-            }
-            .export-to-pdf-content p, .export-to-pdf-content li, .export-to-pdf-content span, .export-to-pdf-content div {
-                 color: #111827 !important;
-            }
-            .export-to-pdf-content a {
-                color: #5858da !important;
-                text-decoration: underline !important;
-            }
-            .export-to-pdf-content .algorithm-step, .export-to-pdf-content .reglament-item {
-                page-break-inside: avoid;
-                border: 1px solid #e5e7eb;
-                box-shadow: none;
-                background-color: #f9fafb !important;
-            }
-            .export-to-pdf-content code, .export-to-pdf-content pre {
-                 background-color: #f3f4f6 !important;
-                 border: 1px solid #d1d5db !important;
-                 color: #1f2937 !important;
-            }
-            /* Скрыть все ненужные для печати элементы */
-            .export-to-pdf-content button,
-            .export-to-pdf-content .fav-btn-placeholder-modal-reglament,
-            .export-to-pdf-content .toggle-favorite-btn,
-            .export-to-pdf-content .view-screenshot-btn,
-            .export-to-pdf-content #noInnLink_main_1,
-            .export-to-pdf-content .copyable-step-active {
-                display: none !important;
-            }
-        `;
+        }
+        body > .export-pdf-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 210mm;
+            background-color: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+        .export-to-pdf-content {
+            color: #111827;
+            background-color: #ffffff;
+            font-family: 'Times New Roman', serif;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        .export-to-pdf-content .dark, .export-to-pdf-content .dark\\:bg-gray-800 {
+             background-color: #ffffff;
+        }
+        .export-to-pdf-content h1, .export-to-pdf-content h2, .export-to-pdf-content h3, .export-to-pdf-content h4 {
+            color: #000000 !important;
+            page-break-after: avoid;
+        }
+        .export-to-pdf-content p, .export-to-pdf-content li, .export-to-pdf-content span, .export-to-pdf-content div {
+             color: #111827 !important;
+        }
+        .export-to-pdf-content a {
+            color: #5858da !important;
+            text-decoration: underline !important;
+        }
+        .export-to-pdf-content .algorithm-step, .export-to-pdf-content .reglament-item {
+            page-break-inside: avoid;
+            border: 1px solid #e5e7eb;
+            box-shadow: none;
+            background-color: #f9fafb;
+        }
+        .export-to-pdf-content code, .export-to-pdf-content pre {
+             background-color: #f3f4f6 !important;
+             border: 1px solid #d1d5db !important;
+             color: #1f2937 !important;
+        }
+        .export-to-pdf-content button,
+        .export-to-pdf-content .fav-btn-placeholder-modal-reglament,
+        .export-to-pdf-content .toggle-favorite-btn,
+        .export-to-pdf-content .view-screenshot-btn,
+        .export-to-pdf-content #noInnLink_main_1,
+        .export-to-pdf-content .copyable-step-active {
+            display: none !important;
+        }
+        .export-pdf-image-container {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed #d1d5db;
+            page-break-inside: avoid;
+        }
+        .export-pdf-image-container img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin-top: 0.5rem;
+            border: 1px solid #d1d5db;
+        }
+    `;
         document.head.appendChild(this.styleElement);
-        console.log("ExportService initialized with print styles.");
+        console.log("ExportService initialized with print styles (FIXED).");
     },
 
-    async exportElementToPdf(element, filename = 'document') {
+    async exportElementToPdf(element, filename = 'document', context = {}) {
         if (this.isExporting) {
             NotificationService.add("Экспорт уже выполняется.", "warning");
             return;
@@ -694,19 +725,100 @@ const ExportService = {
 
         const clone = element.cloneNode(true);
         clone.classList.add('export-to-pdf-content');
-        container.appendChild(clone);
+
+        clone.style.maxHeight = 'none';
+        clone.style.height = 'auto';
+        clone.style.overflow = 'visible';
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            loadingOverlayManager.updateProgress(30, "Генерация PDF...");
+            await new Promise(resolve => setTimeout(resolve, 50));
+            loadingOverlayManager.updateProgress(20, "Обработка изображений...");
 
+            if (context.type === 'algorithm' && context.data && Array.isArray(context.data.steps)) {
+                const algorithmData = context.data;
+                const stepsInClone = clone.querySelectorAll('.algorithm-step');
+
+                const allImageLoadPromises = [];
+
+                const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+                    if (!blob || !(blob instanceof Blob)) {
+                        return reject(new Error('Input is not a valid Blob object.'));
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error('FileReader failed to read the blob.'));
+                    reader.readAsDataURL(blob);
+                });
+
+                for (let i = 0; i < algorithmData.steps.length; i++) {
+                    const stepData = algorithmData.steps[i];
+                    const stepElementInClone = stepsInClone[i];
+
+                    if (stepElementInClone && Array.isArray(stepData.screenshotIds) && stepData.screenshotIds.length > 0) {
+                        const screenshotPromises = stepData.screenshotIds.map(id => getFromIndexedDB('screenshots', id));
+                        const screenshots = (await Promise.all(screenshotPromises)).filter(Boolean);
+
+                        if (screenshots.length > 0) {
+                            const imageContainer = document.createElement('div');
+                            imageContainer.className = 'export-pdf-image-container';
+
+                            for (const screenshot of screenshots) {
+                                if (screenshot.blob instanceof Blob) {
+                                    const imageLoadPromise = new Promise(async (resolve, reject) => {
+                                        try {
+                                            const base64Data = await blobToBase64(screenshot.blob);
+                                            const img = document.createElement('img');
+                                            img.alt = `Скриншот для шага ${i + 1}`;
+
+                                            img.onload = () => {
+                                                console.log(`[PDF Export] Изображение для шага ${i} успешно загружено в DOM.`);
+                                                resolve();
+                                            };
+                                            img.onerror = () => {
+                                                console.error(`[PDF Export] Ошибка загрузки изображения для шага ${i}.`);
+                                                reject(new Error(`Image loading failed for step ${i}`));
+                                            };
+
+                                            img.src = base64Data;
+                                            imageContainer.appendChild(img);
+                                        } catch (error) {
+                                            console.error(`Ошибка конвертации Blob для скриншота ${screenshot.id}:`, error);
+                                            reject(error);
+                                        }
+                                    });
+                                    allImageLoadPromises.push(imageLoadPromise);
+                                }
+                            }
+                            stepElementInClone.appendChild(imageContainer);
+                        }
+                    }
+                }
+
+                if (allImageLoadPromises.length > 0) {
+                    console.log(`[PDF Export] Ожидание загрузки ${allImageLoadPromises.length} изображений...`);
+                    await Promise.all(allImageLoadPromises);
+                    console.log(`[PDF Export] Все изображения успешно загружены.`);
+                }
+            }
+
+            loadingOverlayManager.updateProgress(50, "Генерация PDF...");
             document.body.appendChild(container);
+            container.appendChild(clone);
+
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            console.log("[PDF Export] Render frame has passed, proceeding to generate PDF.");
 
             const opt = {
-                margin: 0,
+                margin: [10, 7, 10, 7],
                 filename: finalFilename,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: false },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    scrollY: 0,
+                    backgroundColor: '#ffffff'
+                },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                 pagebreak: { mode: ['css', 'avoid-all'], before: '.page-break-before' }
             };
@@ -718,9 +830,11 @@ const ExportService = {
 
         } catch (error) {
             console.error("Ошибка при экспорте в PDF:", error);
-            NotificationService.add("Произошла ошибка при экспорте в PDF.", "error", { important: true });
+            NotificationService.add(`Произошла ошибка при экспорте в PDF: ${error.message}`, "error", { important: true });
         } finally {
-            document.body.removeChild(container);
+            if (document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
             loadingOverlayManager.updateProgress(100);
             await loadingOverlayManager.hideAndDestroy();
             this.isExporting = false;
@@ -729,9 +843,6 @@ const ExportService = {
 };
 
 ExportService.init();
-
-
-
 
 
 const UNIFIED_FULLSCREEN_MODAL_CLASSES = {
@@ -1159,11 +1270,16 @@ const loadingOverlayManager = {
         }
 
         .progress-percentage-text {
-            font-size: 13px; 
-            font-weight: 500; 
-            color: rgba(230, 230, 250, 0.75); 
+            font-size: 14px; 
+            font-weight: 600; 
             letter-spacing: 0.5px;
-            text-shadow: 0 0 5px rgba(138, 43, 226, 0.5); 
+            background: linear-gradient(120deg, #9333ea, #c084fc, #9333ea);
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-fill-color: transparent;
+            animation: gradient-text-flow-smooth 3s linear infinite;
         }
 
         @keyframes gradient-text-flow-smooth {
@@ -1858,6 +1974,16 @@ window.onload = async () => {
                 appContent.classList.add('content-fading-in');
                 console.log("[window.onload Promise.all.then] appContent показан с fade-in эффектом.");
 
+                await new Promise(resolve => requestAnimationFrame(resolve));
+
+                if (appInitSuccessfully) {
+                    if (typeof initGoogleDocSections === 'function') {
+                        initGoogleDocSections();
+                    } else {
+                        console.error("Функция initGoogleDocSections не найдена в window.onload!");
+                    }
+                }
+
                 requestAnimationFrame(() => {
                     if (typeof setupTabsOverflow === 'function') {
                         console.log("window.onload (FIXED): Вызов setupTabsOverflow для инициализации обработчиков.");
@@ -1900,71 +2026,84 @@ async function loadUserPreferences() {
         showBlacklistUsageWarning: true,
         disableForcedBackupOnImport: false,
         welcomeTextShownInitially: false,
-        clientNotesFontSize: 100
+        clientNotesFontSize: 100,
+        employeeExtension: ''
     };
 
     if (!db) {
-        console.warn("[loadUserPreferences] База данных не инициализирована. Используются дефолтные userPreferences (с темой из DEFAULT_UI_SETTINGS).");
+        console.warn("[loadUserPreferences] База данных не инициализирована. Используются дефолтные userPreferences.");
         userPreferences = { ...defaultPreferences };
         return;
     }
 
+    let migrationNeeded = false;
     try {
         const savedPrefsContainer = await getFromIndexedDB('preferences', USER_PREFERENCES_KEY);
         if (savedPrefsContainer && typeof savedPrefsContainer.data === 'object') {
             userPreferences = { ...defaultPreferences, ...savedPrefsContainer.data };
             console.log("[loadUserPreferences] Пользовательские настройки загружены из IndexedDB:", userPreferences);
         } else {
-            console.log("[loadUserPreferences] Пользовательские настройки не найдены в IndexedDB или формат некорректен. Используются дефолтные (с темой из DEFAULT_UI_SETTINGS).");
+            console.log("[loadUserPreferences] Пользовательские настройки не найдены в IndexedDB. Используются дефолтные.");
             userPreferences = { ...defaultPreferences };
-            await saveUserPreferences();
-            console.log("[loadUserPreferences] Дефолтные userPreferences сохранены в IndexedDB.");
+            migrationNeeded = true;
         }
+
+        if (!userPreferences.employeeExtension) {
+            const legacyExtensionPref = await getFromIndexedDB('preferences', 'employeeExtension');
+            if (legacyExtensionPref && typeof legacyExtensionPref.value === 'string') {
+                console.log(`[loadUserPreferences] Найдена устаревшая запись добавочного номера ('${legacyExtensionPref.value}'). Выполняется миграция.`);
+                userPreferences.employeeExtension = legacyExtensionPref.value;
+                migrationNeeded = true;
+                await deleteFromIndexedDB('preferences', 'employeeExtension');
+                console.log("[loadUserPreferences] Устаревшая запись добавочного номера удалена.");
+            }
+        }
+
+        if (migrationNeeded) {
+            await saveUserPreferences();
+            console.log("[loadUserPreferences] Настройки (с возможной миграцией) сохранены в IndexedDB.");
+        }
+
     } catch (error) {
         console.error("[loadUserPreferences] Ошибка при загрузке пользовательских настроек из IndexedDB:", error);
         userPreferences = { ...defaultPreferences };
     }
 
     if (typeof userPreferences.theme !== 'string' || !['auto', 'light', 'dark'].includes(userPreferences.theme)) {
-        console.warn(`[loadUserPreferences] Загруженная тема некорректна (${userPreferences.theme}). Сброс к теме из defaultPreferences: ${defaultPreferences.theme}.`);
         userPreferences.theme = defaultPreferences.theme;
     }
-
     if (typeof userPreferences.showBlacklistUsageWarning !== 'boolean') {
-        console.warn(`[loadUserPreferences] showBlacklistUsageWarning имеет неверный тип (${typeof userPreferences.showBlacklistUsageWarning}). Сброс к ${defaultPreferences.showBlacklistUsageWarning}.`);
         userPreferences.showBlacklistUsageWarning = defaultPreferences.showBlacklistUsageWarning;
     }
-
     if (typeof userPreferences.disableForcedBackupOnImport !== 'boolean') {
-        console.warn(`[loadUserPreferences] disableForcedBackupOnImport имеет неверный тип (${typeof userPreferences.disableForcedBackupOnImport}). Сброс к ${defaultPreferences.disableForcedBackupOnImport}.`);
         userPreferences.disableForcedBackupOnImport = defaultPreferences.disableForcedBackupOnImport;
     }
-
     if (typeof userPreferences.welcomeTextShownInitially !== 'boolean') {
-        console.warn(`[loadUserPreferences] welcomeTextShownInitially имеет неверный тип (${typeof userPreferences.welcomeTextShownInitially}). Сброс к ${defaultPreferences.welcomeTextShownInitially}.`);
         userPreferences.welcomeTextShownInitially = defaultPreferences.welcomeTextShownInitially;
     }
-
     if (typeof userPreferences.clientNotesFontSize !== 'number' || userPreferences.clientNotesFontSize < CLIENT_NOTES_MIN_FONT_SIZE || userPreferences.clientNotesFontSize > CLIENT_NOTES_MAX_FONT_SIZE) {
-        console.warn(`[loadUserPreferences] Некорректный clientNotesFontSize (${userPreferences.clientNotesFontSize}). Сброс к значению по умолчанию.`);
         userPreferences.clientNotesFontSize = defaultPreferences.clientNotesFontSize;
     }
-
-    console.log("[loadUserPreferences] Загрузка пользовательских настроек завершена. Итоговые userPreferences.theme:", userPreferences.theme, "welcomeTextShownInitially:", userPreferences.welcomeTextShownInitially);
+    if (typeof userPreferences.employeeExtension !== 'string') {
+        userPreferences.employeeExtension = defaultPreferences.employeeExtension;
+    }
+    console.log("[loadUserPreferences] Загрузка пользовательских настроек завершена. Итоговые userPreferences:", userPreferences);
 }
 
 
 async function saveUserPreferences() {
     if (!db) {
         console.error("[saveUserPreferences] База данных не инициализирована. Настройки пользователя не могут быть сохранены.");
-
         if (typeof showNotification === 'function') {
             showNotification("Ошибка: Не удалось сохранить пользовательские настройки (БД недоступна).", "error");
         }
         return false;
     }
-
     try {
+        if (typeof userPreferences.employeeExtension === 'undefined') {
+            console.warn("[saveUserPreferences] Поле employeeExtension отсутствует в userPreferences. Устанавливается пустая строка.");
+            userPreferences.employeeExtension = '';
+        }
 
         const dataToSave = {
             id: USER_PREFERENCES_KEY,
@@ -2701,7 +2840,7 @@ async function saveDataToIndexedDB() {
 
 
 const tabsConfig = [
-    { id: 'main', name: 'Главный алгоритм', icon: 'fa-home' },
+    { id: 'main', name: 'Главная', icon: 'fa-home' },
     { id: 'program', name: 'Программа 1С', icon: 'fa-desktop' },
     { id: 'links', name: 'Ссылки 1С', icon: 'fa-link' },
     { id: 'extLinks', name: 'Внешние ресурсы', icon: 'fa-globe' },
@@ -2710,6 +2849,8 @@ const tabsConfig = [
     { id: 'webReg', name: 'Веб-Регистратор', icon: 'fa-plug' },
     { id: 'reglaments', name: 'Регламенты', icon: 'fa-clipboard-list' },
     { id: 'bookmarks', name: 'Закладки', icon: 'fa-bookmark' },
+    { id: 'telefony', name: 'Телефоны', icon: 'fa-phone-alt' },
+    { id: 'shablony', name: 'Шаблоны', icon: 'fa-file-invoice' },
     { id: 'sedoTypes', name: 'Типы сообщений СЭДО', icon: 'fa-comments' },
     { id: 'blacklistedClients', name: 'Черный список жаб', icon: 'fa-user-secret', isSpecial: true }
 ];
@@ -3338,7 +3479,7 @@ function renderSedoTypesContent(data, isEditing, searchQuery = '') {
 
         const clearSearchBtn = document.createElement('button');
         clearSearchBtn.id = 'clearSedoSearchBtn';
-        clearSearchBtn.className = 'absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700';
+        clearSearchBtn.className = 'absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700';
         clearSearchBtn.title = 'Очистить поиск';
         clearSearchBtn.innerHTML = '<i class="fas fa-times"></i>';
         clearSearchBtn.classList.toggle('hidden', !searchQuery);
@@ -3672,7 +3813,7 @@ function handleSedoTableFullscreen(tableIndex) {
 function renderSedoTableRowAsVerticalBlock(rowData, columnNames, tableConfig, originalTableIndex, originalRowIndex) {
     const rowBlock = document.createElement('div');
 
-    rowBlock.className = 'p-3 sm:p-4 bg-gray-50 dark:bg-gray-700/60 rounded-lg shadow border border-gray-200 dark:border-gray-600';
+    rowBlock.className = 'sedo-fullscreen-item-block p-3 sm:p-4 bg-gray-50 dark:bg-gray-700/60 rounded-lg shadow border border-gray-200 dark:border-gray-600';
     rowBlock.dataset.originalTableIndex = originalTableIndex;
     rowBlock.dataset.originalRowIndex = originalRowIndex;
 
@@ -3686,8 +3827,6 @@ function renderSedoTableRowAsVerticalBlock(rowData, columnNames, tableConfig, or
         if (colIndex === 0 && tableConfig.codeField && rowData.hasOwnProperty(tableConfig.codeField)) {
             currentItemKey = tableConfig.codeField;
         }
-
-
         else {
 
             const potentialKeys = {
@@ -3710,7 +3849,6 @@ function renderSedoTableRowAsVerticalBlock(rowData, columnNames, tableConfig, or
             if (foundKey) {
                 currentItemKey = foundKey;
             }
-
             else if (itemKeys[colIndex] !== undefined) {
                 currentItemKey = itemKeys[colIndex];
                 if (!rowData.hasOwnProperty(currentItemKey)) {
@@ -5080,13 +5218,21 @@ async function _processActualImport(jsonString) {
 
         if (importTransactionSuccessful) {
             console.log("[_processActualImport V8] Импорт данных в IndexedDB завершен. Обновление приложения...");
+
+            console.log("[FIX] Принудительный сброс кэшей в памяти перед реинициализацией...");
+            if (typeof algorithms !== 'undefined') {
+                algorithms = { main: {}, program: [], skzi: [], lk1c: [], webReg: [] };
+                console.log("[FIX] Кэш 'algorithms' сброшен.");
+            }
+            if (typeof extLinkCategoryInfo !== 'undefined') {
+                extLinkCategoryInfo = {};
+                console.log("[FIX] Кэш 'extLinkCategoryInfo' сброшен.");
+            }
+
             if (typeof loadingOverlayManager !== 'undefined' && loadingOverlayManager.updateProgress) {
                 loadingOverlayManager.updateProgress(Math.min(currentImportProgress + 1, 99), "Инициализация приложения");
             }
             try {
-                if (typeof algorithms !== 'undefined') algorithms = { main: {}, program: [], skzi: [], lk1c: [], webReg: [] };
-                console.log("[_processActualImport V8] Предполагаемые кэши данных в памяти сброшены перед appInit.");
-
                 const dbReadyAfterImport = await appInit('import');
                 if (!dbReadyAfterImport && db === null) {
                     throw new Error("Не удалось переинициализировать приложение после импорта (БД стала null).");
@@ -6174,7 +6320,7 @@ async function setActiveTab(tabId, warningJustAccepted = false) {
 
     const FADE_DURATION = 150;
 
-    console.log(`[setActiveTab V.Animation] Активация вкладки: ${tabId}`);
+    console.log(`[setActiveTab v.Corrected] Активация вкладки: ${tabId}`);
 
     if (tabId === 'blacklistedClients' && userPreferences.showBlacklistUsageWarning && !warningJustAccepted) {
         if (typeof showBlacklistWarning === 'function') {
@@ -6192,16 +6338,16 @@ async function setActiveTab(tabId, warningJustAccepted = false) {
     allTabButtons.forEach(button => {
         const isActive = (button.id === targetTabId) && (tabId !== 'favorites');
         if (isActive) {
-            button.classList.add('border-primary', 'text-primary');
-            button.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400', 'hover:border-gray-300', 'dark:hover:border-gray-600', 'hover:text-gray-700', 'dark:hover:text-gray-300');
+            button.classList.add('tab-active');
+            button.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
         } else {
-            button.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400', 'hover:border-gray-300', 'dark:hover:border-gray-600', 'hover:text-gray-700', 'dark:hover:text-gray-300');
-            button.classList.remove('border-primary', 'text-primary');
+            button.classList.remove('tab-active');
+            button.classList.add('text-gray-500', 'dark:text-gray-400', 'border-transparent');
         }
     });
 
     if (currentSection === tabId && !warningJustAccepted) {
-        console.log(`[setActiveTab V.Animation] Вкладка ${tabId} уже активна. Выход.`);
+        console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} уже активна. Выход.`);
         return;
     }
 
@@ -6254,7 +6400,7 @@ async function setActiveTab(tabId, warningJustAccepted = false) {
         requestAnimationFrame(updateVisibleTabs);
     }
 
-    console.log(`[setActiveTab V.Animation] Вкладка ${tabId} успешно активирована с анимацией.`);
+    console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} успешно активирована с анимацией.`);
 }
 
 
@@ -7163,7 +7309,7 @@ function escapeHtml(text) {
 
 
 async function showAlgorithmDetail(algorithm, section) {
-    console.log(`[showAlgorithmDetail v10 - Favorites Removed for Main Modal] Вызвана. Алгоритм ID: ${algorithm?.id}, Секция: ${section}`);
+    console.log(`[showAlgorithmDetail v11 - PDF Export Fix] Вызвана. Алгоритм ID: ${algorithm?.id}, Секция: ${section}`);
 
     const algorithmModal = document.getElementById('algorithmModal');
     const modalTitleElement = document.getElementById('modalTitle');
@@ -7172,18 +7318,18 @@ async function showAlgorithmDetail(algorithm, section) {
     const editAlgorithmBtnModal = document.getElementById('editAlgorithmBtn');
 
     if (!algorithmModal || !modalTitleElement || !algorithmStepsContainer) {
-        console.error("[showAlgorithmDetail v10 Error] Не найдены основные элементы модального окна.");
+        console.error("[showAlgorithmDetail v11 Error] Не найдены основные элементы модального окна.");
         showNotification("Критическая ошибка интерфейса: не найдены элементы окна деталей.", "error");
         return;
     }
     if (!algorithm || typeof algorithm !== 'object') {
-        console.error("[showAlgorithmDetail v10 Error] Передан некорректный объект алгоритма:", algorithm);
+        console.error("[showAlgorithmDetail v11 Error] Передан некорректный объект алгоритма:", algorithm);
         showNotification("Ошибка: Некорректные данные алгоритма.", "error");
         return;
     }
     const currentAlgorithmId = (section === 'main' || algorithm.id === 'main') ? 'main' : (algorithm.id || null);
     if (currentAlgorithmId === null) {
-        console.error(`[showAlgorithmDetail v10 Error] Не удалось определить ID алгоритма.`);
+        console.error(`[showAlgorithmDetail v11 Error] Не удалось определить ID алгоритма.`);
         showNotification("Ошибка: Не удалось определить ID алгоритма.", "error");
         return;
     }
@@ -7226,7 +7372,7 @@ async function showAlgorithmDetail(algorithm, section) {
             exportBtn._clickHandler = () => {
                 const content = document.getElementById('algorithmSteps');
                 const title = document.getElementById('modalTitle').textContent;
-                ExportService.exportElementToPdf(content, title);
+                ExportService.exportElementToPdf(content, title, { type: 'algorithm', data: algorithm });
             };
             exportBtn.addEventListener('click', exportBtn._clickHandler);
         }
@@ -7246,7 +7392,7 @@ async function showAlgorithmDetail(algorithm, section) {
 
         if (section === 'main' || currentAlgorithmId === 'main') {
             favButtonContainer.innerHTML = '';
-            console.log("[showAlgorithmDetail v10] Кнопка 'В избранное' скрыта для главного алгоритма в модальном окне.");
+            console.log("[showAlgorithmDetail v11] Кнопка 'В избранное' скрыта для главного алгоритма в модальном окне.");
         } else {
             const itemType = 'algorithm';
             const itemId = currentAlgorithmId;
@@ -7255,10 +7401,10 @@ async function showAlgorithmDetail(algorithm, section) {
             const itemDesc = algorithm.steps?.[0]?.description || algorithm.steps?.[0]?.title || (algorithm.description || '');
             const isFav = isFavorite(itemType, itemId);
             favButtonContainer.innerHTML = getFavoriteButtonHTML(itemId, itemType, itemSection, itemTitle, itemDesc, isFav);
-            console.log(`[showAlgorithmDetail v10] Кнопка 'В избранное' отображена для алгоритма ID ${itemId} в модальном окне.`);
+            console.log(`[showAlgorithmDetail v11] Кнопка 'В избранное' отображена для алгоритма ID ${itemId} в модальном окне.`);
         }
     } else {
-        console.warn("[showAlgorithmDetail v10] Контейнер для кнопок управления в шапке модалки не найден.");
+        console.warn("[showAlgorithmDetail v11] Контейнер для кнопок управления в шапке модалки не найден.");
     }
 
     const isMainAlgorithm = section === 'main';
@@ -7270,7 +7416,7 @@ async function showAlgorithmDetail(algorithm, section) {
 
         const stepHtmlPromises = algorithm.steps.map(async (step, index) => {
             if (!step || typeof step !== 'object') {
-                console.warn(`[showAlgorithmDetail v10 Step Render Warn] Пропуск невалидного объекта шага на индексе ${index}:`, step);
+                console.warn(`[showAlgorithmDetail v11 Step Render Warn] Пропуск невалидного объекта шага на индексе ${index}:`, step);
                 return `<div class="algorithm-step bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 p-4 mb-3 rounded shadow-sm text-red-700 dark:text-red-300">Ошибка: Некорректные данные для шага ${index + 1}.</div>`;
             }
 
@@ -7349,17 +7495,14 @@ async function showAlgorithmDetail(algorithm, section) {
             }
         }
     } catch (error) {
-        console.error("[showAlgorithmDetail v10 Step Render Error]", error);
+        console.error("[showAlgorithmDetail v11 Step Render Error]", error);
         algorithmStepsContainer.innerHTML = `<p class="text-red-500 p-4 text-center">Ошибка при отображении шагов: ${error.message}</p>`;
     }
 
     algorithmModal.classList.remove('hidden');
     document.body.classList.add('modal-open');
-    console.log(`[showAlgorithmDetail v10 Info] Модальное окно #${algorithmModal.id} показано.`);
+    console.log(`[showAlgorithmDetail v11 Info] Модальное окно #${algorithmModal.id} показано.`);
 }
-
-
-
 
 
 function initStepInteractions(stepElement) {
@@ -7814,9 +7957,14 @@ async function editAlgorithm(algorithmId, section = 'main') {
         if (isMainAlgorithm) {
             algorithm = algorithms.main;
         } else {
-            algorithm = algorithms[section]?.find(a => String(a?.id) === String(algorithmId));
+            if (algorithms[section] && Array.isArray(algorithms[section])) {
+                algorithm = algorithms[section].find(a => String(a?.id) === String(algorithmId));
+            }
         }
-        if (!algorithm) throw new Error(`Алгоритм с ID ${algorithmId} не найден в секции ${section}.`);
+        if (!algorithm) {
+            throw new Error(`Алгоритм с ID ${algorithmId} не найден в секции ${section}.`);
+        }
+        algorithm = JSON.parse(JSON.stringify(algorithm));
         algorithm.steps = algorithm.steps?.map(step => ({ ...step })) || [];
     } catch (error) {
         console.error(`[editAlgorithm v9] Ошибка при получении данных алгоритма:`, error);
@@ -7832,7 +7980,7 @@ async function editAlgorithm(algorithmId, section = 'main') {
     const editStepsContainerElement = document.getElementById('editSteps');
     const saveAlgorithmBtn = document.getElementById('saveAlgorithmBtn');
 
-    if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainerElement || !saveAlgorithmBtn || !descriptionContainer) {
+    if (!editModal || !editModalTitle || !algorithmTitleInput || !editStepsContainerElement || !saveAlgorithmBtn || !descriptionContainer || !algorithmDescriptionInput) {
         console.error("[editAlgorithm v9] КРИТИЧЕСКАЯ ОШИБКА: Не найдены ОБЯЗАТЕЛЬНЫЕ элементы модального окна.");
         return;
     }
@@ -7859,7 +8007,7 @@ async function editAlgorithm(algorithmId, section = 'main') {
         descriptionContainer.style.display = isMainAlgorithm ? 'none' : 'block';
         editModalTitle.textContent = `Редактирование: ${algorithm.title ?? 'Без названия'}`;
         algorithmTitleInput.value = algorithm.title ?? '';
-        if (!isMainAlgorithm && algorithmDescriptionInput) {
+        if (!isMainAlgorithm) {
             algorithmDescriptionInput.value = algorithm.description ?? '';
         }
         editStepsContainerElement.innerHTML = '';
@@ -7871,10 +8019,10 @@ async function editAlgorithm(algorithmId, section = 'main') {
             editStepsContainerElement.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center p-4">${message}</p>`;
         } else {
             const fragment = document.createDocumentFragment();
-            for (const [index, step] of algorithm.steps.entries()) {
+            const stepPromises = algorithm.steps.map(async (step, index) => {
                 if (!step || typeof step !== 'object') {
                     console.warn(`Пропуск невалидного шага на индексе ${index} при заполнении формы.`);
-                    continue;
+                    return null;
                 }
                 const stepDiv = document.createElement('div');
                 stepDiv.className = 'edit-step p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 shadow-sm mb-4';
@@ -7895,9 +8043,15 @@ async function editAlgorithm(algorithmId, section = 'main') {
 
                 if (titleInput) {
                     titleInput.value = step.title ?? '';
-                    if (titlePreview) titlePreview.textContent = step.title || 'Без заголовка';
+                    if (titlePreview) {
+                        const previewText = step.title || 'Без заголовка';
+                        titlePreview.textContent = previewText;
+                    }
                     titleInput.addEventListener('input', () => {
-                        if (titlePreview) titlePreview.textContent = titleInput.value || 'Без заголовка';
+                        if (titlePreview) {
+                            const previewText = titleInput.value || `Шаг ${index + 1}`;
+                            titlePreview.textContent = previewText;
+                        }
                     });
                 }
                 if (descInput) { descInput.value = step.description ?? ''; }
@@ -7908,14 +8062,7 @@ async function editAlgorithm(algorithmId, section = 'main') {
                 if (isMainAlgorithm && isCopyableCheckbox) { isCopyableCheckbox.checked = step.isCopyable || false; }
 
                 if (isMainAlgorithm && noInnHelpCheckbox) {
-                    const defaultInnStepTitle = "Уточнение ИНН";
-                    const isThisTheDefaultInnStep = (step.title === defaultInnStepTitle &&
-                        DEFAULT_MAIN_ALGORITHM.steps.some(s => s.title === defaultInnStepTitle && s.showNoInnHelp === true));
-                    if (isThisTheDefaultInnStep) {
-                        noInnHelpCheckbox.checked = false;
-                    } else {
-                        noInnHelpCheckbox.checked = step.showNoInnHelp || false;
-                    }
+                    noInnHelpCheckbox.checked = step.showNoInnHelp || false;
                 }
 
                 if (!isMainAlgorithm) {
@@ -7947,9 +8094,11 @@ async function editAlgorithm(algorithmId, section = 'main') {
                 if (index > 0) {
                     toggleStepCollapse(stepDiv, true);
                 }
+                return stepDiv;
+            });
+            const stepDivs = (await Promise.all(stepPromises)).filter(Boolean);
+            stepDivs.forEach(div => fragment.appendChild(div));
 
-                fragment.appendChild(stepDiv);
-            }
             editStepsContainerElement.appendChild(fragment);
             updateStepNumbers(editStepsContainerElement);
         }
@@ -7962,7 +8111,10 @@ async function editAlgorithm(algorithmId, section = 'main') {
         });
 
         initStepSorting(editStepsContainerElement);
-        captureInitialEditState(algorithm);
+
+        editModal.dataset.algorithmId = String(algorithm.id);
+        editModal.dataset.section = section;
+        captureInitialEditState(algorithm, section);
 
     } catch (error) {
         console.error("[editAlgorithm v9] Ошибка при заполнении формы:", error);
@@ -7973,8 +8125,6 @@ async function editAlgorithm(algorithmId, section = 'main') {
         return;
     }
 
-    editModal.dataset.algorithmId = String(algorithm.id);
-    editModal.dataset.section = section;
     const algorithmModalView = document.getElementById('algorithmModal');
     if (algorithmModalView) { algorithmModalView.classList.add('hidden'); }
     openAnimatedModal(editModal);
@@ -9810,7 +9960,7 @@ function renderSearchResults(results, query) {
 
         switch (result.type) {
             case 'algorithm': iconClass = 'fa-sitemap'; typeText = 'Алгоритм'; break;
-            case 'main': iconClass = 'fa-sitemap'; typeText = 'Главный алгоритм'; resultSectionForDataset = 'main'; break;
+            case 'main': iconClass = 'fa-sitemap'; typeText = 'Главная'; resultSectionForDataset = 'main'; break;
             case 'link': iconClass = 'fa-link'; typeText = 'Ссылка 1С'; break;
             case 'bookmark': iconClass = 'fa-bookmark'; typeText = 'Закладка (URL)'; break;
             case 'bookmark_note': iconClass = 'fa-sticky-note'; typeText = 'Заметка'; break;
@@ -9822,6 +9972,8 @@ function renderSearchResults(results, query) {
             case 'sedoInfo': iconClass = 'fa-info-circle'; typeText = 'Инфо СЭДО (раздел)'; resultSectionForDataset = 'sedoTypes'; break;
             case 'uiSetting': iconClass = 'fa-palette'; typeText = 'Настройка UI'; resultSectionForDataset = 'uiSettingsControl'; break;
             case 'section_link': iconClass = 'fa-columns'; typeText = 'Раздел'; break;
+            case 'telefony_row': iconClass = 'fa-phone-alt'; typeText = 'Телефоны'; break;
+            case 'shablony_block': iconClass = 'fa-file-invoice'; typeText = 'Шаблоны'; break;
         }
 
         const titleContainer = document.createElement('div');
@@ -10043,10 +10195,55 @@ function highlightTextInElement(element, searchTerm) {
 function convertItemToSearchResult(ref, itemData, score) {
     const storeName = ref.store;
     const itemIdFromRef = ref.id;
-    const MAIN_SEDO_GLOBAL_CONTENT_FIELD = "mainSedoGlobalContent";
+
+    if (storeName === 'telefony') {
+        const docId = itemIdFromRef;
+        const rowIndex = ref.rowIndex;
+        const allRows = originalTelefonyData || [];
+        const rowData = allRows[rowIndex];
+
+        if (rowData) {
+            return {
+                section: 'telefony',
+                type: 'telefony_row',
+                id: `${docId}_row_${rowIndex}`,
+                title: Object.values(rowData).find(val => val && String(val).trim()) || `Строка #${rowIndex + 1}`,
+                description: Object.values(rowData).join(' | '),
+                score: score || 0,
+                rowIndex: rowIndex
+            };
+        }
+        return null;
+    }
+
+    if (storeName === 'shablony') {
+        const docId = itemIdFromRef;
+        const blockIndex = ref.blockIndex;
+
+        if (typeof blockIndex !== 'number') {
+            console.warn(`[convertItemToSearchResult] Получена ссылка на 'shablony' без blockIndex.`, ref);
+            return null;
+        }
+        const allBlocks = parseShablonyContent(originalShablonyData || []);
+        const blockData = allBlocks.find(b => b.originalIndex === blockIndex);
+
+        if (blockData) {
+            return {
+                section: 'shablony',
+                type: 'shablony_block',
+                id: `${docId}_block_${blockIndex}`,
+                title: blockData.title,
+                description: truncateText(blockData.content, 150),
+                score: score || 0,
+                blockIndex: blockIndex
+            };
+        }
+        console.warn(`[convertItemToSearchResult] Не удалось найти данные для блока ${blockIndex} в 'shablony'.`);
+        return null;
+    }
 
     if (!itemData) {
-        console.warn(`[convertItemToSearchResult V12 - SKZI Fix & Bookmark Desc Fix] Попытка конвертировать пустой элемент для ${storeName}/${itemIdFromRef}`);
+        console.warn(`[convertItemToSearchResult] Попытка конвертировать пустой элемент для ${storeName}/${itemIdFromRef}`);
         return null;
     }
 
@@ -10062,66 +10259,43 @@ function convertItemToSearchResult(ref, itemData, score) {
             finalSection = 'main';
             finalItemId = 'main';
         } else {
-            let determinedSection = null;
-            if (itemData.section && algoSectionsFromTabs.includes(itemData.section)) {
-                determinedSection = itemData.section;
-            }
-            if (!determinedSection && (itemData.id || itemIdFromRef)) {
-                const idToCheck = itemData.id || itemIdFromRef;
-                if (typeof idToCheck === 'string') {
-                    for (const prefix of algoSectionsFromTabs) {
-                        if (idToCheck.toLowerCase().startsWith(prefix.toLowerCase())) {
-                            determinedSection = prefix;
-                            break;
-                        }
-                    }
-                }
-            }
+            let determinedSection = itemData.section && algoSectionsFromTabs.includes(itemData.section)
+                ? itemData.section
+                : algoSectionsFromTabs.find(prefix => String(itemData.id || itemIdFromRef).toLowerCase().startsWith(prefix.toLowerCase()));
+
             if (determinedSection) {
                 finalSection = determinedSection;
-                finalItemId = itemData.id || itemIdFromRef;
             } else {
-                finalItemId = itemData.id || itemIdFromRef;
                 finalSection = 'program';
-                console.warn(`[convertItemToSearchResult V12 - SKZI Fix] КРИТИЧЕСКОЕ ПРЕДУПРЕЖДЕНИЕ: Не удалось определить секцию для algorithm ID: ${finalItemId}. itemData.section: '${itemData.section}'. Используется fallback '${finalSection}'. ItemData:`, itemData);
+                console.warn(`[convertItemToSearchResult] Не удалось определить секцию для algorithm ID: ${itemData.id || itemIdFromRef}. Fallback на '${finalSection}'.`);
             }
+            finalItemId = itemData.id || itemIdFromRef;
         }
-        if (typeof itemData === 'object' && itemData !== null) {
+        if (itemData) {
             if (!itemData.id || String(itemData.id) !== String(finalItemId)) itemData.id = finalItemId;
             if (!itemData.section || itemData.section !== finalSection) itemData.section = finalSection;
         }
-
     } else if (storeName === 'clientData') {
         finalItemId = 'current';
         finalSection = 'main';
-        if (typeof itemData === 'object' && itemData !== null && itemData.id !== 'current') itemData.id = 'current';
     } else if (storeName === 'bookmarkFolders') {
         finalItemId = String(itemData.id || itemIdFromRef);
         finalSection = 'bookmarks';
-        if (!finalItemId) { console.warn("[convertItemToSearchResult V12 - SKZI Fix] Отсутствует ID у папки закладок:", itemData); return null; }
-        if (typeof itemData === 'object' && itemData !== null && !itemData.id) itemData.id = finalItemId;
     } else if (storeName === 'preferences') {
-        if (itemIdFromRef === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null)) {
+        if (itemIdFromRef === SEDO_CONFIG_KEY) {
             finalSection = 'sedoTypes';
         } else if (itemIdFromRef === 'uiSettings') {
             finalSection = 'uiSettingsControl';
             finalItemId = 'customizeUIBtn';
         } else {
             finalSection = 'preferences';
-            finalItemId = itemIdFromRef;
         }
     } else if (storeName === 'blacklistedClients') {
         finalSection = 'blacklistedClients';
         finalItemId = String(itemData.id || itemIdFromRef);
-    }
-    else {
+    } else {
         finalSection = storeName;
         finalItemId = String(itemData.id || itemIdFromRef);
-        if (!finalItemId) {
-            console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Item ID не найден для хранилища ${storeName}, itemData:`, itemData, `itemIdFromRef: ${itemIdFromRef}`);
-            return null;
-        }
-        if (typeof itemData === 'object' && itemData !== null && !itemData.id) itemData.id = finalItemId;
     }
 
     let result = {
@@ -10136,506 +10310,174 @@ function convertItemToSearchResult(ref, itemData, score) {
     switch (storeName) {
         case 'algorithms':
             result.type = (finalItemId === 'main') ? 'main' : 'algorithm';
-            result.title = itemData.title || (finalItemId === 'main' ? (algorithms?.main?.title || 'Главный алгоритм') : `Алгоритм ${finalItemId}`);
-            let algoDesc = itemData.description || itemData.steps?.[0]?.description || itemData.steps?.[0]?.title || 'Нет описания';
+            result.title = itemData.title || (finalItemId === 'main' ? 'Главная' : `Алгоритм ${finalItemId}`);
+            result.description = itemData.description || itemData.steps?.[0]?.description || itemData.steps?.[0]?.title || '';
             if (result.type === 'algorithm' && itemData.section && typeof getSectionName === 'function') {
-                const sectionNameText = getSectionName(itemData.section);
-                if (sectionNameText && sectionNameText.toLowerCase() !== "основной" && !algoDesc.toLowerCase().startsWith(`[${sectionNameText.toLowerCase()}]`)) {
-                    algoDesc = `[${sectionNameText}] ${algoDesc}`;
-                }
+                result.description = `[${getSectionName(itemData.section)}] ${result.description}`;
             }
-            result.description = algoDesc;
             break;
         case 'links':
             result.type = 'link';
-            result.title = itemData.title || `Ссылка 1С #${finalItemId}`;
-            result.description = itemData.description || itemData.link || 'Нет описания или адреса';
             break;
         case 'bookmarks':
-            if (itemData.url) {
-                result.type = 'bookmark';
-                result.title = itemData.title || itemData.url;
-                if (itemData.description) {
-                    result.description = itemData.description;
-                } else {
-                    try {
-                        let fullUrl = itemData.url;
-                        if (!fullUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fullUrl.includes('.')) {
-                            if (!fullUrl.startsWith('//')) {
-                                fullUrl = "https://" + fullUrl;
-                            } else {
-                                fullUrl = "https:" + fullUrl;
-                            }
-                        }
-                        const urlObj = new URL(fullUrl);
-                        result.description = `Ссылка на: ${urlObj.hostname.replace(/^www\./, '')}`;
-                    } catch (e) {
-                        result.description = itemData.url;
-                    }
-                }
-            } else {
-                result.type = 'bookmark_note';
-                result.title = itemData.title || `Заметка #${finalItemId}`;
-                result.description = itemData.description || 'Нет текста заметки';
-            }
+            result.type = itemData.url ? 'bookmark' : 'bookmark_note';
             break;
         case 'reglaments':
             result.type = 'reglament';
-            result.title = itemData.title || `Регламент #${finalItemId}`;
-            const categoryInfo = itemData.category && typeof categoryDisplayInfo === 'object' ? categoryDisplayInfo[itemData.category] : null;
-            const categoryName = categoryInfo ? categoryInfo.title : (itemData.category || 'Без категории');
-            const contentPreview = itemData.content ? (itemData.content.substring(0, 100).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() + (itemData.content.length > 100 ? '...' : '')) : 'Нет содержимого';
-            result.description = `Категория: ${categoryName}. ${contentPreview}`;
+            result.description = `Категория: ${itemData.category ? (categoryDisplayInfo[itemData.category]?.title || itemData.category) : 'Без категории'}. ` + (itemData.content || '').substring(0, 100) + '...';
             break;
         case 'extLinks':
             result.type = 'extLink';
-            result.title = itemData.title || itemData.url || `Ресурс #${finalItemId}`;
-            result.description = itemData.description || itemData.url || 'Нет описания или URL';
             break;
         case 'clientData':
             result.type = 'clientNote';
             result.title = 'Заметки по клиенту';
-            const notesPreview = itemData.notes ? (itemData.notes.substring(0, 100).replace(/\s+/g, ' ').trim() + (itemData.notes.length > 100 ? '...' : '')) : 'Нет заметок';
-            result.description = notesPreview;
+            result.description = (itemData.notes || '').substring(0, 100) + '...';
             break;
         case 'bookmarkFolders':
             result.type = 'bookmarkFolder';
-            result.title = `Папка: ${itemData.name || 'Без названия'}`;
-            result.description = `Нажмите для фильтрации закладок по этой папке`;
+            result.title = `Папка: ${itemData.name}`;
             break;
         case 'blacklistedClients':
             result.type = 'blacklistedClient';
             result.title = itemData.organizationName || `Запись ЧС #${finalItemId}`;
-            let descParts = [];
-            if (itemData.inn) descParts.push(`ИНН: ${itemData.inn}`);
-            if (itemData.phone) descParts.push(`Тел: ${itemData.phone}`);
-            if (itemData.notes) descParts.push(`Заметка: ${truncateText(itemData.notes, 50)}`);
-            result.description = descParts.join('; ') || 'Нет доп. информации';
+            result.description = `ИНН: ${itemData.inn || '-'}, Тел: ${itemData.phone || '-'}`;
             break;
         case 'preferences':
-            if (itemIdFromRef === (typeof SEDO_CONFIG_KEY !== 'undefined' ? SEDO_CONFIG_KEY : null)) {
+            if (itemIdFromRef === SEDO_CONFIG_KEY) {
                 const table = itemData.tables?.[ref.tableIndex];
-
-                if (ref.field === MAIN_SEDO_GLOBAL_CONTENT_FIELD && ref.tableIndex === undefined && ref.rowIndex === undefined) {
-                    result.type = 'sedoInfo';
-                    result.title = 'Типы сообщений СЭДО';
-                    result.description = (itemData.name && typeof itemData.name === 'string') ? itemData.name : 'Общая информация и таблицы по типам сообщений СЭДО.';
-                    result.id = 'sedoTypesPanel';
-                } else if (ref.tableIndex !== undefined && table) {
-                    result.type = 'sedoInfoItem';
-                    let specificTitle = `Запись СЭДО`;
-                    let specificDesc = '';
-                    const rowItem = table.items?.[ref.rowIndex];
-
-                    if (rowItem && typeof rowItem === 'object') {
-                        const matchedFieldKey = ref.field;
-                        const matchedFieldValue = (typeof rowItem[matchedFieldKey] === 'string')
-                            ? rowItem[matchedFieldKey]
-                            : JSON.stringify(rowItem[matchedFieldKey]);
-
-                        if (rowItem.name && typeof rowItem.name === 'string') specificTitle = rowItem.name;
-                        else if (table.codeField && rowItem[table.codeField] && typeof rowItem[table.codeField] === 'string') specificTitle = `${table.columns?.[0] || 'Код'}: ${rowItem[table.codeField]}`;
-                        else if (rowItem.type && typeof rowItem.type === 'string') specificTitle = `Тип: ${rowItem.type}`;
-                        else if (table.columns?.[0] && rowItem[Object.keys(rowItem)[0]] && typeof rowItem[Object.keys(rowItem)[0]] === 'string') specificTitle = `${table.columns[0]}: ${rowItem[Object.keys(rowItem)[0]]}`;
-                        else specificTitle = table.title || `Элемент из таблицы СЭДО`;
-
-                        let columnName = matchedFieldKey;
-                        if (table.columns) {
-                            const colKeys = Object.keys(rowItem);
-                            const colIndex = colKeys.indexOf(matchedFieldKey);
-                            if (colIndex !== -1 && table.columns[colIndex]) {
-                                columnName = table.columns[colIndex];
-                            }
-                        }
-                        specificDesc = `В поле "${columnName}": ${truncateText(String(matchedFieldValue), 100)}. (Таблица: "${truncateText(table.title || 'Без названия', 50)}")`;
-
-                    } else if (ref.field === "tableTitle") {
-                        specificTitle = table.title || `Таблица СЭДО ${ref.tableIndex + 1}`;
-                        specificDesc = `Найден заголовок таблицы СЭДО`;
-                    } else if (ref.field === "staticListItem" && table?.isStaticList && typeof table.items?.[ref.rowIndex] === 'string') {
-                        specificTitle = table.items[ref.rowIndex];
-                        specificDesc = `Из статического списка: ${table.title || 'Общая информация СЭДО'}`;
+                result.type = 'sedoInfoItem';
+                result.sedoTableIndex = ref.tableIndex;
+                result.sedoRowIndex = ref.rowIndex;
+                result.sedoHighlightField = ref.field;
+                if (table) {
+                    const row = table.items?.[ref.rowIndex];
+                    if (row) {
+                        result.title = row.name || row.code || row.type || table.title;
+                        result.description = `В поле "${ref.field}": ` + truncateText(String(row[ref.field]), 100);
+                    } else if (ref.field === 'tableTitle') {
+                        result.title = table.title;
+                        result.description = 'Найдено в заголовке таблицы';
+                    } else {
+                        result.title = table.title || 'Элемент СЭДО';
+                        result.description = 'Найдено совпадение в таблице СЭДО';
                     }
-                    else {
-                        specificTitle = `Данные СЭДО (ошибка структуры)`;
-                        specificDesc = `Элемент из таблицы СЭДО не найден. Поле: ${ref.field}`;
-                        console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Не удалось точно определить элемент СЭДО для ref:`, ref, `itemData:`, itemData);
-                    }
-                    result.title = truncateText(String(specificTitle), 70);
-                    result.description = String(specificDesc);
-                    result.id = `${SEDO_CONFIG_KEY}#t${ref.tableIndex}${ref.rowIndex !== undefined ? `#r${ref.rowIndex}` : ''}#f${String(ref.field).replace(/\s/g, '_')}`;
-                    result.originalSedoItemId = SEDO_CONFIG_KEY;
-                    result.sedoTableIndex = ref.tableIndex;
-                    result.sedoRowIndex = ref.rowIndex;
-                    result.sedoHighlightField = ref.field;
-                } else {
-                    result.type = 'sedoInfo';
-                    result.title = 'Типы сообщений СЭДО';
-                    let descText = `Настройки и информация по типам сообщений СЭДО.`;
-                    if (ref.field === 'name' && itemData.name && typeof itemData.name === 'string') {
-                    } else if (ref.field && typeof itemData[ref.field] === 'string') {
-                        descText = `Найдено по полю "${ref.field}": ${truncateText(itemData[ref.field], 100)}`;
-                    }
-                    result.description = descText;
-                    result.id = 'sedoTypesPanel';
-                    console.log(`[convertItemToSearchResult V12 - SKZI Fix] Общий результат для SEDO_CONFIG_KEY, поле совпадения: ${ref.field}`);
                 }
             } else if (itemIdFromRef === 'uiSettings') {
                 result.type = 'uiSetting';
                 result.title = 'Настройки интерфейса';
-                result.description = 'Открыть панель настроек интерфейса';
             } else {
                 result.type = 'preference';
-                result.title = itemData.title || itemData.name || `Настройка: ${finalItemId}`;
-                if (itemData.data && typeof itemData.data === 'object') {
-                    result.description = truncateText(JSON.stringify(itemData.data), 100);
-                } else if (itemData.data) {
-                    result.description = truncateText(String(itemData.data), 100);
-                } else {
-                    result.description = "Нет дополнительной информации.";
-                }
-                console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Неизвестный preferences item (не СЭДО, не UI):`, ref, `itemData:`, itemData);
             }
             break;
         default:
-            console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Неизвестный storeName: ${storeName}. Используется тип по умолчанию.`);
             result.type = storeName;
-            result.title = itemData.title || itemData.name || `Запись ID: ${finalItemId}`;
-            result.description = itemData.description || JSON.stringify(itemData).substring(0, 100) + '...';
             break;
     }
 
-    if (result.description && typeof result.description === 'string') {
+    if (result.description) {
         result.description = result.description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     }
     if (!result.title) {
-        console.warn(`[convertItemToSearchResult V12 - SKZI Fix] Результат не имеет заголовка:`, result);
-        result.title = `(${result.type || 'Запись'} ${result.id})`;
+        result.title = `(${result.type} ${result.id})`;
     }
-    result.title = String(result.title);
-    result.description = String(result.description);
-
     return result;
 }
 
 
 async function handleSearchResultClick(result) {
-    console.log("[handleSearchResultClick V9 - ScrollTextareaFix Enhanced Wait] Clicked on result:", JSON.parse(JSON.stringify(result)));
+    console.log("[handleSearchResultClick V11 - Google Docs] Clicked on result:", JSON.parse(JSON.stringify(result)));
     const searchInput = document.getElementById('searchInput');
     const searchResultsContainer = document.getElementById('searchResults');
 
     if (searchInput) searchInput.value = '';
     if (searchResultsContainer) searchResultsContainer.classList.add('hidden');
 
-    if (document.body.classList.contains('modal-open')) {
-        document.body.classList.remove('modal-open');
-        console.log("[handleSearchResultClick] Принудительно снят 'modal-open' с body.");
-    }
-    if (document.body.style.overflow === 'hidden') {
-        document.body.style.overflow = '';
-        console.log("[handleSearchResultClick] Принудительно снят 'overflow: hidden' с body.");
-    }
-
     async function tryScrollAndHighlight(tabId, itemSelector, highlightTerm) {
-
         if (typeof setActiveTab === 'function' && currentSection !== tabId) {
-            console.log(`[tryScrollAndHighlight] Переключаю на вкладку: ${tabId}`);
             setActiveTab(tabId);
             await new Promise(resolve => setTimeout(resolve, 350));
-        } else {
-            await new Promise(resolve => requestAnimationFrame(resolve));
         }
-
         return new Promise((resolve) => {
-
             requestAnimationFrame(() => {
-                const element = itemSelector ? document.querySelector(itemSelector) : null;
+                const element = document.querySelector(itemSelector);
                 if (element) {
-                    if (element.offsetParent !== null) {
-                        console.log(`[tryScrollAndHighlight] Элемент ${itemSelector} найден и видим. Скролл и подсветка.`);
-                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        if (typeof highlightElement === 'function') highlightElement(element, highlightTerm);
-                        else console.error("tryScrollAndHighlight: функция highlightElement не найдена!");
-
-                        setTimeout(() => resolve({ success: true, elementFound: true, elementVisible: true, element }), 400);
-                    } else {
-
-                        if (typeof highlightElement === 'function') highlightElement(element, highlightTerm);
-                        else console.error("tryScrollAndHighlight: функция highlightElement не найдена!");
-                        console.warn(`[tryScrollAndHighlight] Элемент ${itemSelector} найден, но не видим. Подсвечен без скролла.`);
-                        resolve({ success: false, elementFound: true, elementVisible: false, element });
-                    }
-                } else if (itemSelector) {
-                    console.warn(`[tryScrollAndHighlight] Элемент ${itemSelector} не найден.`);
-                    resolve({ success: false, elementFound: false, elementVisible: false, element: null });
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    if (typeof highlightElement === 'function') highlightElement(element, highlightTerm);
+                    resolve({ success: true, elementFound: true });
                 } else {
-
-                    console.log(`[tryScrollAndHighlight] itemSelector не предоставлен.`);
-                    resolve({ success: true, elementFound: false, elementVisible: false, element: null });
+                    console.warn(`[tryScrollAndHighlight] Element ${itemSelector} not found.`);
+                    resolve({ success: false, elementFound: false });
                 }
             });
         });
     }
 
     try {
-        let tabId, itemSelector, scrollResult;
-
+        let tabId, itemSelector;
         switch (result.type) {
+            case 'telefony_row':
+                tabId = 'telefony';
+                itemSelector = `#doc-content-telefony tr[data-row-index="${result.rowIndex}"]`;
+                await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
+                break;
+            case 'shablony_block':
+                tabId = 'shablony';
+                itemSelector = `#doc-content-shablony div[data-block-index="${result.blockIndex}"]`;
+                await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
+                break;
             case 'algorithm':
             case 'main':
-                const algoId = (result.type === 'main' || result.id === 'main') ? 'main' : result.id;
+                const algoId = (result.type === 'main') ? 'main' : result.id;
                 const algoSection = result.section;
-
-                if (!algoSection) {
-                    console.error(`[handleSearchResultClick V8] Не определена секция для алгоритма ID: ${algoId}`);
-                    if (typeof showNotification === 'function') showNotification("Ошибка: не удалось определить раздел алгоритма.", "error");
-                    return;
+                if (algoId !== 'main') {
+                    await tryScrollAndHighlight(algoSection, `#${algoSection}Algorithms .algorithm-card[data-id="${algoId}"]`, result.highlightTerm || result.title);
                 }
-
-                let algoData;
-                if (algoId === 'main') {
-                    algoData = algorithms?.main;
-                    if (typeof setActiveTab === 'function' && currentSection !== 'main') {
-                        setActiveTab('main');
-                        await new Promise(resolve => setTimeout(resolve, 350));
-                    }
-                } else {
-                    algoData = algorithms?.[algoSection]?.find(a => String(a.id) === String(algoId));
-                    tabId = algoSection;
-                    itemSelector = `#${algoSection}Algorithms .algorithm-card[data-id="${algoId}"]`;
-                    await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
-                }
-
-                if (algoData && typeof showAlgorithmDetail === 'function') {
-                    showAlgorithmDetail(algoData, algoSection);
-                } else {
-                    if (typeof showNotification === 'function') showNotification("Не удалось найти или отобразить алгоритм.", "error");
-                    console.error("[handleSearchResultClick V8] Algorithm data or showAlgorithmDetail not found for:", result, "AlgoData found:", algoData);
-                }
+                const algoData = algoId === 'main' ? algorithms.main : algorithms[algoSection]?.find(a => String(a.id) === String(algoId));
+                if (algoData) showAlgorithmDetail(algoData, algoSection);
                 break;
-
-            case 'link':
-                tabId = 'links';
-                itemSelector = `.cib-link-item[data-id="${result.id}"]`;
-                scrollResult = await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
-                if (!scrollResult.elementFound) {
-                    if (typeof showNotification === 'function') showNotification(`Ссылка 1С: ${result.title}. (Элемент не найден для подсветки и скролла).`, "info");
-                }
-                break;
-
             case 'bookmark':
             case 'bookmark_note':
-                tabId = 'bookmarks';
-                itemSelector = `.bookmark-item[data-id="${result.id}"]`;
-                await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
-
-                if (typeof showBookmarkDetailModal === 'function') {
-                    showBookmarkDetailModal(parseInt(result.id, 10));
-                } else {
-                    if (typeof showNotification === 'function') showNotification(`Детали закладки: ${result.title}. (Функция просмотра деталей не найдена).`, "info");
-                    console.warn("showBookmarkDetailModal function not found.");
-                }
+                await tryScrollAndHighlight('bookmarks', `.bookmark-item[data-id="${result.id}"]`, result.highlightTerm || result.title);
+                showBookmarkDetailModal(parseInt(result.id, 10));
                 break;
-
             case 'reglament':
-                tabId = 'reglaments';
-                const reglamentDataForCategory = await getFromIndexedDB('reglaments', parseInt(result.id, 10));
-
-                if (typeof setActiveTab === 'function' && currentSection !== tabId) {
-                    setActiveTab(tabId);
-                    await new Promise(resolve => setTimeout(resolve, 350));
+                const reglamentData = await getFromIndexedDB('reglaments', parseInt(result.id, 10));
+                if (reglamentData && reglamentData.category) {
+                    await setActiveTab('reglaments');
+                    await showReglamentsForCategory(reglamentData.category);
+                    await tryScrollAndHighlight(null, `.reglament-item[data-id="${result.id}"]`, result.highlightTerm || result.title);
                 }
-
-                if (reglamentDataForCategory && reglamentDataForCategory.category && typeof showReglamentsForCategory === 'function') {
-                    await showReglamentsForCategory(reglamentDataForCategory.category);
-                    const reglamentsListDiv = document.getElementById('reglamentsList');
-                    if (reglamentsListDiv) reglamentsListDiv.dataset.currentCategory = reglamentDataForCategory.category;
-                    await new Promise(resolve => requestAnimationFrame(resolve));
-                }
-
-                itemSelector = `.reglament-item[data-id="${result.id}"]`;
-                await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
-
-                if (typeof showReglamentDetail === 'function') {
-                    showReglamentDetail(parseInt(result.id, 10));
-                } else {
-                    if (typeof showNotification === 'function') showNotification(`Регламент: ${result.title}. (Функция просмотра не найдена).`, "info");
-                    console.warn("showReglamentDetail function not found.");
-                }
-                break;
-            case 'extLink':
-                tabId = 'extLinks';
-                itemSelector = `.ext-link-item[data-id="${result.id}"]`;
-                scrollResult = await tryScrollAndHighlight(tabId, itemSelector, result.highlightTerm || result.title);
-                if (!scrollResult.elementFound) {
-                    if (typeof showNotification === 'function') showNotification(`Внешний ресурс: ${result.title}. (Элемент не найден для подсветки и скролла).`, "info");
-                }
-                break;
-            case 'blacklistedClient':
-                tabId = 'blacklistedClients';
-
-                if (typeof setActiveTab === 'function') setActiveTab(tabId);
-                await new Promise(resolve => setTimeout(resolve, 250));
-
-                const entryRow = document.querySelector(`#blacklistTableContainer tr[data-entry-id="${result.id}"]`);
-                if (entryRow) {
-                    entryRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    highlightElement(entryRow, result.highlightTerm || result.title);
-                }
-                break;
-            case 'clientNote':
-                if (typeof setActiveTab === 'function') {
-                    setActiveTab('main');
-                }
-                await new Promise(resolve => {
-                    let attempts = 0;
-                    const maxAttempts = 50;
-                    function checkTextarea() {
-                        const textarea = document.getElementById('clientNotes');
-
-                        if (textarea && textarea.offsetParent !== null && textarea.offsetWidth > 0 && textarea.offsetHeight > 0) {
-                            console.log(`[handleSearchResultClick V9] clientNotesTextarea готова после ${attempts} попыток.`);
-                            resolve();
-                        } else if (attempts < maxAttempts) {
-                            attempts++;
-                            requestAnimationFrame(checkTextarea);
-                        } else {
-                            console.warn(`[handleSearchResultClick V9] clientNotesTextarea не стала готова после ${maxAttempts} попыток.`);
-                            resolve();
-                        }
-                    }
-                    requestAnimationFrame(checkTextarea);
-                });
-
-                const clientNotesTextarea = document.getElementById('clientNotes');
-                if (clientNotesTextarea) {
-
-                    clientNotesTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    clientNotesTextarea.focus();
-
-                    const searchTerm = result.highlightTerm || result.query || '';
-                    if (searchTerm && clientNotesTextarea.value) {
-                        const text = clientNotesTextarea.value;
-                        const searchTermLower = searchTerm.toLowerCase();
-                        const textLower = text.toLowerCase();
-                        const index = textLower.indexOf(searchTermLower);
-
-                        if (index !== -1) {
-                            clientNotesTextarea.setSelectionRange(index, index + searchTerm.length);
-
-                            const tempDiv = document.createElement('div');
-                            const computedStyle = window.getComputedStyle(clientNotesTextarea);
-                            ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing',
-                                'lineHeight', 'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom',
-                                'borderTopWidth', 'borderLeftWidth', 'borderRightWidth', 'borderBottomWidth',
-                                'width', 'boxSizing'].forEach(prop => {
-                                    tempDiv.style[prop] = computedStyle[prop];
-                                });
-                            tempDiv.style.whiteSpace = 'pre-wrap';
-                            tempDiv.style.wordWrap = 'break-word';
-                            tempDiv.style.visibility = 'hidden';
-                            tempDiv.style.position = 'absolute';
-                            tempDiv.style.top = '-9999px';
-                            tempDiv.style.left = '-9999px';
-
-                            const textBeforeSelection = text.substring(0, index);
-                            tempDiv.textContent = textBeforeSelection;
-                            document.body.appendChild(tempDiv);
-                            const scrollHeightToSelection = tempDiv.scrollHeight;
-                            document.body.removeChild(tempDiv);
-
-                            const textareaVisibleHeight = clientNotesTextarea.clientHeight;
-                            let scrollToPosition = scrollHeightToSelection - (textareaVisibleHeight / 3);
-                            if (scrollToPosition < 0) scrollToPosition = 0;
-
-                            clientNotesTextarea.scrollTop = scrollToPosition;
-                            console.log(`[handleSearchResultClick V9] Прокрутка textarea.scrollTop к ${scrollToPosition}px (scrollHeightToSelection: ${scrollHeightToSelection}px)`);
-
-                            clientNotesTextarea.classList.add('highlight-search-result-textarea');
-                            setTimeout(() => {
-                                clientNotesTextarea.classList.remove('highlight-search-result-textarea');
-                            }, 3000);
-                        } else {
-                            clientNotesTextarea.classList.add('highlight-search-result-textarea');
-                            setTimeout(() => {
-                                clientNotesTextarea.classList.remove('highlight-search-result-textarea');
-                            }, 2500);
-                        }
-                    } else {
-                        clientNotesTextarea.classList.add('highlight-search-result-textarea');
-                        setTimeout(() => {
-                            clientNotesTextarea.classList.remove('highlight-search-result-textarea');
-                        }, 2500);
-                    }
-                } else {
-                    console.warn("[handleSearchResultClick V9] clientNotesTextarea не найдена после ожидания.");
-                }
-                if (typeof showNotification === 'function') {
-                    showNotification("Переход к заметкам по клиенту.", "info");
-                }
-                break;
-
-            case 'bookmarkFolder':
-
-                if (typeof setActiveTab === 'function') setActiveTab('bookmarks');
-                const folderFilter = document.getElementById('bookmarkFolderFilter');
-                if (folderFilter) {
-                    folderFilter.value = result.id;
-                    if (typeof filterBookmarks === 'function') filterBookmarks();
-                    else console.warn("filterBookmarks function not found.");
-                }
-                if (typeof showNotification === 'function') showNotification(`Отфильтровано по папке: ${result.title.replace('Папка: ', '')}`, "info");
-                break;
-            case 'sedoInfo':
-
-                if (typeof setActiveTab === 'function') setActiveTab('sedoTypes');
-                await new Promise(resolve => setTimeout(resolve, 350));
-                if (typeof showNotification === 'function') showNotification("Переход к разделу 'Типы сообщений СЭДО'.", "info");
-                const sedoContainer = document.getElementById('sedoTypesInfoContainer');
-                if (sedoContainer) sedoContainer.scrollTop = 0;
+                showReglamentDetail(parseInt(result.id, 10));
                 break;
             case 'sedoInfoItem':
-
-                if (typeof setActiveTab === 'function') {
-                    setActiveTab('sedoTypes');
-                }
-                await new Promise(resolve => setTimeout(resolve, 350));
-
-                if (typeof highlightAndScrollSedoItem === 'function') {
-                    await highlightAndScrollSedoItem(
-                        result.sedoTableIndex,
-                        result.sedoRowIndex,
-                        result.sedoHighlightField,
-                        result.highlightTerm || result.title
-                    );
-                } else {
-                    console.warn("highlightAndScrollSedoItem function not found.");
-                    if (typeof showNotification === 'function') showNotification("Функция подсветки элемента СЭДО не найдена.", "warning");
-                }
+                await setActiveTab('sedoTypes');
+                await highlightAndScrollSedoItem(result.sedoTableIndex, result.sedoRowIndex, result.sedoHighlightField, result.highlightTerm || result.title);
                 break;
-            case 'uiSetting':
-                const customizeBtn = document.getElementById('customizeUIBtn');
-                if (customizeBtn) customizeBtn.click();
-                else {
-                    if (typeof showNotification === 'function') showNotification("Кнопка настроек UI не найдена.", "warning");
-                    console.warn("Button #customizeUIBtn not found.");
+            case 'clientNote':
+                await setActiveTab('main');
+                const textarea = document.getElementById('clientNotes');
+                if (textarea) {
+                    textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    textarea.focus();
+                    highlightElement(textarea, result.highlightTerm);
                 }
                 break;
             case 'section_link':
                 if (result.section && typeof setActiveTab === 'function') {
                     setActiveTab(result.section);
-                    await new Promise(resolve => setTimeout(resolve, 350));
-                } else {
-                    console.warn("[handleSearchResultClick V8] Не удалось перейти к секции:", result);
                 }
                 break;
             default:
-                if (typeof showNotification === 'function') showNotification(`Действие для типа "${result.type}" не определено.`, "warning");
-                console.warn(`[handleSearchResultClick V8] Unknown result type: ${result.type}`);
+                if (result.section) {
+                    await tryScrollAndHighlight(result.section, `[data-id="${result.id}"]`, result.highlightTerm || result.title);
+                } else {
+                    showNotification(`Действие для типа "${result.type}" не определено.`, "warning");
+                }
         }
     } catch (error) {
-        console.error("[handleSearchResultClick V9 - ScrollTextareaFix Enhanced Wait] Ошибка при обработке клика по результату поиска:", error);
-        if (typeof showNotification === 'function') showNotification("Произошла ошибка при переходе к результату.", "error");
+        console.error("Ошибка при обработке клика по результату поиска:", error);
+        showNotification("Произошла ошибка при переходе к результату.", "error");
     }
 }
 
@@ -10788,6 +10630,9 @@ async function addToSearchIndex(word, type, id, field, weight = 1, originalRefDe
                     if (typeof originalRefDetails.tableIndex === 'number') newRefData.tableIndex = originalRefDetails.tableIndex;
                     if (typeof originalRefDetails.rowIndex === 'number') newRefData.rowIndex = originalRefDetails.rowIndex;
                     if (typeof originalRefDetails.stepIndex === 'number') newRefData.stepIndex = originalRefDetails.stepIndex;
+                    if (originalRefDetails.blockIndex !== undefined) newRefData.blockIndex = originalRefDetails.blockIndex;
+                    if (originalRefDetails.title) newRefData.title = originalRefDetails.title;
+                    if (originalRefDetails.description) newRefData.description = originalRefDetails.description;
                     if (originalRefDetails.field) newRefData.field = originalRefDetails.field;
                 }
 
@@ -10799,7 +10644,8 @@ async function addToSearchIndex(word, type, id, field, weight = 1, originalRefDe
                         existingRef.field === newRefData.field &&
                         existingRef.tableIndex === newRefData.tableIndex &&
                         existingRef.rowIndex === newRefData.rowIndex &&
-                        existingRef.stepIndex === newRefData.stepIndex
+                        existingRef.stepIndex === newRefData.stepIndex &&
+                        existingRef.blockIndex === newRefData.blockIndex
                     );
 
                     if (!refExists) {
@@ -11211,6 +11057,8 @@ function generateDocKey(ref) {
     let docKey = `${ref.store}:${ref.id}`;
     if (ref.tableIndex !== undefined) docKey += `#t${ref.tableIndex}`;
     if (ref.rowIndex !== undefined) docKey += `#r${ref.rowIndex}`;
+    if (ref.blockIndex !== undefined) docKey += `#b${ref.blockIndex}`;
+
     if (ref.field) docKey += `#f${String(ref.field).replace(/[:#]/g, '_')}`;
     return docKey;
 }
@@ -11336,35 +11184,44 @@ function trackSearchMetrics(query, resultsCount, executionTime, context) {
 
 async function processSearchResults(candidateDocs, normalizedQuery, originalQuery) {
     const startTime = performance.now();
-    console.log(`[processSearchResults V2 - Grouping] Начало обработки ${candidateDocs.size} кандидатов для запроса "${originalQuery}" (нормализованный: "${normalizedQuery}")`);
+    console.log(`[processSearchResults V4 - Final Grouping Fix] Начало обработки ${candidateDocs.size} кандидатов для запроса "${originalQuery}"`);
 
     const finalDocEntries = Array.from(candidateDocs.values())
         .filter(candidate => candidate.matchedTokens.size > 0);
-    console.log(`[processSearchResults V2] После фильтрации по matchedTokens.size > 0: ${finalDocEntries.length} кандидатов.`);
+    console.log(`[processSearchResults V4] После фильтрации по matchedTokens.size > 0: ${finalDocEntries.length} кандидатов.`);
 
     const filteredEntries = applyFieldFilters(finalDocEntries);
-    console.log(`[processSearchResults V2] После applyFieldFilters: ${filteredEntries.length} кандидатов.`);
+    console.log(`[processSearchResults V4] После applyFieldFilters: ${filteredEntries.length} кандидатов.`);
 
     const fullResults = await loadFullDataForResults(filteredEntries);
-    console.log(`[processSearchResults V2] После loadFullDataForResults: ${fullResults.length} полных записей.`);
+    console.log(`[processSearchResults V4] После loadFullDataForResults: ${fullResults.length} полных записей.`);
 
     const groupedByActualItem = new Map();
     fullResults.forEach(entry => {
         if (!entry || !entry.ref || !entry.itemData || entry.ref.id === undefined) {
-            console.warn("[processSearchResults V2] Пропуск некорректного entry при группировке:", entry);
+            console.warn("[processSearchResults V4] Пропуск некорректного entry при группировке:", entry);
             return;
         }
 
-        let actualItemIdValue;
-        if (entry.ref.store === 'clientData') {
-            actualItemIdValue = 'current';
-        } else if (entry.ref.store === 'algorithms' && entry.itemData.id === 'main') {
-            actualItemIdValue = 'main';
-        } else {
-            actualItemIdValue = String(entry.itemData.id || entry.ref.id);
-        }
+        let groupKey;
+        const ref = entry.ref;
+        const itemData = entry.itemData;
 
-        const groupKey = `${entry.ref.store}:${actualItemIdValue}`;
+        if (ref.store === 'telefony' && ref.rowIndex !== undefined) {
+            groupKey = `telefony:${ref.id}:${ref.rowIndex}`;
+        } else if (ref.store === 'shablony' && ref.blockIndex !== undefined) {
+            groupKey = `shablony:${ref.id}:${ref.blockIndex}`;
+        } else {
+            let actualItemIdValue;
+            if (ref.store === 'clientData') {
+                actualItemIdValue = 'current';
+            } else if (ref.store === 'algorithms' && itemData.id === 'main') {
+                actualItemIdValue = 'main';
+            } else {
+                actualItemIdValue = String(itemData.id || ref.id);
+            }
+            groupKey = `${ref.store}:${actualItemIdValue}`;
+        }
 
         if (!groupedByActualItem.has(groupKey)) {
             groupedByActualItem.set(groupKey, {
@@ -11380,17 +11237,16 @@ async function processSearchResults(candidateDocs, normalizedQuery, originalQuer
         group.totalScore += entry.score;
         entry.matchedTokens.forEach(token => group.matchedTokensUnion.add(token));
     });
-    console.log(`[processSearchResults V2] Сгруппировано в ${groupedByActualItem.size} уникальных элементов.`);
+    console.log(`[processSearchResults V4] Сгруппировано в ${groupedByActualItem.size} уникальных элементов.`);
 
     const searchResults = [];
     for (const [groupKey, group] of groupedByActualItem.entries()) {
         if (!group.refsForConversion || group.refsForConversion.length === 0) {
-            console.warn(`[processSearchResults V2] Группа ${groupKey} не имеет refsForConversion, пропуск.`);
+            console.warn(`[processSearchResults V4] Группа ${groupKey} не имеет refsForConversion, пропуск.`);
             continue;
         }
 
         const representativeRef = group.refsForConversion[0];
-
         const result = convertItemToSearchResult(representativeRef, group.itemData, group.totalScore);
 
         if (result) {
@@ -11440,9 +11296,7 @@ async function processSearchResults(candidateDocs, normalizedQuery, originalQuer
                     result.score = (result.score || 0) + 100000;
                 }
             } else {
-                let itemTitleOrName = '';
-                if (group.itemData?.title) itemTitleOrName = group.itemData.title;
-                else if (group.itemData?.name) itemTitleOrName = group.itemData.name;
+                let itemTitleOrName = result.title || '';
 
                 if (itemTitleOrName.toLowerCase() === lowerOriginalQuery) {
                     result.isExactTitleMatch = true;
@@ -11451,11 +11305,11 @@ async function processSearchResults(candidateDocs, normalizedQuery, originalQuer
             }
             searchResults.push(result);
         } else {
-            console.warn(`[processSearchResults V2] convertItemToSearchResult вернул null для группы ${groupKey}`, group);
+            console.warn(`[processSearchResults V4] convertItemToSearchResult вернул null для группы ${groupKey}`, group);
         }
     }
     const endTime = performance.now();
-    console.log(`[processSearchResults V2] Обработка кандидатов завершена за ${(endTime - startTime).toFixed(2)}ms. Финальных результатов: ${searchResults.length}.`);
+    console.log(`[processSearchResults V4] Обработка кандидатов завершена за ${(endTime - startTime).toFixed(2)}ms. Финальных результатов: ${searchResults.length}.`);
     return searchResults;
 }
 
@@ -11513,6 +11367,14 @@ async function loadFullDataForResults(docEntries) {
         loadedData.set(storeName, storeData);
 
         try {
+            if (storeName === 'telefony' || storeName === 'shablony') {
+                ids.forEach(id => {
+                    storeData.set(String(id), { id: id, _isPlaceholder: true });
+                });
+                console.log(`[loadFullDataForResults] Пропущена загрузка из IndexedDB для виртуального хранилища: ${storeName}`);
+                continue;
+            }
+
             if (storeName === 'algorithms') {
                 const algoContainer = await getFromIndexedDB('algorithms', 'all');
                 if (algoContainer?.data) {
@@ -11731,6 +11593,26 @@ function getTextForItem(storeName, itemData) {
     };
 
     switch (storeName) {
+        case 'telefony':
+            const headers = Object.keys(itemData).filter(key => !key.startsWith('_'));
+            const firstColumnKey = headers[0];
+            const otherColumnKeys = headers.slice(1);
+            const isSectionHeader = itemData[firstColumnKey] && otherColumnKeys.every(key => !itemData[key] || String(itemData[key]).trim() === '');
+
+            if (isSectionHeader) {
+                textsByField.header = itemData[firstColumnKey];
+            } else {
+                textsByField.cell = Object.values(itemData).filter(val => typeof val === 'string' && val.trim() !== '' && !val.startsWith('_')).join(' ');
+            }
+            break;
+        case 'shablony':
+            if (itemData.title) {
+                textsByField[`h${itemData.level || 3}`] = itemData.title;
+            }
+            if (itemData.content) {
+                textsByField.content = itemData.content;
+            }
+            break;
         case 'algorithms':
             textsByField = getAlgorithmText(itemData);
             break;
@@ -11944,7 +11826,33 @@ function findSectionMatches(normalizedQuery) {
 
 
 async function updateSearchIndex(storeName, itemId, newItemData, operation, oldItemData = null) {
-    const LOG_PREFIX_USI = `[updateSearchIndex V3 - Archive Logic Enhanced with Bookmark Folder Name]`;
+    const LOG_PREFIX_USI = `[updateSearchIndex V4 - Google Docs Logic]`;
+
+    if (storeName === 'telefony' || storeName === 'shablony') {
+        const docId = itemId;
+        console.log(`${LOG_PREFIX_USI} Начало индексации для Google Doc: ${storeName} (ID: ${docId})`);
+
+        await removeFromSearchIndex(docId, storeName);
+        console.log(`${LOG_PREFIX_USI} Старые записи для ${docId} удалены из индекса.`);
+
+        if (operation !== 'delete' && Array.isArray(newItemData)) {
+            if (storeName === 'telefony') {
+                const rows = newItemData;
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    await updateSearchIndexForItem({ ...row, _internal_row_index: i }, 'telefony', docId);
+                }
+            } else if (storeName === 'shablony') {
+                const blocks = newItemData;
+                for (let i = 0; i < blocks.length; i++) {
+                    const block = blocks[i];
+                    await updateSearchIndexForItem({ ...block, _internal_block_index: block.originalIndex }, 'shablony', docId);
+                }
+            }
+        }
+        console.log(`${LOG_PREFIX_USI} Индексация для ${storeName} (ID: ${docId}) завершена.`);
+        return;
+    }
 
     if (storeName === 'blacklistedClients') {
         console.log(`${LOG_PREFIX_USI} Indexing of 'blacklistedClients' is disabled. Skipping operation for ${storeName}:${itemId}.`);
@@ -12107,7 +12015,7 @@ async function checkAndBuildIndex(forceRebuild = false, externalProgressCallback
     }
     console.log(`checkAndBuildIndex: Проверка состояния поискового индекса. Контекст: ${context}`);
 
-    const REINDEX_MESSAGE = "Выполняется повторная индексация базы данных после обновления, загрузка может быть чуть дольше обычного";
+    const REINDEX_MESSAGE = "Выполняется обновление приложения, для загрузки и индексации может требоваться время, это нормально";
 
     try {
         const indexStatus = await getFromIndexedDB('preferences', 'searchIndexStatus');
@@ -12215,7 +12123,7 @@ function highlightText(text, tokensToHighlight) {
 
 
 async function buildInitialSearchIndex(progressCallback) {
-    const LOG_PREFIX_BUILD = "[SearchIndexBuild V11 - Archive Logic Refined with Bookmark Folder Name]";
+    const LOG_PREFIX_BUILD = "[SearchIndexBuild V13 - Batch Optimized]";
     if (!db) {
         console.error(`${LOG_PREFIX_BUILD} Cannot build search index: DB not initialized.`);
         if (typeof showNotification === 'function') showNotification("Ошибка построения поискового индекса: База данных недоступна.", "error");
@@ -12227,11 +12135,12 @@ async function buildInitialSearchIndex(progressCallback) {
         if (progressCallback) progressCallback(0, 0, true);
         return;
     }
-    console.log(`${LOG_PREFIX_BUILD} Starting to build initial search index...`);
+    console.log(`${LOG_PREFIX_BUILD} Starting to build initial search index with BATCHING...`);
 
     let overallSuccess = true;
     let processedItems = 0;
     let totalItemsToEstimate = 0;
+    const indexData = new Map();
 
     try {
         console.log(`${LOG_PREFIX_BUILD} Clearing existing search index...`);
@@ -12270,45 +12179,77 @@ async function buildInitialSearchIndex(progressCallback) {
                 }
             } catch (e) { console.warn(`${LOG_PREFIX_BUILD} Could not count items in ${source.name}: ${e.message}`); }
         }
+        totalItemsToEstimate += 2;
         console.log(`${LOG_PREFIX_BUILD} Estimated total items for indexing: ${totalItemsToEstimate}`);
         if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
+
 
         let bookmarkFoldersMap = new Map();
         try {
             const folders = await getAllFromIndexedDB('bookmarkFolders');
-            if (folders && folders.length > 0) {
-                folders.forEach(folder => {
-                    if (folder && folder.id !== undefined && folder.name) {
-                        bookmarkFoldersMap.set(String(folder.id), folder.name);
-                    }
-                });
-            }
-            console.log(`${LOG_PREFIX_BUILD} Pre-fetched ${bookmarkFoldersMap.size} bookmark folder names.`);
-        } catch (e) {
-            console.warn(`${LOG_PREFIX_BUILD} Could not pre-fetch bookmark folder names: ${e.message}`);
-        }
+            folders.forEach(folder => bookmarkFoldersMap.set(String(folder.id), folder.name));
+        } catch (e) { console.warn(`${LOG_PREFIX_BUILD} Could not pre-fetch bookmark folder names: ${e.message}`); }
 
-        const indexingPromises = [];
+        const processItemInMemory = (itemData, storeName) => {
+            const textsByField = getTextForItem(storeName, itemData);
+            let indexableId = itemData.id;
+            if (storeName === 'clientData') indexableId = 'current';
+            if (storeName === 'algorithms' && itemData.id === 'main') indexableId = 'main';
+
+            if (Object.keys(textsByField).length === 0) return;
+
+            for (const [fieldKey, textContent] of Object.entries(textsByField)) {
+                if (!textContent || typeof textContent !== 'string' || textContent.trim() === "") continue;
+
+                const tokens = tokenize(textContent);
+                const storeWeights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
+                const fieldWeight = storeWeights[fieldKey] || 1.0;
+
+                const refDetails = { store: storeName, type: storeName, id: String(indexableId), field: fieldKey, weight: fieldWeight };
+
+                if (storeName === 'preferences' && itemData.id === SEDO_CONFIG_KEY) {
+                    const parts = fieldKey.split('_');
+                    if (parts.length >= 3) {
+                        if (parts[0] === 'tableCell') {
+                            refDetails.tableIndex = parseInt(parts[1].substring(1));
+                            refDetails.rowIndex = parseInt(parts[2].substring(1));
+                            refDetails.field = parts[3]?.substring(1) || fieldKey;
+                        } else if (parts[0] === 'staticListItem') {
+                            refDetails.tableIndex = parseInt(parts[1].substring(1));
+                            refDetails.rowIndex = parseInt(parts[2].substring(1));
+                            refDetails.field = 'staticListItem';
+                        }
+                    }
+                }
+
+                for (const token of tokens) {
+                    if (token.length < MIN_TOKEN_LEN_FOR_INDEX && !isExceptionShortToken(token)) continue;
+                    if (!indexData.has(token)) indexData.set(token, []);
+                    const refs = indexData.get(token);
+                    if (refs.length < MAX_REFS_PER_WORD) {
+                        refs.push(refDetails);
+                    }
+                }
+            }
+        };
+
         for (const source of sourcesToProcess) {
             console.log(`${LOG_PREFIX_BUILD} Processing source: ${source.name}`);
             if (source.name === 'algorithms') {
                 const algoContainer = await getFromIndexedDB('algorithms', 'all');
                 if (algoContainer && algoContainer.data) {
-                    const algoData = algoContainer.data;
-                    if (algoData.main) {
-                        const pMain = updateSearchIndexForItem(algoData.main, 'algorithms')
-                            .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
-                            .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing main algorithm:`, err); overallSuccess = false; });
-                        indexingPromises.push(pMain);
+                    if (algoContainer.data.main) {
+                        processItemInMemory(algoContainer.data.main, 'algorithms');
+                        processedItems++;
+                        if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
                     }
-                    for (const sectionKey in algoData) {
-                        if (sectionKey !== 'main' && Array.isArray(algoData[sectionKey])) {
-                            for (const item of algoData[sectionKey]) {
+                    for (const sectionKey in algoContainer.data) {
+                        if (sectionKey !== 'main' && Array.isArray(algoContainer.data[sectionKey])) {
+                            for (const item of algoContainer.data[sectionKey]) {
                                 if (item && typeof item.id !== 'undefined') {
-                                    const pItem = updateSearchIndexForItem(item, 'algorithms')
-                                        .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
-                                        .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing algorithm ${item.id} from ${sectionKey}:`, err); overallSuccess = false; });
-                                    indexingPromises.push(pItem);
+                                    processItemInMemory(item, 'algorithms');
+                                    processedItems++;
+                                    if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
                                 }
                             }
                         }
@@ -12317,69 +12258,84 @@ async function buildInitialSearchIndex(progressCallback) {
             } else if (source.keyForSpecificItem && source.name === 'preferences' && source.keyForSpecificItem) {
                 const specificItem = await getFromIndexedDB(source.name, source.keyForSpecificItem);
                 if (specificItem) {
-                    let itemToIndex = { ...specificItem };
-                    if (typeof itemToIndex.id === 'undefined') itemToIndex.id = source.keyForSpecificItem;
-
-                    const pSpecific = updateSearchIndexForItem(itemToIndex, 'preferences')
-                        .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
-                        .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing preference ${source.keyForSpecificItem}:`, err); overallSuccess = false; });
-                    indexingPromises.push(pSpecific);
+                    processItemInMemory(specificItem, 'preferences');
+                    processedItems++;
+                    if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
                 }
-            } else if (source.name === 'bookmarks') {
+            } else {
                 const items = await getAllFromIndexedDB(source.name);
                 for (const item of items) {
-                    if (item && item.folder === ARCHIVE_FOLDER_ID) {
-                        console.log(`${LOG_PREFIX_BUILD} Skipping archived bookmark ID: ${item.id}`);
+                    if (item && (item.id !== undefined || source.name === 'clientData')) {
+                        if (source.name === 'bookmarks') {
+                            if (item.folder === ARCHIVE_FOLDER_ID) {
+                                processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
+                                continue;
+                            }
+                            if (item.folder && bookmarkFoldersMap.has(String(item.folder))) {
+                                item._folderNameForIndex = bookmarkFoldersMap.get(String(item.folder));
+                            }
+                        }
+                        processItemInMemory(item, source.type);
                         processedItems++;
                         if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
-                        continue;
-                    }
-                    if (item && typeof item.id !== 'undefined') {
-                        const itemWithContext = { ...item };
-                        if (item.folder && bookmarkFoldersMap.has(String(item.folder))) {
-                            itemWithContext._folderNameForIndex = bookmarkFoldersMap.get(String(item.folder));
-                        }
-                        const pItem = updateSearchIndexForItem(itemWithContext, source.type)
-                            .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
-                            .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing item ${item.id || 'N/A'} from ${source.name}:`, err); overallSuccess = false; });
-                        indexingPromises.push(pItem);
-                    }
-                }
-            }
-            else {
-                const items = await getAllFromIndexedDB(source.name);
-                for (const item of items) {
-                    if (item && (typeof item.id !== 'undefined' || source.name === 'clientData')) {
-                        const pItem = updateSearchIndexForItem(item, source.type)
-                            .then(() => { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); })
-                            .catch(err => { console.error(`${LOG_PREFIX_BUILD} Error indexing item ${item.id || 'N/A'} from ${source.name}:`, err); overallSuccess = false; });
-                        indexingPromises.push(pItem);
                     }
                 }
             }
         }
 
-        await Promise.all(indexingPromises);
-        console.log(`${LOG_PREFIX_BUILD} All indexing promises settled. Processed items (counter): ${processedItems}`);
+        const googleDocSources = [
+            { name: 'telefony', docId: TELEFONY_DOC_ID },
+            { name: 'shablony', docId: SHABLONY_DOC_ID }
+        ];
+
+        for (const gdSource of googleDocSources) {
+            try {
+                const results = await fetchGoogleDocs([gdSource.docId], false);
+                const data = results?.[0]?.content?.data || [];
+                if (gdSource.name === 'telefony') {
+                    data.forEach((row, i) => processItemInMemory({ ...row, _internal_row_index: i }, 'telefony'));
+                } else if (gdSource.name === 'shablony') {
+                    const blocks = parseShablonyContent(data);
+                    blocks.forEach(block => processItemInMemory({ ...block, _internal_block_index: block.originalIndex }, 'shablony'));
+                }
+            } catch (error) { console.error(`${LOG_PREFIX_BUILD} Error processing Google Doc ${gdSource.name}:`, error); overallSuccess = false; }
+            finally { processedItems++; if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false); }
+        }
+
+        console.log(`${LOG_PREFIX_BUILD} In-memory index created with ${indexData.size} unique tokens. Starting batch write to IndexedDB.`);
+        const transaction = db.transaction(['searchIndex'], 'readwrite');
+        const store = transaction.objectStore('searchIndex');
+        let writePromises = [];
+
+        for (const [word, refs] of indexData.entries()) {
+            const request = store.put({ word, refs });
+            writePromises.push(new Promise((resolve, reject) => {
+                request.onsuccess = resolve;
+                request.onerror = (e) => reject(`Failed to put word '${word}': ${e.target.error}`);
+            }));
+        }
+
+        await Promise.all(writePromises);
+        console.log(`${LOG_PREFIX_BUILD} All put requests have been sent within the transaction.`);
+
+        await new Promise((resolve, reject) => {
+            transaction.oncomplete = resolve;
+            transaction.onerror = (e) => reject(`Transaction failed: ${e.target.error}`);
+            transaction.onabort = (e) => reject(`Transaction aborted: ${e.target.error}`);
+        });
 
         if (!overallSuccess) {
             await saveToIndexedDB('preferences', { id: 'searchIndexStatus', built: false, error: "One or more items failed to index", version: DB_VERSION, timestamp: Date.now() });
-            console.error(`${LOG_PREFIX_BUILD} One or more items failed to index.`);
-            if (typeof showNotification === 'function') showNotification("При построении поискового индекса произошли ошибки.", "warning", 10000);
-        } else if (processedItems === 0 && totalItemsToEstimate > 0) {
-            await saveToIndexedDB('preferences', { id: 'searchIndexStatus', built: false, error: "No items were processed for indexing, though data was present.", version: DB_VERSION, timestamp: Date.now() });
-            console.error(`${LOG_PREFIX_BUILD} No items were processed for indexing, but data was expected. Index will be empty.`);
-            if (typeof showNotification === 'function') showNotification("Поисковый индекс пуст: элементы не были обработаны.", "error", 10000);
-            overallSuccess = false;
-        }
-        else {
+            console.error(`${LOG_PREFIX_BUILD} One or more items failed during in-memory processing.`);
+        } else {
             await saveToIndexedDB('preferences', { id: 'searchIndexStatus', built: true, version: DB_VERSION, timestamp: Date.now(), error: null });
-            console.log(`${LOG_PREFIX_BUILD} Initial search index built successfully. Processed items: ${processedItems}.`);
+            console.log(`${LOG_PREFIX_BUILD} Initial search index built successfully.`);
         }
+
         if (progressCallback) progressCallback(totalItemsToEstimate, totalItemsToEstimate, !overallSuccess);
 
     } catch (error) {
-        console.error(`${LOG_PREFIX_BUILD} Error building initial search index:`, error);
+        console.error(`${LOG_PREFIX_BUILD} Critical error building initial search index:`, error);
         if (typeof showNotification === 'function') { showNotification(`Критическая ошибка при построении поискового индекса: ${error.message || String(error)}`, "error", 10000); }
         try {
             await saveToIndexedDB('preferences', { id: 'searchIndexStatus', built: false, error: String(error.message || error), version: DB_VERSION, timestamp: Date.now() });
@@ -12389,11 +12345,53 @@ async function buildInitialSearchIndex(progressCallback) {
 }
 
 
-async function updateSearchIndexForItem(itemData, storeName) {
-    const LOG_PREFIX_USI_ITEM = `[updateSearchIndexForItem V4 - Detailed Ref Logic]`;
+async function updateSearchIndexForItem(itemData, storeName, docId = null) {
+    const LOG_PREFIX_USI_ITEM = `[updateSearchIndexForItem V6 - Google Docs Logic]`;
 
     if (!itemData || typeof itemData !== 'object') {
         console.warn(`${LOG_PREFIX_USI_ITEM} Получены невалидные itemData для ${storeName}. Пропуск индексации.`, itemData);
+        return;
+    }
+
+    if (storeName === 'telefony' || storeName === 'shablony') {
+        const textsByField = getTextForItem(storeName, itemData);
+        if (Object.keys(textsByField).length === 0) return;
+
+        const blockOrRowIndex = itemData.originalIndex ?? itemData._internal_row_index ?? itemData._internal_block_index;
+
+        if (blockOrRowIndex === undefined) {
+            console.error(`${LOG_PREFIX_USI_ITEM} Отсутствует индекс блока/строки для ${storeName}`, itemData);
+            return;
+        }
+
+        if (!docId) {
+            console.error(`${LOG_PREFIX_USI_ITEM} Отсутствует docId для ${storeName}. Индексация невозможна.`);
+            return;
+        }
+
+        const promises = [];
+        for (const [fieldKey, textContent] of Object.entries(textsByField)) {
+            if (!textContent || typeof textContent !== 'string' || textContent.trim() === "") continue;
+
+            const tokens = tokenize(textContent);
+            const weights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
+            const fieldWeight = weights[fieldKey] || 1.0;
+
+            const refDetails = {
+                field: fieldKey,
+                ...(storeName === 'telefony' && { rowIndex: blockOrRowIndex }),
+                ...(storeName === 'shablony' && {
+                    blockIndex: blockOrRowIndex,
+                    title: itemData.title,
+                    description: truncateText(itemData.content, 150)
+                })
+            };
+
+            for (const token of tokens) {
+                promises.push(addToSearchIndex(token, storeName, docId, fieldKey, fieldWeight, refDetails));
+            }
+        }
+        await Promise.all(promises);
         return;
     }
 
@@ -14001,7 +13999,7 @@ async function initExternalLinksSystem() {
             <div class="flex items-center gap-4 mb-4 flex-shrink-0">
                 <div class="relative flex-grow">
                     <input type="text" id="extLinkSearchInput" placeholder="Поиск по ресурсам..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
-                    <button id="clearExtLinkSearchBtn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 hidden" title="Очистить поиск">
+                    <button id="clearExtLinkSearchBtn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700 hidden" title="Очистить поиск">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -16631,7 +16629,7 @@ function renderReglamentCategories() {
 
 function createCategoryElement(categoryId, title, iconClass = 'fa-folder', color = 'gray') {
     const categoryElement = document.createElement('div');
-    categoryElement.className = `reglament-category view-item bg-[#374151] p-content rounded-lg shadow-sm hover:shadow-md transition cursor-pointer flex flex-col justify-between group relative border-l-4 border-transparent`;
+    categoryElement.className = `reglament-category view-item bg-white dark:bg-gray-700 p-content rounded-lg shadow-sm hover:shadow-md transition cursor-pointer flex flex-col justify-between group relative border-l-4 border-transparent`;
     categoryElement.dataset.category = categoryId;
 
     const iconColorMap = {
@@ -16645,7 +16643,6 @@ function createCategoryElement(categoryId, title, iconClass = 'fa-folder', color
     const iconColorClass = iconColorMap[color] || iconColorMap['default'];
     const titleBaseColorClass = 'text-gray-100';
     const titleHoverColorClass = 'group-hover:text-primary';
-    const descriptionColorClass = 'text-gray-300';
 
     categoryElement.innerHTML = `
         <div class="category-content-wrapper flex-grow flex flex-col items-center text-center md:items-start md:text-left">
@@ -17055,7 +17052,12 @@ async function handleExtLinkFormSubmit(e) {
     const title = titleInput.value.trim();
     const url = urlInput.value.trim();
     const description = descriptionInput.value.trim() || null;
-    const category = categoryInput.value || null;
+
+    const categoryValue = categoryInput.value;
+    let category = null;
+    if (categoryValue && !isNaN(parseInt(categoryValue, 10))) {
+        category = parseInt(categoryValue, 10);
+    }
 
     if (!title || !url) {
         showNotification("Пожалуйста, заполните поля 'Название' и 'URL'", "error");
@@ -17063,7 +17065,13 @@ async function handleExtLinkFormSubmit(e) {
         return;
     }
     try {
-        new URL(url);
+        let testUrl = url;
+        if (!testUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && testUrl.includes('.')) {
+            if (!testUrl.startsWith('//')) {
+                testUrl = "https://" + testUrl;
+            }
+        }
+        new URL(testUrl);
     } catch (_) {
         showNotification("Пожалуйста, введите корректный URL (например, https://example.com)", "error");
         if (saveButton) saveButton.disabled = false;
@@ -17371,18 +17379,7 @@ function requestCloseModal(modalElement) {
     if (modalType === 'edit' || modalType === 'add') {
         changesDetected = hasChanges(modalType);
     } else if (modalType === 'customizeUI') {
-        const currentSettingsFromUIModal = getSettingsFromModal();
-        const comparableOriginalUISettings = {
-            ...DEFAULT_UI_SETTINGS,
-            ...(originalUISettings || {}),
-            showBlacklistUsageWarning: (originalUISettings && typeof originalUISettings.showBlacklistUsageWarning === 'boolean')
-                ? originalUISettings.showBlacklistUsageWarning
-                : (userPreferences.showBlacklistUsageWarning ?? true),
-            disableForcedBackupOnImport: (originalUISettings && typeof originalUISettings.disableForcedBackupOnImport === 'boolean')
-                ? originalUISettings.disableForcedBackupOnImport
-                : (userPreferences.disableForcedBackupOnImport ?? false)
-        };
-        changesDetected = !deepEqual(comparableOriginalUISettings, currentSettingsFromUIModal);
+        changesDetected = isUISettingsDirty;
     }
 
     let performClose = true;
@@ -17395,15 +17392,7 @@ function requestCloseModal(modalElement) {
             console.log(`Закрытие окна ${modalId} подтверждено пользователем (с изменениями).`);
             if (modalType === 'customizeUI') {
                 if (typeof applyPreviewSettings === 'function' && typeof window.originalUISettings !== 'undefined') {
-                    const settingsToRevertTo = JSON.parse(JSON.stringify(originalUISettings || DEFAULT_UI_SETTINGS));
-                    if (settingsToRevertTo.showBlacklistUsageWarning === undefined) {
-                        settingsToRevertTo.showBlacklistUsageWarning = userPreferences.showBlacklistUsageWarning ?? true;
-                    }
-                    if (settingsToRevertTo.disableForcedBackupOnImport === undefined) {
-                        settingsToRevertTo.disableForcedBackupOnImport = userPreferences.disableForcedBackupOnImport ?? false;
-                    }
-
-                    applyPreviewSettings(settingsToRevertTo);
+                    applyPreviewSettings(originalUISettings);
                     window.isUISettingsDirty = false;
                     console.log("Предпросмотр настроек UI откачен к оригинальным.");
                 }
@@ -17774,11 +17763,10 @@ async function editReglament(id) {
 
 
 async function loadExtLinks() {
-    const LOG_PREFIX = "[loadExtLinks V.Fix]";
+    const LOG_PREFIX = "[loadExtLinks V.Fix with data correction]";
     console.log(`${LOG_PREFIX} Запуск...`);
     try {
         const migrationStatus = await getFromIndexedDB('preferences', EXT_LINKS_MIGRATION_KEY);
-
         if (db && (!migrationStatus || !migrationStatus.done)) {
             console.log(`${LOG_PREFIX} ЗАПУСК МИГРАЦИИ: Категории для внешних ссылок будут проверены и, при необходимости, перенесены в новую структуру.`);
 
@@ -17812,9 +17800,9 @@ async function loadExtLinks() {
                 }
             }
 
-            const allLinks = await getAllExtLinks();
-            if (allLinks.length > 0) {
-                const updatePromises = allLinks.map(link => {
+            const allLinksForMigration = await getAllExtLinks();
+            if (allLinksForMigration.length > 0) {
+                const updatePromises = allLinksForMigration.map(link => {
                     if (link.category && typeof link.category === 'string' && oldToNewIdMap[link.category]) {
                         console.log(`${LOG_PREFIX} Миграция ссылки "${link.title}" со старой категории "${link.category}" на новый ID ${oldToNewIdMap[link.category]}`);
                         link.category = oldToNewIdMap[link.category];
@@ -17827,13 +17815,26 @@ async function loadExtLinks() {
 
             await saveToIndexedDB('preferences', { id: EXT_LINKS_MIGRATION_KEY, done: true });
             console.log(`${LOG_PREFIX} МИГРАЦИЯ ЗАВЕРШЕНА. Флаг установлен.`);
-        } else if (!db) {
-            console.warn(`${LOG_PREFIX} База данных не инициализирована, миграция и загрузка пропущены.`);
         }
+
+        const allLinks = await getAllExtLinks();
+        const linksToFix = allLinks.filter(link => typeof link.category === 'string' && !isNaN(parseInt(link.category, 10)));
+        if (linksToFix.length > 0) {
+            console.warn(`${LOG_PREFIX} Найдено ${linksToFix.length} ссылок с ID категории в виде строки. Запускаю исправление.`);
+            const fixPromises = linksToFix.map(link => {
+                const numericId = parseInt(link.category, 10);
+                console.log(`   - Исправление ссылки "${link.title}": категория "${link.category}" -> ${numericId}`);
+                link.category = numericId;
+                return saveToIndexedDB('extLinks', link);
+            });
+            await Promise.all(fixPromises);
+            showNotification("База данных внешних ресурсов была автоматически обновлена.", "info");
+        }
+
     } catch (migrationError) {
-        console.error(`${LOG_PREFIX} Критическая ошибка во время миграции категорий внешних ссылок:`, migrationError);
+        console.error(`${LOG_PREFIX} Критическая ошибка во время миграции или исправления данных:`, migrationError);
         if (typeof showNotification === 'function') {
-            showNotification(`Критическая ошибка миграции: ${migrationError.message}`, "error");
+            showNotification(`Критическая ошибка обновления данных: ${migrationError.message}`, "error");
         }
     }
 
@@ -18225,214 +18226,47 @@ async function deleteExtLink(id) {
 
 
 function initUICustomization() {
+    injectCustomizationStyles();
+
     const getElem = (id) => document.getElementById(id);
-    const querySelAll = (selector) => document.querySelectorAll(selector);
 
     const customizeUIBtn = getElem('customizeUIBtn');
     const customizeUIModal = getElem('customizeUIModal');
+    if (!customizeUIBtn || !customizeUIModal) {
+        console.warn("initUICustomization: Кнопка или модальное окно настроек не найдены. Инициализация прервана.");
+        return;
+    }
     const closeCustomizeUIModalBtn = getElem('closeCustomizeUIModalBtn');
     const saveUISettingsBtn = getElem('saveUISettingsBtn');
     const cancelUISettingsBtn = getElem('cancelUISettingsBtn');
-    const resetUISettingsBtn = getElem('resetUISettingsBtn');
+    const resetUiBtn = getElem('resetUiBtn');
+
+    const colorTargetSelector = getElem('colorTargetSelector');
+
+    const colorPickerState = { h: 0, s: 80, b: 88 };
+    const colorPreview = getElem('color-preview-swatch');
+    const saturationSliderGradient = getElem('saturation-slider-gradient');
+    const brightnessSliderGradient = getElem('brightness-slider-gradient');
+    const hueSlider = getElem('hue-slider');
+    const hueHandle = getElem('hue-handle');
+    const saturationSlider = getElem('saturation-slider');
+    const saturationHandle = getElem('saturation-handle');
+    const brightnessSlider = getElem('brightness-slider');
+    const brightnessHandle = getElem('brightness-handle');
+    const hueValueInput = getElem('hue-value');
+    const saturationValueInput = getElem('saturation-value');
+    const brightnessValueInput = getElem('brightness-value');
 
     const decreaseFontBtn = getElem('decreaseFontBtn');
     const increaseFontBtn = getElem('increaseFontBtn');
     const resetFontBtn = getElem('resetFontBtn');
     const fontSizeLabel = getElem('fontSizeLabel');
-
-    if (!customizeUIBtn || !customizeUIModal) {
-        console.warn("initUICustomization: Кнопка открытия или само модальное окно настроек не найдены. Инициализация прервана.");
-        return;
-    }
-
-    const toggleBlacklistWarningCheckbox = getElem('toggleBlacklistWarning');
-    const toggleDisableForcedBackupCheckbox = getElem('toggleDisableForcedBackup');
-
-    const uiModalHasChanges = () => {
-        const currentSettingsFromUIModal = getSettingsFromModal();
-        if (!originalUISettings || !currentSettingsFromUIModal) {
-            return isUISettingsDirty;
-        }
-        return !deepEqual(originalUISettings, currentSettingsFromUIModal);
-    };
-
-    const closeModal = async (forceClose = false) => {
-        if (!customizeUIModal) {
-            console.error("closeModal (initUICustomization): customizeUIModal не найден.");
-            return false;
-        }
-
-        const inputField = getElem('employeeExtensionInput');
-        if (inputField && !inputField.classList.contains('hidden')) {
-            if (typeof loadEmployeeExtension === 'function') {
-                await loadEmployeeExtension();
-            }
-            const displaySpan = getElem('employeeExtensionDisplay');
-            inputField.classList.add('hidden');
-            inputField.disabled = true;
-            if (displaySpan) displaySpan.classList.remove('hidden');
-        }
-
-
-        let changesActuallyMade = uiModalHasChanges();
-
-        if (changesActuallyMade && !forceClose) {
-            if (!confirm("Изменения не сохранены. Вы уверены, что хотите выйти?")) {
-                return false;
-            }
-        }
-
-        if (!forceClose && changesActuallyMade) {
-            const settingsToRevertTo = JSON.parse(JSON.stringify(originalUISettings || DEFAULT_UI_SETTINGS));
-            if (settingsToRevertTo.showBlacklistUsageWarning === undefined) {
-                settingsToRevertTo.showBlacklistUsageWarning = userPreferences.showBlacklistUsageWarning ?? true;
-            }
-            if (settingsToRevertTo.disableForcedBackupOnImport === undefined) {
-                settingsToRevertTo.disableForcedBackupOnImport = userPreferences.disableForcedBackupOnImport ?? false;
-            }
-
-            if (typeof applyPreviewSettings === 'function') {
-                await applyPreviewSettings(settingsToRevertTo);
-            }
-        }
-
-        isUISettingsDirty = false;
-        customizeUIModal.classList.add('hidden');
-
-        if (typeof getVisibleModals === 'function') {
-            if (getVisibleModals().length === 0) {
-                document.body.classList.remove('overflow-hidden');
-                document.body.classList.remove('modal-open');
-            }
-        } else {
-            document.body.classList.remove('overflow-hidden');
-            document.body.classList.remove('modal-open');
-        }
-
-
-        if (typeof removeEscapeHandler === 'function') {
-            removeEscapeHandler(customizeUIModal);
-        }
-        return true;
-    };
-
-    const openModal = async () => {
-        if (typeof loadUISettings === 'function') {
-            await loadUISettings();
-        } else {
-            const baseSettings = (originalUISettings && Object.keys(originalUISettings).length > 0)
-                ? originalUISettings
-                : DEFAULT_UI_SETTINGS;
-
-            originalUISettings = {
-                ...baseSettings,
-                showBlacklistUsageWarning: userPreferences.showBlacklistUsageWarning ?? true,
-                disableForcedBackupOnImport: userPreferences.disableForcedBackupOnImport ?? false
-            };
-            currentPreviewSettings = JSON.parse(JSON.stringify(originalUISettings));
-        }
-
-        if (typeof loadEmployeeExtension === 'function') {
-            await loadEmployeeExtension();
-        }
-
-        if (currentPreviewSettings) {
-            if (currentPreviewSettings.showBlacklistUsageWarning === undefined) {
-                currentPreviewSettings.showBlacklistUsageWarning = userPreferences.showBlacklistUsageWarning ?? true;
-            }
-            if (currentPreviewSettings.disableForcedBackupOnImport === undefined) {
-                currentPreviewSettings.disableForcedBackupOnImport = userPreferences.disableForcedBackupOnImport ?? false;
-            }
-            if (currentPreviewSettings.themeMode === undefined) {
-                currentPreviewSettings.themeMode = userPreferences.theme ?? DEFAULT_UI_SETTINGS.themeMode;
-            }
-        } else {
-            currentPreviewSettings = JSON.parse(JSON.stringify(originalUISettings));
-        }
-
-        if (typeof populateModalControls === 'function') {
-            populateModalControls(currentPreviewSettings);
-        }
-
-        isUISettingsDirty = false;
-
-        if (customizeUIModal) {
-            customizeUIModal.classList.remove('hidden');
-            document.body.classList.add('overflow-hidden');
-            document.body.classList.add('modal-open');
-            if (typeof addEscapeHandler === 'function') {
-                addEscapeHandler(customizeUIModal);
-            }
-        }
-    };
-
-    customizeUIBtn.addEventListener('click', openModal);
-
-    if (closeCustomizeUIModalBtn) {
-        closeCustomizeUIModalBtn.addEventListener('click', () => closeModal(false));
-    }
-    if (cancelUISettingsBtn) {
-        cancelUISettingsBtn.addEventListener('click', () => closeModal(false));
-    }
-
-    saveUISettingsBtn?.addEventListener('click', async () => {
-        if (typeof updatePreviewSettingsFromModal === 'function') {
-            updatePreviewSettingsFromModal();
-        } else {
-            console.error("updatePreviewSettingsFromModal не найдена!");
-            return;
-        }
-
-        let saved = false;
-        if (typeof saveUISettings === 'function') {
-            saved = await saveUISettings();
-        } else {
-            console.error("saveUISettings не найдена!");
-            return;
-        }
-
-        if (saved) {
-            const inputField = getElem('employeeExtensionInput');
-            if (inputField && !inputField.classList.contains('hidden')) {
-                if (typeof saveEmployeeExtension === 'function') {
-                    await saveEmployeeExtension(inputField.value);
-                }
-            }
-            await closeModal(true);
-        }
-    });
-
-    resetUISettingsBtn?.addEventListener('click', async () => {
-        if (confirm('Вы уверены, что хотите сбросить все настройки интерфейса к значениям по умолчанию (в окне предпросмотра)? Это изменение нужно будет сохранить.')) {
-            currentPreviewSettings = {
-                ...DEFAULT_UI_SETTINGS,
-                id: 'uiSettings',
-                showBlacklistUsageWarning: DEFAULT_UI_SETTINGS.showBlacklistUsageWarning ?? true,
-                disableForcedBackupOnImport: DEFAULT_UI_SETTINGS.disableForcedBackupOnImport ?? false
-            };
-
-            if (typeof populateModalControls === 'function') populateModalControls(currentPreviewSettings);
-            if (typeof applyPreviewSettings === 'function') await applyPreviewSettings(currentPreviewSettings);
-
-            isUISettingsDirty = !deepEqual(originalUISettings, currentPreviewSettings);
-
-            if (typeof updateExtensionDisplay === 'function') updateExtensionDisplay('');
-            const inputField = getElem('employeeExtensionInput');
-            if (inputField) inputField.value = '';
-
-            if (typeof showNotification === 'function') showNotification("Настройки сброшены для предпросмотра. Нажмите 'Сохранить', чтобы применить.", "info");
-        }
-    });
+    const borderRadiusSlider = getElem('borderRadiusSlider');
+    const densitySlider = getElem('densitySlider');
 
     const genericChangeHandler = async (updateFn) => {
         if (typeof currentPreviewSettings !== 'object' || currentPreviewSettings === null) {
             currentPreviewSettings = JSON.parse(JSON.stringify(originalUISettings || DEFAULT_UI_SETTINGS));
-            if (currentPreviewSettings.showBlacklistUsageWarning === undefined) {
-                currentPreviewSettings.showBlacklistUsageWarning = userPreferences.showBlacklistUsageWarning ?? true;
-            }
-            if (currentPreviewSettings.disableForcedBackupOnImport === undefined) {
-                currentPreviewSettings.disableForcedBackupOnImport = userPreferences.disableForcedBackupOnImport ?? false;
-            }
         }
         updateFn();
         if (typeof applyPreviewSettings === 'function') {
@@ -18441,162 +18275,266 @@ function initUICustomization() {
         isUISettingsDirty = !deepEqual(originalUISettings, getSettingsFromModal());
     };
 
-    if (toggleBlacklistWarningCheckbox) {
-        if (toggleBlacklistWarningCheckbox._changeHandler) {
-            toggleBlacklistWarningCheckbox.removeEventListener('change', toggleBlacklistWarningCheckbox._changeHandler);
-        }
-        toggleBlacklistWarningCheckbox._changeHandler = () => genericChangeHandler(() => {
-            currentPreviewSettings.showBlacklistUsageWarning = toggleBlacklistWarningCheckbox.checked;
-        });
-        toggleBlacklistWarningCheckbox.addEventListener('change', toggleBlacklistWarningCheckbox._changeHandler);
-    }
-
-    if (toggleDisableForcedBackupCheckbox) {
-        if (toggleDisableForcedBackupCheckbox._changeHandler) {
-            toggleDisableForcedBackupCheckbox.removeEventListener('change', toggleDisableForcedBackupCheckbox._changeHandler);
-        }
-        toggleDisableForcedBackupCheckbox._changeHandler = () => genericChangeHandler(() => {
-            currentPreviewSettings.disableForcedBackupOnImport = toggleDisableForcedBackupCheckbox.checked;
-        });
-        toggleDisableForcedBackupCheckbox.addEventListener('change', toggleDisableForcedBackupCheckbox._changeHandler);
-    }
-
-    querySelAll('input[name="themeMode"]').forEach(radio => {
-        radio.addEventListener('change', () => genericChangeHandler(() => {
-            currentPreviewSettings.themeMode = radio.value;
-        }));
-    });
-
-    querySelAll('input[name="mainLayout"]').forEach(radio => {
-        radio.addEventListener('change', () => genericChangeHandler(() => {
-            currentPreviewSettings.mainLayout = radio.value;
-        }));
-    });
-
-    const colorSwatches = customizeUIModal.querySelectorAll('.color-swatch');
-    colorSwatches.forEach(swatch => {
-        swatch.addEventListener('click', () => genericChangeHandler(() => {
-            const selectedColor = swatch.getAttribute('data-color');
-            if (!selectedColor) return;
-            currentPreviewSettings.primaryColor = selectedColor;
-            colorSwatches.forEach(s => {
-                s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-                s.classList.add('border-2', 'border-transparent');
-            });
-            swatch.classList.remove('border-transparent');
-            swatch.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-        }));
-    });
-
-    const FONT_SIZE_STEP = 5;
-    const MIN_FONT_SIZE = 50;
-    const MAX_FONT_SIZE = 150;
-
-    const updateFontSizeUIAndSettings = (newSize) => {
-        if (!fontSizeLabel) return;
-        const clampedSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize));
-        fontSizeLabel.textContent = clampedSize + '%';
-        if (currentPreviewSettings) {
-            currentPreviewSettings.fontSize = clampedSize;
+    const setColorPickerStateFromHex = (hex) => {
+        const rgb = hexToRgb(hex);
+        if (rgb) {
+            const hsb = rgbToHsb(rgb.r, rgb.g, rgb.b);
+            Object.assign(colorPickerState, hsb);
+            _updatePickerVisualsWithoutTriggeringChange();
         }
     };
 
-    if (decreaseFontBtn && fontSizeLabel) {
-        if (decreaseFontBtn._clickListener) decreaseFontBtn.removeEventListener('click', decreaseFontBtn._clickListener);
-        decreaseFontBtn._clickListener = () => genericChangeHandler(() => {
-            let currentSize = parseInt(fontSizeLabel.textContent, 10);
-            if (isNaN(currentSize) && currentPreviewSettings) currentSize = currentPreviewSettings.fontSize || DEFAULT_UI_SETTINGS.fontSize;
-            else if (isNaN(currentSize)) currentSize = DEFAULT_UI_SETTINGS.fontSize;
-            updateFontSizeUIAndSettings(currentSize - FONT_SIZE_STEP);
-        });
-        decreaseFontBtn.addEventListener('click', decreaseFontBtn._clickListener);
-    }
-
-    if (increaseFontBtn && fontSizeLabel) {
-        if (increaseFontBtn._clickListener) increaseFontBtn.removeEventListener('click', increaseFontBtn._clickListener);
-        increaseFontBtn._clickListener = () => genericChangeHandler(() => {
-            let currentSize = parseInt(fontSizeLabel.textContent, 10);
-            if (isNaN(currentSize) && currentPreviewSettings) currentSize = currentPreviewSettings.fontSize || DEFAULT_UI_SETTINGS.fontSize;
-            else if (isNaN(currentSize)) currentSize = DEFAULT_UI_SETTINGS.fontSize;
-            updateFontSizeUIAndSettings(currentSize + FONT_SIZE_STEP);
-        });
-        increaseFontBtn.addEventListener('click', increaseFontBtn._clickListener);
-    }
-
-    if (resetFontBtn && fontSizeLabel) {
-        if (resetFontBtn._clickListener) resetFontBtn.removeEventListener('click', resetFontBtn._clickListener);
-        resetFontBtn._clickListener = () => genericChangeHandler(() => {
-            updateFontSizeUIAndSettings(100);
-        });
-        resetFontBtn.addEventListener('click', resetFontBtn._clickListener);
-    }
-
-    const borderRadiusSlider = getElem('borderRadiusSlider');
-    if (borderRadiusSlider) {
-        borderRadiusSlider.addEventListener('input', () => genericChangeHandler(() => {
-            if (currentPreviewSettings) currentPreviewSettings.borderRadius = parseInt(borderRadiusSlider.value, 10);
-        }));
-    }
-
-    const densitySlider = getElem('densitySlider');
-    if (densitySlider) {
-        densitySlider.addEventListener('input', () => genericChangeHandler(() => {
-            if (currentPreviewSettings) currentPreviewSettings.contentDensity = parseInt(densitySlider.value, 10);
-        }));
-    }
-
-    const panelSortContainer = document.getElementById('panelSortContainer');
-    if (panelSortContainer && window.Sortable) {
-        if (panelSortContainer.sortableInstance) {
-            try { panelSortContainer.sortableInstance.destroy(); } catch (e) { }
+    const _updatePickerVisualsWithoutTriggeringChange = () => {
+        if (!saturationSliderGradient || !brightnessSliderGradient || !hueHandle || !saturationHandle || !brightnessHandle || !colorPreview || !hueValueInput || !saturationValueInput || !brightnessValueInput) {
+            return;
         }
-        panelSortContainer.sortableInstance = new Sortable(panelSortContainer, {
-            animation: 150,
-            handle: '.fa-grip-lines',
-            ghostClass: 'my-sortable-ghost',
-            onEnd: async function (evt) {
-                const newOrder = Array.from(panelSortContainer.querySelectorAll('.panel-item')).map(item => item.dataset.section);
-                const newVisibility = Array.from(panelSortContainer.querySelectorAll('.panel-item')).map(item =>
-                    item.querySelector('.toggle-visibility i')?.classList.contains('fa-eye') ?? true
-                );
-                if (currentPreviewSettings) {
-                    currentPreviewSettings.panelOrder = newOrder;
-                    currentPreviewSettings.panelVisibility = newVisibility;
+        const { h, s, b } = colorPickerState;
+
+        const pureHueRgb = hsbToRgb(h, 100, 100);
+        const pureHueHex = rgbToHex(pureHueRgb.r, pureHueRgb.g, pureHueRgb.b);
+        saturationSliderGradient.style.background = `linear-gradient(to right, rgb(128,128,128), ${pureHueHex})`;
+        brightnessSliderGradient.style.background = `linear-gradient(to right, #000, ${pureHueHex})`;
+
+        const huePercentFraction = h / 360;
+        hueHandle.style.left = `calc(${huePercentFraction * 99}% - ${huePercentFraction}rem)`;
+
+        const saturationPercentFraction = s / 100;
+        saturationHandle.style.left = `calc(${saturationPercentFraction * 99}% - ${saturationPercentFraction}rem)`;
+
+        const brightnessPercentFraction = b / 100;
+        brightnessHandle.style.left = `calc(${brightnessPercentFraction * 99}% - ${brightnessPercentFraction}rem)`;
+
+        const currentRgb = hsbToRgb(h, s, b);
+        const currentHex = rgbToHex(currentRgb.r, currentRgb.g, currentRgb.b);
+        colorPreview.style.backgroundColor = currentHex;
+
+        hueValueInput.value = `${Math.round(h)}°`;
+        saturationValueInput.value = `${Math.round(s)}%`;
+        brightnessValueInput.value = `${Math.round(b)}%`;
+    };
+
+    const updatePickerUI = () => {
+        _updatePickerVisualsWithoutTriggeringChange();
+        const currentRgb = hsbToRgb(colorPickerState.h, colorPickerState.s, colorPickerState.b);
+        const currentHex = rgbToHex(currentRgb.r, currentRgb.g, currentRgb.b);
+
+        genericChangeHandler(() => {
+            if (!currentPreviewSettings) return;
+            if (uiModalState.currentColorTarget === 'elements') {
+                currentPreviewSettings.primaryColor = currentHex;
+            } else if (uiModalState.currentColorTarget === 'background') {
+                currentPreviewSettings.backgroundColor = currentHex;
+                currentPreviewSettings.isBackgroundCustom = true;
+            } else if (uiModalState.currentColorTarget === 'text') {
+                currentPreviewSettings.customTextColor = currentHex;
+                currentPreviewSettings.isTextCustom = true;
+            }
+        });
+    };
+
+    const setupDraggable = (element, onDrag) => {
+        const handler = (e_down) => { if (!element) return; e_down.preventDefault(); const rect = element.getBoundingClientRect(); const moveHandler = (e_move) => { const moveEvent = e_move.touches ? e_move.touches[0] : e_move; onDrag(moveEvent, rect); }; const upHandler = () => { document.removeEventListener('mousemove', moveHandler); document.removeEventListener('mouseup', upHandler); document.removeEventListener('touchmove', moveHandler); document.removeEventListener('touchend', upHandler); }; document.addEventListener('mousemove', moveHandler); document.addEventListener('mouseup', upHandler); document.addEventListener('touchmove', moveHandler, { passive: false }); document.addEventListener('touchend', upHandler); const downEvent = e_down.touches ? e_down.touches[0] : e_down; onDrag(downEvent, rect); };
+        element.addEventListener('mousedown', handler);
+        element.addEventListener('touchstart', handler, { passive: false });
+    };
+
+    if (hueSlider) setupDraggable(hueSlider, (e, rect) => { let percent = ((e.clientX - rect.left) / rect.width) * 100; colorPickerState.h = Math.max(0, Math.min(359.9, percent * 3.6)); updatePickerUI(); });
+    if (saturationSlider) setupDraggable(saturationSlider, (e, rect) => { let percent = ((e.clientX - rect.left) / rect.width) * 100; colorPickerState.s = Math.max(0, Math.min(100, percent)); updatePickerUI(); });
+    if (brightnessSlider) setupDraggable(brightnessSlider, (e, rect) => { let percent = ((e.clientX - rect.left) / rect.width) * 100; colorPickerState.b = Math.max(0, Math.min(100, percent)); updatePickerUI(); });
+
+    if (colorTargetSelector) {
+        colorTargetSelector.addEventListener('change', (event) => {
+            const target = event.target.value;
+            if (['elements', 'background', 'text'].includes(target)) {
+                uiModalState.currentColorTarget = target;
+                let colorToSet;
+
+                if (target === 'elements') {
+                    colorToSet = currentPreviewSettings.primaryColor;
+                } else if (target === 'background') {
+                    if (currentPreviewSettings.isBackgroundCustom) {
+                        colorToSet = currentPreviewSettings.backgroundColor;
+                    } else {
+                        const computedBg = getComputedStyle(document.body).backgroundColor;
+                        const match = /rgb\((\d+), (\d+), (\d+)\)/.exec(computedBg);
+                        if (match) {
+                            colorToSet = rgbToHex(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+                        } else {
+                            colorToSet = document.documentElement.classList.contains('dark') ? '#111827' : '#F9FAFB';
+                        }
+                    }
+                } else if (target === 'text') {
+                    if (currentPreviewSettings.isTextCustom) {
+                        colorToSet = currentPreviewSettings.customTextColor;
+                    } else {
+                        const computedText = getComputedStyle(document.body).color;
+                        const match = /rgb\((\d+), (\d+), (\d+)\)/.exec(computedText);
+                        if (match) {
+                            colorToSet = rgbToHex(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+                        } else {
+                            colorToSet = document.documentElement.classList.contains('dark') ? '#f9fafb' : '#111827';
+                        }
+                    }
                 }
-                if (typeof applyPreviewSettings === 'function' && currentPreviewSettings) await applyPreviewSettings(currentPreviewSettings);
-                isUISettingsDirty = !deepEqual(originalUISettings, getSettingsFromModal());
-            },
+                setColorPickerStateFromHex(colorToSet);
+            }
         });
     }
 
-    panelSortContainer?.querySelectorAll('.toggle-visibility').forEach(button => {
-        if (button._visibilityToggleHandler) button.removeEventListener('click', button._visibilityToggleHandler);
+    const openModal = async () => {
+        await loadUISettings();
+        uiModalState.currentColorTarget = 'elements';
+        const elementsRadio = colorTargetSelector.querySelector('input[value="elements"]');
+        if (elementsRadio) elementsRadio.checked = true;
+        const initialColor = currentPreviewSettings.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
+        setColorPickerStateFromHex(initialColor);
+        populateModalControls(currentPreviewSettings);
+        customizeUIModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        requestAnimationFrame(() => _updatePickerVisualsWithoutTriggeringChange());
+        isUISettingsDirty = false;
+    };
 
-        button._visibilityToggleHandler = async (event) => {
-            const i = button.querySelector('i');
-            if (!i) return;
-            const isVis = i.classList.contains('fa-eye');
-            i.classList.toggle('fa-eye', !isVis);
-            i.classList.toggle('fa-eye-slash', isVis);
-            button.title = isVis ? "Показать раздел" : "Скрыть раздел";
+    customizeUIBtn.addEventListener('click', openModal);
 
-            const newOrder = Array.from(panelSortContainer.querySelectorAll('.panel-item')).map(item => item.dataset.section);
-            const newVisibility = Array.from(panelSortContainer.querySelectorAll('.panel-item')).map(item =>
-                item.querySelector('.toggle-visibility i')?.classList.contains('fa-eye') ?? true
-            );
-            if (currentPreviewSettings) {
-                currentPreviewSettings.panelOrder = newOrder;
-                currentPreviewSettings.panelVisibility = newVisibility;
-            }
-            if (typeof applyPreviewSettings === 'function' && currentPreviewSettings) await applyPreviewSettings(currentPreviewSettings);
-            isUISettingsDirty = !deepEqual(originalUISettings, getSettingsFromModal());
-        };
-        button.addEventListener('click', button._visibilityToggleHandler);
+    const handleCloseRequest = async () => {
+        if (typeof requestCloseModal === 'function') {
+            requestCloseModal(customizeUIModal);
+        } else {
+            customizeUIModal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+    };
+
+    if (closeCustomizeUIModalBtn) closeCustomizeUIModalBtn.addEventListener('click', handleCloseRequest);
+    if (cancelUISettingsBtn) cancelUISettingsBtn.addEventListener('click', handleCloseRequest);
+    if (saveUISettingsBtn) saveUISettingsBtn.addEventListener('click', async () => {
+        updatePreviewSettingsFromModal();
+        if (await saveUISettings()) {
+            customizeUIModal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            isUISettingsDirty = false;
+        }
     });
 
+    if (resetUiBtn) {
+        resetUiBtn.addEventListener('click', () => {
+            if (confirm('Сбросить настройки к значениям по умолчанию?')) {
+                resetUISettingsInModal();
+            }
+        });
+    }
+
+
+    const FONT_SIZE_STEP = 5, MIN_FONT_SIZE = 50, MAX_FONT_SIZE = 150;
+    const updateFontSizeUIAndSettings = (newSize) => { const clampedSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize)); if (fontSizeLabel) fontSizeLabel.textContent = clampedSize + '%'; if (currentPreviewSettings) currentPreviewSettings.fontSize = clampedSize; };
+    if (decreaseFontBtn) decreaseFontBtn.addEventListener('click', () => genericChangeHandler(() => updateFontSizeUIAndSettings(parseInt(fontSizeLabel.textContent) - FONT_SIZE_STEP)));
+    if (increaseFontBtn) increaseFontBtn.addEventListener('click', () => genericChangeHandler(() => updateFontSizeUIAndSettings(parseInt(fontSizeLabel.textContent) + FONT_SIZE_STEP)));
+    if (resetFontBtn) resetFontBtn.addEventListener('click', () => genericChangeHandler(() => updateFontSizeUIAndSettings(100)));
+    if (borderRadiusSlider) borderRadiusSlider.addEventListener('input', () => genericChangeHandler(() => currentPreviewSettings.borderRadius = parseInt(borderRadiusSlider.value)));
+    if (densitySlider) densitySlider.addEventListener('input', () => genericChangeHandler(() => currentPreviewSettings.contentDensity = parseInt(densitySlider.value)));
+
+    document.querySelectorAll('input[name="themeMode"], input[name="mainLayout"]').forEach(radio => {
+        radio.addEventListener('change', () => genericChangeHandler(() => { if (radio.name === "themeMode") currentPreviewSettings.themeMode = radio.value; if (radio.name === "mainLayout") currentPreviewSettings.mainLayout = radio.value; }));
+    });
+
+    const panelSortContainer = getElem('panelSortContainer');
+    if (panelSortContainer && typeof Sortable !== 'undefined') {
+        new Sortable(panelSortContainer, { animation: 150, handle: '.fa-grip-lines', ghostClass: 'my-sortable-ghost', onEnd: () => genericChangeHandler(updatePreviewSettingsFromModal), });
+    }
     if (typeof setupExtensionFieldListeners === 'function') {
         setupExtensionFieldListeners();
     }
+    if (typeof setupBackgroundImageControls === 'function') {
+        setupBackgroundImageControls();
+    } else {
+        console.error("Функция setupBackgroundImageControls не найдена!");
+    }
+}
+
+
+function hexToRgb(hex) {
+    if (!hex || typeof hex !== 'string') return null;
+    let r = 0, g = 0, b = 0;
+    hex = hex.startsWith('#') ? hex.slice(1) : hex;
+    if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length === 6) {
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+    } else {
+        return null;
+    }
+    return { r, g, b };
+}
+
+
+function rgbToHex(r, g, b) {
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+}
+
+
+function rgbToHsb(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, v = max;
+    const d = max - min;
+    s = max === 0 ? 0 : d / max;
+    if (max !== min) {
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return { h: h * 360, s: s * 100, b: v * 100 };
+}
+
+
+function hsbToRgb(h, s, b) {
+    h /= 360; s /= 100; b /= 100;
+    let r, g, v;
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = b * (1 - s);
+    const q = b * (1 - f * s);
+    const t = b * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = b, g = t, v = p; break;
+        case 1: r = q, g = b, v = p; break;
+        case 2: r = p, g = b, v = t; break;
+        case 3: r = p, g = q, v = b; break;
+        case 4: r = t, g = p, v = b; break;
+        case 5: r = b, g = p, v = q; break;
+    }
+    return {
+        r: Math.round(r * 255),
+        g: Math.round(g * 255),
+        b: Math.round(v * 255)
+    };
+}
+
+
+function injectCustomizationStyles() {
+    const styleId = 'ui-customization-fixes';
+    if (document.getElementById(styleId)) return;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+        /* Отключаем интерактивность для полей со значениями процентов цвета */
+        #hue-value, #saturation-value, #brightness-value {
+            pointer-events: none;
+            cursor: default;
+            user-select: none;
+        }
+    `;
+    document.head.appendChild(style);
+    console.log("Стили для исправления UI настроек успешно добавлены.");
 }
 
 
@@ -18604,188 +18542,46 @@ function populateModalControls(settings) {
     const modal = document.getElementById('customizeUIModal');
     if (!modal) return;
 
-    console.log("[populateModalControls] START. Populating with settings:", JSON.parse(JSON.stringify(settings || {})));
     if (typeof settings !== 'object' || settings === null) {
-        console.error("[populateModalControls] CRITICAL: settings is not an object or is null. Cannot populate controls. Using defaults based on userPreferences and DEFAULT_UI_SETTINGS.");
-        settings = {
-            ...DEFAULT_UI_SETTINGS,
-            themeMode: userPreferences.theme,
-            showBlacklistUsageWarning: userPreferences.showBlacklistUsageWarning,
-            disableForcedBackupOnImport: userPreferences.disableForcedBackupOnImport
-        };
+        settings = { ...DEFAULT_UI_SETTINGS, themeMode: userPreferences.theme };
     }
 
-    if (settings.themeMode === undefined || !['auto', 'light', 'dark'].includes(settings.themeMode)) {
-        settings.themeMode = userPreferences.theme ?? DEFAULT_UI_SETTINGS.themeMode;
-        console.warn(`[populateModalControls] settings.themeMode был невалиден, установлен в: ${settings.themeMode}`);
-    }
-    if (settings.showBlacklistUsageWarning === undefined) {
-        settings.showBlacklistUsageWarning = userPreferences.showBlacklistUsageWarning ?? DEFAULT_UI_SETTINGS.showBlacklistUsageWarning ?? true;
-        console.warn(`[populateModalControls] settings.showBlacklistUsageWarning был невалиден, установлен в: ${settings.showBlacklistUsageWarning}`);
-    }
-    if (settings.disableForcedBackupOnImport === undefined) {
-        settings.disableForcedBackupOnImport = userPreferences.disableForcedBackupOnImport ?? DEFAULT_UI_SETTINGS.disableForcedBackupOnImport ?? false;
-        console.warn(`[populateModalControls] settings.disableForcedBackupOnImport был невалиден, установлен в: ${settings.disableForcedBackupOnImport}`);
-    }
-
-    const layoutRadio = modal.querySelector(`input[name="mainLayout"][value="${settings.mainLayout || DEFAULT_UI_SETTINGS.mainLayout}"]`);
+    const layoutRadio = modal.querySelector(`input[name="mainLayout"][value="${settings.mainLayout || 'horizontal'}"]`);
     if (layoutRadio) layoutRadio.checked = true;
-    else {
-        const defaultLayoutRadio = modal.querySelector(`input[name="mainLayout"][value="${DEFAULT_UI_SETTINGS.mainLayout}"]`);
-        if (defaultLayoutRadio) defaultLayoutRadio.checked = true;
-    }
 
-    const themeRadio = modal.querySelector(`input[name="themeMode"][value="${settings.themeMode}"]`);
-    if (themeRadio) {
-        themeRadio.checked = true;
-    } else {
-        const autoThemeRadio = modal.querySelector(`input[name="themeMode"][value="auto"]`);
-        if (autoThemeRadio) autoThemeRadio.checked = true;
-        else {
-            const firstThemeRadio = modal.querySelector('input[name="themeMode"]');
-            if (firstThemeRadio) firstThemeRadio.checked = true;
-        }
-        console.warn(`[populateModalControls] Тема "${settings.themeMode}" не найдена среди радиокнопок. Выбрана 'auto' или первая доступная.`);
-    }
-
-    const toggleBlacklistWarningCheckbox = modal.querySelector('#toggleBlacklistWarning');
-    if (toggleBlacklistWarningCheckbox) {
-        toggleBlacklistWarningCheckbox.checked = settings.showBlacklistUsageWarning;
-    } else {
-        console.warn("[populateModalControls] Чекбокс #toggleBlacklistWarning не найден.");
-    }
-
-    const toggleDisableForcedBackupCheckbox = modal.querySelector('#toggleDisableForcedBackup');
-    if (toggleDisableForcedBackupCheckbox) {
-        toggleDisableForcedBackupCheckbox.checked = settings.disableForcedBackupOnImport;
-    } else {
-        console.warn("[populateModalControls] Чекбокс #toggleDisableForcedBackup не найден.");
-    }
-
-    modal.querySelectorAll('.color-swatch').forEach(s => {
-        s.classList.remove('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-        s.classList.add('border-2', 'border-transparent');
-        if (s.getAttribute('data-color') === (settings.primaryColor || DEFAULT_UI_SETTINGS.primaryColor)) {
-            s.classList.remove('border-transparent');
-            s.classList.add('ring-2', 'ring-offset-2', 'dark:ring-offset-gray-800', 'ring-primary');
-        }
-    });
+    const themeRadio = modal.querySelector(`input[name="themeMode"][value="${settings.themeMode || 'auto'}"]`);
+    if (themeRadio) themeRadio.checked = true;
 
     const fontSizeLabel = modal.querySelector('#fontSizeLabel');
-    let currentFontSize = DEFAULT_UI_SETTINGS.fontSize;
-    if (settings.fontSize !== undefined && settings.fontSize !== null && !isNaN(parseInt(settings.fontSize, 10))) {
-        currentFontSize = parseInt(settings.fontSize, 10);
-    } else if (settings.fontSize !== undefined) {
-        console.warn(`[populateModalControls] Невалидное значение settings.fontSize: ${settings.fontSize}. Используется дефолт: ${DEFAULT_UI_SETTINGS.fontSize}`);
-    }
-
-    if (fontSizeLabel) fontSizeLabel.textContent = currentFontSize + '%';
-    console.log(`[populateModalControls] fontSize set to: ${currentFontSize}% (Label: ${fontSizeLabel?.textContent})`);
+    if (fontSizeLabel) fontSizeLabel.textContent = (settings.fontSize ?? 100) + '%';
 
     const borderRadiusSlider = modal.querySelector('#borderRadiusSlider');
-    if (borderRadiusSlider) borderRadiusSlider.value = settings.borderRadius ?? DEFAULT_UI_SETTINGS.borderRadius;
+    if (borderRadiusSlider) borderRadiusSlider.value = settings.borderRadius ?? 8;
 
     const densitySlider = modal.querySelector('#densitySlider');
-    if (densitySlider) densitySlider.value = settings.contentDensity ?? DEFAULT_UI_SETTINGS.contentDensity;
+    if (densitySlider) densitySlider.value = settings.contentDensity ?? 3;
 
     const panelSortContainer = document.getElementById('panelSortContainer');
     if (panelSortContainer) {
         panelSortContainer.innerHTML = '';
+        const idToConfigMap = tabsConfig.reduce((map, tab) => (map[tab.id] = tab, map), {});
 
-        const idToConfigMap = (typeof tabsConfig !== 'undefined' && Array.isArray(tabsConfig))
-            ? tabsConfig.reduce((map, tab) => { map[tab.id] = tab; return map; }, {})
-            : {};
+        const order = settings.panelOrder || defaultPanelOrder;
+        const visibility = settings.panelVisibility || defaultPanelVisibility;
 
-        const currentPanelIds = (typeof tabsConfig !== 'undefined' && Array.isArray(tabsConfig)) ? tabsConfig.map(t => t.id) : [];
-
-        const actualDefaultPanelOrder = (typeof defaultPanelOrder !== 'undefined' && Array.isArray(defaultPanelOrder) && defaultPanelOrder.length > 0)
-            ? defaultPanelOrder
-            : currentPanelIds;
-
-        const actualDefaultPanelVisibility = (typeof defaultPanelVisibility !== 'undefined' && Array.isArray(defaultPanelVisibility) && defaultPanelVisibility.length === actualDefaultPanelOrder.length)
-            ? defaultPanelVisibility
-            : currentPanelIds.map(id => !(id === 'sedoTypes' || id === 'blacklistedClients'));
-
-        const effectiveOrder = (settings.panelOrder && settings.panelOrder.length > 0 && Array.isArray(settings.panelOrder))
-            ? settings.panelOrder
-            : actualDefaultPanelOrder;
-
-        let effectiveVisibility;
-        if (settings.panelVisibility && settings.panelVisibility.length === effectiveOrder.length && Array.isArray(settings.panelVisibility)) {
-            effectiveVisibility = settings.panelVisibility;
-        } else {
-            effectiveVisibility = effectiveOrder.map(id => {
-                const defaultIndex = actualDefaultPanelOrder.indexOf(id);
-                return defaultIndex !== -1 ? actualDefaultPanelVisibility[defaultIndex] : (!(id === 'sedoTypes' || id === 'blacklistedClients'));
-            });
-        }
-
-        const visibilityMap = effectiveOrder.reduce((map, panelId, index) => {
-            map[panelId] = (typeof effectiveVisibility[index] === 'boolean')
-                ? effectiveVisibility[index]
-                : (!(panelId === 'sedoTypes' || panelId === 'blacklistedClients'));
-            return map;
-        }, {});
-
-        effectiveOrder.forEach((panelId) => {
+        order.forEach((panelId, index) => {
             const config = idToConfigMap[panelId];
             if (config) {
-                const isVisible = visibilityMap[panelId];
-                if (typeof createPanelItemElement === 'function') {
-                    const panelItem = createPanelItemElement(config.id, config.name, isVisible);
-                    panelSortContainer.appendChild(panelItem);
-                } else {
-                    console.error("createPanelItemElement function not found.");
-                }
-            } else {
-                console.warn(`Config not found for panel ID: ${panelId} during modal population.`);
+                const isVisible = visibility[index] ?? true;
+                const panelItem = createPanelItemElement(config.id, config.name, isVisible);
+                panelSortContainer.appendChild(panelItem);
             }
         });
-
-        if (window.Sortable) {
-            if (panelSortContainer.sortableInstance && typeof panelSortContainer.sortableInstance.destroy === 'function') {
-                try {
-                    panelSortContainer.sortableInstance.destroy();
-                } catch (e) { console.error("[populateModalControls] Error destroying Sortable instance:", e); }
-            }
-            try {
-                panelSortContainer.sortableInstance = new Sortable(panelSortContainer, {
-                    animation: 150,
-                    handle: '.fa-grip-lines',
-                    ghostClass: 'my-sortable-ghost',
-                    onEnd: function (evt) {
-                        if (typeof updatePreviewSettingsFromModal === 'function') {
-                            updatePreviewSettingsFromModal();
-                        } else {
-                            console.error("updatePreviewSettingsFromModal function not found in Sortable onEnd.");
-                        }
-                        isUISettingsDirty = true;
-                    },
-                });
-            } catch (e) {
-                console.error("[populateModalControls] Failed to initialize Sortable:", e);
-                if (typeof showNotification === 'function') showNotification("Не удалось инициализировать сортировку панелей.", "error");
-            }
-        } else {
-            console.warn("[populateModalControls] SortableJS library not loaded. Drag-and-drop for panels disabled.");
-        }
 
         panelSortContainer.querySelectorAll('.toggle-visibility').forEach(button => {
-            if (button._visibilityToggleHandler) {
-                button.removeEventListener('click', button._visibilityToggleHandler);
-            }
-            if (typeof handleModalVisibilityToggle === 'function') {
-                button._visibilityToggleHandler = handleModalVisibilityToggle;
-                button.addEventListener('click', button._visibilityToggleHandler);
-            } else {
-                console.error("handleModalVisibilityToggle function not found.");
-            }
+            button.addEventListener('click', handleModalVisibilityToggle);
         });
-
-    } else {
-        console.error("[populateModalControls] Panel sort container (#panelSortContainer) not found.");
     }
-    console.log("[populateModalControls] Populating controls finished.");
 }
 
 
@@ -18938,11 +18734,37 @@ if (typeof setTheme === 'undefined') { window.setTheme = (theme) => console.log(
 async function resetUISettingsInModal() {
     console.log("Resetting UI settings in modal preview...");
 
-    currentPreviewSettings = { ...DEFAULT_UI_SETTINGS, id: 'uiSettings' };
+    currentPreviewSettings = JSON.parse(JSON.stringify(DEFAULT_UI_SETTINGS));
+    currentPreviewSettings.id = 'uiSettings';
+    currentPreviewSettings.isBackgroundCustom = false;
+    delete currentPreviewSettings.backgroundColor;
+    currentPreviewSettings.isTextCustom = false;
+    delete currentPreviewSettings.customTextColor;
+
+    document.body.classList.remove('custom-background-active');
+
+    try {
+        await deleteFromIndexedDB('preferences', 'customBackgroundImage');
+        removeCustomBackgroundImage();
+    } catch (err) {
+        console.error("Не удалось удалить фон при сбросе настроек:", err);
+    }
+
     isUISettingsDirty = true;
 
     try {
         populateModalControls(currentPreviewSettings);
+
+        uiModalState.currentColorTarget = 'elements';
+
+        const colorTargetSelector = document.getElementById('colorTargetSelector');
+        const elementsRadio = colorTargetSelector?.querySelector('input[value="elements"]');
+        if (elementsRadio) elementsRadio.checked = true;
+
+        if (typeof setColorPickerStateFromHex === 'function') {
+            setColorPickerStateFromHex(currentPreviewSettings.primaryColor);
+        }
+
         await applyPreviewSettings(currentPreviewSettings);
         console.log("UI settings reset preview applied.");
         showNotification("Настройки сброшены для предпросмотра. Нажмите 'Сохранить', чтобы применить.", "info");
@@ -18986,6 +18808,15 @@ async function applyInitialUISettings() {
                 delete loadedUiSpecificSettings.themeMode;
                 console.log("applyInitialUISettings: UI-специфичные настройки загружены из 'uiSettings' (тема исключена).");
             }
+
+            const bgImagePref = await getFromIndexedDB('preferences', 'customBackgroundImage');
+
+            if (bgImagePref && bgImagePref.value) {
+                applyCustomBackgroundImage(bgImagePref.value);
+            } else {
+                removeCustomBackgroundImage();
+            }
+
         } catch (error) {
             console.error("applyInitialUISettings: Ошибка загрузки 'uiSettings', используются дефолты для UI-специфичных настроек.", error);
         }
@@ -19298,256 +19129,238 @@ function createPanelItemElement(id, name, isVisible = true) {
 
 
 async function applyPreviewSettings(settings) {
-    console.log("[applyPreviewSettings] START. Applying settings (Scrollbar Fix V3):", JSON.parse(JSON.stringify(settings || {})));
+    console.log("[applyPreviewSettings v5 - Corrected Text Palette] Applying settings:", JSON.parse(JSON.stringify(settings || {})));
     if (typeof settings !== 'object' || settings === null) {
-        console.error("[applyPreviewSettings] CRITICAL: settings is not an object or is null. Using DEFAULT_UI_SETTINGS.", settings);
         settings = JSON.parse(JSON.stringify(DEFAULT_UI_SETTINGS));
     }
 
     const { style } = document.documentElement;
+    const body = document.body;
 
     const primaryColor = settings?.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
     const secondaryColor = calculateSecondaryColor(primaryColor);
     style.setProperty('--color-primary', primaryColor);
     style.setProperty('--color-secondary', secondaryColor);
-    console.log(`[applyPreviewSettings] --color-primary set to: ${primaryColor}`);
-    console.log(`[applyPreviewSettings] --color-secondary set to: ${secondaryColor}`);
 
-    if (typeof hexToHSL === 'function') {
-        style.setProperty('--color-primary-hsl', hexToHSL(primaryColor));
-        style.setProperty('--color-secondary-hsl', hexToHSL(secondaryColor));
-    } else {
-        console.warn("[applyPreviewSettings] hexToHSL function not found. HSL variables for primary/secondary colors will not be set.");
+    let palette = {
+        textPrimary: null,
+        textSecondary: null,
+        surface1: null,
+        surface2: null,
+        border: null,
+        inputBg: null
+    };
+    let isPaletteActive = false;
+
+    const isBackgroundCustom = settings?.isBackgroundCustom || false;
+    const backgroundColor = settings?.backgroundColor;
+
+    if (isBackgroundCustom && backgroundColor) {
+        isPaletteActive = true;
+        style.setProperty('--color-background', backgroundColor);
+
+        const bgHsl = hexToHsl(backgroundColor);
+        if (bgHsl) {
+            const luminance = getLuminance(backgroundColor);
+            const isDarkBg = luminance < 0.5;
+            const textPrimary = adjustHsl(bgHsl, isDarkBg ? 85 : -85, -30);
+            const textSecondary = adjustHsl(bgHsl, isDarkBg ? 60 : -60, -15);
+            const surface1 = adjustHsl(bgHsl, isDarkBg ? 5 : -5, -5);
+            const surface2 = adjustHsl(bgHsl, isDarkBg ? 8 : -8, -8);
+            const border = adjustHsl(bgHsl, isDarkBg ? 12 : -12, -10);
+            const inputBg = adjustHsl(bgHsl, isDarkBg ? 3 : -3, -5);
+            palette.textPrimary = hslToHex(textPrimary.h, textPrimary.s, textPrimary.l);
+            palette.textSecondary = hslToHex(textSecondary.h, textSecondary.s, textSecondary.l);
+            palette.surface1 = hslToHex(surface1.h, surface1.s, surface1.l);
+            palette.surface2 = hslToHex(surface2.h, surface2.s, surface2.l);
+            palette.border = hslToHex(border.h, border.s, border.l);
+            palette.inputBg = hslToHex(inputBg.h, inputBg.s, inputBg.l);
+        }
     }
 
-    const hexToRgba = (hex, alpha = 1) => {
-        if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) {
-            console.warn(`[hexToRgba] Invalid hex color: ${hex}. Returning fallback.`);
-            return `rgba(136, 136, 136, ${alpha})`;
-        }
-        let r = 0, g = 0, b = 0;
-        if (hex.length === 4) {
-            r = parseInt(hex[1] + hex[1], 16);
-            g = parseInt(hex[2] + hex[2], 16);
-            b = parseInt(hex[3] + hex[3], 16);
-        } else if (hex.length === 7) {
-            r = parseInt(hex.substring(1, 3), 16);
-            g = parseInt(hex.substring(3, 5), 16);
-            b = parseInt(hex.substring(5, 7), 16);
-        } else {
-            console.warn(`[hexToRgba] Invalid hex color length: ${hex}. Returning fallback.`);
-            return `rgba(136, 136, 136, ${alpha})`;
-        }
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    };
+    const isTextCustom = settings?.isTextCustom || false;
+    const customTextColor = settings?.customTextColor;
+
+    if (isTextCustom && customTextColor) {
+        isPaletteActive = true;
+
+        palette.textPrimary = customTextColor;
+        palette.textSecondary = customTextColor;
+    }
+
+    if (isPaletteActive) {
+        body.classList.add('custom-background-active');
+
+        if (palette.textPrimary) style.setProperty('--color-text-primary', palette.textPrimary); else style.removeProperty('--color-text-primary');
+        if (palette.textSecondary) style.setProperty('--color-text-secondary', palette.textSecondary); else style.removeProperty('--color-text-secondary');
+        if (palette.surface1) style.setProperty('--color-surface-1', palette.surface1); else style.removeProperty('--color-surface-1');
+        if (palette.surface2) style.setProperty('--color-surface-2', palette.surface2); else style.removeProperty('--color-surface-2');
+        if (palette.border) style.setProperty('--color-border', palette.border); else style.removeProperty('--color-border');
+        if (palette.inputBg) style.setProperty('--color-input-bg', palette.inputBg); else style.removeProperty('--color-input-bg');
+    } else {
+        body.classList.remove('custom-background-active');
+        style.removeProperty('--color-background');
+        style.removeProperty('--color-text-primary');
+        style.removeProperty('--color-text-secondary');
+        style.removeProperty('--color-surface-1');
+        style.removeProperty('--color-surface-2');
+        style.removeProperty('--color-border');
+        style.removeProperty('--color-input-bg');
+    }
 
     const scrollbarThumbOpacity = 0.6;
     const scrollbarThumbHoverOpacity = 0.8;
-
+    const hexToRgba = (hex, alpha = 1) => {
+        if (!hex) return ''; let r = 0, g = 0, b = 0; if (hex.length == 4) { r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16); } else if (hex.length == 7) { r = parseInt(hex.substring(1, 3), 16); g = parseInt(hex.substring(3, 5), 16); b = parseInt(hex.substring(5, 7), 16); } return `rgba(${r},${g},${b},${alpha})`;
+    };
     style.setProperty('--scrollbar-thumb-bg', hexToRgba(primaryColor, scrollbarThumbOpacity));
     style.setProperty('--scrollbar-thumb-hover-bg', hexToRgba(primaryColor, scrollbarThumbHoverOpacity));
 
-    style.setProperty('--scrollbar-track-color-light', 'rgba(0, 0, 0, 0.08)');
-    style.setProperty('--scrollbar-track-color-dark', 'rgba(255, 255, 255, 0.08)');
-
-    console.log(`[applyPreviewSettings] --scrollbar-thumb-bg set to: ${style.getPropertyValue('--scrollbar-thumb-bg')}`);
-    console.log(`[applyPreviewSettings] --scrollbar-thumb-hover-bg set to: ${style.getPropertyValue('--scrollbar-thumb-hover-bg')}`);
-    console.log(`[applyPreviewSettings] --scrollbar-track-color-light set to: ${style.getPropertyValue('--scrollbar-track-color-light')}`);
-    console.log(`[applyPreviewSettings] --scrollbar-track-color-dark set to: ${style.getPropertyValue('--scrollbar-track-color-dark')}`);
-
-    let fontSizeToApply = DEFAULT_UI_SETTINGS.fontSize;
-    if (settings && settings.fontSize !== undefined && settings.fontSize !== null && !isNaN(parseInt(settings.fontSize, 10))) {
-        fontSizeToApply = parseInt(settings.fontSize, 10);
-        const MIN_FONT_SIZE_PREVIEW = 50;
-        const MAX_FONT_SIZE_PREVIEW = 150;
-        if (fontSizeToApply < MIN_FONT_SIZE_PREVIEW || fontSizeToApply > MAX_FONT_SIZE_PREVIEW) {
-            console.warn(`[applyPreviewSettings] fontSize ${fontSizeToApply}% вне допустимых пределов (${MIN_FONT_SIZE_PREVIEW}-${MAX_FONT_SIZE_PREVIEW}). Используется дефолтное значение ${DEFAULT_UI_SETTINGS.fontSize}%.`);
-            fontSizeToApply = DEFAULT_UI_SETTINGS.fontSize;
-        }
-    } else {
-        console.warn(`[applyPreviewSettings] fontSize в settings невалиден (${settings?.fontSize}). Используется дефолтное значение ${DEFAULT_UI_SETTINGS.fontSize}%.`);
-    }
-    console.log(`[applyPreviewSettings] Итоговый fontSize для применения: ${fontSizeToApply}%`);
-    style.fontSize = `${fontSizeToApply}%`;
-
-    const borderRadius = settings?.borderRadius ?? DEFAULT_UI_SETTINGS.borderRadius;
-    style.setProperty('--border-radius', `${borderRadius}px`);
-    console.log(`[applyPreviewSettings] --border-radius set to: ${borderRadius}px`);
-
+    style.fontSize = `${settings?.fontSize ?? DEFAULT_UI_SETTINGS.fontSize}%`;
+    style.setProperty('--border-radius', `${settings?.borderRadius ?? DEFAULT_UI_SETTINGS.borderRadius}px`);
     const contentDensity = settings?.contentDensity ?? DEFAULT_UI_SETTINGS.contentDensity;
-    const baseSpacingUnit = 0.25;
-    const spacingMultiplier = 2 + contentDensity;
-    const finalSpacing = baseSpacingUnit * spacingMultiplier;
-    style.setProperty('--content-spacing', `${finalSpacing.toFixed(3)}rem`);
-    console.log(`[applyPreviewSettings] --content-spacing set to: ${finalSpacing.toFixed(3)}rem (density: ${contentDensity})`);
+    const baseSpacingUnit = 0.25; const spacingMultiplier = 2 + contentDensity;
+    style.setProperty('--content-spacing', `${(baseSpacingUnit * spacingMultiplier).toFixed(3)}rem`);
 
-    const mainLayout = settings?.mainLayout || DEFAULT_UI_SETTINGS.mainLayout;
     const mainLayoutDiv = document.querySelector('#mainContent > div.grid');
     if (mainLayoutDiv) {
-        const isVertical = mainLayout === 'vertical';
+        const isVertical = (settings?.mainLayout || DEFAULT_UI_SETTINGS.mainLayout) === 'vertical';
         mainLayoutDiv.classList.toggle('grid-cols-1', isVertical);
         mainLayoutDiv.classList.toggle('md:grid-cols-2', !isVertical);
-        console.log(`[applyPreviewSettings] Main layout set to: ${mainLayout}`);
-    } else {
-        console.warn("[applyPreviewSettings] Main content grid container (#mainContent > div.grid) not found.");
     }
 
-    const themeMode = settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode;
     if (typeof setTheme === 'function') {
-        setTheme(themeMode);
-        console.log(`[applyPreviewSettings] Theme set to: ${themeMode} via setTheme function.`);
-    } else {
-        const isDark = themeMode === 'dark' || (themeMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.classList.toggle('dark', isDark);
-        userPreferences.theme = themeMode;
-        console.warn(`[applyPreviewSettings] setTheme function was not available. Used direct class toggle. Theme: ${themeMode}. userPreferences.theme updated.`);
+        setTheme(settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode);
     }
 
-    const currentPanelIds = (typeof tabsConfig !== 'undefined' && Array.isArray(tabsConfig)) ? tabsConfig.map(t => t.id) : [];
-    const knownPanelIds = new Set(currentPanelIds);
-
-    const actualDefaultPanelOrder = (typeof defaultPanelOrder !== 'undefined' && Array.isArray(defaultPanelOrder) && defaultPanelOrder.length > 0)
-        ? defaultPanelOrder
-        : currentPanelIds;
-
-    const actualDefaultPanelVisibility = (typeof defaultPanelVisibility !== 'undefined' && Array.isArray(defaultPanelVisibility) && defaultPanelVisibility.length === actualDefaultPanelOrder.length)
-        ? defaultPanelVisibility
-        : currentPanelIds.map(id => !(id === 'sedoTypes' || id === 'blacklistedClients'));
-
-    let savedOrder = settings?.panelOrder || actualDefaultPanelOrder;
-    let savedVisibility = settings?.panelVisibility || actualDefaultPanelVisibility;
-
-    if (!Array.isArray(savedOrder) || savedOrder.length === 0 || !savedOrder.every(id => typeof id === 'string')) {
-        console.warn("[applyPreviewSettings] panelOrder в settings невалиден или пуст. Используется defaultPanelOrder.");
-        savedOrder = [...actualDefaultPanelOrder];
-    }
-
-    if (!Array.isArray(savedVisibility) || savedVisibility.length === 0 || savedVisibility.length !== savedOrder.length || !savedVisibility.every(v => typeof v === 'boolean')) {
-        console.warn("[applyPreviewSettings] panelVisibility в settings невалиден, пуст или не соответствует длине panelOrder. Генерируется на основе defaultPanelVisibility и savedOrder.");
-        savedVisibility = savedOrder.map(id => {
-            const defaultIndex = actualDefaultPanelOrder.indexOf(id);
-            return defaultIndex !== -1 ? actualDefaultPanelVisibility[defaultIndex] : (!(id === 'sedoTypes' || id === 'blacklistedClients'));
-        });
-    }
-
-    let effectiveOrder = [];
-    let effectiveVisibility = [];
-    const processedIds = new Set();
-
-    savedOrder.forEach((panelId, index) => {
-        if (knownPanelIds.has(panelId)) {
-            effectiveOrder.push(panelId);
-            let isPanelVisible = false;
-            if (typeof savedVisibility[index] === 'boolean') {
-                isPanelVisible = savedVisibility[index];
-            } else {
-                const defaultIndex = actualDefaultPanelOrder.indexOf(panelId);
-                isPanelVisible = defaultIndex !== -1 ? actualDefaultPanelVisibility[defaultIndex] : (!(panelId === 'sedoTypes' || panelId === 'blacklistedClients'));
-            }
-            effectiveVisibility.push(isPanelVisible);
-            processedIds.add(panelId);
-        } else {
-            console.warn(`[applyPreviewSettings] Панель с ID "${panelId}" из сохраненного порядка не найдена в tabsConfig. Пропускается.`);
-        }
-    });
-
-    currentPanelIds.forEach(panelId => {
-        if (!processedIds.has(panelId)) {
-            effectiveOrder.push(panelId);
-            const defaultIndex = actualDefaultPanelOrder.indexOf(panelId);
-            effectiveVisibility.push(
-                defaultIndex !== -1 ? actualDefaultPanelVisibility[defaultIndex] : (!(panelId === 'sedoTypes' || panelId === 'blacklistedClients'))
-            );
-            console.log(`[applyPreviewSettings] Добавлена новая панель "${panelId}" в порядок с видимостью по умолчанию.`);
-        }
-    });
-
+    const order = settings?.panelOrder || defaultPanelOrder;
+    const visibility = settings?.panelVisibility || defaultPanelVisibility;
     if (typeof applyPanelOrderAndVisibility === 'function') {
-        applyPanelOrderAndVisibility(effectiveOrder, effectiveVisibility);
-        console.log("[applyPreviewSettings] Порядок и видимость панелей применены.");
-
+        applyPanelOrderAndVisibility(order, visibility);
         const appContentElement = document.getElementById('appContent');
-        if (appContentElement && !appContentElement.classList.contains('hidden')) {
-            if (typeof updateVisibleTabs === 'function') {
-                console.log("[applyPreviewSettings] Вызов updateVisibleTabs после применения настроек.");
-                requestAnimationFrame(updateVisibleTabs);
-            } else {
-                console.warn("[applyPreviewSettings] Функция updateVisibleTabs не найдена, переполнение вкладок может не обработаться.");
-            }
-        } else {
-            console.log("[applyPreviewSettings] appContent скрыт, updateVisibleTabs не будет вызван сейчас.");
+        if (appContentElement && !appContentElement.classList.contains('hidden') && typeof updateVisibleTabs === 'function') {
+            requestAnimationFrame(updateVisibleTabs);
         }
-    } else {
-        console.error("[applyPreviewSettings] Функция applyPanelOrderAndVisibility не найдена!");
     }
-    console.log("[applyPreviewSettings] END.");
+}
+
+
+function hexToHsl(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) return null;
+    let r = parseInt(result[1], 16) / 255;
+    let g = parseInt(result[2], 16) / 255;
+    let b = parseInt(result[3], 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) {
+        h = s = 0;
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+
+function hslToHex(h, s, l) {
+    l /= 100;
+    const a = s * Math.min(l, 1 - l) / 100;
+    const f = n => {
+        const k = (n + h / 30) % 12;
+        const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+
+function getLuminance(hex) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return 0;
+    const { r, g, b } = rgb;
+    const a = [r, g, b].map(function (v) {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+}
+
+
+function adjustHsl(hsl, l_adjust = 0, s_adjust = 0) {
+    return {
+        h: hsl.h,
+        s: Math.max(0, Math.min(100, hsl.s + s_adjust)),
+        l: Math.max(0, Math.min(100, hsl.l + l_adjust))
+    };
 }
 
 
 function applyPanelOrderAndVisibility(order, visibility) {
     const tabNav = document.querySelector('header + .border-b nav.flex');
     if (!tabNav) {
-        console.warn("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] Tab navigation container not found.");
+        console.error("[applyPanelOrderAndVisibility v5 - State Restore] Tab navigation container not found.");
         return;
     }
 
-    const moreTabsBtn = document.getElementById('moreTabsBtn');
-    const moreTabsBtnParent = moreTabsBtn ? moreTabsBtn.parentNode : null;
+    const moreTabsBtnParent = document.getElementById('moreTabsBtn')?.parentNode;
+    const idToConfigMap = tabsConfig.reduce((map, tab) => {
+        map[tab.id] = tab;
+        return map;
+    }, {});
 
-    const allTabButtons = {};
-    tabsConfig.forEach(tab => {
-        const btn = document.getElementById(`${tab.id}Tab`);
-        if (btn) allTabButtons[tab.id] = btn;
-        else console.warn(`[applyPanelOrderAndVisibility v3.2 - Robust - Patched] Tab button not found for ID: ${tab.id}Tab`);
-    });
-
-    console.log("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] Applying visibility. Order:", order, "Visibility:", visibility);
-
-    order.forEach((panelId, index) => {
-        const tabBtn = allTabButtons[panelId];
-        const isVisible = visibility[index] ?? true;
-        if (tabBtn) {
-            const wasHidden = tabBtn.classList.contains('hidden');
-            const shouldBeHidden = !isVisible;
-            if (wasHidden && !shouldBeHidden) {
-                console.log(`[applyPanelOrderAndVisibility v3.2 - Robust - Patched] Removing 'hidden' from: ${panelId}Tab`);
-                tabBtn.classList.remove('hidden');
-            } else if (!wasHidden && shouldBeHidden) {
-                console.log(`[applyPanelOrderAndVisibility v3.2 - Robust - Patched] Adding 'hidden' to: ${panelId}Tab`);
-                tabBtn.classList.add('hidden');
-            }
-        } else {
-            console.warn(`[applyPanelOrderAndVisibility v3.2 - Robust - Patched] Cannot apply visibility, button ${panelId}Tab not found.`);
-        }
-    });
+    const currentTabButtons = tabNav.querySelectorAll('.tab-btn:not(#moreTabsBtn)');
+    currentTabButtons.forEach(btn => btn.remove());
 
     const fragment = document.createDocumentFragment();
+    const visibilityMap = order.reduce((map, panelId, index) => {
+        map[panelId] = visibility[index] ?? true;
+        return map;
+    }, {});
+
     order.forEach(panelId => {
-        const tabBtn = allTabButtons[panelId];
-        if (tabBtn) {
+        const config = idToConfigMap[panelId];
+        if (config) {
+            const tabBtn = createTabButtonElement(config);
+            if (!visibilityMap[panelId]) {
+                tabBtn.classList.add('hidden');
+            }
             fragment.appendChild(tabBtn);
+        } else {
+            console.warn(`[applyPanelOrderAndVisibility v5] Config not found for panel ID: ${panelId}`);
         }
     });
 
     if (moreTabsBtnParent) {
-        let currentChild = tabNav.firstChild;
-        while (currentChild) {
-            let nextSibling = currentChild.nextSibling;
-
-            if (currentChild.nodeType === Node.ELEMENT_NODE && currentChild.id && currentChild.id.endsWith('Tab') && currentChild.id !== 'moreTabsBtn') {
-                tabNav.removeChild(currentChild);
-            }
-            currentChild = nextSibling;
-        }
         tabNav.insertBefore(fragment, moreTabsBtnParent);
-        console.log("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] DOM order applied before 'more' button.");
     } else {
-        tabNav.innerHTML = '';
         tabNav.appendChild(fragment);
-        console.log("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] DOM order applied (moreTabsBtnParent not found, full replace).");
     }
 
-    console.log("[applyPanelOrderAndVisibility v3.2 - Robust - Patched] setupTabsOverflow call removed from here.");
+    if (currentSection) {
+        const activeTabId = currentSection + 'Tab';
+        const activeTabButton = tabNav.querySelector(`#${activeTabId}`);
+
+        if (activeTabButton) {
+            activeTabButton.classList.add('tab-active');
+            activeTabButton.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
+            console.log(`[applyPanelOrderAndVisibility v5] Active state restored for #${activeTabId}`);
+        } else {
+            console.warn(`[applyPanelOrderAndVisibility v5] Could not re-apply active state. Button with ID #${activeTabId} not found after rebuild.`);
+        }
+    }
+
+    console.log("[applyPanelOrderAndVisibility v5] Panel order and visibility applied, active state restored.");
+
+    if (typeof updateVisibleTabs === 'function') {
+        requestAnimationFrame(updateVisibleTabs);
+    }
 }
 
 
@@ -19573,15 +19386,13 @@ function handleModalVisibilityToggle(event) {
 
 function getSettingsFromModal() {
     const modal = document.getElementById('customizeUIModal');
-    if (!modal) {
-        console.error("[getSettingsFromModal] Модальное окно #customizeUIModal не найдено.");
-        return null;
-    }
+    if (!modal) return null;
 
-    const selectedColorSwatch = modal.querySelector('.color-swatch.ring-primary');
-    const primaryColor = selectedColorSwatch
-        ? selectedColorSwatch.getAttribute('data-color')
-        : DEFAULT_UI_SETTINGS.primaryColor;
+    const primaryColor = currentPreviewSettings.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
+    const backgroundColor = currentPreviewSettings.backgroundColor;
+    const isBackgroundCustom = currentPreviewSettings.isBackgroundCustom || false;
+    const customTextColor = currentPreviewSettings.customTextColor;
+    const isTextCustom = currentPreviewSettings.isTextCustom || false;
 
     const panelItems = Array.from(modal.querySelectorAll('#panelSortContainer .panel-item'));
     const panelOrder = panelItems.map(item => item.getAttribute('data-section'));
@@ -19589,42 +19400,22 @@ function getSettingsFromModal() {
         item.querySelector('.toggle-visibility i')?.classList.contains('fa-eye') ?? true
     );
 
-    const toggleBlacklistWarningCheckbox = modal.querySelector('#toggleBlacklistWarning');
-    let showBlacklistWarningValue;
-    if (toggleBlacklistWarningCheckbox) {
-        showBlacklistWarningValue = toggleBlacklistWarningCheckbox.checked;
-    } else if (currentPreviewSettings && typeof currentPreviewSettings.showBlacklistUsageWarning === 'boolean') {
-        showBlacklistWarningValue = currentPreviewSettings.showBlacklistUsageWarning;
-        console.warn("[getSettingsFromModal] Чекбокс #toggleBlacklistWarning не найден, используется значение из currentPreviewSettings.");
-    } else {
-        showBlacklistWarningValue = userPreferences.showBlacklistUsageWarning ?? true;
-        console.warn("[getSettingsFromModal] Чекбокс #toggleBlacklistWarning не найден, currentPreviewSettings не содержит флага, используется значение из userPreferences или дефолт.");
-    }
-
-    const toggleDisableForcedBackupCheckbox = modal.querySelector('#toggleDisableForcedBackup');
-    let disableForcedBackupValue;
-    if (toggleDisableForcedBackupCheckbox) {
-        disableForcedBackupValue = toggleDisableForcedBackupCheckbox.checked;
-    } else if (currentPreviewSettings && typeof currentPreviewSettings.disableForcedBackupOnImport === 'boolean') {
-        disableForcedBackupValue = currentPreviewSettings.disableForcedBackupOnImport;
-        console.warn("[getSettingsFromModal] Чекбокс #toggleDisableForcedBackup не найден, используется значение из currentPreviewSettings.");
-    } else {
-        disableForcedBackupValue = userPreferences.disableForcedBackupOnImport ?? false;
-        console.warn("[getSettingsFromModal] Чекбокс #toggleDisableForcedBackup не найден, currentPreviewSettings не содержит флага, используется значение из userPreferences или дефолт.");
-    }
-
     return {
         id: 'uiSettings',
-        mainLayout: modal.querySelector('input[name="mainLayout"]:checked')?.value || DEFAULT_UI_SETTINGS.mainLayout,
-        themeMode: modal.querySelector('input[name="themeMode"]:checked')?.value || DEFAULT_UI_SETTINGS.themeMode,
+        mainLayout: modal.querySelector('input[name="mainLayout"]:checked')?.value || 'horizontal',
+        themeMode: modal.querySelector('input[name="themeMode"]:checked')?.value || 'auto',
         primaryColor: primaryColor,
-        fontSize: parseInt(modal.querySelector('#fontSizeLabel')?.textContent) || DEFAULT_UI_SETTINGS.fontSize,
-        borderRadius: parseInt(modal.querySelector('#borderRadiusSlider')?.value) ?? DEFAULT_UI_SETTINGS.borderRadius,
-        contentDensity: parseInt(modal.querySelector('#densitySlider')?.value) ?? DEFAULT_UI_SETTINGS.contentDensity,
+        backgroundColor: backgroundColor,
+        isBackgroundCustom: isBackgroundCustom,
+        customTextColor: customTextColor,
+        isTextCustom: isTextCustom,
+        fontSize: parseInt(modal.querySelector('#fontSizeLabel')?.textContent) || 100,
+        borderRadius: parseInt(modal.querySelector('#borderRadiusSlider')?.value) || 8,
+        contentDensity: parseInt(modal.querySelector('#densitySlider')?.value) || 3,
         panelOrder: panelOrder,
         panelVisibility: panelVisibility,
-        showBlacklistUsageWarning: showBlacklistWarningValue,
-        disableForcedBackupOnImport: disableForcedBackupValue
+        showBlacklistUsageWarning: true,
+        disableForcedBackupOnImport: false
     };
 }
 
@@ -19951,18 +19742,23 @@ document.addEventListener('click', (event) => {
 function linkify(text) {
     if (!text) return '';
 
-    const urlPattern = /(https?:\/\/[^\s"']*[^\s"',.?!')\]}])/g;
+    const combinedPattern = /(https?:\/\/[^\s"']*[^\s"',.?!')\]}])|([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/g;
 
     const parts = [];
     let lastIndex = 0;
 
-    text.replace(urlPattern, (match, url, offset) => {
-
+    text.replace(combinedPattern, (match, url, email, offset) => {
         if (offset > lastIndex) {
             parts.push({ type: 'text', content: text.substring(lastIndex, offset) });
         }
-        parts.push({ type: 'url', content: url });
-        lastIndex = offset + url.length;
+
+        if (url) {
+            parts.push({ type: 'url', content: url });
+        } else if (email) {
+            parts.push({ type: 'email', content: email });
+        }
+
+        lastIndex = offset + match.length;
         return match;
     });
 
@@ -19970,50 +19766,26 @@ function linkify(text) {
         parts.push({ type: 'text', content: text.substring(lastIndex) });
     }
 
-    if (parts.length === 0 && text.length > 0) {
-
-        const escapeHtmlLocal = typeof escapeHtml === 'function' ? escapeHtml :
-            (unsafeText) => {
-                if (typeof unsafeText !== 'string') return '';
-                return unsafeText
-                    .replace(/&/g, "&")
-                    .replace(/</g, "<")
-                    .replace(/>/g, ">")
-                    .replace(/"/g, "")
-                    .replace(/'/g, "'");
-            };
-        return escapeHtmlLocal(text).replace(/\n/g, '<br>');
+    if (parts.length === 0) {
+        return escapeHtml(text).replace(/\n/g, '<br>');
     }
 
-    let resultHTML = "";
-    parts.forEach(part => {
-
-        const escapeHtmlLocal = typeof escapeHtml === 'function' ? escapeHtml :
-            (unsafeText) => {
-                if (typeof unsafeText !== 'string') return '';
-                return unsafeText
-                    .replace(/&/g, "&")
-                    .replace(/</g, "<")
-                    .replace(/>/g, ">")
-                    .replace(/"/g, "")
-                    .replace(/'/g, "'");
-            };
-
+    return parts.map(part => {
         if (part.type === 'text') {
-
-            resultHTML += escapeHtmlLocal(part.content).replace(/\n/g, '<br>');
-        } else if (part.type === 'url') {
-            const rawUrl = part.content;
-
-            const linkDisplayText = escapeHtmlLocal(rawUrl);
-
-
-            const hrefUrl = rawUrl;
-
-            resultHTML += `<a href="${hrefUrl}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">${linkDisplayText}</a>`;
+            return escapeHtml(part.content).replace(/\n/g, '<br>');
         }
-    });
-    return resultHTML;
+
+        if (part.type === 'url') {
+            const safeUrl = escapeHtml(part.content);
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: underline;">${safeUrl}</a>`;
+        }
+
+        if (part.type === 'email') {
+            const safeEmail = escapeHtml(part.content);
+            return `<a href="mailto:${safeEmail}" style="color: #3b82f6; text-decoration: underline;">${safeEmail}</a>`;
+        }
+        return '';
+    }).join('');
 }
 
 
@@ -20381,10 +20153,7 @@ function hasChanges(modalType) {
 }
 
 
-function captureInitialEditState(algorithm) {
-    const editModal = document.getElementById('editModal');
-    const section = editModal?.dataset.section;
-
+function captureInitialEditState(algorithm, section) {
     if (!algorithm || !section) {
         initialEditState = null;
         console.warn("captureInitialEditState: Алгоритм или секция не предоставлены.");
@@ -20393,13 +20162,15 @@ function captureInitialEditState(algorithm) {
 
     try {
         const isMainAlgorithm = section === 'main';
-        const algorithmCopy = JSON.parse(JSON.stringify(algorithm));
+        const algorithmCopy = algorithm;
 
         const initialData = {
             title: algorithmCopy.title || '',
-            ...(!isMainAlgorithm && { description: algorithmCopy.description || '' }),
-            steps: []
         };
+
+        if (!isMainAlgorithm) {
+            initialData.description = algorithmCopy.description || '';
+        }
 
         if (Array.isArray(algorithmCopy.steps)) {
             initialData.steps = algorithmCopy.steps.map(step => {
@@ -20609,79 +20380,37 @@ function setupExtensionFieldListeners() {
     removeListenerSafe(inputField, 'keydown', '_keydownHandlerInstance');
     removeListenerSafe(inputField, 'input', '_inputHandlerInstance');
 
+    const updateDisplayFromGlobalState = () => {
+        const extensionValue = userPreferences?.employeeExtension || '';
+        updateExtensionDisplay(extensionValue);
+    };
+
     const clickHandler = () => {
-        if (!displaySpan || !inputField) {
-            return;
-        }
-
-        const currentValueText = displaySpan.textContent;
-        const placeholderText = 'Введите свой добавочный';
-        const isPlaceholder = currentValueText === placeholderText || displaySpan.classList.contains('italic');
-
-        inputField.value = isPlaceholder ? '' : currentValueText;
-        inputField.disabled = false;
-        inputField.readOnly = false;
-
+        if (!displaySpan || !inputField) return;
+        inputField.value = userPreferences?.employeeExtension || '';
         displaySpan.classList.add('hidden');
         inputField.classList.remove('hidden');
-
         requestAnimationFrame(() => {
-            if (inputField.classList.contains('hidden') || inputField.disabled || inputField.readOnly) {
-                return;
-            }
-
             inputField.focus();
-
-            if (document.activeElement === inputField) {
-                requestAnimationFrame(() => {
-                    if (document.activeElement === inputField) {
-                        inputField.select();
-                    }
-                });
-            }
+            inputField.select();
         });
     };
     displaySpan.addEventListener('click', clickHandler);
     displaySpan._clickHandlerInstance = clickHandler;
 
     const finishEditing = async (saveChanges = true) => {
-        if (!(inputField instanceof HTMLInputElement) || inputField.classList.contains('hidden')) {
-            return;
-        }
+        if (!(inputField instanceof HTMLInputElement) || inputField.classList.contains('hidden')) return;
 
-        let operationSuccessful = false;
         if (saveChanges) {
-            const newValue = inputField.value;
-            try {
-                operationSuccessful = await saveEmployeeExtension(newValue);
-            } catch (saveError) {
-                if (typeof showNotification === 'function') showNotification(`Ошибка сохранения доб. номера: ${saveError.message}`, "error", { important: true });
-                operationSuccessful = false;
-            }
-        } else {
-            try {
-                await loadEmployeeExtension();
-                operationSuccessful = true;
-            } catch (loadError) {
-                if (typeof showNotification === 'function') showNotification(`Ошибка отмены редактирования доб. номера: ${loadError.message}`, "error", { important: true });
-                operationSuccessful = false;
-            }
+            const newValue = inputField.value.trim().replace(/\D/g, '');
+            userPreferences.employeeExtension = newValue;
+            await saveUserPreferences();
         }
 
-        if (operationSuccessful) {
-            inputField.classList.add('hidden');
-            inputField.disabled = true;
-            if (displaySpan instanceof HTMLElement) {
-                displaySpan.classList.remove('hidden');
-            }
-        } else {
-            if (document.activeElement !== inputField) {
-                requestAnimationFrame(() => {
-                    try {
-                        inputField.focus();
-                    } catch (e) { }
-                });
-            }
+        updateDisplayFromGlobalState();
+        inputField.classList.add('hidden');
+        if (displaySpan instanceof HTMLElement) {
+            displaySpan.classList.remove('hidden');
         }
     };
 
@@ -20716,6 +20445,8 @@ function setupExtensionFieldListeners() {
     };
     inputField.addEventListener('input', inputHandler);
     inputField._inputHandlerInstance = inputHandler;
+
+    updateDisplayFromGlobalState();
 }
 
 
@@ -20923,7 +20654,7 @@ function handleGlobalHotkey(event) {
             applyClientNotesFontSize();
             saveUserPreferences().catch(err => console.error("Не удалось сохранить настройку размера шрифта:", err));
         }
-        return; // Горячая клавиша обработана, выходим.
+        return;
     }
 
     if (alt && !ctrlOrMeta && !shift) {
@@ -21392,7 +21123,6 @@ async function showBookmarkDetailModal(bookmarkId) {
                             <div class="flex justify-between items-center">
                                 <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
                                 <div class="flex items-center flex-shrink-0">
-                                    <!-- НОВЫЙ ПЛЕЙСХОЛДЕР -->
                                     <div class="fav-btn-placeholder-modal-bookmark mr-1"></div>
                                     <button id="${bookmarkDetailModalConfigGlobal.buttonId}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                         <i class="fas fa-expand"></i>
@@ -22309,7 +22039,7 @@ async function handleViewScreenshotClick(event) {
         let algorithmTitle = algorithmId;
         try {
             if (algorithmId === 'main') {
-                algorithmTitle = algorithms?.main?.title || 'Главный алгоритм';
+                algorithmTitle = algorithms?.main?.title || 'Главная';
             } else {
                 const sections = ['program', 'skzi', 'lk1c', 'webReg'];
                 let found = false;
@@ -22691,7 +22421,7 @@ if (exportMainBtn) {
     exportMainBtn.addEventListener('click', () => {
         const mainAlgorithmContainer = document.getElementById('mainAlgorithm');
         const mainTitleElement = document.querySelector('#mainContent h2');
-        const title = mainTitleElement ? mainTitleElement.textContent : 'Главный алгоритм';
+        const title = mainTitleElement ? mainTitleElement.textContent : 'Главная';
         ExportService.exportElementToPdf(mainAlgorithmContainer, title);
     });
 }
@@ -23758,7 +23488,6 @@ async function updateFavoriteStatusUI(originalItemId, itemType, isFavorite) {
         if (!button) return;
         const icon = button.querySelector('i');
         if (icon) {
-            // Устанавливаем правильные классы для иконки
             icon.className = isFavorite ? 'fas fa-star text-yellow-400' : 'far fa-star';
         }
         button.title = isFavorite ? "Удалить из избранного" : "Добавить в избранное";
@@ -23821,7 +23550,7 @@ async function renderFavoritesPage() {
             let typeText = fav.itemType;
 
             switch (fav.itemType) {
-                case 'mainAlgorithm': iconClass = 'fa-home'; typeText = 'Главный алгоритм'; break;
+                case 'mainAlgorithm': iconClass = 'fa-home'; typeText = 'Главная'; break;
                 case 'algorithm': iconClass = 'fa-sitemap'; typeText = 'Алгоритм'; break;
                 case 'link': iconClass = 'fa-link'; typeText = 'Ссылка 1С'; break;
                 case 'bookmark': iconClass = 'fa-bookmark'; typeText = 'Закладка'; break;
@@ -24473,3 +24202,768 @@ function renderBlacklistEntries(entries) {
     container.appendChild(fragment);
 }
 
+
+function initGoogleDocSections() {
+    const appContent = document.getElementById('appContent');
+    if (!appContent) {
+        console.error("КРИТИЧЕСКАЯ ОШИБКА (initGoogleDocSections): контейнер #appContent не найден.");
+        return;
+    }
+
+    let mainContentArea = appContent.querySelector('main');
+    if (!mainContentArea) {
+        console.warn("ПРЕДУПРЕЖДЕНИЕ (initGoogleDocSections): Тег <main> внутри #appContent не найден. Создаю его динамически.");
+        mainContentArea = document.createElement('main');
+        mainContentArea.className = 'flex-grow p-4 overflow-y-auto custom-scrollbar';
+        const tabNavContainer = appContent.querySelector('.border-b.border-gray-200');
+        if (tabNavContainer && tabNavContainer.nextSibling) {
+            tabNavContainer.parentNode.insertBefore(mainContentArea, tabNavContainer.nextSibling);
+        } else {
+            appContent.appendChild(mainContentArea);
+        }
+        const tabContents = appContent.querySelectorAll('.tab-content');
+        tabContents.forEach(content => mainContentArea.appendChild(content));
+    }
+
+    const sections = [
+        { id: 'telefony', docId: '1lDCKpFcBIB4gRCI7_Ppsepy140YWdFtziut67xr6GTw', title: 'Телефоны' },
+        { id: 'shablony', docId: '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4', title: 'Шаблоны' }
+    ];
+
+    sections.forEach(section => {
+        if (!document.getElementById(`${section.id}Content`)) {
+            const tabContentDiv = document.createElement('div');
+            tabContentDiv.id = `${section.id}Content`;
+            tabContentDiv.className = 'tab-content hidden h-full';
+            tabContentDiv.innerHTML = `
+                <div class="p-4 bg-gray-100 dark:bg-gray-800 h-full flex flex-col">
+                    <div class="flex-shrink-0 flex flex-wrap gap-y-2 justify-between items-center mb-4">
+                         <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${section.title}</h2>
+                         <div class="flex items-center gap-2">
+                             <button id="force-refresh-${section.id}-btn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors" title="Принудительно обновить данные с сервера">
+                                 <i class="fas fa-sync-alt mr-2"></i>Обновить<span class="update-timestamp ml-1"></span>
+                             </button>
+                         </div>
+                    </div>
+                    <div class="relative mb-4 flex-shrink-0">
+                        <input type="text" id="${section.id}-search-input" placeholder="Поиск по разделу..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
+                        <button id="${section.id}-search-clear-btn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700 hidden" title="Очистить поиск">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="doc-content-${section.id}" class="flex-grow overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow p-4 custom-scrollbar">
+                        Загрузка данных из Google-дока...
+                    </div>
+                </div>
+            `;
+            mainContentArea.appendChild(tabContentDiv);
+
+            const refreshButton = document.getElementById(`force-refresh-${section.id}-btn`);
+            if (refreshButton) {
+                refreshButton.addEventListener('click', () => {
+                    console.log(`Нажата кнопка принудительного обновления для раздела '${section.id}'. Запрос свежих данных...`);
+                    if (typeof loadAndRenderGoogleDoc === 'function') {
+                        loadAndRenderGoogleDoc(section.docId, `doc-content-${section.id}`, true);
+                    } else {
+                        console.error(`Функция loadAndRenderGoogleDoc не найдена для раздела '${section.id}'.`);
+                    }
+                });
+            }
+
+            const searchInput = document.getElementById(`${section.id}-search-input`);
+            const clearBtn = document.getElementById(`${section.id}-search-clear-btn`);
+            const searchHandler = section.id === 'telefony' ? handleTelefonySearch : handleShablonySearch;
+
+            searchInput.addEventListener('input', debounce(searchHandler, 300));
+            clearBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                searchHandler();
+            });
+
+            if (section.id === 'shablony') {
+                const docContainer = document.getElementById(`doc-content-${section.id}`);
+                if (docContainer) {
+                    docContainer.addEventListener('click', (event) => {
+                        const block = event.target.closest('.shablony-block.copyable-block');
+                        if (!block) return;
+
+                        if (event.target.closest('a')) {
+                            return;
+                        }
+
+                        const textToCopy = block.innerText;
+                        if (textToCopy && typeof copyToClipboard === 'function') {
+                            copyToClipboard(textToCopy, 'Содержимое шаблона скопировано!');
+                        }
+                    });
+                }
+            }
+
+            if (typeof loadAndRenderGoogleDoc === 'function') {
+                console.log(`Инициирую начальную загрузку для раздела '${section.id}'.`);
+                loadAndRenderGoogleDoc(section.docId, `doc-content-${section.id}`, false)
+                    .catch(err => console.error(`Ошибка при начальной загрузке ${section.id}:`, err));
+            }
+        }
+    });
+    startTimestampUpdater();
+    console.log("[initGoogleDocSections] Функция завершена, загрузка инициирована, таймер запущен.");
+}
+
+
+function startTimestampUpdater() {
+    if (timestampUpdateInterval) {
+        console.log("Таймер обновления временных меток уже запущен.");
+        return;
+    }
+
+    console.log("Запуск таймера обновления временных меток для кнопок 'Обновить'.");
+    timestampUpdateInterval = setInterval(updateRefreshButtonTimestamps, 60000);
+}
+
+
+function updateRefreshButtonTimestamps() {
+    const sections = [
+        { id: 'telefony', docId: '1lDCKpFcBIB4gRCI7_Ppsepy140YWdFtziut67xr6GTw' },
+        { id: 'shablony', docId: '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4' }
+    ];
+
+    sections.forEach(section => {
+        const refreshButton = document.getElementById(`force-refresh-${section.id}-btn`);
+        if (!refreshButton) return;
+
+        const timestampSpan = refreshButton.querySelector('.update-timestamp');
+        if (!timestampSpan) return;
+
+        const lastUpdateTime = googleDocTimestamps.get(section.docId);
+        if (lastUpdateTime) {
+            const minutesAgo = Math.floor((Date.now() - lastUpdateTime) / 60000);
+            if (minutesAgo < 1) {
+                timestampSpan.textContent = '(только что)';
+            } else if (minutesAgo === 1) {
+                timestampSpan.textContent = `(1 минуту назад)`;
+            } else if (minutesAgo < 5) {
+                timestampSpan.textContent = `(${minutesAgo} минуты назад)`;
+            } else {
+                timestampSpan.textContent = `(${minutesAgo} минут назад)`;
+            }
+        } else {
+            timestampSpan.textContent = '';
+        }
+    });
+}
+
+
+async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
+    const docContainer = document.getElementById(targetContainerId);
+    if (!docContainer) {
+        console.error(`КРИТИЧЕСКАЯ ОШИБКА: HTML-элемент #${targetContainerId} не найден.`);
+        return;
+    }
+
+    docContainer.innerHTML = '<div class="text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Загрузка данных из Google-дока...</div>';
+    console.log(`[ШАГ 1] Инициализация... Запрос для ID: ${docId}. Принудительное обновление: ${force}`);
+
+    try {
+        const results = await fetchGoogleDocs([docId], force);
+        if (!results || results.length === 0) {
+            throw new Error("API не вернул результатов.");
+        }
+
+        const resultData = results[0]?.content?.data || [];
+
+        if (targetContainerId === 'doc-content-telefony') {
+            originalTelefonyData = resultData;
+        } else if (targetContainerId === 'doc-content-shablony') {
+            originalShablonyData = resultData;
+        }
+
+        renderGoogleDocContent(results, docContainer, targetContainerId);
+        docContainer.dataset.loaded = 'true';
+
+        googleDocTimestamps.set(docId, Date.now());
+        updateRefreshButtonTimestamps();
+
+        console.log(`%cУСПЕХ: Содержимое Google Doc (ID: ${docId}) отображено в #${targetContainerId}.`, "color: #00DD00; font-weight: bold;");
+
+        if (typeof updateSearchIndex === 'function') {
+            if (docId === TELEFONY_DOC_ID) {
+                console.log(`[ИНДЕКСАЦИЯ] Запуск updateSearchIndex для telefony (ID: ${docId}) по сырым данным.`);
+                await updateSearchIndex('telefony', docId, resultData, 'update');
+            } else if (docId === SHABLONY_DOC_ID) {
+                console.log(`[ИНДЕКСАЦИЯ ИСПРАВЛЕНО] Запуск updateSearchIndex для shablony (ID: ${docId}) по сырым данным через parseShablonyContent.`);
+                const blocks = parseShablonyContent(resultData);
+                await updateSearchIndex('shablony', docId, blocks, 'update');
+            }
+        }
+
+    } catch (error) {
+        console.error(`%cОШИБКА ЗАГРУЗКИ для ${targetContainerId}:`, "color: red; font-weight: bold;", error);
+        docContainer.innerHTML = `<div style="color: red; border: 1px solid red; padding: 10px;"><b>Критическая ошибка:</b> ${escapeHtml(error.message)}</div>`;
+        delete docContainer.dataset.loaded;
+    }
+}
+
+
+async function fetchGoogleDocs(docIds, force = false) {
+    if (!Array.isArray(docIds) || docIds.length === 0) {
+        console.error("КРИТИЧЕСКАЯ ОШИБКА: В функцию fetchGoogleDocs не передан массив ID документов.");
+        throw new Error("Не переданы ID документов для загрузки.");
+    }
+
+    const BASE_URL = 'https://script.google.com/macros/s/AKfycby5ak0hPZF7_YJnhqYD8g1M2Ck6grzq11mpKqPFIWaX9_phJe5H_97cXmnClXKg1Nrl/exec';
+    const params = new URLSearchParams();
+    params.append('docIds', docIds.join(','));
+    params.append('v', new Date().getTime());
+    if (force) {
+        params.append('nocache', 'true');
+    }
+
+    const requestUrl = `${BASE_URL}?${params.toString()}`;
+    console.log("URL для запроса:", requestUrl);
+
+    const response = await fetch(requestUrl);
+    if (!response.ok) {
+        throw new Error(`Сетевая ошибка: статус ${response.status}`);
+    }
+
+    const results = await response.json();
+    if (results.error) {
+        throw new Error(`Ошибка на стороне сервера: ${results.message}`);
+    }
+    return results;
+}
+
+
+function renderGoogleDocContent(results, container, parentContainerId) {
+    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    for (const result of results) {
+        const contentDiv = document.createElement('div');
+        if (result.status === 'success') {
+            const contentType = result.content.type;
+            const contentData = result.content.data;
+
+            if (parentContainerId === 'doc-content-telefony') {
+                console.log(`[renderGoogleDocContent CORRECTED] Обнаружен особый случай: рендеринг таблицы телефонов. Используется специальный парсер.`);
+                renderPhoneDirectoryTable(contentDiv, contentData);
+            } else if (parentContainerId === 'doc-content-shablony') {
+                console.log(`[renderGoogleDocContent CORRECTED] Обнаружен особый случай: рендеринг документа "Шаблоны". Используется парсер стилизованных параграфов.`);
+                renderStyledParagraphs(contentDiv, contentData);
+            } else {
+                console.log(`[renderGoogleDocContent] Используется рендеринг по умолчанию для ${parentContainerId}. Тип контента: ${contentType}`);
+                if (contentType === 'paragraphs') {
+                    renderParagraphs(contentDiv, contentData);
+                } else if (contentType === 'table') {
+                    renderTable(contentDiv, contentData);
+                } else {
+                    contentDiv.innerHTML = `<p style="color: orange;">Получен неизвестный тип контента: ${escapeHtml(contentType)}</p>`;
+                }
+            }
+        } else {
+            contentDiv.innerHTML = `<div style="color: red; border: 1px solid red; padding: 10px;"><b>Ошибка загрузки этого документа:</b> ${escapeHtml(result.message)}</div>`;
+        }
+        fragment.appendChild(contentDiv);
+    }
+    container.appendChild(fragment);
+}
+
+
+function renderTable(container, data) {
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>Таблица пуста.</p>';
+        return;
+    }
+    const headers = Object.keys(data[0]);
+    const headerHtml = `<thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
+    const bodyHtml = `<tbody>${data.map(row => {
+        const cells = headers.map(header => `<td>${escapeHtml(String(row[header] || ''))}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('')}</tbody>`;
+    container.innerHTML = `<table class="google-doc-table w-full text-sm text-left text-gray-500 dark:text-gray-400" style="border-collapse: collapse;">${headerHtml}${bodyHtml}</table>`;
+}
+
+
+function renderParagraphs(container, data) {
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>Содержимое не найдено.</p>';
+        return;
+    }
+    container.innerHTML = data.map(p => `<div>${escapeHtml(p)}</div>`).join('');
+}
+
+
+function renderPhoneDirectoryTable(container, data, options = {}) {
+    const LOG_PREFIX = '[Phone Table Parser v7 ROBUST-STYLING-WITH-INDEX]';
+    console.log(`%c${LOG_PREFIX} Запуск функции рендеринга.`, "color: blue; font-weight: bold;");
+
+    const { scale = 1.0, fontScale = 1.0, searchQuery = '' } = options;
+    const highlight = (text) => {
+        if (!text || typeof text !== 'string') return '';
+        if (!searchQuery) return escapeHtml(text);
+        if (typeof highlightTextInString === 'function') {
+            return highlightTextInString(text, searchQuery);
+        }
+        return escapeHtml(text);
+    };
+
+    if (!container || typeof container.appendChild !== 'function') {
+        console.error(`${LOG_PREFIX} КРИТИЧЕСКАЯ ОШИБКА: Передан невалидный контейнер.`);
+        return;
+    }
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+        if (searchQuery) {
+            container.innerHTML = `<p class="p-4 text-center text-gray-500">По запросу "${escapeHtml(searchQuery)}" ничего не найдено.</p>`;
+        } else {
+            container.innerHTML = '<p class="p-4 text-center text-gray-500">Данные отсутствуют.</p>';
+        }
+        return;
+    }
+
+    const headers = Object.keys(data.find(item => typeof item === 'object' && item !== null && Object.keys(item).length > 0) || {});
+    if (headers.length === 0) {
+        console.warn(`${LOG_PREFIX} ОШИБКА: Не удалось определить заголовки.`);
+        container.innerHTML = '<p class="p-4 text-center text-gray-500">Ошибка: структура данных не распознана.</p>';
+        return;
+    }
+
+    const table = document.createElement('table');
+    table.className = "google-doc-table text-sm text-left text-gray-500 dark:text-gray-400 border-collapse w-full";
+    table.style.fontSize = `${100 * fontScale}%`;
+
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.className = "px-4 py-3 bg-gray-100 dark:bg-slate-700 dark:text-gray-300 border border-gray-300 dark:border-slate-600 font-semibold sticky top-0 z-10";
+        th.scope = "col";
+        th.textContent = headerText;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    data.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.className = "bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors duration-150";
+        tr.dataset.rowIndex = index;
+
+        const firstColumnKey = headers[0];
+        const otherColumnKeys = headers.slice(1);
+        const isSectionHeader = item[firstColumnKey] && otherColumnKeys.every(key => !item[key]);
+
+        if (isSectionHeader) {
+            const td = document.createElement('td');
+            td.colSpan = headers.length;
+            td.className = "px-4 py-2 font-bold text-gray-800 dark:text-white bg-gray-200 dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-center";
+            td.innerHTML = highlight(item[firstColumnKey]);
+            tr.appendChild(td);
+        } else {
+            headers.forEach(headerKey => {
+                const td = document.createElement('td');
+                td.className = "px-4 py-4 whitespace-pre-wrap break-word border border-gray-300 dark:border-slate-600 align-top";
+                td.innerHTML = highlight(item[headerKey] || '');
+                tr.appendChild(td);
+            });
+        }
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
+
+function renderStyledParagraphs(container, data, searchQuery = '') {
+    if (!container) {
+        console.error("renderStyledParagraphs: Контейнер для рендеринга не предоставлен.");
+        return;
+    }
+    const highlight = (text) => {
+        if (!text || typeof text !== 'string') return '';
+        if (!searchQuery) {
+            return linkify(text);
+        }
+        return linkify(highlightTextInString(text, searchQuery).replace(/<mark[^>]*>/g, '##MARK_START##').replace(/<\/mark>/g, '##MARK_END##')).replace(/##MARK_START##/g, '<mark class="search-term-highlight">').replace(/##MARK_END##/g, '</mark>');
+    };
+
+    if (!data || data.length === 0) {
+        if (searchQuery) {
+            container.innerHTML = `<p class="text-gray-500">По запросу "${escapeHtml(searchQuery)}" ничего не найдено.</p>`;
+        } else {
+            container.innerHTML = '<p class="text-gray-500">Содержимое не найдено.</p>';
+        }
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    let currentBlockWrapper = null;
+    let blockIndex = -1;
+
+    const createBlockWrapper = (index, level) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'shablony-block p-3 rounded-lg';
+        wrapper.dataset.blockIndex = index;
+
+        if (level === 2) {
+            wrapper.classList.add(
+                'transition-colors', 'duration-200', 'hover:bg-gray-100',
+                'dark:hover:bg-gray-800/50', 'copyable-block', 'group'
+            );
+            wrapper.title = 'Нажмите, чтобы скопировать содержимое блока';
+            wrapper.style.cursor = 'pointer';
+        }
+
+        return wrapper;
+    };
+
+    data.forEach(p => {
+        const trimmedP = p.trim();
+        if (trimmedP === '') return;
+
+        let level = 0;
+        if (trimmedP.startsWith('⏩')) level = 1;
+        else if (trimmedP.startsWith('➧')) level = 2;
+        else if (trimmedP.startsWith('▸')) level = 3;
+
+        if (level > 0) {
+            blockIndex++;
+            currentBlockWrapper = createBlockWrapper(blockIndex, level);
+
+            const headerTag = `h${level + 1}`;
+            const header = document.createElement(headerTag);
+
+            const classMap = {
+                'h2': 'text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 mb-4 pb-2 border-gray-300 dark:border-gray-600 text-center',
+                'h3': 'text-xl font-bold text-gray-800 dark:text-gray-200 mt-5 mb-3',
+                'h4': 'text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2'
+            };
+
+            header.className = classMap[headerTag];
+            header.innerHTML = highlight(trimmedP.slice(1).trim());
+            currentBlockWrapper.appendChild(header);
+            fragment.appendChild(currentBlockWrapper);
+        } else if (currentBlockWrapper) {
+            if (trimmedP.startsWith('•') || trimmedP.startsWith('* ') || trimmedP.startsWith('- ')) {
+                let list = currentBlockWrapper.querySelector('ul');
+                if (!list) {
+                    list = document.createElement('ul');
+                    list.className = 'list-disc list-inside space-y-1 mb-2 pl-4';
+                    currentBlockWrapper.appendChild(list);
+                }
+                const li = document.createElement('li');
+                li.innerHTML = highlight(trimmedP.slice(1).trim());
+                list.appendChild(li);
+            } else {
+                const pElem = document.createElement('p');
+                pElem.className = 'mb-2';
+                pElem.innerHTML = highlight(trimmedP.replace(/\*(.*?)\*/g, '<strong>$1</strong>'));
+                currentBlockWrapper.appendChild(pElem);
+            }
+        }
+    });
+
+    container.innerHTML = '';
+    container.appendChild(fragment);
+
+    const createSeparator = () => {
+        const separator = document.createElement('div');
+        separator.className = 'w-full h-px bg-gray-200 dark:bg-gray-700 my-4';
+        return separator;
+    };
+
+    const blocksToSeparate = container.querySelectorAll('.shablony-block');
+
+    blocksToSeparate.forEach((block, index) => {
+        if (index < blocksToSeparate.length - 1) {
+            block.after(createSeparator());
+        }
+    });
+}
+
+
+let originalTelefonyData = [];
+let originalShablonyData = [];
+
+function handleTelefonySearch() {
+    const searchInput = document.getElementById('telefony-search-input');
+    const clearBtn = document.getElementById('telefony-search-clear-btn');
+    const container = document.getElementById('doc-content-telefony');
+
+    if (!searchInput || !container || !clearBtn) return;
+
+    const query = searchInput.value.trim().toLowerCase();
+    clearBtn.classList.toggle('hidden', !query);
+
+    const filteredData = filterTelefonyData(query, originalTelefonyData);
+    renderPhoneDirectoryTable(container, filteredData, { searchQuery: query });
+}
+
+
+function filterTelefonyData(query, originalData) {
+    if (!query) {
+        return originalData;
+    }
+
+    if (!Array.isArray(originalData) || originalData.length === 0) {
+        return [];
+    }
+
+    const lowerCaseQuery = query.toLowerCase();
+    const filteredResults = [];
+
+    const headers = Object.keys(originalData.find(item => typeof item === 'object' && item !== null && Object.keys(item).length > 0) || {});
+    if (headers.length === 0) {
+        console.warn("[filterTelefonyData] Не удалось определить структуру (заголовки) данных. Фильтрация невозможна.");
+        return [];
+    }
+    const firstColumnKey = headers[0];
+
+    let currentSectionHeader = null;
+    let currentHeaderAdded = false;
+
+    for (const item of originalData) {
+        const isPotentialHeader = item[firstColumnKey] &&
+            (item[firstColumnKey].includes('доб. 7005 секретарь') ||
+                Object.keys(item).slice(1).every(key => !/[a-zA-Z0-9]/.test(item[key])));
+
+        if (isPotentialHeader) {
+            currentSectionHeader = item;
+            currentHeaderAdded = false;
+        }
+
+        const matches = Object.values(item).some(value =>
+            String(value).toLowerCase().includes(lowerCaseQuery)
+        );
+
+        if (matches) {
+            if (currentSectionHeader && !currentHeaderAdded) {
+                filteredResults.push(currentSectionHeader);
+                currentHeaderAdded = true;
+            }
+
+            if (item !== currentSectionHeader) {
+                filteredResults.push(item);
+            }
+        }
+    }
+
+    return filteredResults;
+}
+
+
+function handleShablonySearch() {
+    const searchInput = document.getElementById('shablony-search-input');
+    const clearBtn = document.getElementById('shablony-search-clear-btn');
+    const container = document.getElementById('doc-content-shablony');
+
+    if (!searchInput || !container || !clearBtn) return;
+
+    const query = searchInput.value.trim().toLowerCase();
+    clearBtn.classList.toggle('hidden', !query);
+
+    const filteredData = filterShablonyData(query, originalShablonyData);
+    renderStyledParagraphs(container, filteredData, query);
+}
+
+
+function filterShablonyData(query, originalData) {
+    if (!query) {
+        return originalData;
+    }
+    if (!Array.isArray(originalData)) {
+        return [];
+    }
+
+    const blocks = parseShablonyContent(originalData);
+
+    const filteredBlocks = blocks.filter(block => {
+        const titleMatch = block.title.toLowerCase().includes(query);
+        const contentMatch = block.content.toLowerCase().includes(query);
+        return titleMatch || contentMatch;
+    });
+
+    if (filteredBlocks.length > 0) {
+        const resultData = [];
+        filteredBlocks.forEach(block => {
+            let headerMarker = '▸';
+            if (block.level === 1) headerMarker = '⏩';
+            if (block.level === 2) headerMarker = '➧';
+
+            resultData.push(`${headerMarker} ${block.title}`);
+
+            const contentLines = block.content.split('\n').filter(line => line.trim() !== '');
+
+            const originalFirstLine = originalData.find(p => p.trim().slice(1).trim() === block.content.split('\n')[0].trim());
+            const isList = originalFirstLine && (originalFirstLine.trim().startsWith('•') || originalFirstLine.trim().startsWith('* ') || originalFirstLine.trim().startsWith('- '));
+
+            if (isList) {
+                contentLines.forEach(line => resultData.push(`• ${line}`));
+            } else {
+                resultData.push(...contentLines);
+            }
+        });
+        return resultData;
+    }
+    return [];
+}
+
+
+function parseShablonyContent(data) {
+    if (!Array.isArray(data)) return [];
+
+    const blocks = [];
+    let currentBlock = null;
+
+    const getHeaderLevel = (text) => {
+        if (text.startsWith('⏩')) return 1;
+        if (text.startsWith('➧')) return 2;
+        if (text.startsWith('▸')) return 3;
+        return 0;
+    };
+
+    data.forEach(p => {
+        const trimmedP = p.trim();
+        if (trimmedP === '') return;
+
+        const level = getHeaderLevel(trimmedP);
+
+        if (level > 0) {
+            if (currentBlock) {
+                currentBlock.content = currentBlock.content.trim();
+                blocks.push(currentBlock);
+            }
+            currentBlock = {
+                title: trimmedP.slice(1).trim(),
+                content: '',
+                level: level,
+                originalIndex: blocks.length
+            };
+        } else if (currentBlock) {
+            currentBlock.content += trimmedP + '\n';
+        }
+    });
+
+    if (currentBlock) {
+        currentBlock.content = currentBlock.content.trim();
+        blocks.push(currentBlock);
+    }
+
+    return blocks;
+}
+
+
+function applyCustomBackgroundImage(dataUrl) {
+    if (dataUrl && typeof dataUrl === 'string') {
+        document.documentElement.style.setProperty('--custom-background-image', `url(${dataUrl})`);
+        document.body.classList.add('custom-bg-image-active');
+
+        const preview = document.getElementById('backgroundImagePreview');
+        const previewText = document.getElementById('backgroundImagePreviewText');
+        const removeBtn = document.getElementById('backgroundImageRemoveBtn');
+
+        if (preview) {
+            preview.style.backgroundImage = `url(${dataUrl})`;
+        }
+        if (previewText) {
+            previewText.classList.add('hidden');
+        }
+        if (removeBtn) {
+            removeBtn.classList.remove('hidden');
+        }
+    }
+}
+
+
+function removeCustomBackgroundImage() {
+    document.documentElement.style.removeProperty('--custom-background-image');
+    document.body.classList.remove('custom-bg-image-active');
+
+    const preview = document.getElementById('backgroundImagePreview');
+    const previewText = document.getElementById('backgroundImagePreviewText');
+    const removeBtn = document.getElementById('backgroundImageRemoveBtn');
+
+    if (preview) {
+        preview.style.backgroundImage = 'none';
+    }
+    if (previewText) {
+        previewText.classList.remove('hidden');
+    }
+    if (removeBtn) {
+        removeBtn.classList.add('hidden');
+    }
+}
+
+
+function setupBackgroundImageControls() {
+    const uploadBtn = document.getElementById('backgroundImageUploadBtn');
+    const removeBtn = document.getElementById('backgroundImageRemoveBtn');
+    const fileInput = document.getElementById('backgroundImageInput');
+
+    if (!uploadBtn || !removeBtn || !fileInput) {
+        console.warn("setupBackgroundImageControls: Один или несколько элементов управления фоном не найдены.");
+        return;
+    }
+
+    const uploadBtnOriginalText = uploadBtn.innerHTML;
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    removeBtn.addEventListener('click', async () => {
+        if (confirm("Вы уверены, что хотите удалить фоновое изображение?")) {
+            try {
+                await deleteFromIndexedDB('preferences', 'customBackgroundImage');
+                removeCustomBackgroundImage();
+                showNotification("Фоновое изображение удалено.", "info");
+            } catch (error) {
+                console.error("Ошибка при удалении фонового изображения из DB:", error);
+                showNotification("Ошибка при удалении фона.", "error");
+            }
+        }
+    });
+
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const MAX_FILE_SIZE = 5 * 1024 * 1024;
+        if (file.size > MAX_FILE_SIZE) {
+            showNotification(`Файл слишком большой. Максимальный размер: ${MAX_FILE_SIZE / 1024 / 1024} МБ.`, "error");
+            fileInput.value = '';
+            return;
+        }
+
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Обработка...';
+
+        try {
+            const processedBlob = await processImageFile(file);
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const dataUrl = reader.result;
+                try {
+                    await saveToIndexedDB('preferences', { id: 'customBackgroundImage', value: dataUrl });
+                    applyCustomBackgroundImage(dataUrl);
+                    showNotification("Фоновое изображение успешно установлено.", "success");
+                } catch (dbError) {
+                    console.error("Ошибка сохранения фона в DB:", dbError);
+                    showNotification("Не удалось сохранить фон.", "error");
+                } finally {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = uploadBtnOriginalText;
+                    fileInput.value = '';
+                }
+            };
+            reader.readAsDataURL(processedBlob);
+        } catch (processError) {
+            console.error("Ошибка обработки изображения:", processError);
+            showNotification("Ошибка обработки изображения.", "error");
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = uploadBtnOriginalText;
+            fileInput.value = '';
+        }
+    });
+}
