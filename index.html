@@ -814,8 +814,33 @@
             color: white !important;
         }
 
+        #clearClientDataBtn {
+            transition: background-color ease .3s;
+        }
+
         #clearClientDataBtn:hover {
             background-color: var(--color-hover-subtle);
+            transition: background-color ease .3s;
+        }
+
+        #resetUiBtn:hover {
+            background-color: var(--color-hover-subtle);
+            transition: background-color ease .3s;
+        }
+
+        #resetUiBtn {
+            transition: background-color ease .3s;
+        }
+
+        #clearAllDataBtn {
+            background-color: var(--color-red-hover-bg);
+            padding: 0 1rem;
+            transition: background-color ease .3s;
+        }
+
+        #clearAllDataBtn:hover {
+            background-color: var(--color-red-text);
+            transition: background-color ease .3s;
         }
 
         body.custom-background-active :is(#editSedoTypesBtn, #addBlacklistEntryBtn, #force-refresh-telefony-btn, #force-refresh-shablony-btn,
@@ -2131,9 +2156,8 @@
                             <button id="clearAllDataBtn" class="btn-destructive btn-destructive-all">
                                 <i class="fas fa-skull-crossbones mr-2"></i>Очистить все данные
                             </button>
-                            <!-- БЫЛО: <button id="resetUiBtn">...</button> -->
-                            <!-- СТАЛО: -->
-                            <button id="resetUiBtn" class="btn-secondary btn-destructive">Сбросить настройки
+                            <button id="resetUiBtn" class="btn-secondary btn-destructive border-b p-2">Сбросить
+                                настройки
                                 интерфейса</button>
                             <div class="flex gap-2">
                                 <button id="cancelUISettingsBtn"
@@ -2190,11 +2214,11 @@
                         class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto bg-gray-50 dark:bg-gray-700 rounded-b-lg">
                         <div class="flex justify-end gap-3">
                             <button id="cancelClearDataBtn"
-                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition">
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition border">
                                 Отмена
                             </button>
                             <button id="confirmAndClearDataBtn"
-                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition">
+                                class="px-4 py-2 text-white rounded-md transition border">
                                 <i class="fas fa-trash mr-1"></i> Да, очистить все данные
                             </button>
                         </div>
