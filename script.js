@@ -23106,7 +23106,7 @@ async function initClientDataSystem() {
             const exportTextBtn = document.createElement('button');
             exportTextBtn.id = 'exportTextBtn';
             exportTextBtn.innerHTML = `<i class="fas fa-file-download"></i><span class="hidden lg:inline lg:ml-1">Сохранить .txt</span>`;
-            exportTextBtn.className = `p-2 lg:px-3 lg:py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md transition text-sm flex items-center`;
+            exportTextBtn.className = `boreder-b p-2 lg:px-3 lg:py-1.5 text-white rounded-md transition text-sm flex items-center`;
             exportTextBtn.title = 'Сохранить заметки как .txt файл';
             exportTextBtn.addEventListener('click', exportClientDataToTxt);
             buttonContainer.appendChild(exportTextBtn);
