@@ -29897,7 +29897,7 @@ function ensureInnPreviewStyles() {
     style.textContent = `
     .client-notes-preview{
         position: absolute;
-        --inn-offset-x: -0.4px;
+        --inn-offset-x: -0.2px;
         white-space: pre-wrap;
         word-wrap: break-word;
         overflow-wrap: break-word;
@@ -32025,3 +32025,4 @@ function setupBackgroundImageControls() {
         }
     });
 }
+
