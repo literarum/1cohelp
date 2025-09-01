@@ -3773,21 +3773,28 @@ async function saveUISettings() {
             );
         }
 
-        const fallbackOrder = Array.isArray(defaultPanelOrder) && defaultPanelOrder.length
-      ? [...defaultPanelOrder]
-      : (Array.isArray(tabsConfig) ? tabsConfig.map(t => t.id) : []);
-    const order = Array.isArray(userPreferences?.panelOrder) && userPreferences.panelOrder.length
-      ? [...userPreferences.panelOrder]
-      : fallbackOrder;
-    const visibility = (Array.isArray(userPreferences?.panelVisibility)
-      && userPreferences.panelVisibility.length === order.length)
-      ? [...userPreferences.panelVisibility]
-      : order.map(id => !(id === 'sedoTypes' || id === 'blacklistedClients'));
-    if (typeof applyPanelOrderAndVisibility === 'function') {
-      applyPanelOrderAndVisibility(order, visibility);
-    } else {
-      console.warn('applyPanelOrderAndVisibility not found; tabs order may not update immediately after save.');
-    }
+        const fallbackOrder =
+            Array.isArray(defaultPanelOrder) && defaultPanelOrder.length
+                ? [...defaultPanelOrder]
+                : Array.isArray(tabsConfig)
+                ? tabsConfig.map((t) => t.id)
+                : [];
+        const order =
+            Array.isArray(userPreferences?.panelOrder) && userPreferences.panelOrder.length
+                ? [...userPreferences.panelOrder]
+                : fallbackOrder;
+        const visibility =
+            Array.isArray(userPreferences?.panelVisibility) &&
+            userPreferences.panelVisibility.length === order.length
+                ? [...userPreferences.panelVisibility]
+                : order.map((id) => !(id === 'sedoTypes' || id === 'blacklistedClients'));
+        if (typeof applyPanelOrderAndVisibility === 'function') {
+            applyPanelOrderAndVisibility(order, visibility);
+        } else {
+            console.warn(
+                'applyPanelOrderAndVisibility not found; tabs order may not update immediately after save.',
+            );
+        }
 
         showNotification('Настройки успешно сохранены.', 'success');
         return true;
@@ -24240,13 +24247,13 @@ async function applyInitialUISettings() {
                     ? [...userPreferences.panelVisibility]
                     : order.map((id) => id !== 'sedoTypes');
             if (typeof applyPanelOrderAndVisibility === 'function') {
-        applyPanelOrderAndVisibility(order, visArr);
-      } else {
-        console.warn('applyPanelOrderAndVisibility not found; tabs order restore skipped.');
-      }
-      const visMap = order.reduce((m, id, i) => ((m[id] = !!visArr[i]), m), {});
-      ensureTabPresent('telefony', visMap.telefony !== false);
-      ensureTabPresent('shablony', visMap.shablony !== false);
+                applyPanelOrderAndVisibility(order, visArr);
+            } else {
+                console.warn('applyPanelOrderAndVisibility not found; tabs order restore skipped.');
+            }
+            const visMap = order.reduce((m, id, i) => ((m[id] = !!visArr[i]), m), {});
+            ensureTabPresent('telefony', visMap.telefony !== false);
+            ensureTabPresent('shablony', visMap.shablony !== false);
             if (typeof setupTabsOverflow === 'function') setupTabsOverflow();
             if (typeof updateVisibleTabs === 'function') updateVisibleTabs();
         } catch (e) {
@@ -29890,29 +29897,37 @@ function ensureInnPreviewStyles() {
     style.textContent = `
     .client-notes-preview{
         position: absolute;
+        --inn-offset-x: -0.4px;
         white-space: pre-wrap;
         word-wrap: break-word;
-        overflow: auto;
-        pointer-events: none; /* ИЗМЕНЕНИЕ: Оверлей сделан неинтерактивным */
+        overflow-wrap: break-word;
+        overflow: hidden;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         background: transparent;
+        pointer-events: none;
         z-index: 2;
     }
+    .client-notes-preview::-webkit-scrollbar{
+        width: 0; height: 0; display: none;
+    }
+        .client-notes-preview__inner{
+        position: relative;
+        will-change: transform;
+    }
     .client-notes-preview .inn-highlight{
-      color: var(--color-primary);
-color: var(--color-primary);
-      text-decoration: underline;
-      text-decoration-color: var(--color-primary);
+        color: var(--color-primary, #7aa2ff) !important;
+        text-decoration: underline;
         text-decoration-color: var(--color-primary);
         text-decoration-thickness: .1em;
         text-underline-offset: .12em;
         text-decoration-skip-ink: auto;
-        box-decoration-break: clone;
-        font-weight: inherit;
-        display: inline-block;
-        padding: 2px 3px;
-        margin: -2px -3px;
-        cursor: pointer;
+        /* НИЧЕГО, что меняет метрики инлайна */
+        display: inline;
+        padding: 0;
+        margin: 0;
     }
+ 
   `;
     document.head.appendChild(style);
 }
@@ -29927,6 +29942,9 @@ function createClientNotesInnPreview(textarea) {
     const preview = document.createElement('div');
     preview.className = 'client-notes-preview';
     preview.style.display = 'none';
+    const inner = document.createElement('div');
+    inner.className = 'client-notes-preview__inner';
+    preview.appendChild(inner);
     wrapper.appendChild(preview);
 
     const posOverlay = () => {
@@ -29934,16 +29952,39 @@ function createClientNotesInnPreview(textarea) {
         const wr = wrapper.getBoundingClientRect();
         const left = tr.left - wr.left + wrapper.scrollLeft;
         const top = tr.top - wr.top + wrapper.scrollTop;
-        const sbw = Math.max(0, textarea.offsetWidth - textarea.clientWidth);
         preview.style.left = `${left}px`;
         preview.style.top = `${top}px`;
-        preview.style.width = `${Math.max(0, tr.width - sbw)}px`;
-        preview.style.height = `${tr.height}px`;
+        preview.style.width = `${textarea.clientWidth}px`;
+        preview.style.height = `${textarea.clientHeight}px`;
+    };
+
+    const getOffsetX = () => {
+        const v = getComputedStyle(preview).getPropertyValue('--inn-offset-x').trim();
+        return v ? parseFloat(v) : 0;
+    };
+
+    const computeUsedLineHeightPx = () => {
+        const cs = getComputedStyle(textarea);
+        if (cs.lineHeight && cs.lineHeight !== 'normal') return cs.lineHeight;
+        const probe = document.createElement('div');
+        probe.style.position = 'absolute';
+        probe.style.visibility = 'hidden';
+        probe.style.whiteSpace = 'pre-wrap';
+        probe.style.font =
+            cs.font ||
+            `${cs.fontStyle} ${cs.fontVariant} ${cs.fontWeight} ${cs.fontSize}/${cs.lineHeight} ${cs.ontFamily}`;
+        probe.style.letterSpacing = cs.letterSpacing;
+        probe.textContent = 'A\nA';
+        document.body.appendChild(probe);
+        const h = probe.getBoundingClientRect().height / 2;
+        document.body.removeChild(probe);
+        return `${h}px`;
     };
 
     const syncMetrics = () => {
         const cs = getComputedStyle(textarea);
         preview.style.font = cs.font;
+        preview.style.lineHeight = computeUsedLineHeightPx();
         preview.style.lineHeight = cs.lineHeight;
         preview.style.letterSpacing = cs.letterSpacing;
         preview.style.textAlign = cs.textAlign;
@@ -29964,13 +30005,13 @@ function createClientNotesInnPreview(textarea) {
                 ? escapeHtml(text)
                 : text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const rx = /(^|\D)(\d{10}|\d{12})(?!\d)/g;
-        preview.innerHTML = escaped.replace(rx, '$1<span class="inn-highlight">$2</span>');
-        preview.scrollTop = textarea.scrollTop;
+        inner.innerHTML = escaped.replace(rx, '$1<span class="inn-highlight">$2</span>');
+        inner.style.transform = `translate(${getOffsetX()}px, ${-textarea.scrollTop}px)`;
         posOverlay();
     };
 
     const onScroll = () => {
-        preview.scrollTop = textarea.scrollTop;
+        inner.style.transform = `translate(${getOffsetX()}px, ${-textarea.scrollTop}px)`;
     };
     textarea.addEventListener('scroll', onScroll);
     window.addEventListener('resize', () => {
