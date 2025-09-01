@@ -258,6 +258,24 @@ const DEFAULT_WELCOME_CLIENT_NOTES_TEXT = `   Итак, вы здесь. Тру�
 Удачи в работе! И помните...
 Да пребудет с Вами сила!`;
 
+function ensureNotificationIconlessStyles() {
+    try {
+        if (document.getElementById('notification-iconless-css')) return;
+        const style = document.createElement('style');
+        style.id = 'notification-iconless-css';
+        style.textContent = `
+/* Уведомления: только текст — без галочек и крестиков */
+.notification-item .notification-close-btn { display: none !important; }
+.notification-item .notification-icon-i { display: none !important; }
+/* Иконка как первый <i.fas> в контенте уведомления (оба механизма рендера) */
+.notification-item > div > i.fas { display: none !important; }
+`;
+        document.head.appendChild(style);
+    } catch (e) {
+        /* no-op */
+    }
+}
+
 const NotificationService = {
     importantNotificationsContainer: null,
     activeImportantNotifications: new Map(),
@@ -338,6 +356,7 @@ const NotificationService = {
     },
 
     add(message, type = 'info', options = {}) {
+        ensureNotificationIconlessStyles();
         const {
             duration = this.defaultTemporaryDuration,
             important = false,
@@ -3753,6 +3772,22 @@ async function saveUISettings() {
                 'applyPreviewSettings function not found! UI might not update after save.',
             );
         }
+
+        const fallbackOrder = Array.isArray(defaultPanelOrder) && defaultPanelOrder.length
+      ? [...defaultPanelOrder]
+      : (Array.isArray(tabsConfig) ? tabsConfig.map(t => t.id) : []);
+    const order = Array.isArray(userPreferences?.panelOrder) && userPreferences.panelOrder.length
+      ? [...userPreferences.panelOrder]
+      : fallbackOrder;
+    const visibility = (Array.isArray(userPreferences?.panelVisibility)
+      && userPreferences.panelVisibility.length === order.length)
+      ? [...userPreferences.panelVisibility]
+      : order.map(id => !(id === 'sedoTypes' || id === 'blacklistedClients'));
+    if (typeof applyPanelOrderAndVisibility === 'function') {
+      applyPanelOrderAndVisibility(order, visibility);
+    } else {
+      console.warn('applyPanelOrderAndVisibility not found; tabs order may not update immediately after save.');
+    }
 
         showNotification('Настройки успешно сохранены.', 'success');
         return true;
@@ -7518,6 +7553,7 @@ async function performForcedBackup() {
 }
 
 function showNotification(message, type = 'success', duration = 5000) {
+    ensureNotificationIconlessStyles();
     console.log(
         `[SHOW_NOTIFICATION_CALL_V5.2_INLINE_STYLE] Message: "${message}", Type: "${type}", Duration: ${duration}, Timestamp: ${new Date().toISOString()}`,
     );
@@ -18702,7 +18738,7 @@ function showOrganizeExtLinkCategoriesModal() {
                 modal.classList.add('hidden');
                 if (getVisibleModals().length === 0) {
                     document.body.classList.remove('modal-open');
-                    document.body.classList.remove('overflow-hidden'); // safety
+                    document.body.classList.remove('overflow-hidden');
                 }
             }),
         );
@@ -21063,10 +21099,19 @@ async function copyToClipboard(text, successMessage = 'Скопировано!',
     };
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const canRead = !!(navigator.clipboard && navigator.clipboard.readText);
+    const normalizeForVerify = (val) => {
+        if (typeof val !== 'string') return '';
+        return val
+            .replace(/\r\n?/g, '\n')
+            .replace(/\u00A0/g, ' ')
+            .replace(/[ \t]+$/g, '')
+            .replace(/\n+$/g, '');
+    };
     const verify = async () => {
         if (!canRead) return null;
         try {
-            return (await navigator.clipboard.readText()) === s;
+            const got = await navigator.clipboard.readText();
+            return normalizeForVerify(got) === normalizeForVerify(s);
         } catch {
             return null;
         }
@@ -21086,7 +21131,6 @@ async function copyToClipboard(text, successMessage = 'Скопировано!',
         }
     };
 
-    // 1) Синхронно из реального выделения
     let ok = trySelectionCopy();
     if (ok) {
         const v = await verify();
@@ -21098,7 +21142,6 @@ async function copyToClipboard(text, successMessage = 'Скопировано!',
         return !!ok;
     }
 
-    // 2) Clipboard API (если доступно)
     if (navigator.clipboard && navigator.clipboard.writeText) {
         try {
             await navigator.clipboard.writeText(s);
@@ -21107,7 +21150,7 @@ async function copyToClipboard(text, successMessage = 'Скопировано!',
                 await sleep(25);
                 confirmed = await verify();
             }
-            ok = confirmed !== false; // true или null — считаем успехом
+            ok = confirmed !== false;
             if (ok) {
                 notify(successMessage, 'success');
                 restoreFocus();
@@ -21122,7 +21165,6 @@ async function copyToClipboard(text, successMessage = 'Скопировано!',
         }
     }
 
-    // 3) Резерв — скрытая textarea
     let taOk = false;
     const ta = document.createElement('textarea');
     ta.value = s;
@@ -23211,7 +23253,7 @@ function ensureExtLinkModal() {
             }
             if (getVisibleModals().length === 0) {
                 document.body.classList.remove('modal-open');
-                document.body.classList.remove('overflow-hidden'); // safety
+                document.body.classList.remove('overflow-hidden');
             }
         };
         modal
@@ -24197,9 +24239,14 @@ async function applyInitialUISettings() {
                 userPreferences.panelVisibility.length === order.length
                     ? [...userPreferences.panelVisibility]
                     : order.map((id) => id !== 'sedoTypes');
-            const visMap = order.reduce((m, id, i) => ((m[id] = !!visArr[i]), m), {});
-            ensureTabPresent('telefony', visMap.telefony !== false);
-            ensureTabPresent('shablony', visMap.shablony !== false);
+            if (typeof applyPanelOrderAndVisibility === 'function') {
+        applyPanelOrderAndVisibility(order, visArr);
+      } else {
+        console.warn('applyPanelOrderAndVisibility not found; tabs order restore skipped.');
+      }
+      const visMap = order.reduce((m, id, i) => ((m[id] = !!visArr[i]), m), {});
+      ensureTabPresent('telefony', visMap.telefony !== false);
+      ensureTabPresent('shablony', visMap.shablony !== false);
             if (typeof setupTabsOverflow === 'function') setupTabsOverflow();
             if (typeof updateVisibleTabs === 'function') updateVisibleTabs();
         } catch (e) {
@@ -24531,7 +24578,6 @@ async function applyPreviewSettings(settings) {
     const isTextCustom = !!settings?.isTextCustom && !!settings?.customTextColor;
     const customText = isTextCustom ? settings.customTextColor : null;
 
-    // факторы усиления светлой/тёмной тем (как согласовано ранее)
     const darkRelFactor = 0.75;
     const lightRelFactor = 0.2;
 
@@ -24542,7 +24588,6 @@ async function applyPreviewSettings(settings) {
         const darkBoost = Math.round(hsl.l * darkRelFactor);
         const lightBoost = Math.round((100 - hsl.l) * lightRelFactor);
 
-        // базовые текстовые
         let textP = customText
             ? customText
             : hslToHex(...Object.values(adjustHsl(hsl, isDark ? 85 : -85, -30)));
@@ -24550,7 +24595,6 @@ async function applyPreviewSettings(settings) {
             ? customText
             : hslToHex(...Object.values(adjustHsl(hsl, isDark ? 60 : -60, -15)));
 
-        // приглушение текста в тёмной теме
         const dimPoints = Math.max(0, Math.min(30, Number(settings?.darkTextDimPoints ?? 12)));
         const MIN_DARK_TEXT_L = 58;
         if (isDark && !customText) {
@@ -24644,15 +24688,12 @@ async function applyPreviewSettings(settings) {
         ].forEach((v) => style.removeProperty(v));
     }
 
-    // Темизация — затем применяем масштаб/радиус/плотность
     setTheme(settings?.theme || settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode);
 
-    // Масштаб (rem-база): и токен, и реальный html.style.fontSize
     const fontSizePercent = Number.isFinite(settings?.fontSize) ? settings.fontSize : 80;
     root.style.setProperty('--root-font-size', `${fontSizePercent}%`);
     root.style.fontSize = `${fontSizePercent}%`;
 
-    // Скругления (px по умолчанию)
     const radiusRaw = settings?.borderRadius;
     const hasUnit = typeof radiusRaw === 'string' && /[a-z%]+$/i.test(radiusRaw.trim());
     const radiusValue = hasUnit
@@ -24660,7 +24701,6 @@ async function applyPreviewSettings(settings) {
         : `${Number.isFinite(radiusRaw) ? radiusRaw : 8}px`;
     root.style.setProperty('--border-radius', radiusValue);
 
-    // Плотность
     const density = Number.isFinite(settings?.contentDensity) ? settings.contentDensity : 3;
     root.style.setProperty('--content-spacing', `${density * 0.25}rem`);
 }
@@ -26239,7 +26279,7 @@ function setupHotkeys() {
     };
     document.addEventListener('keydown', searchEscClearHandler, true);
 
-    // NEW: Alt + R — принудительная перезагрузка (bubble, вне инпутов)
+    // Alt + R — принудительная перезагрузка
     if (altRReloadHandler) {
         document.removeEventListener('keydown', altRReloadHandler, false);
     }
@@ -29603,7 +29643,7 @@ async function initClientDataSystem() {
     }
 
     if (clientNotesCtrlClickHandler) {
-        clientNotes.removeEventListener('mousedown', clientNotesCtrlClickHandler); // ИЗМЕНЕНИЕ: click -> mousedown
+        clientNotes.removeEventListener('mousedown', clientNotesCtrlClickHandler);
         console.log(`${LOG_PREFIX} Старый обработчик 'click' (Ctrl+Click INN) удален.`);
     }
     if (clientNotesBlurHandler) {
@@ -29694,7 +29734,6 @@ async function initClientDataSystem() {
     clientNotes.addEventListener('keydown', clientNotesKeydownHandler);
     console.log(`${LOG_PREFIX} Обработчик 'keydown' (Ctrl+Enter) успешно привязан.`);
 
-    // ИЗМЕНЕНИЕ: Объявление через function для hoisting и решения ReferenceError
     function getInnAtCursor(ta) {
         const text = ta.value || '';
         const n = text.length;
@@ -29719,7 +29758,6 @@ async function initClientDataSystem() {
         return null;
     }
 
-    // ИЗМЕНЕНИЕ: Обработчик перенесен с 'click' на 'mousedown' для предсказуемого получения позиции курсора.
     const clientNotesCtrlMouseDownHandler = async (event) => {
         console.log(
             `[ClientNotes Handler] Event triggered: ${event.type}. Ctrl/Meta: ${
@@ -29730,7 +29768,6 @@ async function initClientDataSystem() {
         if (typeof event.button === 'number' && event.button !== 0) return;
         if (!__acquireCopyLock(250)) return;
 
-        // Даем браузеру обновить selectionStart после mousedown, но до default-действия
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         console.log(
@@ -29755,7 +29792,7 @@ async function initClientDataSystem() {
     };
 
     clientNotes.addEventListener('mousedown', clientNotesCtrlMouseDownHandler);
-    clientNotesCtrlClickHandler = clientNotesCtrlMouseDownHandler; // Сохраняем ссылку для очистки
+    clientNotesCtrlClickHandler = clientNotesCtrlMouseDownHandler;
     console.log(`${LOG_PREFIX} Обработчик 'mousedown' (Ctrl+Click INN→copy) привязан.`);
 
     clientNotesCtrlKeyDownHandler = (e) => {
