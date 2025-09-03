@@ -413,6 +413,7 @@
                     #extLinkModal .modal-content-area,
                     #cibLinkModal .modal-content-area,
                     #bookmarkModal .p-content.overflow-y-auto.flex-1,
+                    #bookmarkModal .modal-content-area,
                     #bookmarkDetailModal #bookmarkDetailOuterContent,
                     #addModal .p-content.overflow-y-auto.flex-1,
                     #editModal .p-content.overflow-y-auto.flex-1
@@ -483,6 +484,7 @@
                     #extLinkModal .modal-content-area,
                     #cibLinkModal .modal-content-area,
                     #bookmarkModal .p-content.overflow-y-auto.flex-1,
+                    #bookmarkModal .modal-content-area,
                     #bookmarkDetailModal #bookmarkDetailOuterContent,
                     #addModal .p-content.overflow-y-auto.flex-1,
                     #editModal .p-content.overflow-y-auto.flex-1,
@@ -1991,6 +1993,26 @@
             }
             .shadow-xl {
                 box-shadow: var(--shadow-xl) !important;
+            }
+
+            .pdf-drop-overlay {
+                padding: 8px;
+                box-sizing: border-box;
+                display: grid;
+                place-items: center;
+            }
+            .pdf-drop-overlay .pdf-drop-msg {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                max-width: calc(100% - 16px);
+                text-align: center;
+                white-space: normal;
+                word-break: break-word;
+                overflow-wrap: anywhere;
+                line-height: 1.2;
+                font-size: clamp(10px, 1.8vw, 14px);
             }
         </style>
     </head>
