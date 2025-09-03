@@ -2,7 +2,7 @@
 
 let db;
 const DB_NAME = 'CopilotDB';
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 const CURRENT_SCHEMA_VERSION = '1.5';
 let userPreferences = {
     theme: 'auto',
@@ -1158,6 +1158,32 @@ const getVisibleModals = () => [
     ...document.querySelectorAll('div.fixed.inset-0.bg-black.bg-opacity-50:not(.hidden)'),
 ];
 
+const SAVE_BUTTON_SELECTORS =
+    'button[type="submit"], #saveAlgorithmBtn, #createAlgorithmBtn, #saveCibLinkBtn, #saveBookmarkBtn, #saveExtLinkBtn';
+
+function hasBlockingModalsOpen() {
+    const modals = getVisibleModals();
+    return modals.some((modal) => {
+        try {
+            if (modal.classList.contains('hidden')) return false;
+            const hasFormWithSubmit = !!modal.querySelector('form button[type="submit"]');
+            const hasKnownSaveButton = !!modal.querySelector(SAVE_BUTTON_SELECTORS);
+            const explicitlyProtected = modal.dataset.protectUnload === 'true';
+            return hasFormWithSubmit || hasKnownSaveButton || explicitlyProtected;
+        } catch (e) {
+            console.warn('beforeunload: ошибка проверки модального окна:', e);
+            return false;
+        }
+    });
+}
+
+window.addEventListener('beforeunload', (event) => {
+    if (hasBlockingModalsOpen()) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+});
+
 const getTopmostModal = (modals) => {
     if (!modals || modals.length === 0) return null;
     return modals.reduce((top, current) => {
@@ -1244,6 +1270,14 @@ const storeConfigs = [
             },
             { name: 'itemType', keyPath: 'itemType', options: { unique: false } },
             { name: 'dateAdded', keyPath: 'dateAdded', options: { unique: false } },
+        ],
+    },
+    {
+        name: 'pdfFiles',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [
+            { name: 'parentKey', keyPath: 'parentKey', options: { unique: false } },
+            { name: 'uploadedAt', keyPath: 'uploadedAt', options: { unique: false } },
         ],
     },
 ];
@@ -3344,7 +3378,17 @@ async function loadInitialFavoritesCache() {
 }
 
 function deleteFromIndexedDB(storeName, key) {
-    return performDBOperation(storeName, 'readwrite', (store) => store.delete(key));
+    const storeConfig = storeConfigs.find((sc) => sc.name === storeName);
+    let keyToUse = key;
+    if (storeConfig && storeConfig.options && storeConfig.options.autoIncrement) {
+        if (typeof key === 'string') {
+            const parsedKey = parseInt(key, 10);
+            if (!isNaN(parsedKey) && String(parsedKey) === key) {
+                keyToUse = parsedKey;
+            }
+        }
+    }
+    return performDBOperation(storeName, 'readwrite', (store) => store.delete(keyToUse));
 }
 
 function clearIndexedDBStore(storeName) {
@@ -6187,7 +6231,7 @@ async function exportAllData(options = {}) {
 
     try {
         if (!isForcedBackupMode) {
-            NotificationService.add('Подготовка данных для экспорта...', 'info', {
+            NotificationService.add('Подготовка данных для экспорта.', 'info', {
                 duration: 3000,
                 id: 'export-data-prep-started',
             });
@@ -6260,7 +6304,7 @@ async function exportAllData(options = {}) {
             ) {
                 if (!isForcedBackupMode)
                     NotificationService.add(
-                        `Обработка ${screenshotData.data.length} скриншотов...`,
+                        `Обработка ${screenshotData.data.length} скриншотов.`,
                         'info',
                         { duration: 2000, id: 'export-screenshot-processing' },
                     );
@@ -6278,6 +6322,31 @@ async function exportAllData(options = {}) {
                 screenshotData.data = await Promise.all(conversionPromises);
             }
 
+            const pdfData = results.find((r) => r.storeName === 'pdfFiles');
+            if (pdfData && Array.isArray(pdfData.data) && pdfData.data.length > 0) {
+                const convertiblePdfCount = pdfData.data.filter(
+                    (item) => item && item.blob instanceof Blob,
+                ).length;
+                if (!isForcedBackupMode)
+                    NotificationService.add(
+                        `Обработка ${convertiblePdfCount} PDF-файлов.`,
+                        'info',
+                        { duration: 2000, id: 'export-pdf-processing' },
+                    );
+                const pdfConversionPromises = pdfData.data.map(async (item) => {
+                    if (item && item.blob instanceof Blob) {
+                        try {
+                            const base64Data = await blobToBase64(item.blob);
+                            if (base64Data) return { ...item, blob: base64Data };
+                        } catch (convErr) {
+                            return { ...item, blob: undefined, conversionError: convErr.message };
+                        }
+                    }
+                    return item;
+                });
+                pdfData.data = await Promise.all(pdfConversionPromises);
+            }
+
             results.forEach((result) => {
                 exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
             });
@@ -6290,7 +6359,10 @@ async function exportAllData(options = {}) {
                 NotificationService.add(
                     `Критическая ошибка при подготовке экспорта: ${dataPrepError.message}`,
                     'error',
-                    { important: true, id: 'export-data-prep-failed' },
+                    {
+                        important: true,
+                        id: 'export-data-prep-failed',
+                    },
                 );
             if (transaction && typeof transaction.abort === 'function')
                 try {
@@ -6338,7 +6410,6 @@ async function exportAllData(options = {}) {
                     window.removeEventListener('focus', exportWindowFocusHandlerInstance);
                     exportWindowFocusHandlerInstance = null;
                 }
-
                 const handle = await window.showSaveFilePicker({
                     suggestedName: exportFileName,
                     types: [
@@ -6360,7 +6431,6 @@ async function exportAllData(options = {}) {
                 );
                 if (exportWindowFocusHandlerInstance)
                     window.removeEventListener('focus', exportWindowFocusHandlerInstance);
-
                 exportWindowFocusHandlerInstance = () => {
                     if (isExpectingExportFileDialog && !exportDialogInteractionComplete) {
                         console.log(
@@ -6379,7 +6449,6 @@ async function exportAllData(options = {}) {
                     }
                 };
                 window.addEventListener('focus', exportWindowFocusHandlerInstance);
-
                 const dataUri = URL.createObjectURL(dataBlob);
                 const linkElement = document.createElement('a');
                 linkElement.href = dataUri;
@@ -6387,7 +6456,6 @@ async function exportAllData(options = {}) {
                 document.body.appendChild(linkElement);
                 linkElement.click();
                 document.body.removeChild(linkElement);
-
                 setTimeout(() => {
                     if (!exportDialogInteractionComplete) {
                         exportDialogInteractionComplete = true;
@@ -6435,7 +6503,6 @@ async function exportAllData(options = {}) {
         if (exportWatchdogTimerId) clearTimeout(exportWatchdogTimerId);
         if (exportWindowFocusHandlerInstance)
             window.removeEventListener('focus', exportWindowFocusHandlerInstance);
-
         isExportOperationInProgress = false;
         isExpectingExportFileDialog = false;
         exportWindowFocusHandlerInstance = null;
@@ -7083,6 +7150,54 @@ async function _processActualImport(jsonString) {
                                     (item) =>
                                         !(item.hasOwnProperty('blob') && item.blob === undefined),
                                 );
+                        } else if (storeName === 'pdfFiles') {
+                            itemsToImport = itemsToImport
+                                .map((item) => {
+                                    if (item && item.hasOwnProperty('blob')) {
+                                        const blobData = item.blob;
+                                        if (
+                                            typeof blobData === 'object' &&
+                                            blobData !== null &&
+                                            typeof blobData.base64 === 'string' &&
+                                            typeof blobData.type === 'string'
+                                        ) {
+                                            const convertedBlob = base64ToBlob(
+                                                blobData.base64,
+                                                blobData.type,
+                                            );
+                                            if (convertedBlob instanceof Blob) {
+                                                item.blob = convertedBlob;
+                                            } else {
+                                                errorsOccurred.push({
+                                                    storeName,
+                                                    error: `Ошибка конвертации Base64->Blob для PDF ID: ${
+                                                        item.id || 'N/A'
+                                                    }`,
+                                                    item: `(данные blob: ${JSON.stringify(
+                                                        blobData,
+                                                    )?.substring(0, 50)}.)`,
+                                                });
+                                                delete item.blob;
+                                            }
+                                        } else if (blobData === null) {
+                                            delete item.blob;
+                                        } else if (!(blobData instanceof Blob)) {
+                                            errorsOccurred.push({
+                                                storeName,
+                                                error: `Некорректный тип данных в поле blob для PDF ID: ${
+                                                    item.id || 'N/A'
+                                                }`,
+                                                item: `(тип blob: ${typeof blobData})`,
+                                            });
+                                            delete item.blob;
+                                        }
+                                    }
+                                    return item;
+                                })
+                                .filter(
+                                    (item) =>
+                                        !(item.hasOwnProperty('blob') && item.blob === undefined),
+                                );
                         }
 
                         if (itemsToImport.length > 0) {
@@ -7662,7 +7777,6 @@ function showNotification(message, type = 'success', duration = 5000) {
         iconContainer.className = 'flex items-center';
 
         iconElement = document.createElement('i');
-        iconElement.className = `fas ${iconClass} mr-3 text-lg notification-icon-i`;
         try {
             iconElement.style.color = 'var(--color-primary)';
         } catch (e) {}
@@ -7688,7 +7802,6 @@ function showNotification(message, type = 'success', duration = 5000) {
         notificationElement.appendChild(contentWrapper);
     }
 
-    iconElement.className = `fas ${iconClass} mr-3 text-lg notification-icon-i`;
     messageSpan.textContent = message;
 
     const closeAndRemove = () => {
@@ -8625,6 +8738,28 @@ async function saveNewAlgorithm() {
             );
         }
 
+        try {
+            const draftPdfs = Array.from(addModal._tempPdfFiles || []);
+            if (draftPdfs.length > 0) {
+                await addPdfRecords(draftPdfs, 'algorithm', newAlgorithmData.id);
+                console.log(
+                    `[Save New Algorithm] Добавлено PDF: ${draftPdfs.length} для algorithm:${newAlgorithmData.id}`,
+                );
+            }
+        } catch (pdfErr) {
+            console.error(
+                '[Save New Algorithm] Ошибка сохранения PDF-файлов для нового алгоритма:',
+                pdfErr,
+            );
+            if (typeof showNotification === 'function')
+                showNotification('PDF не удалось сохранить для нового алгоритма.', 'warning');
+        } finally {
+            delete addModal._tempPdfFiles;
+            addModal.dataset.pdfDraftWired = '0';
+            const draftList = addModal.querySelector('.pdf-draft-list');
+            if (draftList) draftList.innerHTML = '';
+        }
+
         showNotification('Новый алгоритм успешно добавлен.');
         initialAddState = null;
         addModal.classList.add('hidden');
@@ -9146,89 +9281,82 @@ async function renderMainAlgorithm() {
 }
 
 async function getAllFromIndex(storeName, indexName, indexValue) {
-    if (!db) {
-        console.error(
-            `getAllFromIndex: База данных (db) не инициализирована! Store: ${storeName}, Index: ${indexName}`,
-        );
-        return Promise.reject(new Error('База данных не инициализирована для getAllFromIndex'));
-    }
+    const debugOn = typeof window !== 'undefined' && !!window.DB_LOG;
+    const dlog = (...args) => {
+        if (debugOn) console.debug(...args);
+    };
 
-    if (!storeName || !indexName || indexValue === undefined) {
-        const errorMsg = `getAllFromIndex: Некорректные аргументы: storeName=${storeName}, indexName=${indexName}, indexValue=${indexValue}`;
-        console.error(errorMsg);
-        return Promise.reject(new Error('Некорректные аргументы для getAllFromIndex'));
+    if (!db) {
+        const msg = `getAllFromIndex: База данных не инициализирована. store=${storeName}, index=${indexName}`;
+        console.error(msg);
+        return Promise.reject(new Error(msg));
+    }
+    if (!storeName || !indexName || typeof indexValue === 'undefined') {
+        const msg = `getAllFromIndex: Некорректные аргументы: storeName=${storeName}, indexName=${indexName}, indexValue=${indexValue}`;
+        console.error(msg);
+        return Promise.reject(new Error(msg));
     }
 
     return new Promise((resolve, reject) => {
         try {
-            if (!db.objectStoreNames.contains(storeName)) {
-                const errorMsg = `getAllFromIndex: Хранилище объектов '${storeName}' не найдено в базе данных. Доступные: ${Array.from(
-                    db.objectStoreNames,
-                ).join(', ')}`;
-                console.error(errorMsg);
-                return reject(new Error(errorMsg));
+            if (!db.objectStoreNames || !db.objectStoreNames.contains(storeName)) {
+                const availableStores = Array.from(db.objectStoreNames || []).join(', ');
+                const msg = `getAllFromIndex: Стор '${storeName}' не найден. Доступные: ${availableStores}`;
+                console.error(msg);
+                return reject(new Error(msg));
             }
 
-            const transaction = db.transaction(storeName, 'readonly');
-            const store = transaction.objectStore(storeName);
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
 
-            if (!store.indexNames.contains(indexName)) {
-                const errorMsg = `Индекс '${indexName}' не найден в хранилище '${storeName}'. Доступные индексы: ${Array.from(
-                    store.indexNames,
-                ).join(', ')}`;
-                console.error(`getAllFromIndex: ${errorMsg}`);
-                return reject(new Error(errorMsg));
+            if (!store.indexNames || !store.indexNames.contains(indexName)) {
+                const availableIdx = Array.from(store.indexNames || []).join(', ');
+                const msg = `getAllFromIndex: Индекс '${indexName}' не найден в сторе '${storeName}'. Доступные индексы: ${availableIdx}`;
+                console.error(msg);
+                return reject(new Error(msg));
             }
-
-            console.log(
-                `getAllFromIndex: Индекс '${indexName}' найден в '${storeName}'. Запрашиваем значение:`,
-                indexValue,
-                `(Тип: ${typeof indexValue})`,
-            );
 
             const index = store.index(indexName);
+            dlog(
+                `getAllFromIndex → ${storeName}/${indexName}, value=`,
+                indexValue,
+                `(type: ${typeof indexValue})`,
+            );
+
             const request = index.getAll(indexValue);
 
             request.onsuccess = (e) => {
-                const result = e.target.result;
-                const resultLength = result?.length ?? 0;
-                console.log(
-                    `getAllFromIndex: Успешно получен результат для ${storeName}/${indexName} по значению ${String(
-                        indexValue,
-                    )}. Количество записей: ${resultLength}.`,
+                const result = e.target?.result || [];
+                dlog(
+                    `getAllFromIndex ← OK ${storeName}/${indexName}=${String(indexValue)} → ${
+                        result.length
+                    } rows`,
                 );
-                if (resultLength === 0) {
-                    console.warn(
-                        `getAllFromIndex: Результат пуст. Проверьте, существуют ли записи с ${indexName}=${String(
-                            indexValue,
-                        )} в хранилище ${storeName}.`,
-                    );
-                }
-                resolve(result || []);
-            };
-            request.onerror = (e) => {
-                const errorMsg = `Ошибка получения данных из индекса '${indexName}' по значению '${String(
-                    indexValue,
-                )}' в хранилище '${storeName}'`;
-                console.error(`${errorMsg}:`, e.target.error);
-                reject(e.target.error || new Error(errorMsg));
+                resolve(result);
             };
 
-            transaction.onerror = (e) => {
-                const errorMsg = `Ошибка readonly транзакции при запросе к ${storeName}/${indexName} по значению '${String(
-                    indexValue,
-                )}'`;
-                console.error(`${errorMsg}:`, e.target.error);
+            request.onerror = (e) => {
+                const err =
+                    e.target?.error ||
+                    new Error(`getAllFromIndex: ошибка чтения ${storeName}/${indexName}`);
+                console.error(
+                    `getAllFromIndex: ошибка запроса по ${storeName}/${indexName}=${String(
+                        indexValue,
+                    )}:`,
+                    err,
+                );
+                reject(err);
             };
-            transaction.onabort = (e) => {
-                const errorMsg = `Readonly транзакция прервана при запросе к ${storeName}/${indexName} по значению '${String(
-                    indexValue,
-                )}'`;
-                console.warn(`${errorMsg}:`, e.target.error);
-            };
+
+            tx.onerror = (e) =>
+                dlog(`getAllFromIndex: tx.onerror ${storeName}/${indexName}`, e.target?.error);
+            tx.onabort = (e) =>
+                dlog(`getAllFromIndex: tx.onabort ${storeName}/${indexName}`, e.target?.error);
         } catch (error) {
-            const errorMsg = `Исключение при попытке доступа к индексу '${indexName}' в хранилище '${storeName}'`;
-            console.error(`${errorMsg}:`, error);
+            console.error(
+                `getAllFromIndex: исключение при доступе к ${storeName}/${indexName}:`,
+                error,
+            );
             reject(error);
         }
     });
@@ -9920,6 +10048,11 @@ async function showAlgorithmDetail(algorithm, section) {
 
     algorithmModal.dataset.currentAlgorithmId = String(currentAlgorithmId);
     algorithmModal.dataset.currentSection = section;
+    if (currentAlgorithmId !== 'main') {
+        const host = algorithmStepsContainer.parentElement || algorithmStepsContainer;
+        if (host)
+            window.renderPdfAttachmentsSection?.(host, 'algorithm', String(currentAlgorithmId));
+    }
 
     modalTitleElement.textContent = algorithm.title ?? 'Детали алгоритма';
     algorithmStepsContainer.innerHTML =
@@ -17265,6 +17398,13 @@ async function ensureBookmarkModal() {
                 console.error(
                     `${LOG_PREFIX} Ошибка: Функция attachBookmarkScreenshotHandlers не найдена!`,
                 );
+            if (typeof attachBookmarkPdfHandlers === 'function') {
+                attachBookmarkPdfHandlers(formElement);
+            } else {
+                console.error(
+                    `${LOG_PREFIX} Ошибка: Функция attachBookmarkPdfHandlers не найдена!`,
+                );
+            }
         } else
             console.error(
                 `${LOG_PREFIX} КРИТИЧЕСКАЯ ОШИБКА: Не удалось найти форму #bookmarkForm ПОСЛЕ создания модального окна!`,
@@ -17352,6 +17492,10 @@ async function showAddBookmarkModal(bookmarkToEditId = null) {
     delete form.dataset.screenshotsToDelete;
     form.dataset.existingScreenshotIds = '';
     form.dataset.existingRendered = 'false';
+
+    delete modal.dataset.currentBookmarkId;
+    if (modal.hasAttribute('data-bookmark-id')) modal.removeAttribute('data-bookmark-id');
+    modal.querySelectorAll('.pdf-attachments-section').forEach((n) => n.remove());
 
     const descRequiredIndicator = form.querySelector('#bookmarkDescriptionRequiredIndicator');
     if (descRequiredIndicator) descRequiredIndicator.style.display = 'none';
@@ -18090,6 +18234,18 @@ async function handleBookmarkFormSubmit(event) {
             transaction.onerror = (e) => reject(e.target.error || new Error('Ошибка транзакции'));
             transaction.onabort = (e) => reject(e.target.error || new Error('Транзакция прервана'));
         });
+
+        try {
+            const pdfTemp = Array.isArray(form._tempPdfFiles) ? form._tempPdfFiles : [];
+            if (pdfTemp.length > 0) {
+                console.log(
+                    `[Save Bookmark] Сохранение \${pdfTemp.length} PDF для закладки \${finalId}`,
+                );
+                await addPdfRecords(pdfTemp, 'bookmark', finalId);
+            }
+        } catch (pdfErr) {
+            console.error('[handleBookmarkFormSubmit] Ошибка сохранения PDF-файлов:', pdfErr);
+        }
     } catch (saveError) {
         console.error(
             `[Save Bookmark v6 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${
@@ -18140,6 +18296,22 @@ async function handleBookmarkFormSubmit(event) {
             console.warn('updateSearchIndex не найдена.');
         }
 
+        try {
+            const newPdfFiles = Array.from(form._tempPdfFiles || []);
+            if (newPdfFiles.length > 0) {
+                await addPdfRecords(newPdfFiles, 'bookmark', finalId);
+                console.log(
+                    `[Save Bookmark] Добавлено PDF файлов: ${newPdfFiles.length} для bookmark:${finalId}`,
+                );
+            }
+        } catch (pdfErr) {
+            console.error('Ошибка сохранения PDF-файлов для закладки:', pdfErr);
+            if (typeof showNotification === 'function')
+                showNotification('PDF не удалось сохранить для закладки.', 'warning');
+        } finally {
+            delete form._tempPdfFiles;
+        }
+
         if (typeof showNotification === 'function')
             showNotification(isEditing ? 'Закладка обновлена' : 'Закладка добавлена');
         modal.classList.add('hidden');
@@ -18150,8 +18322,14 @@ async function handleBookmarkFormSubmit(event) {
         if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
         delete form._tempScreenshotBlobs;
         delete form.dataset.screenshotsToDelete;
+        form.dataset.pdfDraftWired = '0';
+        const draftPdfList = form.querySelector('.pdf-draft-list');
+        if (draftPdfList) draftPdfList.innerHTML = '';
         const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
         if (thumbsContainer) thumbsContainer.innerHTML = '';
+        delete form._tempPdfFiles;
+        const pdfListEl = form.querySelector('#bookmarkPdfList');
+        if (pdfListEl) pdfListEl.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
         initialBookmarkFormState = null;
 
         if (typeof loadBookmarks === 'function') loadBookmarks();
@@ -19685,6 +19863,14 @@ async function showEditBookmarkModal(id) {
 
         form.reset();
 
+        const draftList = form.querySelector('.pdf-draft-list');
+        if (draftList) {
+            const draftBlock =
+                draftList.closest('.mb-4') || draftList.closest('details') || draftList;
+            draftBlock.remove();
+            form.dataset.pdfDraftWired = '0';
+        }
+
         idInput.value = bookmark.id;
         titleInput.value = bookmark.title || '';
         urlInput.value = bookmark.url || '';
@@ -20930,6 +21116,24 @@ async function handleCibLinkSubmit(event) {
     };
 
     const isEditing = !!id;
+    try {
+        const existing = await getAllFromIndexedDB('links');
+        const duplicate = (existing || []).find(
+            (l) =>
+                l &&
+                typeof l.link === 'string' &&
+                l.link.trim() === linkValue &&
+                (!isEditing || String(l.id) !== String(id)),
+        );
+        if (duplicate) {
+            showNotification('Данная ссылка уже есть в базе данных', 'error');
+            if (saveButton) saveButton.disabled = false;
+            form.elements.cibLinkValue.focus();
+            return;
+        }
+    } catch (dupErr) {
+        console.warn('Проверка дубликатов ссылок 1С не удалась:', dupErr);
+    }
     let oldData = null;
     let finalId = null;
 
@@ -27191,7 +27395,7 @@ async function showBookmarkDetailModal(bookmarkId) {
                                 </div>
                             </div>
                         </div>
-                        <div class="p-6 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
+                        <div class="pt-6 pl-6 pr-6 pb-2 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
                             <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
                                 <p>Загрузка...</p>
                             </div>
@@ -27199,6 +27403,7 @@ async function showBookmarkDetailModal(bookmarkId) {
                                 <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
                                 <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
                                 </div>
+                                <div id="bookmarkDetailPdfContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4"></div>
                             </div>
                         </div>
                         <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
@@ -27337,6 +27542,12 @@ async function showBookmarkDetailModal(bookmarkId) {
     }
 
     modal.dataset.currentBookmarkId = String(bookmarkId);
+    const pdfHost =
+        modal.querySelector('#bookmarkDetailOuterContent') ||
+        modal.querySelector('.flex-1.overflow-y-auto');
+    if (pdfHost) {
+        window.renderPdfAttachmentsSection?.(pdfHost, 'bookmark', String(bookmarkId));
+    }
     titleEl.textContent = 'Загрузка...';
     textContentEl.innerHTML = '<p>Загрузка...</p>';
     screenshotsGridEl.innerHTML = '';
@@ -29897,7 +30108,7 @@ function ensureInnPreviewStyles() {
     style.textContent = `
     .client-notes-preview{
         position: absolute;
-        --inn-offset-x: -0.2px;
+        --inn-offset-x: -0.4px;
         white-space: pre-wrap;
         word-wrap: break-word;
         overflow-wrap: break-word;
@@ -32026,3 +32237,974 @@ function setupBackgroundImageControls() {
     });
 }
 
+function isPdfFile(file) {
+    if (!file) return false;
+    if (file.type) return file.type === 'application/pdf';
+    return /\.pdf$/i.test(file.name || '');
+}
+
+function setupPdfDragAndDrop(targetEl, onFiles, opts = {}) {
+    if (!targetEl || typeof onFiles !== 'function') return;
+    if (targetEl._pdfDndWired) return;
+    targetEl._pdfDndWired = true;
+
+    const cs = window.getComputedStyle(targetEl);
+    if (cs.position === 'static') targetEl.style.position = 'relative';
+
+    const overlay = document.createElement('div');
+    overlay.className = `pdf-drop-overlay pointer-events-none absolute inset-0 rounded-xl z-[1000]
+    border-2 border-dashed grid place-items-center text-sm font-medium
+    opacity-0 transition-opacity`;
+    overlay.style.zIndex = '1000';
+    overlay.style.willChange = 'opacity';
+    overlay.style.display = 'none';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.borderStyle = 'dashed';
+    overlay.style.borderWidth = '2px';
+    overlay.style.opacity = '0';
+    overlay.style.visibility = 'hidden';
+
+    overlay.innerHTML = `<div class="pdf-drop-msg px-3 py-2 rounded-md">
+    <i class="far fa-file-pdf mr-1"></i>Отпустите PDF, чтобы загрузить
+    </div>`;
+
+    targetEl.appendChild(overlay);
+
+    let dragDepth = 0;
+    const isTransparent = (c) => {
+        if (!c) return true;
+        if (c === 'transparent') return true;
+        const m = c.match(/rgba?\(([^)]+)\)/i);
+        if (m) {
+            const parts = m[1].split(',').map((s) => s.trim());
+            const a = parts[3] !== undefined ? parseFloat(parts[3]) : 1;
+            return a === 0;
+        }
+        return false;
+    };
+    const parseRgb = (c) => {
+        if (!c) return [0, 0, 0];
+        const hex = c.trim().toLowerCase();
+        if (hex.startsWith('#')) {
+            const v =
+                hex.length === 4
+                    ? hex.replace(/#(.)(.)(.)/, (_, r, g, b) => `#${r}${r}${g}${g}${b}${b}`)
+                    : hex;
+            return [
+                parseInt(v.slice(1, 3), 16),
+                parseInt(v.slice(3, 5), 16),
+                parseInt(v.slice(5, 7), 16),
+            ];
+        }
+        const m = c.match(/rgba?\(([^)]+)\)/i);
+        if (m) {
+            const p = m[1].split(',').map((s) => s.trim());
+            return [parseInt(p[0], 10) || 0, parseInt(p[1], 10) || 0, parseInt(p[2], 10) || 0];
+        }
+        return [0, 0, 0];
+    };
+    const toRgbStr = (arr) => `rgb(${arr[0]},${arr[1]},${arr[2]})`;
+    const toRgbaWithAlpha = (c, a) => {
+        if (!c) return `rgba(0,0,0,${a})`;
+        const hex = c.trim().toLowerCase();
+        if (hex.startsWith('#')) {
+            const v =
+                hex.length === 4
+                    ? hex.replace(/#(.)(.)(.)/, (_, r, g, b) => `#${r}${r}${g}${g}${b}${b}`)
+                    : hex;
+            const r = parseInt(v.slice(1, 3), 16),
+                g = parseInt(v.slice(3, 5), 16),
+                b = parseInt(v.slice(5, 7), 16);
+            return `rgba(${r},${g},${b},${a})`;
+        }
+        const m = c.match(/rgba?\(([^)]+)\)/i);
+        if (m) {
+            const parts = m[1].split(',').map((s) => s.trim());
+            const r = parseInt(parts[0], 10),
+                g = parseInt(parts[1], 10),
+                b = parseInt(parts[2], 10);
+            return `rgba(${r || 0},${g || 0},${b || 0},${a})`;
+        }
+        return `rgba(0,0,0,${a})`;
+    };
+    const relLum = (rgb) => {
+        const srgb = rgb
+            .map((v) => v / 255)
+            .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+        return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+    };
+    const contrastRatio = (bgRgb, fgRgb) => {
+        const L1 = relLum(bgRgb),
+            L2 = relLum(fgRgb);
+        const [maxL, minL] = L1 > L2 ? [L1, L2] : [L2, L1];
+        return (maxL + 0.05) / (minL + 0.05);
+    };
+    const pickReadableColor = (bgRgb, fgRgb) => {
+        if (contrastRatio(bgRgb, fgRgb) >= 3.5) return fgRgb;
+        const black = [0, 0, 0],
+            white = [255, 255, 255];
+        return contrastRatio(bgRgb, white) >= contrastRatio(bgRgb, black) ? white : black;
+    };
+    const mixRgb = (a, b, t) => [
+        Math.round(a[0] * (1 - t) + b[0] * t),
+        Math.round(a[1] * (1 - t) + b[1] * t),
+        Math.round(a[2] * (1 - t) + b[2] * t),
+    ];
+    const resolveBg = (el) => {
+        let node = el;
+        while (node) {
+            const csn = window.getComputedStyle(node);
+            if (!isTransparent(csn.backgroundColor)) return csn.backgroundColor;
+            node = node.parentElement;
+        }
+        return window.getComputedStyle(document.body).backgroundColor || '#fff';
+    };
+    const pickColors = (el) => {
+        const csn = window.getComputedStyle(el);
+        const bg = resolveBg(el);
+        const fg = csn.color || '#1f2937';
+        return { bg, fg };
+    };
+
+    const show = () => {
+        const { bg, fg } = pickColors(targetEl);
+        const bgRgb = parseRgb(bg);
+        const fgRgb = parseRgb(fg);
+        const txtRgb = pickReadableColor(bgRgb, fgRgb);
+        const badgeBg = mixRgb(bgRgb, txtRgb, 0.08);
+        const borderRgb = txtRgb;
+
+        overlay.style.backgroundColor = bg;
+        overlay.style.color = toRgbStr(txtRgb);
+        overlay.style.borderColor = `rgba(${borderRgb[0]},${borderRgb[1]},${borderRgb[2]},0.55)`;
+
+        const badge = overlay.querySelector('.pdf-drop-msg');
+        if (badge) {
+            badge.style.backgroundColor = toRgbStr(badgeBg);
+            badge.style.color = toRgbStr(txtRgb);
+            badge.style.boxShadow = `0 1px 2px rgba(0,0,0,0.15)`;
+            badge.style.outline = `1px solid rgba(${txtRgb[0]},${txtRgb[1]},${txtRgb[2]},0.25)`;
+            badge.style.outlineOffset = '0px';
+        }
+        overlay.style.display = 'grid';
+        overlay.style.visibility = 'visible';
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+        });
+    };
+
+    const hide = () => {
+        overlay.style.opacity = '0';
+        overlay.style.visibility = 'hidden';
+        overlay.style.display = 'none';
+        dragDepth = 0;
+    };
+
+    const isFiles = (e) => {
+        const dt = e.dataTransfer;
+        if (!dt) return false;
+        if (dt.types && typeof dt.types.indexOf === 'function' && dt.types.indexOf('Files') !== -1)
+            return true;
+        return dt.files && dt.files.length > 0;
+    };
+
+    targetEl.addEventListener('dragenter', (e) => {
+        if (!isFiles(e)) return;
+        dragDepth++;
+        show();
+        e.preventDefault();
+    });
+    targetEl.addEventListener('dragover', (e) => {
+        if (!isFiles(e)) return;
+        e.preventDefault();
+    });
+    targetEl.addEventListener('dragleave', (e) => {
+        if (!isFiles(e)) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) hide();
+        e.preventDefault();
+    });
+    targetEl.addEventListener('drop', (e) => {
+        if (!isFiles(e)) return;
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files || []).filter(
+            (f) =>
+                f &&
+                (f.type === 'application/pdf' ||
+                    (typeof f.name === 'string' && f.name.toLowerCase().endsWith('.pdf'))),
+        );
+        hide();
+        if (files.length) onFiles(files);
+    });
+}
+
+function makeParentKey(parentType, parentId) {
+    return `${String(parentType)}:${String(parentId)}`;
+}
+
+async function addPdfRecords(files, parentType, parentId) {
+    if (!db) {
+        console.error('[addPdfRecords] DB is not ready');
+        showNotification && showNotification('БД не инициализирована', 'error');
+        return [];
+    }
+    const parentKey = makeParentKey(parentType, parentId);
+    const results = [];
+    let existing = [];
+    try {
+        existing = await getPdfsForParent(parentType, parentId);
+    } catch {}
+    const existingKeys = new Set(
+        (existing || []).filter(Boolean).map((r) => `${(r && r.name) || ''}|${(r && r.size) || 0}`),
+    );
+
+    const uniq = [];
+    for (const f of Array.from(files || [])) {
+        if (!f) continue;
+        const k = `${(f && f.name) || ''}|${(f && f.size) || 0}`;
+        if (!existingKeys.has(k)) {
+            existingKeys.add(k);
+            uniq.push(f);
+        }
+    }
+
+    for (const file of uniq) {
+        if (!isPdfFile(file)) {
+            console.warn('[addPdfRecords] skipped non-pdf', file && file.name);
+            continue;
+        }
+        const rec = {
+            parentType,
+            parentId,
+            parentKey,
+            name: file.name,
+            size: file.size || 0,
+            mime: 'application/pdf',
+            blob: file,
+            uploadedAt: new Date().toISOString(),
+        };
+        try {
+            results.push(await saveToIndexedDB('pdfFiles', rec));
+        } catch (e) {
+            console.error('[addPdfRecords] failed', e);
+        }
+    }
+    return results;
+}
+
+async function getPdfsForParent(parentType, parentId) {
+    try {
+        if (!db) throw new Error('DB not ready');
+        const tx = db.transaction('pdfFiles', 'readonly');
+        const store = tx.objectStore('pdfFiles');
+        if (store.indexNames && store.indexNames.contains('parentKey')) {
+            return (
+                (await getAllFromIndex(
+                    'pdfFiles',
+                    'parentKey',
+                    makeParentKey(parentType, parentId),
+                )) || []
+            );
+        }
+        if (store.indexNames && store.indexNames.contains('parentId')) {
+            const rows = (await getAllFromIndex('pdfFiles', 'parentId', String(parentId))) || [];
+            return rows.filter((r) => r && r.parentType === parentType);
+        }
+        const all = (await getAllFromIndexedDB('pdfFiles')) || [];
+        return all.filter(
+            (r) => r && String(r.parentId) === String(parentId) && r.parentType === parentType,
+        );
+    } catch (e) {
+        console.error('[getPdfsForParent] failed', e);
+        return [];
+    }
+}
+
+function downloadPdfBlob(blob, filename = 'file.pdf') {
+    try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+        console.error('downloadPdfBlob error', e);
+        showNotification && showNotification('Не удалось скачать PDF', 'error');
+    }
+}
+
+function mountPdfSection(hostEl, parentType, parentId) {
+    if (!hostEl) return;
+
+    if (!hostEl.dataset.wired) {
+        hostEl.dataset.wired = '1';
+        hostEl.innerHTML = `
+        <details class="pdf-collapse group open:pb-2" open>
+          <summary class="cursor-pointer select-none font-semibold text-sm text-gray-600 dark:text-gray-300 mb-2">
+            <i class="far fa-file-pdf mr-1"></i>PDF-файлы
+          </summary>
+          <div class="pdf-row flex items-start justify-between gap-3">
+            <ul class="pdf-list flex-1 space-y-1 text-sm"></ul>
+            <div class="shrink-0">
+              <input type="file" accept="application/pdf" multiple class="hidden pdf-input">
+              <button type="button" class="px-2 py-1.5 text-sm bg-primary text-white rounded hover:bg-secondary add-pdf-btn">
+                <i class="far fa-file-pdf mr-1"></i>Загрузить PDF
+              </button>
+            </div>
+          </div>
+        </details>`;
+
+        const rowEl = hostEl.querySelector('.pdf-row');
+        rowEl.style.boxSizing = 'border-box';
+        rowEl.style.width = '100%';
+        rowEl.style.flexWrap = 'wrap';
+        const syncPadNearestAncestor = () => {
+            try {
+                let cur = hostEl,
+                    pl = 0,
+                    pr = 0;
+                while (cur && cur !== document.body) {
+                    const cs = getComputedStyle(cur);
+                    pl = parseFloat(cs.paddingLeft || '0') || 0;
+                    pr = parseFloat(cs.paddingRight || '0') || 0;
+                    if (pl || pr) break;
+                    cur = cur.parentElement;
+                }
+                if (!pr) pr = pl;
+                rowEl.style.paddingLeft = pl + 'px';
+                rowEl.style.paddingRight = pr + 'px';
+            } catch {}
+        };
+        syncPadNearestAncestor();
+        window.addEventListener('resize', syncPadNearestAncestor, { passive: true });
+
+        const listUl = hostEl.querySelector('.pdf-list');
+        if (listUl) {
+            listUl.style.listStyle = 'none';
+            listUl.style.paddingLeft = '0';
+            listUl.style.margin = '0';
+            listUl.style.minWidth = '0';
+            listUl.style.overflowY = 'auto';
+            listUl.style.overscrollBehavior = 'contain';
+            listUl.style.scrollbarGutter = 'stable both-edges';
+        }
+
+        const input = hostEl.querySelector('.pdf-input');
+        const btn = hostEl.querySelector('.add-pdf-btn');
+        const det = hostEl.querySelector('details');
+        const prefKey = `pdfCollapse:${parentType}:${parentId}`;
+
+        if (btn && btn.dataset.wired !== '1') {
+            btn.dataset.wired = '1';
+            btn.addEventListener('click', () => input && input.click());
+        }
+        if (input && input.dataset.wired !== '1') {
+            input.dataset.wired = '1';
+            input.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files || []);
+                if (!files || !files.length) return;
+                await addPdfRecords(files, parentType, parentId);
+                if (det) {
+                    det.open = true;
+                    try {
+                        localStorage.setItem(prefKey, 'expanded');
+                    } catch {}
+                }
+                await refresh();
+            });
+        }
+    }
+
+    async function refresh() {
+        const list = hostEl.querySelector('.pdf-list');
+        list.innerHTML = '<li class="text-gray-500">Загрузка.</li>';
+        const items = await getPdfsForParent(parentType, parentId);
+
+        if (!items.length) {
+            list.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
+            const det = hostEl.querySelector('details');
+            if (det) {
+                const inAlgoEdit = !!hostEl.closest('#editModal');
+                const inBookmarkEdit = !!hostEl.closest('#bookmarkModal');
+                const forceOpen =
+                    (inAlgoEdit && parentType === 'algorithm') ||
+                    (inBookmarkEdit && parentType === 'bookmark');
+                det.open = !!forceOpen;
+            }
+            hostEl._pdfHasItems = false;
+            try {
+                localStorage.removeItem(`pdfCollapse:${parentType}:${parentId}`);
+            } catch {}
+            return;
+        }
+
+        hostEl._pdfHasItems = true;
+        items.sort((a, b) => (a.uploadedAt > b.uploadedAt ? -1 : 1));
+
+        const frag = document.createDocumentFragment();
+        const inView = !!(
+            hostEl.closest('#algorithmModal') || hostEl.closest('#bookmarkDetailModal')
+        );
+
+        for (const item of items) {
+            const li = document.createElement('li');
+            li.className =
+                'flex items-center justify-between bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded';
+
+            const displayName =
+                typeof item?.name === 'string' && item.name.trim()
+                    ? item.name
+                    : item?.blob?.name || 'file.pdf';
+
+            const safe = String(displayName).replace(
+                /[<>&"']/g,
+                (s) =>
+                    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s] ||
+                    s),
+            );
+
+            const sizeBytes =
+                typeof item?.size === 'number' && item.size > 0 ? item.size : item?.blob?.size || 0;
+            const sizeKb = Math.max(0, Math.round(sizeBytes / 1024));
+
+            li.innerHTML = `
+              <div class="truncate pr-2">
+                <i class="far fa-file-pdf mr-2"></i>
+                <span title="${safe}">${safe}</span>
+                <span class="text-gray-500">(${sizeKb} KB)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="dl">Скачать</button>
+                ${
+                    inView
+                        ? ''
+                        : '<button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="rm">Удалить</button>'
+                }
+              </div>`;
+
+            li.querySelector('[data-act="dl"]').addEventListener('click', () =>
+                downloadPdfBlob(item.blob || null, displayName),
+            );
+
+            const rmBtn = li.querySelector('[data-act="rm"]');
+            if (rmBtn) {
+                rmBtn.addEventListener('click', async () => {
+                    await deleteFromIndexedDB('pdfFiles', item.id);
+                    refresh();
+                });
+            }
+
+            frag.appendChild(li);
+        }
+
+        list.innerHTML = '';
+        list.appendChild(frag);
+
+        const det = hostEl.querySelector('details');
+        if (det) {
+            const prefKey = `pdfCollapse:${parentType}:${parentId}`;
+            const inView = !!(
+                hostEl.closest('#algorithmModal') || hostEl.closest('#bookmarkDetailModal')
+            );
+            let shouldOpen = true;
+            try {
+                const pref = localStorage.getItem(prefKey);
+                if (pref === 'collapsed') shouldOpen = false;
+                else if (pref === 'expanded') shouldOpen = true;
+            } catch {}
+            det.open = inView ? true : shouldOpen;
+        }
+    }
+
+    hostEl._refresh = refresh;
+
+    (function ensureDnd() {
+        const rowEl = hostEl.querySelector('.pdf-row');
+        if (!rowEl) return;
+        if (rowEl.dataset.dndWired === '1' || rowEl._pdfDndWired) return;
+        if (typeof setupPdfDragAndDrop !== 'function') return;
+
+        rowEl.dataset.dndWired = '1';
+        const prefKey = `pdfCollapse:${parentType}:${parentId}`;
+        const det = hostEl.querySelector('details');
+
+        setupPdfDragAndDrop(rowEl, async (files) => {
+            if (!files || !files.length) return;
+            await addPdfRecords(files, parentType, parentId);
+            if (det) {
+                det.open = true;
+                try {
+                    localStorage.setItem(prefKey, 'expanded');
+                } catch {}
+            }
+            await refresh();
+        });
+    })();
+
+    refresh();
+}
+
+function tryAttachToAlgorithmModal() {
+    const modal = document.getElementById('algorithmModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const steps = modal.querySelector('#algorithmSteps');
+    const algId = modal.dataset.currentAlgorithmId;
+    const section = modal.dataset.currentSection;
+    if (steps && algId && section && algId !== 'main') {
+        renderPdfAttachmentsSection(steps.parentElement || steps, 'algorithm', String(algId));
+    }
+}
+
+function tryAttachToAlgorithmEditModal() {
+    const modal = document.getElementById('editModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const section = modal.dataset.section;
+    const algId = modal.dataset.algorithmId;
+    if (!section || section === 'main' || !algId) return;
+    const steps = modal.querySelector('#editSteps');
+    if (!steps) return;
+    renderPdfAttachmentsSection(steps.parentElement || steps, 'algorithm', String(algId));
+}
+
+function tryAttachToAlgorithmAddModal() {
+    const modal = document.getElementById('addModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const section = modal.dataset.section;
+    if (!section || section === 'main') return;
+    if (modal.dataset.pdfDraftWired === '1' || modal.querySelector('.pdf-draft-list')) return;
+    attachAlgorithmAddPdfHandlers(modal);
+}
+
+function initPdfAttachmentSystem() {
+    tryAttachToAlgorithmModal();
+    tryAttachToAlgorithmEditModal();
+    tryAttachToAlgorithmAddModal();
+    tryAttachToBookmarkDetailModal();
+    tryAttachToBookmarkEditModal();
+    tryAttachToBookmarkCreateModal();
+    let scheduled = false;
+    const observer = new MutationObserver((mutationList) => {
+        let shouldReact = false;
+        for (const m of mutationList) {
+            const t = m.target && typeof m.target.closest === 'function' ? m.target : null;
+            if (
+                t &&
+                (t.closest('.pdf-attachments-section') ||
+                    t.closest('.pdf-draft-list') ||
+                    t.closest('.pdf-drop-overlay'))
+            ) {
+                continue;
+            }
+            shouldReact = true;
+            break;
+        }
+        if (!shouldReact) return;
+        if (scheduled) return;
+        scheduled = true;
+        setTimeout(() => {
+            tryAttachToAlgorithmModal();
+            tryAttachToAlgorithmEditModal();
+            tryAttachToAlgorithmAddModal();
+            tryAttachToBookmarkDetailModal();
+            tryAttachToBookmarkEditModal();
+            tryAttachToBookmarkCreateModal();
+            scheduled = false;
+        }, 0);
+    });
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: [
+            'class',
+            'data-current-algorithm-id',
+            'data-current-section',
+            'data-algorithm-id',
+            'data-section',
+        ],
+    });
+}
+
+function attachAlgorithmAddPdfHandlers(addModal) {
+    const newSteps = addModal.querySelector('#newSteps');
+    if (!newSteps) return;
+    addModal.dataset.pdfDraftWired = '1';
+
+    const block = document.createElement('div');
+    block.className = 'mt-4 mb-4';
+    block.innerHTML = `
+      <details class="pdf-collapse group" open>
+        <summary class="cursor-pointer select-none font-semibold text-sm text-gray-600 dark:text-gray-300 mb-2">
+          <i class="far fa-file-pdf mr-1"></i>PDF-файлы
+        </summary>
+        <div class="pdf-row flex items-start justify-between gap-3">
+          <ul class="pdf-draft-list flex-1 space-y-1 text-sm"></ul>
+          <div class="shrink-0">
+            <input type="file" accept="application/pdf" multiple class="hidden pdf-draft-input">
+            <button type="button" class="px-2 py-1.5 text-sm bg-primary text-white rounded hover:bg-secondary add-pdf-draft-btn">
+              <i class="far fa-file-pdf mr-1"></i>Загрузить PDF
+            </button>
+          </div>
+        </div>
+      </details>`;
+    (newSteps.parentElement || newSteps).appendChild(block);
+
+    const rowEl = block.querySelector('.pdf-row');
+    const detailsEl = block.querySelector('details');
+    rowEl.style.boxSizing = 'border-box';
+    rowEl.style.width = '100%';
+    rowEl.style.flexWrap = 'wrap';
+
+    const draftUl = block.querySelector('.pdf-draft-list');
+    if (draftUl) {
+        draftUl.style.listStyle = 'none';
+        draftUl.style.paddingLeft = '0';
+        draftUl.style.margin = '0';
+        draftUl.style.minWidth = '0';
+        draftUl.style.overflowY = 'auto';
+        draftUl.style.overscrollBehavior = 'contain';
+        draftUl.style.scrollbarGutter = 'stable both-edges';
+        const syncListHeight = () => {
+            const h = Math.max(160, Math.min(360, Math.round(window.innerHeight * 0.3)));
+            draftUl.style.maxHeight = h + 'px';
+        };
+        syncListHeight();
+        window.addEventListener('resize', syncListHeight, { passive: true });
+    }
+
+    const syncPad = () => {
+        try {
+            const scope =
+                block.closest(
+                    '.modal-body, .modal-content, .modal, .dialog, .sheet, .card, .algorithm-card',
+                ) || addModal;
+            const cs = getComputedStyle(scope);
+            const pl = parseFloat(cs.paddingLeft || '0') || 0;
+            const pr = parseFloat(cs.paddingRight || '0') || 0;
+            rowEl.style.paddingLeft = pl + 'px';
+            rowEl.style.paddingRight = pr + 'px';
+        } catch {}
+    };
+    syncPad();
+    window.addEventListener('resize', syncPad, { passive: true });
+
+    const input = block.querySelector('.pdf-draft-input');
+    const btn = block.querySelector('.add-pdf-draft-btn');
+    const list = block.querySelector('.pdf-draft-list');
+
+    addModal._tempPdfFiles = Array.isArray(addModal._tempPdfFiles) ? addModal._tempPdfFiles : [];
+
+    const makeKey = (f) =>
+        `${(f && f.name) || ''}|${(f && f.size) || 0}|${(f && f.lastModified) || 0}`;
+    const formatKB = (bytes) => Math.max(1, Math.round((bytes || 0) / 1024));
+
+    const refresh = () => {
+        const uniq = new Map();
+        for (const f of Array.from(addModal._tempPdfFiles || [])) uniq.set(makeKey(f), f);
+        const arr = Array.from(uniq.values());
+
+        if (!arr.length) {
+            list.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
+            if (detailsEl && !block.dataset.userToggled) detailsEl.open = true;
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        arr.forEach((file, idx) => {
+            const li = document.createElement('li');
+            const name =
+                typeof file?.name === 'string' && file.name.trim() ? file.name : `PDF ${idx + 1}`;
+            const safe =
+                typeof escapeHtml === 'function'
+                    ? escapeHtml(name)
+                    : name.replace(
+                          /[<>&"']/g,
+                          (s) =>
+                              ({
+                                  '<': '&lt;',
+                                  '>': '&gt;',
+                                  '&': '&amp;',
+                                  '"': '&quot;',
+                                  "'": '&#39;',
+                              }[s]),
+                      );
+            const sizeKb = formatKB(file.size);
+            li.className =
+                'flex items-center justify-between bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded';
+            li.innerHTML = `
+              <div class="truncate pr-2">
+                <i class="far fa-file-pdf mr-2"></i>
+                <span title="${safe}">${safe}</span>
+                <span class="text-gray-500">(${sizeKb} KB)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="dl">Скачать</button>
+                <button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="rm">Удалить</button>
+              </div>`;
+            li.querySelector('[data-act="dl"]').addEventListener('click', () =>
+                downloadPdfBlob(file, typeof file?.name === 'string' ? file.name : 'file.pdf'),
+            );
+            li.querySelector('[data-act="rm"]').addEventListener('click', () => {
+                const curr = Array.from(addModal._tempPdfFiles || []);
+                curr.splice(idx, 1);
+                addModal._tempPdfFiles = curr;
+                refresh();
+            });
+            frag.appendChild(li);
+        });
+        list.innerHTML = '';
+        list.appendChild(frag);
+        if (detailsEl && !block.dataset.userToggled) detailsEl.open = true;
+    };
+
+    detailsEl.addEventListener('toggle', () => (block.dataset.userToggled = '1'));
+
+    if (btn && btn.dataset.wired !== '1') {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            input.click();
+        });
+    }
+
+    if (input && input.dataset.wired !== '1') {
+        input.dataset.wired = '1';
+        input.addEventListener('change', (e) => {
+            const picked = Array.from(e.target.files || []).filter(Boolean);
+            if (!picked.length) return;
+            const curr = Array.from(addModal._tempPdfFiles || []);
+            const seen = new Set(curr.map(makeKey));
+            const toAdd = picked.filter((f) => !seen.has(makeKey(f)));
+            if (toAdd.length) addModal._tempPdfFiles = curr.concat(toAdd);
+            input.value = '';
+            refresh();
+        });
+    }
+
+    if (typeof setupPdfDragAndDrop === 'function' && rowEl && !rowEl.dataset.dndWired) {
+        rowEl.dataset.dndWired = '1';
+        setupPdfDragAndDrop(rowEl, (files) => {
+            const curr = Array.from(addModal._tempPdfFiles || []);
+            const seen = new Set(curr.map(makeKey));
+            const toAdd = Array.from(files || []).filter((f) => !seen.has(makeKey(f)));
+            if (toAdd.length) addModal._tempPdfFiles = curr.concat(toAdd);
+            refresh();
+        });
+    }
+
+    refresh();
+}
+
+function renderPdfAttachmentsSection(container, parentType, parentId) {
+    if (!container) return;
+    const bkey = `${parentType}:${parentId}`;
+    let host = container.querySelector('.pdf-attachments-section');
+
+    if (host && host.dataset.boundKey === bkey) {
+        if (typeof host._refresh === 'function') {
+            host._refresh();
+        } else {
+            mountPdfSection(host, parentType, parentId);
+        }
+        return;
+    }
+
+    if (!host) {
+        host = document.createElement('div');
+        host.className =
+            'pdf-attachments-section mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 m-4';
+        container.appendChild(host);
+    }
+
+    host.dataset.boundKey = bkey;
+    mountPdfSection(host, parentType, parentId);
+}
+
+window.renderPdfAttachmentsSection = renderPdfAttachmentsSection;
+
+function tryAttachToBookmarkDetailModal() {
+    const modal = document.getElementById('bookmarkDetailModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const content =
+        modal.querySelector('#bookmarkDetailOuterContent') ||
+        modal.querySelector('.flex-1.overflow-y-auto');
+    const foundId =
+        modal.dataset.currentBookmarkId ||
+        modal.querySelector('[data-bookmark-id]')?.dataset?.bookmarkId ||
+        modal.getAttribute('data-bookmark-id');
+    if (content && foundId) {
+        renderPdfAttachmentsSection(content, 'bookmark', String(foundId));
+    }
+}
+
+function tryAttachToBookmarkEditModal() {
+    const modal = document.getElementById('bookmarkModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const form = modal.querySelector('#bookmarkForm');
+    if (!form) return;
+    const idInput = form.querySelector('#bookmarkId');
+    const foundId = (idInput && idInput.value && idInput.value.trim()) || '';
+    if (!foundId) return;
+    renderPdfAttachmentsSection(form, 'bookmark', String(foundId));
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPdfAttachmentSystem, { once: true });
+} else {
+    initPdfAttachmentSystem();
+}
+
+function tryAttachToBookmarkCreateModal() {
+    const modal = document.getElementById('bookmarkModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const form = modal.querySelector('#bookmarkForm');
+    if (!form) return;
+    const idInput = form.querySelector('#bookmarkId');
+    if (idInput && idInput.value && idInput.value.trim()) return;
+    if (form.dataset.pdfDraftWired === '1' || form.querySelector('.pdf-draft-list')) return;
+    if (typeof attachBookmarkPdfHandlers === 'function') attachBookmarkPdfHandlers(form);
+}
+
+function attachBookmarkPdfHandlers(form) {
+    if (!form) return;
+
+    const idInput = form.querySelector('#bookmarkId');
+    if (idInput && idInput.value && idInput.value.trim()) return;
+
+    if (form.dataset.pdfDraftWired === '1' || form.querySelector('.pdf-draft-list')) return;
+    form.dataset.pdfDraftWired = '1';
+
+    const block = document.createElement('div');
+    block.className = 'mt-4 mb-4';
+    block.innerHTML = `
+      <details class="pdf-collapse group" open>
+        <summary class="cursor-pointer select-none font-semibold text-sm text-gray-600 dark:text-gray-300 mb-2">
+          <i class="far fa-file-pdf mr-1"></i>PDF-файлы
+        </summary>
+        <div class="pdf-row flex items-start justify-between gap-3">
+          <ul class="pdf-draft-list flex-1 space-y-1 text-sm"></ul>
+          <div class="shrink-0">
+            <input type="file" accept="application/pdf" multiple class="hidden pdf-draft-input">
+            <button type="button" class="px-3 py-1.5 text-sm bg-primary text-white rounded hover:bg-secondary add-pdf-draft-btn">
+              <i class="far fa-file-pdf mr-1"></i>Загрузить PDF
+            </button>
+          </div>
+        </div>
+      </details>`;
+
+    const screenshotsBlock = form
+        .querySelector('#bookmarkScreenshotThumbnailsContainer')
+        ?.closest('.mb-4');
+    if (screenshotsBlock && screenshotsBlock.parentNode) {
+        screenshotsBlock.parentNode.insertBefore(block, screenshotsBlock.nextSibling);
+    } else {
+        form.appendChild(block);
+    }
+
+    const detailsEl = block.querySelector('details');
+    const rowEl = block.querySelector('.pdf-row');
+    const list = block.querySelector('.pdf-draft-list');
+    const input = block.querySelector('.pdf-draft-input');
+    const btn = block.querySelector('.add-pdf-draft-btn');
+
+    detailsEl.addEventListener('toggle', () => (block.dataset.userToggled = '1'));
+
+    if (btn && btn.dataset.wired !== '1') {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            input.click();
+        });
+    }
+
+    const makeKey = (f) =>
+        `${(f && f.name) || ''}|${(f && f.size) || 0}|${(f && f.lastModified) || 0}`;
+
+    const refreshDraftList = () => {
+        const uniq = new Map();
+        for (const f of Array.from(form._tempPdfFiles || [])) {
+            if (!f) continue;
+            const k = makeKey(f);
+            if (!uniq.has(k)) uniq.set(k, f);
+        }
+        const files = Array.from(uniq.values());
+        form._tempPdfFiles = files;
+
+        if (!files.length) {
+            list.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
+            if (!block.dataset.userToggled) detailsEl.open = true;
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        files.forEach((file, idx) => {
+            const li = document.createElement('li');
+            li.className =
+                'flex items-center justify-between bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded';
+
+            const displayName =
+                typeof file?.name === 'string' && file.name.trim() ? file.name : `PDF ${idx + 1}`;
+            const safe = displayName.replace(
+                /[<>&"']/g,
+                (s) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s]),
+            );
+            const sizeKb = Math.max(1, Math.round((file.size || 0) / 1024));
+
+            li.innerHTML = `
+              <div class="truncate pr-2">
+                <i class="far fa-file-pdf mr-2"></i>
+                <span title="${safe}">${safe}</span>
+                <span class="text-gray-500">(${sizeKb} KB)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="rm">Удалить</button>
+              </div>`;
+
+            li.querySelector('[data-act="rm"]').addEventListener('click', () => {
+                const curr = Array.from(form._tempPdfFiles || []);
+                curr.splice(idx, 1);
+                form._tempPdfFiles = curr;
+                refreshDraftList();
+            });
+
+            frag.appendChild(li);
+        });
+
+        list.innerHTML = '';
+        list.appendChild(frag);
+        detailsEl.open = true;
+    };
+
+    if (input && input.dataset.wired !== '1') {
+        input.dataset.wired = '1';
+        input.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+            const curr = Array.from(form._tempPdfFiles || []);
+            const seen = new Set(curr.map(makeKey));
+            const toAdd = files.filter((f) => !seen.has(makeKey(f)));
+            if (toAdd.length) form._tempPdfFiles = curr.concat(toAdd);
+            input.value = '';
+            refreshDraftList();
+        });
+    }
+
+    if (typeof setupPdfDragAndDrop === 'function' && rowEl && !rowEl.dataset.dndWired) {
+        rowEl.dataset.dndWired = '1';
+        setupPdfDragAndDrop(rowEl, (files) => {
+            const curr = Array.from(form._tempPdfFiles || []);
+            const seen = new Set(curr.map(makeKey));
+            const toAdd = Array.from(files || []).filter((f) => !seen.has(makeKey(f)));
+            if (toAdd.length) form._tempPdfFiles = curr.concat(toAdd);
+            refreshDraftList();
+        });
+    }
+
+    refreshDraftList();
+}
