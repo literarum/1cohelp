@@ -2516,21 +2516,6 @@ window.onload = async () => {
                 console.log('[window.onload Promise.all.then] Оверлей скрыт.');
             }
 
-            if (appInitSuccessfully) {
-                if (typeof NotificationService !== 'undefined' && NotificationService.add) {
-                    NotificationService.add('Приложение успешно загружено', 'success', {
-                        duration: 5000,
-                    });
-                }
-                if (typeof checkAndSetWelcomeText === 'function') {
-                    await checkAndSetWelcomeText();
-                }
-            } else {
-                console.warn(
-                    '[window.onload Promise.all.then] Инициализация приложения завершилась неудачно (appInitSuccessfully is false).',
-                );
-            }
-
             if (appContent) {
                 appContent.classList.remove('hidden');
                 appContent.classList.add('content-fading-in');
@@ -15886,29 +15871,58 @@ async function checkAndBuildIndex(
                 searchProgressTextEl.textContent = 'Построение индекса: 0%';
             }
 
-            const actualProgressCallback =
-                externalProgressCallback ||
-                ((processed, total, error) => {
-                    if (searchProgressEl && searchProgressTextEl) {
-                        if (error) {
-                            searchProgressTextEl.textContent = 'Ошибка индексации!';
-                            searchProgressEl.value = 100;
-                            return;
-                        }
-                        if (total > 0) {
-                            const percentage = Math.round((processed / total) * 100);
-                            searchProgressTextEl.textContent = `Построение индекса: ${percentage}% (${processed}/${total})`;
-                            searchProgressEl.value = percentage;
-                            searchProgressEl.max = 100;
-                        } else if (processed === 0 && total === 0) {
-                            searchProgressTextEl.textContent = 'Нет данных для индексации.';
-                            searchProgressEl.value = 100;
-                        }
-                    }
-                });
+            const defaultUiProgress = (processed, total, error) => {
+                if (!searchProgressEl || !searchProgressTextEl) return;
+                if (error) {
+                    searchProgressTextEl.textContent = 'Ошибка индексации!';
+                    searchProgressEl.value = 100;
+                    return;
+                }
+                if (total > 0) {
+                    const percentage = Math.round((processed / total) * 100);
+                    searchProgressTextEl.textContent = `Построение индекса: ${percentage}% (${processed}/${total})`;
+                    searchProgressEl.value = percentage;
+                    searchProgressEl.max = 100;
+                } else if (processed === 0 && total === 0) {
+                    searchProgressTextEl.textContent = 'Нет данных для индексации.';
+                    searchProgressEl.value = 100;
+                }
+            };
 
-            await buildInitialSearchIndex(actualProgressCallback);
+            const actualProgressCallback = (processed, total, error) => {
+                if (
+                    window.BackgroundStatusHUD &&
+                    typeof BackgroundStatusHUD.reportIndexProgress === 'function'
+                ) {
+                    BackgroundStatusHUD.reportIndexProgress(processed, total, error);
+                }
+                if (externalProgressCallback) externalProgressCallback(processed, total, error);
+                else defaultUiProgress(processed, total, error);
+            };
 
+            let _buildError = null;
+            try {
+                if (
+                    window.BackgroundStatusHUD &&
+                    typeof BackgroundStatusHUD.startTask === 'function'
+                ) {
+                    BackgroundStatusHUD.startTask('search-index-build', 'Индексация контента', {
+                        weight: 0.6,
+                        total: 100,
+                    });
+                }
+                await buildInitialSearchIndex(actualProgressCallback);
+            } catch (e) {
+                _buildError = e;
+                throw e;
+            } finally {
+                if (
+                    window.BackgroundStatusHUD &&
+                    typeof BackgroundStatusHUD.finishTask === 'function'
+                ) {
+                    BackgroundStatusHUD.finishTask('search-index-build', !_buildError);
+                }
+            }
             if (searchProgressEl && searchProgressTextEl) {
                 setTimeout(() => {
                     if (searchProgressEl) searchProgressEl.style.display = 'none';
@@ -23644,6 +23658,18 @@ function initUICustomization() {
             'initUICustomization: Кнопка или модальное окно настроек не найдены. Инициализация прервана.',
         );
         return;
+    }
+    if (!customizeUIModal.dataset.themeRealtimeAttached) {
+        customizeUIModal.addEventListener('change', (e) => {
+            const target = e.target;
+            if (target && target.matches('input[name="themeMode"]')) {
+                if (typeof setTheme === 'function') setTheme(target.value);
+                if (typeof currentPreviewSettings === 'object' && currentPreviewSettings) {
+                    currentPreviewSettings.themeMode = target.value;
+                }
+            }
+        });
+        customizeUIModal.dataset.themeRealtimeAttached = 'true';
     }
     const closeCustomizeUIModalBtn = getElem('closeCustomizeUIModalBtn');
     const saveUISettingsBtn = getElem('saveUISettingsBtn');
@@ -31564,8 +31590,22 @@ async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
         `[ШАГ 1] Инициализация... Запрос для ID: ${docId}. Принудительное обновление: ${force}`,
     );
 
+    const hudId = `gdoc-${targetContainerId}`;
+    const humanLabel =
+        targetContainerId === 'doc-content-telefony'
+            ? 'Телефоны'
+            : targetContainerId === 'doc-content-shablony'
+            ? 'Шаблоны'
+            : 'Документ';
+    if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.startTask === 'function') {
+        BackgroundStatusHUD.startTask(hudId, humanLabel, { weight: 0.4, total: 4 });
+        BackgroundStatusHUD.updateTask(hudId, 0, 4);
+    }
     try {
         const results = await fetchGoogleDocs([docId], force);
+        if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.updateTask === 'function') {
+            BackgroundStatusHUD.updateTask(hudId, 1, 4);
+        }
         if (!results || results.length === 0) {
             throw new Error('API не вернул результатов.');
         }
@@ -31580,6 +31620,9 @@ async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
 
         renderGoogleDocContent(results, docContainer, targetContainerId);
         docContainer.dataset.loaded = 'true';
+        if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.updateTask === 'function') {
+            BackgroundStatusHUD.updateTask(hudId, 2, 4);
+        }
 
         googleDocTimestamps.set(docId, Date.now());
         updateRefreshButtonTimestamps();
@@ -31603,6 +31646,9 @@ async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
                 await updateSearchIndex('shablony', docId, blocks, 'update');
             }
         }
+        if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.updateTask === 'function') {
+            BackgroundStatusHUD.updateTask(hudId, 4, 4);
+        }
     } catch (error) {
         console.error(
             `%cОШИБКА ЗАГРУЗКИ для ${targetContainerId}:`,
@@ -31613,6 +31659,13 @@ async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
             error.message,
         )}</div>`;
         delete docContainer.dataset.loaded;
+        if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.finishTask === 'function') {
+            BackgroundStatusHUD.finishTask(hudId, false);
+        }
+    } finally {
+        if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.finishTask === 'function') {
+            BackgroundStatusHUD.finishTask(hudId, true);
+        }
     }
 }
 
@@ -33208,3 +33261,220 @@ function attachBookmarkPdfHandlers(form) {
 
     refreshDraftList();
 }
+
+(function () {
+    const STATE = {
+        tasks: new Map(),
+        container: null,
+        barEl: null,
+        titleEl: null,
+        percentEl: null,
+        hasShownCompletion: false,
+        rafId: null,
+        lastVisualPercent: 0,
+    };
+
+    function ensureStyles() {
+        if (document.getElementById('bg-status-hud-styles')) return;
+        const css = `
+    #bg-status-hud {
+      position: fixed; right: 16px; top: 16px; z-index: 9998;
+      width: 320px; max-width: calc(100vw - 32px);
+      font-family: inherit;
+      color: var(--color-text-primary, #111);
+    }
+    #bg-status-hud .hud-card{
+      background: var(--color-surface-2, #fff);
+      border: 1px solid var(--color-border, rgba(0,0,0,.12));
+      border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+      padding: 12px 14px; backdrop-filter: saturate(1.1) blur(2px);
+      position: relative;
+    }
+    #bg-status-hud .hud-title { display:flex; align-items:center; gap:8px;
+      font-weight:600; font-size:14px; margin-bottom:8px; }
+    #bg-status-hud .hud-title .dot { width:8px; height:8px; border-radius:9999px;
+      background: var(--color-primary, #2563eb); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary, #2563eb) 30%, transparent); }
+    #bg-status-hud .hud-sub { font-size:12px; opacity:.8; margin-bottom:8px; }
+    #bg-status-hud .hud-progress { width:100%; height:10px; border-radius:9999px;
+      background: color-mix(in srgb, var(--color-surface-2, #fff) 60%, var(--color-text-primary, #111) 10%);
+      overflow:hidden; border:1px solid var(--color-border, rgba(0,0,0,.12));
+    }
+    #bg-status-hud .hud-bar {
+      height:100%; width:0%;
+      background: linear-gradient(90deg,
+        color-mix(in srgb, var(--color-primary, #2563eb) 95%, #fff 5%),
+        color-mix(in srgb, var(--color-primary, #2563eb) 80%, #fff 20%)
+      );
+      transition: width .28s ease;
+      background-size: 24px 24px;
+      animation: hud-stripes 2.2s linear infinite;
+    }
+    #bg-status-hud .hud-footer { display:flex; justify-content:flex-start; align-items:center; margin-top:8px; font-size:12px; opacity:.9; gap:8px; }
+    /* Кнопка закрытия — правый верх */
+    #bg-status-hud .hud-close {
+      position: absolute; top: 8px; right: 8px;
+      width: 28px; height: 28px; border-radius: 8px;
+      border: 1px solid var(--color-border, rgba(0,0,0,.12));
+      background: color-mix(in srgb, var(--color-surface-2, #fff) 85%, var(--color-text-primary, #111) 5%);
+      color: var(--color-text-primary, #111);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; opacity: .75;
+    }
+    #bg-status-hud .hud-close:hover { opacity: 1; }
+    #bg-status-hud .hud-close:focus { outline: 2px solid color-mix(in srgb, var(--color-primary, #2563eb) 60%, transparent); outline-offset: 2px; }
+    /* Проценты отключены */
+    #bg-status-hud #bg-hud-percent { display: none !important; }
+    @media (prefers-reduced-motion: reduce){ #bg-status-hud .hud-bar{ animation: none; } }
+    @keyframes hud-stripes{ 0%{ background-position: 0 0; } 100%{ background-position: 24px 0; } }
+  `;
+        const style = document.createElement('style');
+        style.id = 'bg-status-hud-styles';
+        style.textContent = css;
+        document.head.appendChild(style);
+    }
+
+    function ensureContainer() {
+        if (STATE.container) return;
+        ensureStyles();
+        const root = document.createElement('div');
+        root.id = 'bg-status-hud';
+        root.setAttribute('role', 'status');
+        root.setAttribute('aria-live', 'polite');
+        root.style.display = 'none';
+        root.innerHTML = `
+    <div class="hud-card">
+      <button type="button" id="bg-hud-close" class="hud-close" aria-label="Скрыть">✕</button>
+      <div class="hud-title"><span class="dot"></span><span>Фоновая инициализация...</span></div>
+      <div class="hud-sub" id="bg-hud-title">Подготовка…</div>
+      <div class="hud-progress"><div class="hud-bar" id="bg-hud-bar"></div></div>
+      <div class="hud-footer"></div>
+    </div>`;
+        document.body.appendChild(root);
+        STATE.container = root;
+        STATE.barEl = root.querySelector('#bg-hud-bar');
+        STATE.titleEl = root.querySelector('#bg-hud-title');
+        STATE.percentEl = root.querySelector('#bg-hud-percent');
+        root.querySelector('#bg-hud-close').addEventListener('click', () => hide());
+    }
+
+    function computeTopOffset() {
+        let top = 16;
+        const imp = document.getElementById('important-notifications-container');
+        if (imp && imp.children.length > 0) {
+            const s = parseInt(getComputedStyle(imp).top || '0', 10);
+            top = Math.max(top, s + imp.offsetHeight + 8);
+        }
+        const toast = document.getElementById('notification-container');
+        if (toast && toast.children.length > 0) {
+            top = Math.max(top, 90);
+        }
+        STATE.container.style.top = `${top}px`;
+    }
+
+    function aggregatePercent() {
+        let totalWeight = 0,
+            acc = 0;
+        for (const t of STATE.tasks.values()) {
+            if (!t.total || t.total <= 0) continue;
+            const w = t.weight ?? 1;
+            totalWeight += w;
+            acc += w * Math.min(1, t.processed / t.total);
+        }
+        if (totalWeight === 0) return 0;
+        return (acc / totalWeight) * 100;
+    }
+
+    function tick() {
+        const target = aggregatePercent();
+        const next =
+            STATE.lastVisualPercent +
+            Math.min(2.5, Math.max(0.4, (target - STATE.lastVisualPercent) * 0.2));
+        STATE.lastVisualPercent = Math.min(100, Math.max(0, next));
+        if (STATE.barEl) STATE.barEl.style.width = `${STATE.lastVisualPercent.toFixed(1)}%`;
+        if (STATE.percentEl)
+            STATE.percentEl.textContent = `${Math.round(STATE.lastVisualPercent)}%`;
+        if (STATE.tasks.size > 0) STATE.rafId = requestAnimationFrame(tick);
+    }
+
+    function show() {
+        ensureContainer();
+        computeTopOffset();
+        STATE.container.style.display = '';
+        if (!STATE.rafId) STATE.rafId = requestAnimationFrame(tick);
+    }
+    function hide() {
+        if (!STATE.container) return;
+        STATE.container.style.display = 'none';
+        if (STATE.rafId) cancelAnimationFrame(STATE.rafId);
+        STATE.rafId = null;
+        STATE.lastVisualPercent = 0;
+    }
+    function updateTitle() {
+        const active = [...STATE.tasks.values()];
+        if (active.length === 0) return;
+        const main = active[0];
+        const others = Math.max(0, active.length - 1);
+        STATE.titleEl.textContent =
+            others > 0
+                ? `Индексируется: ${main.label} + ещё ${others}`
+                : `Индексируется: ${main.label}`;
+    }
+    function maybeFinishAll() {
+        if (STATE.tasks.size === 0) {
+            if (
+                !STATE.hasShownCompletion &&
+                typeof NotificationService !== 'undefined' &&
+                NotificationService.add
+            ) {
+                STATE.hasShownCompletion = true;
+                NotificationService.add('Приложение полностью загружено', 'success', {
+                    duration: 5000,
+                });
+            }
+            setTimeout(hide, 900);
+        }
+    }
+
+    const API = {
+        startTask(id, label, opts = {}) {
+            ensureContainer();
+            STATE.tasks.set(id, {
+                label,
+                weight: typeof opts.weight === 'number' ? opts.weight : 1,
+                processed: 0,
+                total: Math.max(1, opts.total ?? 100),
+            });
+            updateTitle();
+            show();
+        },
+        updateTask(id, processed, total) {
+            const t = STATE.tasks.get(id);
+            if (!t) return;
+            if (typeof total === 'number' && total > 0) t.total = total;
+            if (typeof processed === 'number')
+                t.processed = Math.min(total ?? t.total, Math.max(0, processed));
+            computeTopOffset();
+            updateTitle();
+        },
+        finishTask(id, success = true) {
+            STATE.tasks.delete(id);
+            updateTitle();
+            maybeFinishAll();
+        },
+        reportIndexProgress(processed, total, error) {
+            const id = 'search-index-build';
+            if (!STATE.tasks.has(id))
+                API.startTask(id, 'Индексация контента', {
+                    weight: 0.6,
+                    total: Math.max(1, total || 100),
+                });
+            if (error) {
+                API.finishTask(id, false);
+            } else {
+                API.updateTask(id, processed, total);
+                if (total && processed >= total) API.finishTask(id, true);
+            }
+        },
+    };
+    window.BackgroundStatusHUD = API;
+})();
