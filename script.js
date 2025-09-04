@@ -19747,9 +19747,7 @@ async function deleteBookmark(id) {
         }
 
         const stores = ['bookmarks'];
-        if (screenshotIdsToDelete.length > 0) {
-            stores.push('screenshots');
-        }
+        if (screenshotIdsToDelete.length > 0) stores.push('screenshots');
 
         transaction = db.transaction(stores, 'readwrite');
         const bookmarkStore = transaction.objectStore('bookmarks');
@@ -19819,6 +19817,46 @@ async function deleteBookmark(id) {
                 reject(e.target.error || new Error('Транзакция прервана'));
             };
         });
+
+        // Синхронизация с избранным
+        try {
+            const removedBookmark = await removeFromFavoritesDB('bookmark', numericId);
+            const removedNote = await removeFromFavoritesDB('bookmark_note', numericId);
+            if (removedBookmark || removedNote) {
+                if (Array.isArray(currentFavoritesCache)) {
+                    currentFavoritesCache = currentFavoritesCache.filter(
+                        (f) =>
+                            !(
+                                String(f.originalItemId) === String(numericId) &&
+                                (f.itemType === 'bookmark' || f.itemType === 'bookmark_note')
+                            ),
+                    );
+                }
+                if (typeof updateFavoriteStatusUI === 'function') {
+                    await updateFavoriteStatusUI(numericId, 'bookmark', false);
+                    await updateFavoriteStatusUI(numericId, 'bookmark_note', false);
+                }
+                if (typeof currentSection !== 'undefined' && currentSection === 'favorites') {
+                    if (typeof renderFavoritesPage === 'function') {
+                        await renderFavoritesPage();
+                    }
+                } else {
+                    const selector = `.favorite-item[data-original-item-id="${String(
+                        numericId,
+                    )}"][data-item-type="bookmark"], .favorite-item[data-original-item-id="${String(
+                        numericId,
+                    )}"][data-item-type="bookmark_note"]`;
+                    document.querySelectorAll(selector).forEach((el) => el.remove());
+                    const favContainer = document.getElementById('favoritesContainer');
+                    if (favContainer && !favContainer.querySelector('.favorite-item')) {
+                        favContainer.innerHTML =
+                            '<p class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">В избранном пока ничего нет.</p>';
+                    }
+                }
+            }
+        } catch (favErr) {
+            console.warn('deleteBookmark: ошибка синхронизации с избранным:', favErr);
+        }
 
         removeBookmarkFromDOM(numericId);
         showNotification('Закладка и связанные скриншоты удалены');
@@ -27449,6 +27487,10 @@ async function showBookmarkDetailModal(bookmarkId) {
             if (!currentModal || currentModal.classList.contains('hidden')) return;
 
             if (e.target.closest('.close-modal, .cancel-modal')) {
+                if (currentModal.dataset.fileDialogOpen === '1') {
+                    console.log('[bookmarkDetailModal] Close suppressed: file dialog is open');
+                    return;
+                }
                 currentModal.classList.add('hidden');
 
                 const images = currentModal.querySelectorAll(
@@ -27567,7 +27609,9 @@ async function showBookmarkDetailModal(bookmarkId) {
         return;
     }
 
+    wireBookmarkDetailModalCloseHandler('bookmarkDetailModal');
     modal.dataset.currentBookmarkId = String(bookmarkId);
+
     const pdfHost =
         modal.querySelector('#bookmarkDetailOuterContent') ||
         modal.querySelector('.flex-1.overflow-y-auto');
@@ -28740,10 +28784,46 @@ async function updateBookmarkInDOM(bookmarkData) {
     applyCurrentView('bookmarksContainer');
 }
 
-function removeBookmarkFromDOM(bookmarkId) {
+async function removeBookmarkFromDOM(bookmarkId) {
     const bookmarksContainer = document.getElementById('bookmarksContainer');
     if (!bookmarksContainer) {
         console.error('removeBookmarkFromDOM: Контейнер #bookmarksContainer не найден.');
+        try {
+            const removed = await removeFromFavoritesDB('bookmark', bookmarkId);
+            if (removed) {
+                if (Array.isArray(currentFavoritesCache)) {
+                    currentFavoritesCache = currentFavoritesCache.filter(
+                        (f) =>
+                            !(
+                                f.itemType === 'bookmark' &&
+                                String(f.originalItemId) === String(bookmarkId)
+                            ),
+                    );
+                }
+                if (typeof updateFavoriteStatusUI === 'function') {
+                    await updateFavoriteStatusUI(bookmarkId, 'bookmark', false);
+                }
+                if (typeof currentSection !== 'undefined' && currentSection === 'favorites') {
+                    if (typeof renderFavoritesPage === 'function') {
+                        await renderFavoritesPage();
+                    }
+                } else {
+                    const favCard = document.querySelector(
+                        `.favorite-item[data-item-type="bookmark"][data-original-item-id="${String(
+                            bookmarkId,
+                        )}"]`,
+                    );
+                    if (favCard) favCard.remove();
+                    const favContainer = document.getElementById('favoritesContainer');
+                    if (favContainer && !favContainer.querySelector('.favorite-item')) {
+                        favContainer.innerHTML =
+                            '<p class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">В избранном пока ничего нет.</p>';
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('removeBookmarkFromDOM: ошибка синхронизации с избранным:', e);
+        }
         return;
     }
 
@@ -28764,6 +28844,42 @@ function removeBookmarkFromDOM(bookmarkId) {
         console.warn(
             `removeBookmarkFromDOM: Элемент закладки ${bookmarkId} не найден в DOM для удаления.`,
         );
+    }
+    try {
+        const removed = await removeFromFavoritesDB('bookmark', bookmarkId);
+        if (removed) {
+            if (Array.isArray(currentFavoritesCache)) {
+                currentFavoritesCache = currentFavoritesCache.filter(
+                    (f) =>
+                        !(
+                            f.itemType === 'bookmark' &&
+                            String(f.originalItemId) === String(bookmarkId)
+                        ),
+                );
+            }
+            if (typeof updateFavoriteStatusUI === 'function') {
+                await updateFavoriteStatusUI(bookmarkId, 'bookmark', false);
+            }
+            if (typeof currentSection !== 'undefined' && currentSection === 'favorites') {
+                if (typeof renderFavoritesPage === 'function') {
+                    await renderFavoritesPage();
+                }
+            } else {
+                const favCard = document.querySelector(
+                    `.favorite-item[data-item-type="bookmark"][data-original-item-id="${String(
+                        bookmarkId,
+                    )}"]`,
+                );
+                if (favCard) favCard.remove();
+                const favContainer = document.getElementById('favoritesContainer');
+                if (favContainer && !favContainer.querySelector('.favorite-item')) {
+                    favContainer.innerHTML =
+                        '<p class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">В избранном пока ничего нет.</p>';
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('removeBookmarkFromDOM: ошибка синхронизации с избранным:', e);
     }
 }
 
@@ -32593,68 +32709,90 @@ function downloadPdfBlob(blob, filename = 'file.pdf') {
 function mountPdfSection(hostEl, parentType, parentId) {
     if (!hostEl) return;
 
+    // Рендер контейнера один раз
     if (!hostEl.dataset.wired) {
         hostEl.dataset.wired = '1';
         hostEl.innerHTML = `
-        <details class="pdf-collapse group open:pb-2" open>
-          <summary class="cursor-pointer select-none font-semibold text-sm text-gray-600 dark:text-gray-300 mb-2">
-            <i class="far fa-file-pdf mr-1"></i>PDF-файлы
+        <details class="pdf-collapse group" open>
+          <summary class="cursor-pointer select-none font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
+            <i class="far fa-file-pdf"></i>
+            <span>PDF-файлы</span>
+            <span class="ml-auto text-xs text-gray-400 group-open:hidden">(свернуто)</span>
           </summary>
+
           <div class="pdf-row flex items-start justify-between gap-3">
             <ul class="pdf-list flex-1 space-y-1 text-sm"></ul>
-            <div class="shrink-0">
+
+            <div class="shrink-0 flex flex-col items-stretch gap-2">
               <input type="file" accept="application/pdf" multiple class="hidden pdf-input">
-              <button type="button" class="px-2 py-1.5 text-sm bg-primary text-white rounded hover:bg-secondary add-pdf-btn">
+              <button type="button" class="add-pdf-btn px-2 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
                 <i class="far fa-file-pdf mr-1"></i>Загрузить PDF
               </button>
+              <div class="drop-hint text-xs text-gray-500 text-center select-none">…или перетащите сюда</div>
             </div>
           </div>
         </details>`;
 
+        // Визуальные/адаптивные правки контейнеров
         const rowEl = hostEl.querySelector('.pdf-row');
         rowEl.style.boxSizing = 'border-box';
         rowEl.style.width = '100%';
         rowEl.style.flexWrap = 'wrap';
-        const syncPadNearestAncestor = () => {
-            try {
-                let cur = hostEl,
-                    pl = 0,
-                    pr = 0;
-                while (cur && cur !== document.body) {
-                    const cs = getComputedStyle(cur);
-                    pl = parseFloat(cs.paddingLeft || '0') || 0;
-                    pr = parseFloat(cs.paddingRight || '0') || 0;
-                    if (pl || pr) break;
-                    cur = cur.parentElement;
-                }
-                if (!pr) pr = pl;
-                rowEl.style.paddingLeft = pl + 'px';
-                rowEl.style.paddingRight = pr + 'px';
-            } catch {}
-        };
-        syncPadNearestAncestor();
-        window.addEventListener('resize', syncPadNearestAncestor, { passive: true });
 
+        // Список
         const listUl = hostEl.querySelector('.pdf-list');
-        if (listUl) {
-            listUl.style.listStyle = 'none';
-            listUl.style.paddingLeft = '0';
-            listUl.style.margin = '0';
-            listUl.style.minWidth = '0';
-            listUl.style.overflowY = 'auto';
-            listUl.style.overscrollBehavior = 'contain';
-            listUl.style.scrollbarGutter = 'stable both-edges';
-        }
+        listUl.style.listStyle = 'none';
+        listUl.style.paddingLeft = '0';
+        listUl.style.margin = '0';
+        listUl.style.minWidth = '0';
+        listUl.style.maxHeight = '220px';
+        listUl.style.overflowY = 'auto';
+        listUl.style.overscrollBehavior = 'contain';
+        listUl.style.scrollbarGutter = 'stable both-edges';
 
         const input = hostEl.querySelector('.pdf-input');
         const btn = hostEl.querySelector('.add-pdf-btn');
         const det = hostEl.querySelector('details');
         const prefKey = `pdfCollapse:${parentType}:${parentId}`;
 
+        // Восстановление состояния раскрытия
+        try {
+            const pref = localStorage.getItem(prefKey);
+            if (pref === 'collapsed') det.open = false;
+            if (pref === 'expanded') det.open = true;
+        } catch {}
+
+        // Тоггл состояния
+        if (!det.dataset.wired) {
+            det.dataset.wired = '1';
+            det.addEventListener('toggle', () => {
+                try {
+                    localStorage.setItem(prefKey, det.open ? 'expanded' : 'collapsed');
+                } catch {}
+            });
+        }
+
+        // Защита модалки от закрытия в момент системного диалога + повторный выбор того же файла
         if (btn && btn.dataset.wired !== '1') {
             btn.dataset.wired = '1';
-            btn.addEventListener('click', () => input && input.click());
+            btn.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const modalEl = hostEl.closest('#bookmarkDetailModal, #bookmarkModal, #editModal');
+                if (modalEl) modalEl.dataset.fileDialogOpen = '1';
+                if (input) {
+                    input.value = ''; // позволяем выбрать тот же файл и получить change
+                    const onFocusOnce = () => {
+                        if (modalEl) delete modalEl.dataset.fileDialogOpen;
+                        window.removeEventListener('focus', onFocusOnce, true);
+                    };
+                    window.addEventListener('focus', onFocusOnce, true);
+                    input.click();
+                }
+            });
         }
+
+        // Обработка выбора файлов
         if (input && input.dataset.wired !== '1') {
             input.dataset.wired = '1';
             input.addEventListener('change', async (e) => {
@@ -32667,36 +32805,123 @@ function mountPdfSection(hostEl, parentType, parentId) {
                         localStorage.setItem(prefKey, 'expanded');
                     } catch {}
                 }
+                const modalEl = hostEl.closest('#bookmarkDetailModal, #bookmarkModal, #editModal');
+                if (modalEl) delete modalEl.dataset.fileDialogOpen;
                 await refresh();
             });
         }
+
+        // Drag-n-drop (на всю правую колонку с подсказкой + на сам список)
+        const dropTargets = [rowEl, listUl];
+        const highlightOn = () => {
+            rowEl.style.outline = '2px dashed rgba(59,130,246,0.8)';
+            rowEl.style.outlineOffset = '3px';
+            rowEl.style.background = 'rgba(59,130,246,0.05)';
+        };
+        const highlightOff = () => {
+            rowEl.style.outline = '';
+            rowEl.style.outlineOffset = '';
+            rowEl.style.background = '';
+        };
+        let dragDepth = 0;
+        dropTargets.forEach((el) => {
+            el.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dragDepth++;
+                highlightOn();
+            });
+            el.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            el.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (--dragDepth <= 0) {
+                    dragDepth = 0;
+                    highlightOff();
+                }
+            });
+            el.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dragDepth = 0;
+                highlightOff();
+
+                const dt = e.dataTransfer;
+                let files = [];
+                if (dt && dt.items && dt.items.length) {
+                    files = Array.from(dt.items)
+                        .filter((it) => it.kind === 'file')
+                        .map((it) => it.getAsFile())
+                        .filter(Boolean);
+                } else if (dt && dt.files && dt.files.length) {
+                    files = Array.from(dt.files);
+                }
+
+                files = files.filter(
+                    (f) => !!f && (/\.pdf$/i.test(f.name) || f.type === 'application/pdf'),
+                );
+                if (!files.length) return;
+
+                await addPdfRecords(files, parentType, parentId);
+                if (det) {
+                    det.open = true;
+                    try {
+                        localStorage.setItem(prefKey, 'expanded');
+                    } catch {}
+                }
+                await refresh();
+            });
+        });
+
+        // Экспортируем локальный рефреш наружу
+        hostEl._refresh = () => refresh();
     }
+
+    // Утилита форматирования
+    const formatBytes = (num) => {
+        if (!num || num <= 0) return '0 B';
+        const u = ['B', 'KB', 'MB', 'GB'];
+        let i = 0,
+            n = num;
+        while (n >= 1024 && i < u.length - 1) {
+            n /= 1024;
+            i++;
+        }
+        return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
+    };
 
     async function refresh() {
         const list = hostEl.querySelector('.pdf-list');
-        list.innerHTML = '<li class="text-gray-500">Загрузка.</li>';
+        list.innerHTML = '<li class="text-gray-500">Загрузка…</li>';
         const items = await getPdfsForParent(parentType, parentId);
 
+        // Пустой список
         if (!items.length) {
             list.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
             const det = hostEl.querySelector('details');
             if (det) {
-                const inAlgoEdit = !!hostEl.closest('#editModal');
-                const inBookmarkEdit = !!hostEl.closest('#bookmarkModal');
-                const forceOpen =
-                    (inAlgoEdit && parentType === 'algorithm') ||
-                    (inBookmarkEdit && parentType === 'bookmark');
-                det.open = !!forceOpen;
+                // В деталях (просмотр) предпочитаем свёрнуто, в формах — раскрыто
+                const inView = !!(
+                    hostEl.closest('#algorithmModal') || hostEl.closest('#bookmarkDetailModal')
+                );
+                const inEdit = !!(hostEl.closest('#editModal') || hostEl.closest('#bookmarkModal'));
+                if (inEdit) det.open = true;
+                if (inView) det.open = false;
+                try {
+                    localStorage.setItem(
+                        `pdfCollapse:${parentType}:${parentId}`,
+                        det.open ? 'expanded' : 'collapsed',
+                    );
+                } catch {}
             }
-            hostEl._pdfHasItems = false;
-            try {
-                localStorage.removeItem(`pdfCollapse:${parentType}:${parentId}`);
-            } catch {}
             return;
         }
 
-        hostEl._pdfHasItems = true;
-        items.sort((a, b) => (a.uploadedAt > b.uploadedAt ? -1 : 1));
+        // Сортировка по дате загрузки (новые сверху)
+        items.sort((a, b) => (String(a?.uploadedAt || '') > String(b?.uploadedAt || '') ? -1 : 1));
 
         const frag = document.createDocumentFragment();
         const inView = !!(
@@ -32713,40 +32938,48 @@ function mountPdfSection(hostEl, parentType, parentId) {
                     ? item.name
                     : item?.blob?.name || 'file.pdf';
 
-            const safe = String(displayName).replace(
+            const safeName = String(displayName).replace(
                 /[<>&"']/g,
                 (s) =>
                     ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s] ||
                     s),
             );
-
             const sizeBytes =
                 typeof item?.size === 'number' && item.size > 0 ? item.size : item?.blob?.size || 0;
-            const sizeKb = Math.max(0, Math.round(sizeBytes / 1024));
+            const sizeText = formatBytes(sizeBytes);
+            const uploadedAt = item?.uploadedAt ? new Date(item.uploadedAt) : null;
 
             li.innerHTML = `
-              <div class="truncate pr-2">
-                <i class="far fa-file-pdf mr-2"></i>
-                <span title="${safe}">${safe}</span>
-                <span class="text-gray-500">(${sizeKb} KB)</span>
+              <div class="truncate pr-2" title="${safeName}">
+                <span class="font-medium">${safeName}</span>
+                <span class="ml-2 text-xs text-gray-500">${sizeText}${
+                uploadedAt ? ` • ${uploadedAt.toLocaleString?.() || uploadedAt.toISOString()}` : ''
+            }</span>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 shrink-0">
                 <button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="dl">Скачать</button>
                 ${
                     inView
                         ? ''
-                        : '<button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="rm">Удалить</button>'
+                        : '<button type="button" class="px-2 py-0.5 text-xs bg-red-50 text-red-700 dark:bg-red-800/40 rounded hover:bg-red-100 dark:hover:bg-red-800" data-act="rm">Удалить</button>'
                 }
               </div>`;
 
-            li.querySelector('[data-act="dl"]').addEventListener('click', () =>
-                downloadPdfBlob(item.blob || null, displayName),
-            );
+            // Скачать
+            li.querySelector('[data-act="dl"]').addEventListener('click', () => {
+                downloadPdfBlob(item.blob || null, displayName);
+            });
 
+            // Удалить (нет в режиме просмотра)
             const rmBtn = li.querySelector('[data-act="rm"]');
             if (rmBtn) {
                 rmBtn.addEventListener('click', async () => {
-                    await deleteFromIndexedDB('pdfFiles', item.id);
+                    try {
+                        await deleteFromIndexedDB('pdfFiles', item.id);
+                    } catch (e) {
+                        console.error('delete pdf error', e);
+                        showNotification && showNotification('Не удалось удалить PDF', 'error');
+                    }
                     refresh();
                 });
             }
@@ -32757,48 +32990,82 @@ function mountPdfSection(hostEl, parentType, parentId) {
         list.innerHTML = '';
         list.appendChild(frag);
 
+        // При наличии файлов — всегда раскрываем
         const det = hostEl.querySelector('details');
         if (det) {
-            const prefKey = `pdfCollapse:${parentType}:${parentId}`;
-            const inView = !!(
-                hostEl.closest('#algorithmModal') || hostEl.closest('#bookmarkDetailModal')
-            );
-            let shouldOpen = true;
+            det.open = true;
             try {
-                const pref = localStorage.getItem(prefKey);
-                if (pref === 'collapsed') shouldOpen = false;
-                else if (pref === 'expanded') shouldOpen = true;
+                localStorage.setItem(`pdfCollapse:${parentType}:${parentId}`, 'expanded');
             } catch {}
-            det.open = inView ? true : shouldOpen;
         }
     }
 
-    hostEl._refresh = refresh;
-
-    (function ensureDnd() {
-        const rowEl = hostEl.querySelector('.pdf-row');
-        if (!rowEl) return;
-        if (rowEl.dataset.dndWired === '1' || rowEl._pdfDndWired) return;
-        if (typeof setupPdfDragAndDrop !== 'function') return;
-
-        rowEl.dataset.dndWired = '1';
-        const prefKey = `pdfCollapse:${parentType}:${parentId}`;
-        const det = hostEl.querySelector('details');
-
-        setupPdfDragAndDrop(rowEl, async (files) => {
-            if (!files || !files.length) return;
-            await addPdfRecords(files, parentType, parentId);
-            if (det) {
-                det.open = true;
-                try {
-                    localStorage.setItem(prefKey, 'expanded');
-                } catch {}
-            }
-            await refresh();
-        });
-    })();
-
+    // Первичная отрисовка
     refresh();
+}
+
+function wireBookmarkDetailModalCloseHandler(modalId = 'bookmarkDetailModal') {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+
+    // Снимаем предыдущие обработчики (делаем идемпотентно)
+    if (modal._closeHandlerBound) return;
+    modal._closeHandlerBound = true;
+
+    modal.addEventListener(
+        'click',
+        (e) => {
+            const currentModal = document.getElementById(modalId);
+            if (!currentModal || currentModal.classList.contains('hidden')) return;
+
+            // Клик по кнопкам закрытия
+            if (e.target.closest('.close-modal, .cancel-modal')) {
+                // ГЛАВНОЕ: не закрываем, если открыт системный диалог выбора файла
+                if (currentModal.dataset.fileDialogOpen === '1') {
+                    console.log('[bookmarkDetailModal] Close suppressed: file dialog is open');
+                    return;
+                }
+
+                currentModal.classList.add('hidden');
+
+                // Очистка ObjectURL из галереи (если есть)
+                const images = currentModal.querySelectorAll(
+                    '#bookmarkDetailScreenshotsGrid img[data-object-url]',
+                );
+                images.forEach((img) => {
+                    if (img.dataset.objectUrl) {
+                        try {
+                            URL.revokeObjectURL(img.dataset.objectUrl);
+                        } catch (revokeError) {
+                            console.warn('Error revoking URL on close:', revokeError);
+                        }
+                        delete img.dataset.objectUrl;
+                    }
+                });
+
+                // Управление классами body с учётом других модалок
+                requestAnimationFrame(() => {
+                    const otherVisibleModals = (
+                        typeof getVisibleModals === 'function'
+                            ? getVisibleModals()
+                            : Array.from(document.querySelectorAll('.fixed.inset-0:not(.hidden)'))
+                    ).filter((m) => m.id !== modalId);
+                    if (otherVisibleModals.length === 0) {
+                        document.body.classList.remove('overflow-hidden');
+                        document.body.classList.remove('modal-open');
+                        console.log(
+                            `[${modalId} Close] overflow-hidden и modal-open сняты с body (rAF).`,
+                        );
+                    } else {
+                        console.log(
+                            `[${modalId} Close] Классы не сняты: есть другие модалки. Count=${otherVisibleModals.length}`,
+                        );
+                    }
+                });
+            }
+        },
+        { passive: true },
+    );
 }
 
 function tryAttachToAlgorithmModal() {
