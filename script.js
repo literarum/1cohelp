@@ -32618,11 +32618,20 @@ async function addPdfRecords(files, parentType, parentId) {
         showNotification && showNotification('БД не инициализирована', 'error');
         return [];
     }
-    const parentKey = makeParentKey(parentType, parentId);
+    const pType = String(parentType || '').trim();
+    const pId = String(parentId ?? '').trim();
+    if (!pType || !pId) {
+        console.error('[addPdfRecords] Invalid parent binding:', { parentType, parentId });
+        showNotification &&
+            showNotification('Не удалось прикрепить PDF: некорректная привязка', 'error');
+        return [];
+    }
+    const parentKey = makeParentKey(pType, pId);
+
     const results = [];
     let existing = [];
     try {
-        existing = await getPdfsForParent(parentType, parentId);
+        existing = await getPdfsForParent(pType, pId);
     } catch {}
     const existingKeys = new Set(
         (existing || []).filter(Boolean).map((r) => `${(r && r.name) || ''}|${(r && r.size) || 0}`),
@@ -32644,8 +32653,8 @@ async function addPdfRecords(files, parentType, parentId) {
             continue;
         }
         const rec = {
-            parentType,
-            parentId,
+            parentType: pType,
+            parentId: pId,
             parentKey,
             name: file.name,
             size: file.size || 0,
@@ -32665,22 +32674,25 @@ async function addPdfRecords(files, parentType, parentId) {
 async function getPdfsForParent(parentType, parentId) {
     try {
         if (!db) throw new Error('DB not ready');
+        const pType = String(parentType || '').trim();
+        const pId = String(parentId ?? '').trim();
+        if (!pType || !pId) {
+            return [];
+        }
         const tx = db.transaction('pdfFiles', 'readonly');
         const store = tx.objectStore('pdfFiles');
         if (store.indexNames && store.indexNames.contains('parentKey')) {
-            return (
-                (await getAllFromIndex(
-                    'pdfFiles',
-                    'parentKey',
-                    makeParentKey(parentType, parentId),
-                )) || []
+            const byKey = await getAllFromIndex(
+                'pdfFiles',
+                'parentKey',
+                makeParentKey(parentType, parentId),
             );
-        }
-        if (store.indexNames && store.indexNames.contains('parentId')) {
-            const rows = (await getAllFromIndex('pdfFiles', 'parentId', String(parentId))) || [];
-            return rows.filter((r) => r && r.parentType === parentType);
+            if (Array.isArray(byKey) && byKey.length) return byKey;
         }
         const all = (await getAllFromIndexedDB('pdfFiles')) || [];
+        const key = makeParentKey(parentType, parentId);
+        const withKey = all.filter((r) => r && String(r.parentKey || '') === key);
+        if (withKey.length) return withKey;
         return all.filter(
             (r) => r && String(r.parentId) === String(parentId) && r.parentType === parentType,
         );
@@ -32709,8 +32721,11 @@ function downloadPdfBlob(blob, filename = 'file.pdf') {
 function mountPdfSection(hostEl, parentType, parentId) {
     if (!hostEl) return;
 
-    // Рендер контейнера один раз
-    if (!hostEl.dataset.wired) {
+    if (
+        !hostEl.dataset.wired ||
+        !hostEl.querySelector('.pdf-row') ||
+        !hostEl.querySelector('.pdf-list')
+    ) {
         hostEl.dataset.wired = '1';
         hostEl.innerHTML = `
         <details class="pdf-collapse group" open>
@@ -33326,11 +33341,11 @@ function renderPdfAttachmentsSection(container, parentType, parentId) {
     let host = container.querySelector('.pdf-attachments-section');
 
     if (host && host.dataset.boundKey === bkey) {
-        if (typeof host._refresh === 'function') {
-            host._refresh();
-        } else {
-            mountPdfSection(host, parentType, parentId);
+        if (!host.querySelector('.pdf-list') || !host.querySelector('.pdf-row')) {
+            host.innerHTML = '';
+            host.removeAttribute('data-wired');
         }
+        mountPdfSection(host, parentType, parentId);
         return;
     }
 
@@ -33339,6 +33354,10 @@ function renderPdfAttachmentsSection(container, parentType, parentId) {
         host.className =
             'pdf-attachments-section mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 m-4';
         container.appendChild(host);
+    } else {
+        host.innerHTML = '';
+        host.removeAttribute('data-wired');
+        delete host._refresh;
     }
 
     host.dataset.boundKey = bkey;
