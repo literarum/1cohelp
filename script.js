@@ -29720,9 +29720,9 @@ async function exportBlacklistToExcel() {
             XLSX.utils.book_append_sheet(wb, ws, name);
         };
 
-        addSheet(grouped[1], 'Уровень 1');
-        addSheet(grouped[2], 'Уровень 2');
-        addSheet(grouped[3], 'Уровень 3');
+        addSheet(grouped[1], 'Низкий (уровень 1)');
+        addSheet(grouped[2], 'Средний (уровень 2)');
+        addSheet(grouped[3], 'Высокий (уровень 3');
 
         const ts = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
         XLSX.writeFile(wb, `Черный_список_жаб_${ts}.xlsx`);
