@@ -44,6 +44,8 @@ const SHABLONY_DOC_ID = '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4';
 
 const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';
 
+const MAIN_ALGO_COLLAPSE_KEY = 'mainAlgoCollapsedState_v1';
+
 const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
 if (showFavoritesHeaderButton && !showFavoritesHeaderButton.dataset.listenerAttached) {
     showFavoritesHeaderButton.addEventListener('click', () => setActiveTab('favorites'));
@@ -9317,6 +9319,15 @@ async function renderMainAlgorithm() {
 
     const mainSteps = algorithms.main.steps;
 
+    const savedCollapse = await loadMainAlgoCollapseState();
+    const validIndices =
+        savedCollapse && savedCollapse.stepsCount === mainSteps.length
+            ? savedCollapse.collapsedIndices.filter(
+                  (i) => Number.isInteger(i) && i >= 0 && i < mainSteps.length,
+              )
+            : [];
+    const collapsedSet = new Set(validIndices);
+
     if (mainSteps.length === 0) {
         const emptyP = document.createElement('p');
         emptyP.className = 'text-gray-500 dark:text-gray-400 p-4 text-center';
@@ -9356,7 +9367,9 @@ async function renderMainAlgorithm() {
         }
 
         stepDiv.addEventListener('click', (e) => {
+            if (e.target.closest('h3')) return;
             if (e.target.tagName === 'A' || e.target.closest('A')) return;
+
             const currentStepData = algorithms.main.steps[index];
             if (currentStepData && currentStepData.isCopyable) {
                 const textToCopy = getStepContentAsText(currentStepData);
@@ -9388,14 +9401,25 @@ async function renderMainAlgorithm() {
             stepDiv.appendChild(body);
             contentTarget = body;
             titleH3.style.cursor = 'pointer';
-            titleH3.addEventListener('click', (e) => {
+
+            if (collapsedSet.has(index)) {
+                stepDiv.classList.add('is-collapsed');
+            }
+
+            titleH3.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 stepDiv.classList.toggle('is-collapsed');
+                const nowCollapsed = stepDiv.classList.contains('is-collapsed');
+                if (nowCollapsed) collapsedSet.add(index);
+                else collapsedSet.delete(index);
+                await saveMainAlgoCollapseState({
+                    stepsCount: mainSteps.length,
+                    collapsedIndices: Array.from(collapsedSet),
+                });
             });
         }
 
         const descriptionP = document.createElement('p');
-
         descriptionP.className = 'text-sm text-gray-700 dark:text-gray-300 mt-1 break-words';
         descriptionP.innerHTML =
             typeof linkify === 'function'
@@ -9495,10 +9519,16 @@ async function renderMainAlgorithm() {
             stepDiv.appendChild(additionalInfoBottomDiv);
             contentTarget.appendChild(additionalInfoBottomDiv);
         }
+
         fragment.appendChild(stepDiv);
     });
 
     mainAlgorithmContainer.appendChild(fragment);
+    await saveMainAlgoCollapseState({
+        stepsCount: mainSteps.length,
+        collapsedIndices: Array.from(collapsedSet),
+    });
+
     const mainTitleElement = document.querySelector('#mainContent > div > div:nth-child(1) h2');
     if (mainTitleElement) {
         mainTitleElement.textContent = algorithms.main.title || DEFAULT_MAIN_ALGORITHM.title;
@@ -9506,6 +9536,45 @@ async function renderMainAlgorithm() {
     console.log(
         `[renderMainAlgorithm v9] Рендеринг ${mainSteps.length} шагов завершен. Кнопка "В избранное" для главного алгоритма удалена.`,
     );
+}
+
+async function loadMainAlgoCollapseState() {
+    try {
+        const raw = localStorage.getItem(MAIN_ALGO_COLLAPSE_KEY);
+        if (!raw) return { stepsCount: 0, collapsedIndices: [] };
+        const parsed = JSON.parse(raw);
+        const stepsCount =
+            parsed && typeof parsed.stepsCount === 'number' && parsed.stepsCount >= 0
+                ? parsed.stepsCount
+                : 0;
+        const collapsedIndices = Array.isArray(parsed?.collapsedIndices)
+            ? parsed.collapsedIndices.filter((i) => Number.isInteger(i) && i >= 0)
+            : [];
+        return { stepsCount, collapsedIndices };
+    } catch (e) {
+        console.warn('[MainAlgoCollapseState] Invalid JSON in localStorage:', e);
+        return { stepsCount: 0, collapsedIndices: [] };
+    }
+}
+
+async function saveMainAlgoCollapseState(state) {
+    try {
+        const stepsCount =
+            state && typeof state.stepsCount === 'number' && state.stepsCount >= 0
+                ? state.stepsCount
+                : 0;
+        const uniqueValid = Array.isArray(state?.collapsedIndices)
+            ? Array.from(
+                  new Set(state.collapsedIndices.filter((i) => Number.isInteger(i) && i >= 0)),
+              )
+            : [];
+        const payload = { stepsCount, collapsedIndices: uniqueValid };
+        localStorage.setItem(MAIN_ALGO_COLLAPSE_KEY, JSON.stringify(payload));
+        return true;
+    } catch (e) {
+        console.error('[MainAlgoCollapseState] Save failed:', e);
+        return false;
+    }
 }
 
 async function getAllFromIndex(storeName, indexName, indexValue) {
@@ -34014,7 +34083,6 @@ function attachBookmarkPdfHandlers(form) {
       animation: hud-stripes 2.2s linear infinite;
     }
     #bg-status-hud .hud-footer { display:flex; justify-content:flex-start; align-items:center; margin-top:8px; font-size:12px; opacity:.9; gap:8px; }
-    /* Кнопка закрытия — правый верх */
     #bg-status-hud .hud-close {
       position: absolute; top: 8px; right: 8px;
       width: 28px; height: 28px; border-radius: 8px;
@@ -34026,7 +34094,6 @@ function attachBookmarkPdfHandlers(form) {
     }
     #bg-status-hud .hud-close:hover { opacity: 1; }
     #bg-status-hud .hud-close:focus { outline: 2px solid color-mix(in srgb, var(--color-primary, #2563eb) 60%, transparent); outline-offset: 2px; }
-    /* Проценты отключены */
     #bg-status-hud #bg-hud-percent { display: none !important; }
     @media (prefers-reduced-motion: reduce){ #bg-status-hud .hud-bar{ animation: none; } }
     @keyframes hud-stripes{ 0%{ background-position: 0 0; } 100%{ background-position: 24px 0; } }
