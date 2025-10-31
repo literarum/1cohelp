@@ -1154,9 +1154,8 @@ const hotkeysModalConfig = {
     contentAreaSelector: '.p-6.overflow-y-auto.flex-1',
 };
 
-const getVisibleModals = () => [
-    ...document.querySelectorAll('div.fixed.inset-0.bg-black.bg-opacity-50:not(.hidden)'),
-];
+const getVisibleModals = () =>
+    Array.from(document.querySelectorAll('div.fixed.inset-0.bg-black.bg-opacity-50:not(.hidden)'));
 
 const SAVE_BUTTON_SELECTORS =
     'button[type="submit"], #saveAlgorithmBtn, #createAlgorithmBtn, #saveCibLinkBtn, #saveBookmarkBtn, #saveExtLinkBtn';
@@ -3863,7 +3862,6 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
         }
 
         const tableConfig = currentSedoData.tables[tableIndex];
-
         const container = document.getElementById('sedoTypesInfoContainer');
         if (!container) {
             console.error(
@@ -3911,7 +3909,8 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
             while (currentElement) {
                 if (
                     currentElement.tagName === 'H3' &&
-                    currentElement.textContent === tableConfig?.title
+                    currentElement.classList.contains('text-lg') &&
+                    currentElement.classList.contains('font-semibold')
                 ) {
                     elementToHighlight = currentElement;
                     break;
@@ -3948,7 +3947,7 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
                 console.warn(
                     `[highlightAndScrollSedoItem V2 - Попытка ${
                         attempt + 1
-                    }] Индекс строки (rowIndex: ${rowIndex}) не является числом для таблицы ${tableIndex}. Поиск по всей таблице.`,
+                    }] Некорректный индекс строки: ${rowIndex}.`,
                 );
                 elementToHighlight = tableElement;
             } else {
@@ -3993,6 +3992,15 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
                             }] Ячейка для поля "${fieldToHighlight}" не найдена в строке ${numericRowIndex}, таблице ${tableIndex}. Выделяем всю строку.`,
                         );
                     }
+
+                    if (
+                        tableElement &&
+                        tableElement.classList &&
+                        tableElement.classList.contains('sedo-table') &&
+                        rowElement
+                    ) {
+                        elementToHighlight = rowElement;
+                    }
                 }
             }
         }
@@ -4006,7 +4014,7 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
             if (attempt === MAX_RETRIES - 1) {
                 if (typeof showNotification === 'function')
                     showNotification(
-                        'Не найден целевой элемент в таблице СЭДО для подсветки.',
+                        `Не удалось найти элемент для подсветки в таблице (индекс ${tableIndex}).`,
                         'warning',
                     );
                 return;
@@ -4029,9 +4037,7 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
                 );
             }
             console.log(
-                `[highlightAndScrollSedoItem V2] Элемент СЭДО (таблица: ${tableIndex}, поле: ${fieldToHighlight}) подсвечен и проскроллен. Попытка ${
-                    attempt + 1
-                }`,
+                `[highlightAndScrollSedoItem V2] Элемент СЭДО (таблица: ${tableIndex}, поле: ${fieldToHighlight}) подсвечен и проскроллен.`,
             );
             return;
         } else {
@@ -4046,14 +4052,13 @@ async function highlightAndScrollSedoItem(tableIndex, rowIndex, fieldToHighlight
                 }
                 if (typeof showNotification === 'function')
                     showNotification(
-                        'Целевой элемент СЭДО найден, но может быть не полностью виден. Попробуйте прокрутить вручную.',
+                        'Элемент подсвечен, но мог быть вне видимой области. Попробуйте прокрутить вручную.',
                         'info',
                     );
-                return;
+            } else {
+                await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+                continue;
             }
-            await new Promise((resolve) =>
-                requestAnimationFrame(() => setTimeout(resolve, RETRY_DELAY)),
-            );
         }
     }
 
@@ -4353,6 +4358,38 @@ const DEFAULT_SEDO_DATA = {
                         'Результат обработки реестра сведений работников медицинских и социальных учреждений, являющихся получателями специальных социальных выплат',
                 },
                 {
+                    type: '78',
+                    sender: 'Страхователь',
+                    description: 'Заявление на предоставление субсидии',
+                },
+                {
+                    type: '79',
+                    sender: 'Фонд',
+                    description: 'Результат обработки заявления на предоставление субсидии',
+                },
+                {
+                    type: '80',
+                    sender: 'Страхователь',
+                    description: 'Запрос статуса транша по заявлению на предоставление субсидии',
+                },
+                {
+                    type: '81',
+                    sender: 'Фонд',
+                    description: 'Статус транша по заявлению на предоставление субсидии',
+                },
+                {
+                    type: '82',
+                    sender: 'Страхователь',
+                    description:
+                        'Заявление об отказе от субсидии, предоставляемой для стимулирования найма безработных граждан',
+                },
+                {
+                    type: '83',
+                    sender: 'Фонд',
+                    description:
+                        'Результат обработки заявления об отказе от субсидии, предоставляемой для стимулирования найма безработных граждан',
+                },
+                {
                     type: '84',
                     sender: 'Страхователь',
                     description:
@@ -4378,6 +4415,17 @@ const DEFAULT_SEDO_DATA = {
                     type: '88',
                     sender: 'Фонд',
                     description: 'Информация о несоответствии сведений о застрахованном лице',
+                },
+                {
+                    type: '90',
+                    sender: 'Страхователь',
+                    description: 'Запрос регистрационного номера страхователя по ИНН/КПП/ОГРН',
+                },
+                {
+                    type: '91',
+                    sender: 'Фонд',
+                    description:
+                        'Ответ на запрос регистрационного номера страхователя по ИНН/КПП/ОГРН',
                 },
                 {
                     type: '94',
@@ -4441,6 +4489,12 @@ const DEFAULT_SEDO_DATA = {
                     description: 'Результат обработки информации о жизненных событиях',
                 },
                 {
+                    type: '11010',
+                    sender: 'Фонд',
+                    description:
+                        'Уведомление о статусе выплаты возмещения расходов страхователю (с 06.10.2025)',
+                },
+                {
                     type: '120',
                     sender: 'Страхователь',
                     description:
@@ -4457,6 +4511,24 @@ const DEFAULT_SEDO_DATA = {
                     sender: 'Фонд',
                     description:
                         'Решение об отказе в возмещении расходов на оплату дополнительных выходных дней для ухода за детьми-инвалидами',
+                },
+                {
+                    type: '12010',
+                    sender: 'Страхователь',
+                    description:
+                        'Заявление о возмещении расходов на оплату дополнительных выходных дней для ухода за детьми-инвалидами (с 06.10.2025)',
+                },
+                {
+                    type: '12110',
+                    sender: 'Фонд',
+                    description:
+                        'Результат обработки заявления о возмещении расходов на оплату дополнительных выходных дней для ухода за детьми-инвалидами (с 06.10.2025)',
+                },
+                {
+                    type: '12210',
+                    sender: 'Фонд',
+                    description:
+                        'Решение об отказе в возмещении расходов на оплату дополнительных выходных дней для ухода за детьми-инвалидами (с 06.10.2025)',
                 },
                 {
                     type: '124',
@@ -4494,7 +4566,8 @@ const DEFAULT_SEDO_DATA = {
                 {
                     type: '303',
                     sender: 'Фонд',
-                    description: 'Требование о представлении документов по камеральной проверке',
+                    description:
+                        'Требование о представлении документов по камеральной проверке (требует ответ)',
                 },
                 {
                     type: '304',
@@ -4518,7 +4591,8 @@ const DEFAULT_SEDO_DATA = {
                 {
                     type: '308',
                     sender: 'Фонд',
-                    description: 'Требование о представлении документов по выездной проверке',
+                    description:
+                        'Требование о представлении документов по выездной проверке (требует ответ)',
                 },
                 {
                     type: '309',
@@ -4569,7 +4643,7 @@ const DEFAULT_SEDO_DATA = {
                     description:
                         'Результат регистрации заявление на формирование справки о расчетах',
                 },
-                { type: '319', sender: 'Фонд', description: 'Справка о расчетах' },
+                { type: '319', sender: 'Фонд', description: 'Справка о состоянии задолженности' },
                 {
                     type: '320',
                     sender: 'Страхователь',
@@ -4582,6 +4656,53 @@ const DEFAULT_SEDO_DATA = {
                     description:
                         'Результат обработки запроса страхователя о получении от Фонда сведений о заработной плате застрахованного лица',
                 },
+                {
+                    type: '322',
+                    sender: 'Фонд',
+                    description:
+                        'Сведения, необходимые для исчисления страхователем первых трех дней пособия по временной нетрудоспособности',
+                },
+                {
+                    type: '323',
+                    sender: 'Фонд',
+                    description:
+                        'Акт проверки выполнения банком (иной кредитной организацией) обязанностей по 125-ФЗ',
+                },
+                {
+                    type: '324',
+                    sender: 'Фонд',
+                    description:
+                        'Требование о предоставлении документов по проверке банка (Требует ответ)',
+                },
+                {
+                    type: '325',
+                    sender: 'Фонд',
+                    description:
+                        'Решение о привлечении банка (иной кредитной организации) к ответственности за совершение правонарушения',
+                },
+                {
+                    type: '326',
+                    sender: 'Фонд',
+                    description:
+                        'Решение об отказе в привлечении банка (иной кредитной организации) к ответственности за совершение правонарушения',
+                },
+                {
+                    type: '327',
+                    sender: 'Фонд',
+                    description:
+                        'Уведомление о приеме (отказе в приеме) территориальным органом Фонда документов по проверке банка',
+                },
+                {
+                    type: '328',
+                    sender: 'Фонд',
+                    description: 'Ответ банка на запрос документов по проверке',
+                },
+                {
+                    type: '329',
+                    sender: 'Фонд',
+                    description:
+                        'Требование об уплате штрафов банками (иными кредитными организациями)',
+                },
                 { type: '330', sender: 'Страхователь', description: 'Запрос исторических данных' },
                 { type: '331', sender: 'Оператор', description: 'Запрос исторических данных' },
                 {
@@ -4589,12 +4710,43 @@ const DEFAULT_SEDO_DATA = {
                     sender: 'Фонд',
                     description: 'Результат запроса исторических данных',
                 },
+                { type: '333', sender: 'Фонд', description: 'Уведомление о факте излишней уплаты' },
+                {
+                    type: '334',
+                    sender: 'Фонд',
+                    description:
+                        'Решение о взыскании штрафов за счет денежных средств на счетах банка (иных кредитных организациях)',
+                },
+                {
+                    type: '335',
+                    sender: 'Фонд',
+                    description:
+                        'Решение о зачете суммы излишне уплаченных (взысканных) страховых взносов, пеней и штрафов',
+                },
+                {
+                    type: '336',
+                    sender: 'Фонд',
+                    description:
+                        'Решение о возврате суммы излишне уплаченных (взысканных) страховых взносов, пеней и штрафов',
+                },
+                {
+                    type: '342',
+                    sender: 'Фонд',
+                    description:
+                        'Требование о представлении необходимых пояснений или внесении исправлений в отчет (Требует ответ: отправить корректировочный отчет ЕФС в течение 10 рабочих дней)',
+                },
                 {
                     type: '1000',
                     sender: 'Страхователь',
                     description: 'Ответ страхователя на обращение СФР',
                 },
                 { type: '1001', sender: 'Фонд', description: 'Обращение СФР к страхователю' },
+                {
+                    type: '1010',
+                    sender: 'Фонд',
+                    description:
+                        'Извещение о запросе недостающих сведений для назначения пособий по ВНиМ, ССВ',
+                },
             ],
         },
         {
@@ -5270,6 +5422,7 @@ function closeSedoTableFullscreen() {
     }
 }
 
+// ts
 async function loadSedoData() {
     const currentDefault = JSON.parse(JSON.stringify(DEFAULT_SEDO_DATA));
     let dataToOperateWith;
@@ -5312,6 +5465,57 @@ async function loadSedoData() {
         }
 
         let requiresSaveAfterMigrationOrNormalization = false;
+
+        // --- Migration: non-destructive deep merge of default tables/items into user data ---
+        try {
+            if (Array.isArray(currentDefault.tables) && Array.isArray(dataToOperateWith.tables)) {
+                for (const defTable of currentDefault.tables) {
+                    const codeKey = defTable && defTable.codeField ? defTable.codeField : 'code';
+                    const targetIndex = dataToOperateWith.tables.findIndex(
+                        (t) =>
+                            t &&
+                            t.title === defTable.title &&
+                            (t.codeField ? t.codeField : 'code') === codeKey,
+                    );
+                    if (targetIndex === -1) {
+                        dataToOperateWith.tables.push(JSON.parse(JSON.stringify(defTable)));
+                        requiresSaveAfterMigrationOrNormalization = true;
+                        continue;
+                    }
+                    const targetTable = dataToOperateWith.tables[targetIndex];
+                    if (Array.isArray(defTable.items) && Array.isArray(targetTable.items)) {
+                        const existing = new Set(
+                            targetTable.items
+                                .filter(
+                                    (it) =>
+                                        it &&
+                                        typeof it === 'object' &&
+                                        it[codeKey] !== undefined &&
+                                        it[codeKey] !== null,
+                                )
+                                .map((it) => String(it[codeKey])),
+                        );
+                        for (const defItem of defTable.items) {
+                            const key =
+                                defItem &&
+                                defItem[codeKey] !== undefined &&
+                                defItem[codeKey] !== null
+                                    ? String(defItem[codeKey])
+                                    : null;
+                            if (key && !existing.has(key)) {
+                                targetTable.items.push(JSON.parse(JSON.stringify(defItem)));
+                                existing.add(key);
+                                requiresSaveAfterMigrationOrNormalization = true;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[SedoData Migration] Deep merge skipped due to error:', e);
+        }
+        // --- /Migration ---
+
         const initialArticleLinksString = JSON.stringify(dataToOperateWith.articleLinks);
 
         if (dataToOperateWith.articleLinks && Array.isArray(dataToOperateWith.articleLinks)) {
@@ -5328,10 +5532,9 @@ async function loadSedoData() {
                         urlToTest = 'http://' + urlToTest;
                     }
                     try {
-                        const urlObject = new URL(urlToTest);
-                        if (urlObject.protocol && urlObject.hostname) isUrl = true;
+                        new URL(urlToTest);
+                        isUrl = true;
                     } catch (_) {}
-
                     if (isUrl) {
                         migratedLinks.push({ url: item, text: '' });
                     } else {
@@ -5364,7 +5567,7 @@ async function loadSedoData() {
 
         if (requiresSaveAfterMigrationOrNormalization) {
             console.log(
-                'loadSedoData: Структура articleLinks была изменена/нормализована. Сохраняем обновленную структуру в БД.',
+                'loadSedoData: Структура данных СЭДО была расширена/нормализована. Сохраняем в БД.',
             );
             await saveToIndexedDB('preferences', { ...dataToOperateWith });
 
@@ -5376,15 +5579,12 @@ async function loadSedoData() {
                     originalDataFromDBForComparison ? 'update' : 'add',
                     originalDataFromDBForComparison,
                 );
-                console.log(
-                    'Поисковый индекс для СЭДО обновлен после миграции/нормализации articleLinks.',
-                );
+                console.log('Поисковый индекс для СЭДО обновлен после миграции/нормализации.');
             }
         }
 
         currentSedoData = JSON.parse(JSON.stringify(dataToOperateWith));
         originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(dataToOperateWith));
-
         return currentSedoData;
     } catch (error) {
         console.error('Ошибка загрузки данных СЭДО:', error);
@@ -5395,14 +5595,21 @@ async function loadSedoData() {
                 ? [...currentDefault.articleLinks]
                 : [],
         };
-
         if (currentSedoData.articleLinks && Array.isArray(currentSedoData.articleLinks)) {
             const migratedOnError = [];
             for (const item of currentSedoData.articleLinks) {
                 if (typeof item === 'string') {
                     let isUrl = false;
+                    let urlToTest = item;
+                    if (
+                        urlToTest.startsWith('www.') &&
+                        !urlToTest.startsWith('http://') &&
+                        !urlToTest.startsWith('https://')
+                    ) {
+                        urlToTest = 'http://' + urlToTest;
+                    }
                     try {
-                        new URL(item.startsWith('www.') ? 'http://' + item : item);
+                        new URL(urlToTest);
                         isUrl = true;
                     } catch (_) {}
                     migratedOnError.push(isUrl ? { url: item, text: '' } : { text: item });
@@ -5414,7 +5621,6 @@ async function loadSedoData() {
         } else {
             currentSedoData.articleLinks = [];
         }
-
         originalSedoDataBeforeEdit = JSON.parse(JSON.stringify(currentSedoData));
         return currentSedoData;
     }
@@ -8402,7 +8608,20 @@ tabButtons.forEach((button) => {
     button.addEventListener('click', () => setActiveTab(button.id.replace('Tab', '')));
 });
 
-closeModalBtn?.addEventListener('click', () => algorithmModal?.classList.add('hidden'));
+closeModalBtn?.addEventListener('click', () => {
+    if (typeof closeAnimatedModal === 'function') {
+        closeAnimatedModal(algorithmModal);
+    } else {
+        algorithmModal?.classList.add('hidden');
+        requestAnimationFrame(() => {
+            if (getVisibleModals().length === 0) {
+                document.body.classList.remove('modal-open');
+                document.body.classList.remove('overflow-hidden');
+            }
+        });
+    }
+});
+
 closeEditModalBtn?.addEventListener('click', () => requestCloseModal(editModal));
 closeAddModalBtn?.addEventListener('click', () => requestCloseModal(addModal));
 cancelEditBtn?.addEventListener('click', () => requestCloseModal(editModal));
@@ -8876,6 +9095,12 @@ async function setActiveTab(tabId, warningJustAccepted = false) {
     }
 
     console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} успешно активирована с анимацией.`);
+    requestAnimationFrame(() => {
+        if (getVisibleModals().length === 0) {
+            document.body.classList.remove('modal-open');
+            document.body.classList.remove('overflow-hidden');
+        }
+    });
 }
 
 function getStepContentAsText(step) {
@@ -9155,13 +9380,29 @@ async function renderMainAlgorithm() {
         titleH3.textContent = step.title || 'Без заголовка';
         stepDiv.appendChild(titleH3);
 
+        let contentTarget = stepDiv;
+        if (step.isCollapsible) {
+            stepDiv.classList.add('collapsible');
+            const body = document.createElement('div');
+            body.className = 'collapsible-body pt-1';
+            stepDiv.appendChild(body);
+            contentTarget = body;
+            titleH3.style.cursor = 'pointer';
+            titleH3.addEventListener('click', (e) => {
+                e.stopPropagation();
+                stepDiv.classList.toggle('is-collapsed');
+            });
+        }
+
         const descriptionP = document.createElement('p');
+
         descriptionP.className = 'text-sm text-gray-700 dark:text-gray-300 mt-1 break-words';
         descriptionP.innerHTML =
             typeof linkify === 'function'
                 ? linkify(step.description || 'Нет описания')
                 : escapeHtml(step.description || 'Нет описания');
         stepDiv.appendChild(descriptionP);
+        contentTarget.appendChild(descriptionP);
 
         if (step.example) {
             const exampleContainer = document.createElement('div');
@@ -9223,6 +9464,7 @@ async function renderMainAlgorithm() {
                 }
             }
             stepDiv.appendChild(exampleContainer);
+            contentTarget.appendChild(exampleContainer);
         }
 
         if (step.showNoInnHelp === true) {
@@ -9251,6 +9493,7 @@ async function renderMainAlgorithm() {
                     ? linkify(step.additionalInfoText)
                     : escapeHtml(step.additionalInfoText);
             stepDiv.appendChild(additionalInfoBottomDiv);
+            contentTarget.appendChild(additionalInfoBottomDiv);
         }
         fragment.appendChild(stepDiv);
     });
@@ -10353,9 +10596,22 @@ function initCollapseAllButtons(container, stepsContainerSelector) {
 }
 
 function initViewToggles() {
+    if (!window.__viewToggleDelegatedBound) {
+        document.addEventListener('click', (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest('.view-toggle') : null;
+            if (!btn) return;
+            handleViewToggleClick(e);
+        });
+        window.__viewToggleDelegatedBound = true;
+    }
+
     document.querySelectorAll('.view-toggle').forEach((button) => {
-        button.addEventListener('click', handleViewToggleClick);
+        if (!button.__viewToggleDirectBound) {
+            button.addEventListener('click', handleViewToggleClick);
+            button.__viewToggleDirectBound = true;
+        }
     });
+
     loadViewPreferences();
 }
 
@@ -10390,123 +10646,89 @@ async function saveViewPreference(sectionId, view) {
 }
 
 function handleViewToggleClick(event) {
-    const clickedButton = event.currentTarget;
+    const clickedButton =
+        event && event.target && event.target.closest
+            ? event.target.closest('.view-toggle')
+            : event.currentTarget;
+    if (!clickedButton) return;
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+
     const desiredView = clickedButton.dataset.view;
-
-    const reglamentsListDiv = document.getElementById('reglamentsList');
-    const isViewingReglamentsList =
-        reglamentsListDiv && !reglamentsListDiv.classList.contains('hidden');
-
-    let targetContainer;
-    let sectionIdForPrefs;
-
-    if (currentSection === 'favorites') {
-        targetContainer =
-            document.getElementById('favoritesContainer') ||
-            document.querySelector('#favoritesContent [data-section-id="favoritesContainer"]');
-        sectionIdForPrefs = 'favoritesContainer';
-    } else if (isViewingReglamentsList) {
-        targetContainer = document.getElementById('reglamentsContainer');
-    } else {
-        const controlBlockSelectors = [
-            '.actions-bar-container',
-            '#bookmarksContent > div:first-child',
-            '#linksContent > div:first-child',
-            '#extLinksContent > div:first-child',
-            '#programAlgorithms',
-            '#skziAlgorithms',
-            '#webRegAlgorithms',
-            '#lk1cAlgorithms',
-            '.bg-gray-100.dark\\:bg-gray-800.p-content.rounded-lg.shadow-md',
-            '.bg-gray-100.dark\\:bg-gray-800',
-            currentSection === 'reglaments' && !isViewingReglamentsList
-                ? '#globalReglamentActionsBar'
-                : null,
-        ].filter(Boolean);
-
-        let viewControlsBlock = null;
-        for (const selector of controlBlockSelectors) {
-            viewControlsBlock = clickedButton.closest(selector);
-            if (viewControlsBlock) break;
-        }
-
-        if (!viewControlsBlock) {
-            viewControlsBlock = clickedButton.parentElement;
-        }
-
-        if (viewControlsBlock) {
-            const parentOfViewControls = viewControlsBlock.parentElement;
-
-            if (currentSection === 'reglaments' && !isViewingReglamentsList) {
-                targetContainer = document.getElementById('reglamentCategoryGrid');
-            } else if (parentOfViewControls) {
-                let potentialContainer = viewControlsBlock.nextElementSibling;
-                while (potentialContainer && !potentialContainer.matches('[data-section-id]')) {
-                    potentialContainer = potentialContainer.nextElementSibling;
-                }
-                if (potentialContainer && potentialContainer.matches('[data-section-id]')) {
-                    targetContainer = potentialContainer;
-                } else {
-                    targetContainer =
-                        parentOfViewControls.querySelector(
-                            `[data-section-id="${currentSection + 'Container'}"]`,
-                        ) ||
-                        parentOfViewControls.querySelector(
-                            `[data-section-id="${currentSection + 'Algorithms'}"]`,
-                        ) ||
-                        parentOfViewControls.querySelector(`[data-section-id]`);
-                }
-            }
-        }
+    if (!desiredView) {
+        console.warn('[handleViewToggleClick] data-view не задан у кнопки.');
+        return;
     }
 
-    if (targetContainer) {
-        sectionIdForPrefs = targetContainer.dataset.sectionId;
-    } else {
-        const activeTabContent = document.querySelector(`#${currentSection}Content`);
-        if (activeTabContent) {
-            targetContainer = activeTabContent.querySelector('[data-section-id]');
-            if (targetContainer) {
-                sectionIdForPrefs = targetContainer.dataset.sectionId;
-            }
-        }
+    const sectionRoot = clickedButton.closest('.tab-content') || document;
+
+    let targetContainer = null;
+    if (currentSection === 'reglaments') {
+        const regList = sectionRoot.querySelector('#reglamentsList');
+        const listVisible = regList && !regList.classList.contains('hidden');
+        targetContainer = sectionRoot.querySelector(
+            listVisible ? '#reglamentsContainer' : '#reglamentCategoryGrid',
+        );
     }
 
-    if (!targetContainer || !sectionIdForPrefs || !desiredView) {
-        console.warn('handleViewToggleClick: Could not find target container or sectionId.', {
-            clickedButton: clickedButton.id,
-            currentSection: currentSection,
-            desiredView: desiredView,
-            targetContainerId: targetContainer ? targetContainer.id : 'null',
-            sectionIdForPrefs: sectionIdForPrefs,
-            isViewingReglamentsList: isViewingReglamentsList,
-        });
-        let fallbackContainerId = currentSection + 'Container';
-        if (['program', 'skzi', 'webReg', 'lk1c'].includes(currentSection)) {
-            fallbackContainerId = currentSection + 'Algorithms';
-        } else if (currentSection === 'reglaments' && !isViewingReglamentsList) {
-            fallbackContainerId = 'reglamentCategoryGrid';
-        }
-
-        const fallbackTargetContainer = document.getElementById(fallbackContainerId);
-        if (fallbackTargetContainer && fallbackTargetContainer.dataset.sectionId && desiredView) {
-            console.log(
-                `handleViewToggleClick: Используется fallback-логика для контейнера ${fallbackContainerId}`,
+    if (!targetContainer) {
+        const visibleContainers = Array.from(
+            sectionRoot.querySelectorAll('[data-section-id]'),
+        ).filter((el) => {
+            const style = window.getComputedStyle(el);
+            return (
+                !el.classList.contains('hidden') &&
+                style.display !== 'none' &&
+                !el.closest('.hidden')
             );
-            targetContainer = fallbackTargetContainer;
-            sectionIdForPrefs = fallbackTargetContainer.dataset.sectionId;
-        } else {
-            showNotification('Не удалось определить область для переключения вида.', 'error');
-            return;
+        });
+
+        if (visibleContainers.length === 1) {
+            targetContainer = visibleContainers[0];
+        } else if (visibleContainers.length > 1) {
+            const controlsBlock =
+                clickedButton.closest(
+                    '.actions-bar-container, .flex.items-center.gap-2, .flex.items-center.space-x-1.border, .flex.items-center.space-x-2, #globalReglamentActionsBar',
+                ) || clickedButton.parentElement;
+
+            let sib = controlsBlock ? controlsBlock.nextElementSibling : null;
+            while (sib && !sib.matches('[data-section-id]')) {
+                sib = sib.nextElementSibling;
+            }
+            targetContainer = sib || visibleContainers[0];
         }
     }
+
+    if (!targetContainer) {
+        targetContainer = clickedButton.closest('[data-section-id]');
+    }
+
+    if (!targetContainer) {
+        let fallbackId = currentSection + 'Container';
+        if (['program', 'skzi', 'webReg', 'lk1c'].includes(currentSection)) {
+            fallbackId = currentSection + 'Algorithms';
+        } else if (currentSection === 'reglaments') {
+            fallbackId = 'reglamentCategoryGrid';
+        }
+        targetContainer =
+            document.getElementById(fallbackId) ||
+            document.querySelector(`[data-section-id="${fallbackId}"]`);
+    }
+
+    if (!targetContainer) {
+        showNotification('Не удалось определить область для переключения вида.', 'error');
+        return;
+    }
+
+    const sectionIdForPrefs =
+        targetContainer.dataset.sectionId || targetContainer.getAttribute('id') || 'unknown';
     applyView(targetContainer, desiredView);
     saveViewPreference(sectionIdForPrefs, desiredView);
 }
 
 function applyView(container, view) {
     if (!container) {
-        console.warn(`[applyView v6 TargetFix] Контейнер не предоставлен.`);
+        console.warn(`[applyView v8] Контейнер не предоставлен.`);
         return;
     }
 
@@ -10544,11 +10766,10 @@ function applyView(container, view) {
         const sectionRoot = container.closest('.tab-content');
         if (sectionRoot) {
             const buttonsWithinSection = sectionRoot.querySelectorAll('.view-toggle');
-            if (buttonsWithinSection.length > 0) {
-                sectionSpecificButtons = Array.from(buttonsWithinSection);
-            } else {
-                sectionSpecificButtons = Array.from(buttons);
-            }
+            sectionSpecificButtons =
+                buttonsWithinSection.length > 0
+                    ? Array.from(buttonsWithinSection)
+                    : Array.from(buttons);
         } else {
             sectionSpecificButtons = Array.from(buttons);
         }
@@ -10556,9 +10777,11 @@ function applyView(container, view) {
 
     let items;
     if (sectionId === 'reglamentCategoryGrid') {
-        items = container.querySelectorAll('.reglament-category');
+        items = container.querySelectorAll('.view-item, .reglament-category, .reglament-item');
     } else {
-        items = container.querySelectorAll('.view-item');
+        items = container.querySelectorAll(
+            '.view-item, .algorithm-card, .bookmark-item, .ext-link-item, .cib-link-item, .favorite-item, .reglament-item',
+        );
     }
 
     if (sectionSpecificButtons.length > 0) {
@@ -10615,16 +10838,19 @@ function applyView(container, view) {
             container.classList.add('gap-content');
         }
     } else {
-        container.classList.add(...LIST_CONTAINER_CLASSES);
-        if (sectionId === 'linksContainer') {
-            container.classList.add('gap-2');
-        } else if (sectionId === 'reglamentCategoryGrid') {
+        if (sectionId === 'reglamentCategoryGrid') {
             container.classList.remove(
                 ...gridColsClassesForCategoryGrid,
                 ...gridColsClassesBase,
                 'auto-rows-fr',
             );
+            container.classList.add('grid');
             container.classList.add('grid-cols-1');
+        } else {
+            container.classList.add(...LIST_CONTAINER_CLASSES);
+            if (sectionId === 'linksContainer') {
+                container.classList.add('gap-2');
+            }
         }
     }
 
@@ -10657,6 +10883,24 @@ function applyView(container, view) {
             item.classList.add(...CARD_ITEM_BASE_CLASSES);
             item.classList.add('h-full');
 
+            if (item.classList.contains('bookmark-item')) {
+                const title = item.querySelector('.bookmark-title, .item-title, h3, h4');
+                if (title) {
+                    title.classList.remove('font-medium', 'text-sm');
+                    title.classList.add('font-semibold', 'text-base');
+                }
+                const actions = item.querySelector('.bookmark-actions, [data-role="actions"]');
+                if (actions) {
+                    actions.classList.add(
+                        'opacity-0',
+                        'pointer-events-none',
+                        'group-hover:opacity-100',
+                        'group-hover:pointer-events-auto',
+                        'transition-opacity',
+                    );
+                }
+            }
+
             if (item.classList.contains('algorithm-card')) {
                 item.classList.add(...ALGO_BOOKMARK_CARD_CLASSES);
             } else if (item.classList.contains('reglament-category')) {
@@ -10675,12 +10919,34 @@ function applyView(container, view) {
             if (item.classList.contains('reglament-category')) {
                 item.classList.remove('border-l-4');
             }
+            if (item.classList.contains('algorithm-card')) {
+                item.classList.remove('flex', 'justify-between', 'items-center');
+                item.classList.add('block');
+            }
+            if (item.classList.contains('bookmark-item')) {
+                const title = item.querySelector('.bookmark-title, .item-title, h3, h4');
+                if (title) {
+                    title.classList.remove('font-semibold', 'text-base');
+                    title.classList.add('font-medium', 'text-sm');
+                }
+                const actions = item.querySelector('.bookmark-actions, [data-role="actions"]');
+                if (actions) {
+                    actions.classList.add(
+                        'opacity-0',
+                        'pointer-events-none',
+                        'group-hover:opacity-100',
+                        'group-hover:pointer-events-auto',
+                        'transition-opacity',
+                    );
+                }
+            }
         }
     });
+
     console.log(
-        `[applyView v7 - CIB Fix] Стили для вида '${view}' применены к ${
-            items.length
-        } элементам в контейнере ${sectionId || container.id}.`,
+        `[applyView v8] Вид '${view}' применён к ${items.length} элементам в контейнере ${
+            sectionId || container.id
+        }.`,
     );
 }
 
@@ -10752,6 +11018,17 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
     `
         : '';
 
+    const isCollapsibleCheckboxHTML = isMainAlgorithm
+        ? `
+        <div class="mt-2">
+            <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input type="checkbox" class="step-is-collapsible form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                <span class="ml-2">Сворачиваемый</span>
+            </label>
+        </div>
+    `
+        : '';
+
     const noInnHelpCheckboxHTML = isMainAlgorithm
         ? `
         <div class="mt-2">
@@ -10787,7 +11064,8 @@ function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreenshotsFi
                 <textarea class="step-desc ${commonTextareaClasses}" rows="3" placeholder="Введите описание шага..."></textarea>
             </div>
             ${exampleInputHTML}
-            ${isCopyableCheckboxHTML} 
+            ${isCopyableCheckboxHTML}
+            ${isCollapsibleCheckboxHTML}
             ${noInnHelpCheckboxHTML}
             ${additionalInfoHTML}
             ${screenshotHTML}
@@ -10917,6 +11195,7 @@ async function editAlgorithm(algorithmId, section = 'main') {
                     '.step-additional-info-pos-bottom',
                 );
                 const isCopyableCheckbox = stepDiv.querySelector('.step-is-copyable');
+                const isCollapsibleCheckbox = stepDiv.querySelector('.step-is-collapsible');
                 const noInnHelpCheckbox = stepDiv.querySelector('.step-no-inn-help-checkbox');
 
                 if (titleInput) {
@@ -10950,6 +11229,9 @@ async function editAlgorithm(algorithmId, section = 'main') {
                 }
                 if (isMainAlgorithm && isCopyableCheckbox) {
                     isCopyableCheckbox.checked = step.isCopyable || false;
+                }
+                if (isMainAlgorithm && isCollapsibleCheckbox) {
+                    isCollapsibleCheckbox.checked = step.isCollapsible || false;
                 }
 
                 if (isMainAlgorithm && noInnHelpCheckbox) {
@@ -11699,6 +11981,9 @@ function extractStepsDataFromEditForm(containerElement, isMainAlgorithm = false)
         const isCopyableCheckbox = isMainAlgorithm
             ? stepDiv.querySelector('.step-is-copyable')
             : null;
+        const isCollapsibleCheckbox = isMainAlgorithm
+            ? stepDiv.querySelector('.step-is-collapsible')
+            : null;
         const noInnHelpCheckbox = isMainAlgorithm
             ? stepDiv.querySelector('.step-no-inn-help-checkbox')
             : null;
@@ -11714,6 +11999,8 @@ function extractStepsDataFromEditForm(containerElement, isMainAlgorithm = false)
             : false;
         const isCopyable =
             isMainAlgorithm && isCopyableCheckbox ? isCopyableCheckbox.checked : undefined;
+        const isCollapsible =
+            isMainAlgorithm && isCollapsibleCheckbox ? isCollapsibleCheckbox.checked : undefined;
         const showNoInnHelp =
             isMainAlgorithm && noInnHelpCheckbox ? noInnHelpCheckbox.checked : undefined;
 
@@ -11751,6 +12038,7 @@ function extractStepsDataFromEditForm(containerElement, isMainAlgorithm = false)
 
         if (isMainAlgorithm) {
             if (isCopyable !== undefined) step.isCopyable = isCopyable;
+            if (isCollapsible !== undefined) step.isCollapsible = isCollapsible;
             if (showNoInnHelp !== undefined) step.showNoInnHelp = showNoInnHelp;
         }
 
@@ -13794,6 +14082,7 @@ function convertItemToSearchResult(ref, itemData, score) {
                 result.sedoTableIndex = ref.tableIndex;
                 result.sedoRowIndex = ref.rowIndex;
                 result.sedoHighlightField = ref.field;
+                if (ref.tableTitle) result.sedoTableTitle = ref.tableTitle;
                 if (table) {
                     const row = table.items?.[ref.rowIndex];
                     if (row) {
@@ -16501,6 +16790,16 @@ async function updateSearchIndexForItem(itemData, storeName, docId = null) {
         } else {
             refDetails.field = fieldKeyFromGetText;
         }
+        if (typeof refDetails.tableIndex === 'number') {
+            try {
+                refDetails.tableTitle =
+                    Array.isArray(itemData.tables) && itemData.tables[refDetails.tableIndex]
+                        ? itemData.tables[refDetails.tableIndex].title || null
+                        : null;
+            } catch (_) {
+                refDetails.tableTitle = null;
+            }
+        }
 
         for (const token of tokens) {
             promises.push(
@@ -16939,7 +17238,7 @@ function ensureTabPresent(panelId, visible = true) {
     }
 }
 
-async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
+function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
     if (!bookmark || typeof bookmark.id === 'undefined') {
         console.error('createBookmarkElement: Неверные данные закладки', bookmark);
         return null;
@@ -16972,7 +17271,7 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
             </span>`;
     } else if (bookmark.folder) {
         folderBadgeHTML = `
-            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${bookmark.folder} не найдена">
+            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-800 text-gray-200 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${bookmark.folder} не найдена">
                 <i class="fas fa-question-circle mr-1 opacity-75"></i>Неизв. папка
             </span>`;
     }
@@ -16982,33 +17281,31 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
     let cardClickOpensUrl = false;
 
     if (bookmark.url) {
-        let fixedUrl = String(bookmark.url).trim();
-        fixedUrl = fixedUrl.replace(/[\u200B-\u200D\uFEFF]/g, '');
-        if (fixedUrl && !fixedUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && fixedUrl.includes('.')) {
-            if (!fixedUrl.startsWith('//')) {
-                fixedUrl = 'https://' + fixedUrl;
-            }
+        let fixedUrl = String(bookmark.url)
+            .trim()
+            .replace(/[\u200B-\u200D\uFEFF]/g, '');
+        if (fixedUrl && !fixedUrl.match(/^https?:\/\//i)) {
+            fixedUrl = 'https://' + fixedUrl;
         }
-        const urlForHref = fixedUrl;
-        const displayUrlForTitle = escapeHtml(urlForHref);
-        let hostnameForDisplay = 'URL';
         try {
-            const tempUrlObject = new URL(urlForHref);
-            const canonicalHref = tempUrlObject.href;
-            hostnameForDisplay = escapeHtml(tempUrlObject.hostname);
-            urlHostnameHTML = `
-                <a href="${canonicalHref}" target="_blank" rel="noopener noreferrer" data-action="open-link-hostname" class="bookmark-url text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary text-xs inline-flex items-center group-hover:underline" title="Перейти: ${displayUrlForTitle}">
-                    <i class="fas fa-link mr-1 opacity-75"></i>${hostnameForDisplay}
-                </a>`;
+            const url = new URL(fixedUrl);
             cardClickOpensUrl = true;
+            externalLinkIconHTML = `
+                <a href="${url.href}" data-action="open-link-icon" target="_blank" rel="noopener noreferrer"
+                   class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                   title="Открыть ссылку">
+                    <i class="fas fa-external-link-alt fa-fw"></i>
+                </a>`;
+            urlHostnameHTML = `
+                <a href="${url.href}" data-action="open-link-hostname" target="_blank" rel="noopener noreferrer"
+                   class="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 underline-offset-2 hover:underline"
+                   title="${url.href}">
+                    <i class="fas fa-link mr-1 opacity-75"></i>${url.hostname}
+                </a>`;
         } catch (e) {
-            externalLinkIconHTML = `<span class="p-1.5 text-red-400 cursor-not-allowed" title="Некорректный URL: ${displayUrlForTitle}"><i class="fas fa-times-circle fa-fw"></i></span>`;
-            urlHostnameHTML = `<span class="text-red-500 text-xs inline-flex items-center" title="Некорректный URL: ${displayUrlForTitle}"><i class="fas fa-exclamation-triangle mr-1"></i>Некорр. URL</span>`;
+            console.warn('Некорректный URL закладки:', fixedUrl, e);
             cardClickOpensUrl = false;
         }
-    } else {
-        urlHostnameHTML = '';
-        cardClickOpensUrl = false;
     }
 
     bookmarkElement.dataset.opensUrl = String(viewMode === 'cards' && cardClickOpensUrl);
@@ -17019,25 +17316,22 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
         bookmark.screenshotIds.length > 0;
     const screenshotButtonHTML = hasScreenshots
         ? `
-        <button data-action="view-screenshots" class="p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Просмотреть скриншоты (${bookmark.screenshotIds.length})">
+        <button data-action="view-screenshots" class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Просмотреть скриншоты (${bookmark.screenshotIds.length})">
             <i class="fas fa-images fa-fw"></i>
-        </button>
-    `
+        </button>`
         : '';
 
     let archiveButtonHTML = '';
     if (bookmark.folder === ARCHIVE_FOLDER_ID) {
         archiveButtonHTML = `
-            <button data-action="restore-from-archive" class="p-1.5 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Восстановить из архива">
+            <button data-action="restore-from-archive" class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Восстановить из архива">
                 <i class="fas fa-box-open fa-fw"></i>
-            </button>
-        `;
+            </button>`;
     } else {
         archiveButtonHTML = `
-            <button data-action="move-to-archive" class="p-1.5 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Переместить в архив">
+            <button data-action="move-to-archive" class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Переместить в архив">
                 <i class="fas fa-archive fa-fw"></i>
-            </button>
-        `;
+            </button>`;
     }
 
     const itemTypeForFavorite = bookmark.url ? 'bookmark' : 'bookmark_note';
@@ -17052,85 +17346,82 @@ async function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards
     );
 
     const actionsHTML = `
-            <div class="bookmark-actions flex items-center gap-0.5 ${
-                viewMode === 'cards'
-                    ? 'absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200'
-                    : 'flex-shrink-0 ml-auto pl-2'
-            }">
-                ${favButtonHTML}
-                ${screenshotButtonHTML}
-                ${externalLinkIconHTML}
-                ${archiveButtonHTML}
-                <button data-action="edit" class="edit-bookmark p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Редактировать">
-                    <i class="fas fa-edit fa-fw"></i>
-                </button>
-                <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Удалить">
-                    <i class="fas fa-trash fa-fw"></i>
-                </button>
-            </div>`;
+        <div class="bookmark-actions flex items-center gap-0.5 ${
+            viewMode === 'cards'
+                ? 'absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200'
+                : 'flex-shrink-0 ml-auto pl-2'
+        }">
+            ${viewMode !== 'cards' ? folderBadgeHTML : ''}
+            ${favButtonHTML}
+            ${screenshotButtonHTML}
+            ${externalLinkIconHTML}
+            ${archiveButtonHTML}
+            <button data-action="edit" class="edit-bookmark p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Редактировать">
+                <i class="fas fa-edit fa-fw"></i>
+            </button>
+            <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Удалить">
+                <i class="fas fa-trash fa-fw"></i>
+            </button>
+        </div>`;
 
     const safeTitle = escapeHtml(bookmark.title || 'Без названия');
     const safeDescription = escapeHtml(bookmark.description || '');
 
     if (viewMode === 'cards') {
         bookmarkElement.className =
-            'bookmark-item view-item group relative cursor-pointer flex flex-col justify-between h-full bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-shadow duration-200 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
+            'bookmark-item view-item group relative cursor-pointer bg-white dark:bg-gray-700 hover:shadow-md transition-shadow duration-200 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
 
         const descriptionHTML = safeDescription
-            ? `<p class="bookmark-description text-gray-600 dark:text-gray-400 text-sm mt-1 mb-2 line-clamp-3" title="${safeDescription}">${safeDescription}</p>`
+            ? `<p class="bookmark-description text-gray-600 dark:text-gray-300 text-sm line-clamp-3" title="${safeDescription}">${safeDescription}</p>`
             : bookmark.url
             ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>'
             : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>';
 
         const mainContentHTML = `
-                <div class="flex-grow min-w-0 mb-3"> 
-                    <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary transition-colors duration-200 truncate pr-10 sm:pr-24" title="${safeTitle}">
-                        ${safeTitle}
-                    </h3>
-                    ${descriptionHTML}
-                    <div class="bookmark-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-2">
-                        ${folderBadgeHTML}
-                        <span class="text-gray-500 dark:text-gray-400" title="Добавлено: ${new Date(
+            <div class="flex-grow min-w-0 mb-3">
+                <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 hover:text-primary dark:hover:text-primary transition-colors duration-200 truncate pr-10 sm:pr-24" title="${safeTitle}">
+                    ${safeTitle}
+                </h3>
+                ${descriptionHTML}
+                <div class="bookmark-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-2">
+                    ${folderBadgeHTML}
+                    <span class="text-gray-500 dark:text-gray-400" title="Добавлено: ${new Date(
+                        bookmark.dateAdded || Date.now(),
+                    ).toLocaleString()}">
+                        <i class="far fa-clock mr-1 opacity-75"></i>${new Date(
                             bookmark.dateAdded || Date.now(),
-                        ).toLocaleString()}">
-                            <i class="far fa-clock mr-1 opacity-75"></i>${new Date(
-                                bookmark.dateAdded || Date.now(),
-                            ).toLocaleDateString()}
-                        </span>
-                        ${urlHostnameHTML} 
-                    </div>
-                </div>`;
+                        ).toLocaleDateString()}
+                    </span>
+                    ${urlHostnameHTML}
+                </div>
+            </div>`;
         bookmarkElement.innerHTML = mainContentHTML + actionsHTML;
     } else {
         bookmarkElement.className =
-            'bookmark-item view-item group relative cursor-pointer flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
+            'bookmark-item view-item group relative cursor-pointer flex items-center p-3 border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
 
-        let listIconHTML = '';
-        if (bookmark.url) {
-            listIconHTML =
-                '<i class="fas fa-link text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>';
-        } else {
-            listIconHTML =
-                '<i class="fas fa-sticky-note text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>';
-        }
+        const listIconHTML = bookmark.url
+            ? '<i class="fas fa-link text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>'
+            : '<i class="fas fa-sticky-note text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>';
 
         const listDescText = safeDescription
             ? truncateText(safeDescription, 70)
             : bookmark.url
             ? escapeHtml(bookmark.url)
-            : 'Заметка без текста';
+            : 'Текстовая заметка';
 
         const mainContentHTML = `
-            <div class="flex items-center flex-grow min-w-0">
+            <div class="flex items-center w-full min-w-0">
                 ${listIconHTML}
-                <div class="min-w-0">
-                    <h3 class="font-medium text-sm text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary transition-colors truncate" title="${safeTitle}">${safeTitle}</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate" title="${
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <h3 class="text-base font-medium text-gray-900 dark:text-gray-100 truncate" title="${safeTitle}">${safeTitle}</h3>
+                    </div>
+                    <p class="bookmark-description text-sm text-gray-500 dark:text-gray-400 truncate" title="${
                         safeDescription || (bookmark.url ? escapeHtml(bookmark.url) : '')
                     }">${listDescText}</p>
                 </div>
-            </div>
-        `;
+            </div>`;
         bookmarkElement.innerHTML = mainContentHTML + actionsHTML;
     }
     return bookmarkElement;
@@ -18567,9 +18858,10 @@ async function initExternalLinksSystem() {
                             <button class="view-toggle p-1.5 rounded bg-primary text-white" data-view="cards" title="Вид карточек"> <i class="fas fa-th-large"></i> </button>
                             <button class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300" data-view="list" title="Вид списка"> <i class="fas fa-list"></i> </button>
                         </div>
-                    <button id="addExtLinkBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm font-medium flex items-center">
-                        <i class="fas fa-plus mr-2"></i>Добавить ресурс
-                    </button>
+                    <button
+                        id="addBlacklistEntryBtn"
+                        class="h-9 px-3.5 bg-primary hover:bg-secondary text-white rounded-md shadow-sm transition inline-flex items-center gap-2"
+                    >
                     <button id="organizeExtLinkCategoriesBtn" class="px-3 py-2 bg-primary hover:bg-secondary text-white dark:text-gray-200 rounded-md transition text-sm font-medium flex items-center">
                         <i class="fas fa-folder-open mr-2"></i>Категории
                     </button>
@@ -19299,7 +19591,7 @@ async function renderBookmarks(bookmarks, folderMap = {}) {
         bookmarksContainer.innerHTML =
             '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Нет сохраненных закладок</div>';
         if (typeof applyCurrentView === 'function') {
-            applyCurrentView('bookmarksContainer');
+            applyView(bookmarksContainer, currentView);
         } else {
             console.warn('applyCurrentView не найдена, вид для пустого списка не применен.');
         }
@@ -19307,31 +19599,21 @@ async function renderBookmarks(bookmarks, folderMap = {}) {
     }
 
     const fragment = document.createDocumentFragment();
-
     for (const bookmark of bookmarks) {
         if (!bookmark || typeof bookmark.id === 'undefined') {
             console.warn('Пропуск невалидной закладки (отсутствует id или сам объект):', bookmark);
             continue;
         }
         const bookmarkElement = await createBookmarkElement(bookmark, folderMap, currentView);
-
-        if (bookmarkElement) {
-            fragment.appendChild(bookmarkElement);
-        } else {
-            console.error('Не удалось создать элемент для закладки:', bookmark);
-        }
+        if (bookmarkElement) fragment.appendChild(bookmarkElement);
     }
 
     bookmarksContainer.appendChild(fragment);
-
-    if (bookmarksContainer._handleBookmarkAction) {
-        bookmarksContainer.removeEventListener('click', bookmarksContainer._handleBookmarkAction);
-    }
-    bookmarksContainer._handleBookmarkAction = handleBookmarkAction;
+    bookmarksContainer.removeEventListener('click', handleBookmarkAction);
     bookmarksContainer.addEventListener('click', handleBookmarkAction);
 
     if (typeof applyCurrentView === 'function') {
-        applyCurrentView('bookmarksContainer');
+        applyView(bookmarksContainer, currentView);
     } else {
         console.warn('applyCurrentView не найдена, вид после рендеринга не применен.');
     }
@@ -19818,7 +20100,6 @@ async function deleteBookmark(id) {
             };
         });
 
-        // Синхронизация с избранным
         try {
             const removedBookmark = await removeFromFavoritesDB('bookmark', numericId);
             const removedNote = await removeFromFavoritesDB('bookmark_note', numericId);
@@ -21596,7 +21877,7 @@ async function showReglamentDetail(reglamentId) {
                 <div class="flex-1 overflow-y-auto p-6" id="reglamentDetailContent">
                     <p class="text-center text-gray-500 dark:text-gray-400">Загрузка данных...</p>
                 </div>
-                <div class="flex-shrink-0 px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                <div class="flex-shrink-0 px-6 py-4">
                     <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
                         <span class="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left" id="reglamentDetailMeta"></span>
                         <div class="flex items-center gap-2 flex-shrink-0">
@@ -22809,7 +23090,7 @@ async function showAddReglamentModal(currentCategoryId = null) {
                             </div>
                         </form>
                     </div>
-                    <div class="flex-shrink-0 px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                    <div class="flex-shrink-0 px-6 py-4">
                         <div class="flex justify-end">
                             <button type="button" class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition mr-2">
                                 Отмена
@@ -29183,22 +29464,45 @@ async function showAddModal(section) {
 }
 
 function initBlacklistSystem() {
-    const addBlacklistEntryBtn = document.getElementById('addBlacklistEntryBtn');
-    const blacklistTableContainer = document.getElementById('blacklistTableContainer');
-    const searchInput = document.getElementById('blacklistSearchInput');
-    const clearSearchBtn = document.getElementById('clearBlacklistSearchBtn');
-    const actionsContainer = document.querySelector(
-        '#blacklistedClientsContent .flex.justify-between.items-center.mb-4',
-    );
+    const section = document.getElementById('blacklistedClientsContent');
+    const q = (sel) => (section ? section.querySelector(sel) : null);
+
+    const addBlacklistEntryBtn = q('#addBlacklistEntryBtn');
+    const blacklistTableContainer = q('#blacklistTableContainer');
+    const searchInput = q('#blacklistSearchInput');
+    const clearSearchBtn = q('#clearBlacklistSearchBtn');
+    const actionsContainer = q('.flex.justify-between.items-center.mb-4');
 
     if (addBlacklistEntryBtn) {
-        addBlacklistEntryBtn.addEventListener('click', () => showBlacklistEntryModal());
+        if (addBlacklistEntryBtn._clickHandler) {
+            addBlacklistEntryBtn.removeEventListener('click', addBlacklistEntryBtn._clickHandler);
+        }
+        addBlacklistEntryBtn._clickHandler = () => showBlacklistEntryModal();
+        addBlacklistEntryBtn.addEventListener('click', addBlacklistEntryBtn._clickHandler);
+        addBlacklistEntryBtn.classList.add(
+            'h-9',
+            'px-3.5',
+            'leading-5',
+            'inline-flex',
+            'items-center',
+            'gap-2',
+            'whitespace-nowrap',
+            'border',
+            'border-transparent',
+        );
     } else {
-        console.warn('Кнопка #addBlacklistEntryBtn не найдена.');
+        console.warn('Кнопка #addBlacklistEntryBtn не найдена в секции blacklist.');
     }
 
     if (blacklistTableContainer) {
-        blacklistTableContainer.addEventListener('click', handleBlacklistActionClick);
+        if (blacklistTableContainer._clickHandler) {
+            blacklistTableContainer.removeEventListener(
+                'click',
+                blacklistTableContainer._clickHandler,
+            );
+        }
+        blacklistTableContainer._clickHandler = (e) => handleBlacklistActionClick(e);
+        blacklistTableContainer.addEventListener('click', blacklistTableContainer._clickHandler);
     }
 
     if (searchInput) {
@@ -29207,9 +29511,8 @@ function initBlacklistSystem() {
         }
         searchInput._debouncedSearchHandler = debounce(handleBlacklistSearchInput, 300);
         searchInput.addEventListener('input', searchInput._debouncedSearchHandler);
-        if (clearSearchBtn) {
+        if (clearSearchBtn)
             clearSearchBtn.classList.toggle('hidden', searchInput.value.length === 0);
-        }
     }
 
     if (clearSearchBtn) {
@@ -29217,33 +29520,76 @@ function initBlacklistSystem() {
             clearSearchBtn.removeEventListener('click', clearSearchBtn._clearClickHandler);
         }
         clearSearchBtn._clearClickHandler = () => {
-            if (searchInput) {
-                searchInput.value = '';
-                searchInput.focus();
-                searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-            }
+            if (!searchInput) return;
+            searchInput.value = '';
+            searchInput.focus();
+            searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         };
         clearSearchBtn.addEventListener('click', clearSearchBtn._clearClickHandler);
     }
 
     if (actionsContainer) {
+        const rightContainer = addBlacklistEntryBtn
+            ? addBlacklistEntryBtn.parentElement
+            : actionsContainer;
+        if (rightContainer) rightContainer.classList.add('flex', 'items-center', 'gap-2');
+
         let sortControls = document.getElementById('blacklistSortControls');
         if (!sortControls) {
             sortControls = document.createElement('div');
             sortControls.id = 'blacklistSortControls';
             sortControls.className = 'flex items-center gap-2';
             sortControls.innerHTML = `
-                <button id="sortBlacklistByLevel" class="px-3 py-1 text-sm font-medium rounded-md transition" data-sort="level">По уровню</button>
-                <button id="sortBlacklistByDate" class="px-3 py-1 text-sm font-medium rounded-md transition" data-sort="date">По дате</button>
+                <button id="sortBlacklistByLevel"
+                    class="h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition
+                           inline-flex items-center gap-1.5 whitespace-nowrap
+                           shadow-sm border border-gray-300 dark:border-gray-600
+                           bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50"
+                    data-sort="level">
+                    <span class="btn-label">По уровню</span>
+                    <i class="sort-icon fas ml-1 w-3 opacity-0"></i>
+                </button>
+                <button id="sortBlacklistByDate"
+                    class="h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition
+                           inline-flex items-center gap-1.5 whitespace-nowrap
+                           shadow-sm border border-gray-300 dark:border-gray-600
+                           bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50"
+                    data-sort="date">
+                    <span class="btn-label">По дате</span>
+                    <i class="sort-icon fas ml-1 w-3 opacity-0"></i>
+                </button>
             `;
-            const addBtnContainer = addBlacklistEntryBtn
-                ? addBlacklistEntryBtn.parentElement
-                : null;
-            if (addBtnContainer && addBlacklistEntryBtn) {
-                addBtnContainer.insertBefore(sortControls, addBlacklistEntryBtn);
+            if (rightContainer && addBlacklistEntryBtn) {
+                rightContainer.insertBefore(sortControls, addBlacklistEntryBtn);
+            } else if (rightContainer) {
+                rightContainer.appendChild(sortControls);
             } else {
-                actionsContainer.insertBefore(sortControls, actionsContainer.firstChild);
+                actionsContainer.appendChild(sortControls);
             }
+        }
+
+        let exportBtn = document.getElementById('exportBlacklistToExcelBtn');
+        if (!exportBtn) {
+            exportBtn = document.createElement('button');
+            exportBtn.id = 'exportBlacklistToExcelBtn';
+            exportBtn.className =
+                'h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition ' +
+                'inline-flex items-center gap-2 whitespace-nowrap shadow-sm ' +
+                'bg-emerald-600 text-white hover:bg-emerald-700 border border-transparent';
+            exportBtn.innerHTML = '<i class="fas fa-file-excel"></i><span>Экспорт</span>';
+            if (rightContainer && addBlacklistEntryBtn) {
+                rightContainer.insertBefore(exportBtn, addBlacklistEntryBtn);
+            } else if (rightContainer) {
+                rightContainer.appendChild(exportBtn);
+            } else {
+                actionsContainer.appendChild(exportBtn);
+            }
+        }
+        if (exportBtn) {
+            if (exportBtn._clickHandler)
+                exportBtn.removeEventListener('click', exportBtn._clickHandler);
+            exportBtn._clickHandler = () => exportBlacklistToExcel();
+            exportBtn.addEventListener('click', exportBtn._clickHandler);
         }
 
         const updateSortButtonsUI = () => {
@@ -29251,22 +29597,27 @@ function initBlacklistSystem() {
             const dateBtn = document.getElementById('sortBlacklistByDate');
             if (!levelBtn || !dateBtn) return;
 
+            const baseCompact =
+                'h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition ' +
+                'inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border';
+
             [levelBtn, dateBtn].forEach((btn) => {
                 btn.className =
-                    'px-3 py-1 text-sm font-medium rounded-md transition bg-gray-200 dark:bg-gray-600 hover:bg-gray-300';
-                const icon = btn.querySelector('i');
-                if (icon) icon.remove();
+                    `${baseCompact} border-gray-300 dark:border-gray-600 ` +
+                    `bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50`;
+                const icon = btn.querySelector('.sort-icon');
+                if (icon) icon.className = 'sort-icon fas ml-1 w-3 opacity-0';
             });
 
             const activeBtn = currentBlacklistSort.criteria === 'level' ? levelBtn : dateBtn;
-            activeBtn.classList.remove('bg-gray-200', 'dark:bg-gray-600', 'hover:bg-gray-300');
-            activeBtn.classList.add('bg-primary', 'text-white');
+            activeBtn.className = `${baseCompact} border-transparent bg-primary text-white hover:bg-secondary`;
 
-            const iconEl = document.createElement('i');
-            iconEl.className = `fas ${
-                currentBlacklistSort.direction === 'desc' ? 'fa-arrow-down' : 'fa-arrow-up'
-            } ml-2`;
-            activeBtn.appendChild(iconEl);
+            const activeIcon = activeBtn.querySelector('.sort-icon');
+            if (activeIcon) {
+                activeIcon.className = `sort-icon fas ${
+                    currentBlacklistSort.direction === 'desc' ? 'fa-arrow-down' : 'fa-arrow-up'
+                } ml-1 w-3 opacity-100`;
+            }
         };
 
         const handleSortClick = (criteria) => {
@@ -29281,20 +29632,108 @@ function initBlacklistSystem() {
             sortAndRenderBlacklist();
         };
 
-        document
-            .getElementById('sortBlacklistByLevel')
-            .addEventListener('click', () => handleSortClick('level'));
-        document
-            .getElementById('sortBlacklistByDate')
-            .addEventListener('click', () => handleSortClick('date'));
+        const levelBtn = document.getElementById('sortBlacklistByLevel');
+        const dateBtn = document.getElementById('sortBlacklistByDate');
+
+        if (levelBtn) {
+            if (levelBtn._clickHandler)
+                levelBtn.removeEventListener('click', levelBtn._clickHandler);
+            levelBtn._clickHandler = () => handleSortClick('level');
+            levelBtn.addEventListener('click', levelBtn._clickHandler);
+        }
+        if (dateBtn) {
+            if (dateBtn._clickHandler) dateBtn.removeEventListener('click', dateBtn._clickHandler);
+            dateBtn._clickHandler = () => handleSortClick('date');
+            dateBtn.addEventListener('click', dateBtn._clickHandler);
+        }
 
         updateSortButtonsUI();
     }
 
     loadBlacklistedClients();
-    console.log(
-        'Система черного списка инициализирована (v2, с динамическими контролами и сменой направления сортировки).',
-    );
+    console.log('Система черного списка инициализирована (унифицированные метрики кнопок).');
+}
+
+async function exportBlacklistToExcel() {
+    try {
+        if (typeof XLSX === 'undefined') {
+            showNotification(
+                'Библиотека XLSX не загружена. Проверьте подключение в index.html.',
+                'error',
+            );
+            return;
+        }
+        const entries = (await getAllBlacklistEntriesDB()) || [];
+        if (!entries.length) {
+            showNotification('Нет данных для экспорта.', 'warning');
+            return;
+        }
+
+        const levelLabel = (n) => (n === 3 ? 'Высокий' : n === 2 ? 'Средний' : 'Низкий');
+        const sanitizeExcelText = (val) => {
+            if (val === null || val === undefined) return '';
+            const s = String(val);
+            return /^[=+\-@]/.test(s) ? "'" + s : s;
+        };
+        const fmtDate = (iso) => {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return '';
+            const pad = (x) => String(x).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+                d.getHours(),
+            )}-${pad(d.getMinutes())}`;
+        };
+
+        const grouped = { 1: [], 2: [], 3: [] };
+        for (const e of entries) {
+            const lvl = [1, 2, 3].includes(e.level) ? e.level : 1;
+            grouped[lvl].push({
+                Организация: sanitizeExcelText(e.organizationName || ''),
+                ИНН: sanitizeExcelText(e.inn || ''),
+                Телефон: sanitizeExcelText(e.phone || ''),
+                Уровень: levelLabel(lvl),
+                'Дата добавления': fmtDate(e.dateAdded || e.dateUpdated),
+                Примечание: sanitizeExcelText(e.notes || ''),
+            });
+        }
+
+        const headers = [
+            'Организация',
+            'ИНН',
+            'Телефон',
+            'Уровень',
+            'Дата добавления',
+            'Примечание',
+        ];
+        const wb = XLSX.utils.book_new();
+        const addSheet = (rows, name) => {
+            const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+            const colWidths = headers.map((h) => {
+                const maxLen = Math.max(
+                    h.length,
+                    ...rows.map((r) => (r[h] ? String(r[h]).length : 0)),
+                );
+                return { wch: Math.min(Math.max(maxLen + 2, 10), 60) };
+            });
+            ws['!cols'] = colWidths;
+            XLSX.utils.book_append_sheet(wb, ws, name);
+        };
+
+        addSheet(grouped[1], 'Уровень 1');
+        addSheet(grouped[2], 'Уровень 2');
+        addSheet(grouped[3], 'Уровень 3');
+
+        const ts = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+        XLSX.writeFile(wb, `Черный_список_жаб_${ts}.xlsx`);
+        showNotification('Экспорт в Excel выполнен.', 'success');
+    } catch (err) {
+        console.error('[exportBlacklistToExcel] Ошибка экспорта:', err);
+        showNotification(
+            `Ошибка экспорта в Excel: ${err?.message || 'Неизвестная ошибка'}`,
+            'error',
+        );
+    }
 }
 
 async function loadBlacklistedClients() {
@@ -32748,13 +33187,11 @@ function mountPdfSection(hostEl, parentType, parentId) {
           </div>
         </details>`;
 
-        // Визуальные/адаптивные правки контейнеров
         const rowEl = hostEl.querySelector('.pdf-row');
         rowEl.style.boxSizing = 'border-box';
         rowEl.style.width = '100%';
         rowEl.style.flexWrap = 'wrap';
 
-        // Список
         const listUl = hostEl.querySelector('.pdf-list');
         listUl.style.listStyle = 'none';
         listUl.style.paddingLeft = '0';
@@ -32770,14 +33207,12 @@ function mountPdfSection(hostEl, parentType, parentId) {
         const det = hostEl.querySelector('details');
         const prefKey = `pdfCollapse:${parentType}:${parentId}`;
 
-        // Восстановление состояния раскрытия
         try {
             const pref = localStorage.getItem(prefKey);
             if (pref === 'collapsed') det.open = false;
             if (pref === 'expanded') det.open = true;
         } catch {}
 
-        // Тоггл состояния
         if (!det.dataset.wired) {
             det.dataset.wired = '1';
             det.addEventListener('toggle', () => {
@@ -32787,7 +33222,6 @@ function mountPdfSection(hostEl, parentType, parentId) {
             });
         }
 
-        // Защита модалки от закрытия в момент системного диалога + повторный выбор того же файла
         if (btn && btn.dataset.wired !== '1') {
             btn.dataset.wired = '1';
             btn.addEventListener('click', (ev) => {
@@ -32796,7 +33230,7 @@ function mountPdfSection(hostEl, parentType, parentId) {
                 const modalEl = hostEl.closest('#bookmarkDetailModal, #bookmarkModal, #editModal');
                 if (modalEl) modalEl.dataset.fileDialogOpen = '1';
                 if (input) {
-                    input.value = ''; // позволяем выбрать тот же файл и получить change
+                    input.value = '';
                     const onFocusOnce = () => {
                         if (modalEl) delete modalEl.dataset.fileDialogOpen;
                         window.removeEventListener('focus', onFocusOnce, true);
@@ -32807,7 +33241,6 @@ function mountPdfSection(hostEl, parentType, parentId) {
             });
         }
 
-        // Обработка выбора файлов
         if (input && input.dataset.wired !== '1') {
             input.dataset.wired = '1';
             input.addEventListener('change', async (e) => {
@@ -32826,7 +33259,6 @@ function mountPdfSection(hostEl, parentType, parentId) {
             });
         }
 
-        // Drag-n-drop (на всю правую колонку с подсказкой + на сам список)
         const dropTargets = [rowEl, listUl];
         const highlightOn = () => {
             rowEl.style.outline = '2px dashed rgba(59,130,246,0.8)';
@@ -32891,11 +33323,9 @@ function mountPdfSection(hostEl, parentType, parentId) {
             });
         });
 
-        // Экспортируем локальный рефреш наружу
         hostEl._refresh = () => refresh();
     }
 
-    // Утилита форматирования
     const formatBytes = (num) => {
         if (!num || num <= 0) return '0 B';
         const u = ['B', 'KB', 'MB', 'GB'];
@@ -32913,12 +33343,10 @@ function mountPdfSection(hostEl, parentType, parentId) {
         list.innerHTML = '<li class="text-gray-500">Загрузка…</li>';
         const items = await getPdfsForParent(parentType, parentId);
 
-        // Пустой список
         if (!items.length) {
             list.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
             const det = hostEl.querySelector('details');
             if (det) {
-                // В деталях (просмотр) предпочитаем свёрнуто, в формах — раскрыто
                 const inView = !!(
                     hostEl.closest('#algorithmModal') || hostEl.closest('#bookmarkDetailModal')
                 );
@@ -32935,7 +33363,6 @@ function mountPdfSection(hostEl, parentType, parentId) {
             return;
         }
 
-        // Сортировка по дате загрузки (новые сверху)
         items.sort((a, b) => (String(a?.uploadedAt || '') > String(b?.uploadedAt || '') ? -1 : 1));
 
         const frag = document.createDocumentFragment();
@@ -32980,12 +33407,10 @@ function mountPdfSection(hostEl, parentType, parentId) {
                 }
               </div>`;
 
-            // Скачать
             li.querySelector('[data-act="dl"]').addEventListener('click', () => {
                 downloadPdfBlob(item.blob || null, displayName);
             });
 
-            // Удалить (нет в режиме просмотра)
             const rmBtn = li.querySelector('[data-act="rm"]');
             if (rmBtn) {
                 rmBtn.addEventListener('click', async () => {
@@ -33005,7 +33430,6 @@ function mountPdfSection(hostEl, parentType, parentId) {
         list.innerHTML = '';
         list.appendChild(frag);
 
-        // При наличии файлов — всегда раскрываем
         const det = hostEl.querySelector('details');
         if (det) {
             det.open = true;
@@ -33015,7 +33439,6 @@ function mountPdfSection(hostEl, parentType, parentId) {
         }
     }
 
-    // Первичная отрисовка
     refresh();
 }
 
@@ -33023,7 +33446,6 @@ function wireBookmarkDetailModalCloseHandler(modalId = 'bookmarkDetailModal') {
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
-    // Снимаем предыдущие обработчики (делаем идемпотентно)
     if (modal._closeHandlerBound) return;
     modal._closeHandlerBound = true;
 
@@ -33033,9 +33455,7 @@ function wireBookmarkDetailModalCloseHandler(modalId = 'bookmarkDetailModal') {
             const currentModal = document.getElementById(modalId);
             if (!currentModal || currentModal.classList.contains('hidden')) return;
 
-            // Клик по кнопкам закрытия
             if (e.target.closest('.close-modal, .cancel-modal')) {
-                // ГЛАВНОЕ: не закрываем, если открыт системный диалог выбора файла
                 if (currentModal.dataset.fileDialogOpen === '1') {
                     console.log('[bookmarkDetailModal] Close suppressed: file dialog is open');
                     return;
@@ -33043,7 +33463,6 @@ function wireBookmarkDetailModalCloseHandler(modalId = 'bookmarkDetailModal') {
 
                 currentModal.classList.add('hidden');
 
-                // Очистка ObjectURL из галереи (если есть)
                 const images = currentModal.querySelectorAll(
                     '#bookmarkDetailScreenshotsGrid img[data-object-url]',
                 );
@@ -33058,7 +33477,6 @@ function wireBookmarkDetailModalCloseHandler(modalId = 'bookmarkDetailModal') {
                     }
                 });
 
-                // Управление классами body с учётом других модалок
                 requestAnimationFrame(() => {
                     const otherVisibleModals = (
                         typeof getVisibleModals === 'function'
