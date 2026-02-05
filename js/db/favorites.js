@@ -1,7 +1,7 @@
 'use strict';
 
 import { FAVORITES_STORE_NAME } from '../constants.js';
-import * as State from '../app/state.js';
+import { State } from '../app/state.js';
 import {
     saveToIndexedDB,
     getAllFromIndexedDB,

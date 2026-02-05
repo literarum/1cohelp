@@ -179,3 +179,154 @@ export function getStepContentAsText(step) {
         return '';
     }
 }
+
+/**
+ * Создаёт debounce-версию функции
+ * @param {Function} func - функция для debounce
+ * @param {number} wait - задержка в миллисекундах
+ * @param {boolean} immediate - вызвать сразу при первом вызове
+ * @returns {Function} - debounce-версия функции
+ */
+export function debounce(func, wait, immediate) {
+    let timeout;
+    return function executedFunction(...args) {
+        const context = this;
+        const later = function () {
+            timeout = null;
+            if (!immediate) func.apply(context, args);
+        };
+        const callNow = immediate && !timeout;
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+        if (callNow) func.apply(context, args);
+    };
+}
+
+/**
+ * Настройка кнопки очистки поля ввода
+ * @param {string} inputId - ID поля ввода
+ * @param {string} buttonId - ID кнопки очистки
+ * @param {Function} [actionCallback] - callback при очистке
+ */
+export function setupClearButton(inputId, buttonId, actionCallback) {
+    const input = document.getElementById(inputId);
+    const button = document.getElementById(buttonId);
+
+    if (!input || !button) {
+        console.warn(
+            `Не удалось настроить кнопку очистки: поле ввода (${inputId}) или кнопка (${buttonId}) не найдены.`,
+        );
+        return;
+    }
+
+    const toggleButtonVisibility = () => {
+        if (input && document.body.contains(input)) {
+            button.classList.toggle('hidden', input.value.length === 0);
+        } else {
+            button.classList.add('hidden');
+            console.warn(
+                `Поле ввода ${inputId} больше не существует в DOM. Кнопка очистки ${buttonId} скрыта.`,
+            );
+        }
+    };
+
+    if (input._clearButtonInputHandler) {
+        input.removeEventListener('input', input._clearButtonInputHandler);
+    }
+    if (button._clearButtonClickHandler) {
+        button.removeEventListener('click', button._clearButtonClickHandler);
+    }
+
+    input._clearButtonInputHandler = toggleButtonVisibility;
+    input.addEventListener('input', toggleButtonVisibility);
+
+    toggleButtonVisibility();
+
+    button._clearButtonClickHandler = () => {
+        if (input && document.body.contains(input)) {
+            input.value = '';
+            button.classList.add('hidden');
+            input.focus();
+
+            if (typeof actionCallback === 'function') {
+                try {
+                    actionCallback();
+                } catch (error) {
+                    console.error(
+                        `Ошибка при вызове actionCallback для кнопки очистки поля ${inputId}:`,
+                        error,
+                    );
+                }
+            }
+
+            const event = new Event('input', { bubbles: true, cancelable: true });
+            input.dispatchEvent(event);
+        } else {
+            console.warn(
+                `Попытка очистить несуществующее поле ввода ${inputId} через кнопку ${buttonId}.`,
+            );
+        }
+    };
+    button.addEventListener('click', button._clearButtonClickHandler);
+
+    console.log(
+        `Кнопка очистки успешно настроена для поля ввода '${inputId}' и кнопки '${buttonId}'.`,
+    );
+}
+
+/**
+ * Глубокое сравнение двух объектов
+ * @param {any} obj1 - первый объект
+ * @param {any} obj2 - второй объект
+ * @returns {boolean} - true если объекты равны
+ */
+export function deepEqual(obj1, obj2) {
+    if (obj1 === obj2) {
+        return true;
+    }
+
+    if (obj1 === null || typeof obj1 !== 'object' || obj2 === null || typeof obj2 !== 'object') {
+        if (Number.isNaN(obj1) && Number.isNaN(obj2)) {
+            return true;
+        }
+        return false;
+    }
+
+    if (obj1 instanceof Date && obj2 instanceof Date) {
+        return obj1.getTime() === obj2.getTime();
+    }
+    if (obj1 instanceof RegExp && obj2 instanceof RegExp) {
+        return obj1.toString() === obj2.toString();
+    }
+
+    if (Array.isArray(obj1) && Array.isArray(obj2)) {
+        if (obj1.length !== obj2.length) {
+            return false;
+        }
+        for (let i = 0; i < obj1.length; i++) {
+            if (!deepEqual(obj1[i], obj2[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (Array.isArray(obj1) || Array.isArray(obj2)) {
+        return false;
+    }
+
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+
+    if (keys1.length !== keys2.length) {
+        return false;
+    }
+
+    for (const key of keys1) {
+        if (!Object.prototype.hasOwnProperty.call(obj2, key) || !deepEqual(obj1[key], obj2[key])) {
+            return false;
+        }
+    }
+
+    return true;
+}

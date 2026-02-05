@@ -2,7 +2,7 @@
 
 import { DB_NAME, DB_VERSION } from '../constants.js';
 import { storeConfigs } from './stores.js';
-import * as State from '../app/state.js';
+import { State } from '../app/state.js';
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ

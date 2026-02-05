@@ -10,7 +10,7 @@ import * as Constants from './constants.js';
 import * as Config from './config.js';
 
 // Импорты состояния
-import * as State from './app/state.js';
+import { State } from './app/state.js';
 
 // Импорты базы данных
 import { initDB } from './db/indexeddb.js';
@@ -71,7 +71,7 @@ export async function initApp() {
     try {
         // 1. Инициализация базы данных
         console.log('[App Init] Инициализация базы данных...');
-        State.db = await initDB();
+        await initDB();
         console.log('[App Init] База данных инициализирована.');
 
         // 2. Инициализация сервисов
@@ -138,6 +138,13 @@ export function setDependencies(deps) {
         showNotification: deps.showNotification,
         debounce: deps.debounce,
         setupClearButton: deps.setupClearButton,
+        loadFoldersList: deps.loadFoldersList,
+        removeEscapeHandler: deps.removeEscapeHandler,
+        getVisibleModals: deps.getVisibleModals,
+        addEscapeHandler: deps.addEscapeHandler,
+        handleSaveFolderSubmit: deps.handleSaveFolderSubmit,
+        getAllFromIndex: deps.getAllFromIndex,
+        State: deps.State,
     });
 
     // Установка loadingOverlayManager для ExportService

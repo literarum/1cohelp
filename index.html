@@ -2045,6 +2045,110 @@
     <body
         class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-200"
     >
+        <!-- Оверлей загрузки - показывается мгновенно -->
+        <div id="custom-loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99999; background-color: #0a0a1a; display: flex; justify-content: center; align-items: center; margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            <canvas id="loadingCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></canvas>
+            <div class="loading-text" id="loadingText">Загрузка<span id="animated-dots"></span></div>
+            <div class="progress-indicator-container">
+                <div class="progress-bar-line-track">
+                    <div class="progress-bar-line" id="progressBarLine"></div>
+                </div>
+                <div class="progress-percentage-text" id="progressPercentageText">0%</div>
+            </div>
+        </div>
+        <style id="custom-loading-overlay-styles">
+            #custom-loading-overlay {
+                height: 100vh;
+                position: relative;
+            }
+            .loading-text {
+                position: absolute;
+                bottom: 12%;
+                left: 50%;
+                transform: translateX(-50%);
+                max-width: 90%;
+                padding: 0 20px;
+                box-sizing: border-box;
+                font-size: 20px;
+                letter-spacing: 1px;
+                line-height: 1.4;
+                font-weight: 600;
+                z-index: 10;
+                background: linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2);
+                background-size: 250% 100%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                text-fill-color: transparent;
+                animation: gradient-text-flow-smooth 4s linear infinite;
+                text-align: center;
+            }
+            #animated-dots {
+                display: inline-block;
+                min-width: 25px;
+                text-align: left;
+            }
+            #animated-dots::before {
+                content: ".";
+                animation: ellipsis-content-for-span 1.5s infinite steps(1, end);
+            }
+            .progress-indicator-container {
+                position: absolute;
+                bottom: 5%;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 280px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                z-index: 10;
+            }
+            .progress-bar-line-track {
+                width: 100%;
+                height: 6px;
+                background-color: rgba(138, 43, 226, 0.15);
+                border-radius: 3px;
+                margin-bottom: 8px;
+                overflow: hidden;
+                box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+            }
+            .progress-bar-line {
+                width: 0%;
+                height: 100%;
+                background: linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2);
+                background-size: 300% 100%;
+                border-radius: 3px;
+                transition: width 0.15s linear;
+                animation: progress-gradient-flow 2s linear infinite;
+            }
+            @keyframes progress-gradient-flow {
+                0% { background-position: 0% center; }
+                100% { background-position: -300% center; }
+            }
+            .progress-percentage-text {
+                font-size: 14px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                background: linear-gradient(120deg, #9333ea, #c084fc, #9333ea);
+                background-size: 200% 100%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                text-fill-color: transparent;
+                animation: gradient-text-flow-smooth 3s linear infinite;
+            }
+            @keyframes gradient-text-flow-smooth {
+                0% { background-position: 0% center; }
+                100% { background-position: -250% center; }
+            }
+            @keyframes ellipsis-content-for-span {
+                0% { content: "."; }
+                33% { content: ".."; }
+                66% { content: "..."; }
+                100% { content: "."; }
+            }
+        </style>
+
         <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
             <header class="mb-4">
                 <div class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-3">
@@ -4245,7 +4349,30 @@
             для репорта об ошибках и предложений по усовершенстованию
         </div>
 
-        <script src="./script.js"></script>
-        <script type="module" src="./js/entry.js"></script>
+        <script type="module">
+            // Обработка ошибок загрузки модулей
+            window.addEventListener('error', (event) => {
+                console.error('Ошибка загрузки:', event);
+                const filename = event.filename || event.target?.src || '';
+                if (filename && (filename.includes('.js') || filename.includes('module'))) {
+                    const appContent = document.getElementById('appContent');
+                    if (appContent && appContent.classList.contains('hidden')) {
+                        appContent.classList.remove('hidden');
+                        console.error('Обнаружена ошибка загрузки модуля. Показываем контент.');
+                    }
+                }
+            }, true);
+            
+            // Обработка необработанных промисов
+            window.addEventListener('unhandledrejection', (event) => {
+                console.error('Необработанная ошибка промиса:', event.reason);
+                const appContent = document.getElementById('appContent');
+                if (appContent && appContent.classList.contains('hidden')) {
+                    appContent.classList.remove('hidden');
+                }
+            });
+        </script>
+        <script type="module" src="./script.js?v=20260205i"></script>
+        <script type="module" src="./js/entry.js?v=20260205i"></script>
     </body>
 </html>

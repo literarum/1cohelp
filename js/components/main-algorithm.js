@@ -4,7 +4,7 @@ import { escapeHtml } from '../utils/html.js';
 import { getStepContentAsText } from '../utils/helpers.js';
 import { MAIN_ALGO_COLLAPSE_KEY } from '../constants.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
-import * as State from '../app/state.js';
+import { State } from '../app/state.js';
 
 // ============================================================================
 // КОМПОНЕНТ ГЛАВНОГО АЛГОРИТМА

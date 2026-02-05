@@ -1,5 +1,7 @@
 'use strict';
 
+import { escapeRegExp } from './helpers.js';
+
 // ============================================================================
 // УТИЛИТЫ ДЛЯ РАБОТЫ С HTML И ТЕКСТОМ
 // ============================================================================
@@ -23,7 +25,7 @@ export const escapeHTML = escapeHtml;
  * Нормализует сломанные HTML сущности в тексте
  */
 export function normalizeBrokenEntities(text) {
-    if (typeof text !== 'string') return text;
+    if (typeof text !== 'string') return '';
     let s = text;
     s = s.replace(/&qt;/gi, '>');
     s = s
@@ -38,7 +40,7 @@ export function normalizeBrokenEntities(text) {
  * Декодирует базовые HTML сущности один раз
  */
 export function decodeBasicEntitiesOnce(s) {
-    if (typeof s !== 'string') return s;
+    if (typeof s !== 'string') return '';
     return s
         .replace(/&(amp;)+gt;|&gt;|&#0*62;|&#x0*3e;/gi, '>')
         .replace(/&(amp;)+lt;|&lt;|&#0*60;|&#x0*3c;/gi, '<')
@@ -156,4 +158,59 @@ export function highlightTextInElement(element, searchTerm) {
             parent.replaceChild(wrapper, textNode);
         }
     });
+}
+
+/**
+ * Преобразует URL и email в кликабельные ссылки
+ */
+export function linkify(text) {
+    if (!text) return '';
+
+    const combinedPattern =
+        /(https?:\/\/[^\s"']*[^\s"',.?!')\]}])|([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/g;
+
+    const parts = [];
+    let lastIndex = 0;
+
+    text.replace(combinedPattern, (match, url, email, offset) => {
+        if (offset > lastIndex) {
+            parts.push({ type: 'text', content: text.substring(lastIndex, offset) });
+        }
+
+        if (url) {
+            parts.push({ type: 'url', content: url });
+        } else if (email) {
+            parts.push({ type: 'email', content: email });
+        }
+
+        lastIndex = offset + match.length;
+        return match;
+    });
+
+    if (lastIndex < text.length) {
+        parts.push({ type: 'text', content: text.substring(lastIndex) });
+    }
+
+    if (parts.length === 0) {
+        return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    return parts
+        .map((part) => {
+            if (part.type === 'text') {
+                return escapeHtml(part.content).replace(/\n/g, '<br>');
+            }
+
+            if (part.type === 'url') {
+                const safeUrl = escapeHtml(part.content);
+                return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: underline;">${safeUrl}</a>`;
+            }
+
+            if (part.type === 'email') {
+                const safeEmail = escapeHtml(part.content);
+                return `<a href="mailto:${safeEmail}" style="color: #3b82f6; text-decoration: underline;">${safeEmail}</a>`;
+            }
+            return '';
+        })
+        .join('');
 }

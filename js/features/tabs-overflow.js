@@ -1,103 +1,48 @@
 'use strict';
 
-import { MAX_UPDATE_VISIBLE_TABS_RETRIES } from '../constants.js';
-import { State } from '../app/state.js';
-import { tabsConfig } from '../config.js';
+/**
+ * Модуль управления переполнением вкладок
+ * Содержит функции для адаптивного отображения вкладок с выпадающим меню
+ */
 
-// Зависимости модуля
+import { State } from '../app/state.js';
+
+// ============================================================================
+// ЗАВИСИМОСТИ (устанавливаются через setTabsOverflowDependencies)
+// ============================================================================
+
 let deps = {
     setActiveTab: null,
 };
 
 /**
- * Установка зависимостей модуля
- * @param {Object} dependencies - объект с зависимостями
+ * Устанавливает зависимости для модуля Tabs Overflow
+ * @param {Object} dependencies - Объект с зависимостями
  */
-export function setTabsDependencies(dependencies) {
+export function setTabsOverflowDependencies(dependencies) {
     deps = { ...deps, ...dependencies };
+    console.log('[TabsOverflow] Зависимости установлены');
 }
 
 // ============================================================================
-// КОМПОНЕНТ РАБОТЫ С ВКЛАДКАМИ
+// КОНСТАНТЫ
+// ============================================================================
+
+const MAX_UPDATE_VISIBLE_TABS_RETRIES = 5;
+const LAYOUT_ERROR_MARGIN = 5;
+
+// ============================================================================
+// ОСНОВНЫЕ ФУНКЦИИ
 // ============================================================================
 
 /**
- * Создаёт элемент кнопки вкладки
- * @param {Object} tabConfig - конфигурация вкладки
- * @returns {HTMLButtonElement} элемент кнопки
- */
-export function createTabButtonElement(tabConfig) {
-    const button = document.createElement('button');
-    button.id = `${tabConfig.id}Tab`;
-
-    button.className =
-        'tab-btn relative px-1 py-2 sm:px-3 sm:py-2 border-b-2 font-medium text-sm focus:outline-none transition-colors whitespace-nowrap border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300';
-    button.setAttribute('role', 'tab');
-    button.setAttribute('aria-controls', `${tabConfig.id}Content`);
-
-    let buttonContent = '';
-    if (tabConfig.icon) {
-        buttonContent += `<i class="fas ${tabConfig.icon} sm:mr-2"></i>`;
-    }
-
-    if (tabConfig.icon) {
-        buttonContent += `<span class="hidden sm:inline">${tabConfig.name}</span>`;
-        button.title = tabConfig.name;
-    } else {
-        buttonContent += `<span>${tabConfig.name}</span>`;
-    }
-    button.innerHTML = buttonContent;
-
-    button.addEventListener('click', () => {
-        if (deps.setActiveTab) {
-            deps.setActiveTab(tabConfig.id);
-        } else if (typeof window.setActiveTab === 'function') {
-            window.setActiveTab(tabConfig.id);
-        } else {
-            console.error(
-                `[createTabButtonElement] Функция setActiveTab не найдена при клике на кнопку ${tabConfig.id}`,
-            );
-        }
-    });
-    return button;
-}
-
-/**
- * Убеждается, что вкладка присутствует в навигации
- * @param {string} panelId - ID панели
- * @param {boolean} visible - видимость вкладки
- */
-export function ensureTabPresent(panelId, visible = true) {
-    try {
-        const tabNav = document.querySelector('header + .border-b nav.flex');
-        if (!tabNav) return;
-        const moreTabsBtnParent = document.getElementById('moreTabsBtn')?.parentNode || null;
-        const existing = document.getElementById(`${panelId}Tab`);
-        if (existing) {
-            existing.classList.toggle('hidden', !visible);
-            return;
-        }
-        const cfg = Array.isArray(tabsConfig) ? tabsConfig.find((t) => t.id === panelId) : null;
-        if (!cfg) return;
-        const btn = createTabButtonElement(cfg);
-        if (!visible) btn.classList.add('hidden');
-        if (moreTabsBtnParent) tabNav.insertBefore(btn, moreTabsBtnParent);
-        else tabNav.appendChild(btn);
-    } catch (e) {
-        console.error('[ensureTabPresent] Ошибка при создании вкладки', panelId, e);
-    }
-}
-
-/**
- * Обновляет видимость вкладок с учетом переполнения
+ * Обновляет видимость вкладок на основе доступной ширины
  */
 export function updateVisibleTabs() {
     const tabsNav = document.querySelector('nav.flex.flex-wrap');
     const moreTabsBtn = document.getElementById('moreTabsBtn');
     const moreTabsDropdown = document.getElementById('moreTabsDropdown');
     const moreTabsContainer = moreTabsBtn ? moreTabsBtn.parentNode : null;
-
-    const LAYOUT_ERROR_MARGIN = 5;
 
     if (
         !tabsNav ||
@@ -130,8 +75,8 @@ export function updateVisibleTabs() {
         tabsNav.offsetWidth === 0 &&
         State.updateVisibleTabsRetryCount >= MAX_UPDATE_VISIBLE_TABS_RETRIES
     ) {
-        console.error(
-            `[updateVisibleTabs v8_FIXED - Max Retries Reached] tabsNav.offsetWidth is still 0. Calculation skipped.`,
+        console.warn(
+            `[updateVisibleTabs] Element not visible yet (offsetWidth=0). Will recalculate on resize.`,
         );
         if (moreTabsContainer && document.body.contains(moreTabsContainer)) {
             moreTabsContainer.classList.add('hidden');
@@ -218,8 +163,8 @@ export function updateVisibleTabs() {
             dropdownItem.dataset.tabId = tab.id.replace('Tab', '');
             dropdownItem.addEventListener('click', (e) => {
                 e.preventDefault();
-                if (typeof window.setActiveTab === 'function') {
-                    window.setActiveTab(dropdownItem.dataset.tabId);
+                if (deps.setActiveTab) {
+                    deps.setActiveTab(dropdownItem.dataset.tabId);
                 }
                 if (moreTabsDropdown) moreTabsDropdown.classList.add('hidden');
             });
@@ -230,7 +175,7 @@ export function updateVisibleTabs() {
 }
 
 /**
- * Настраивает обработчики событий для переполнения вкладок
+ * Настраивает обработчики событий для системы переполнения вкладок
  */
 export function setupTabsOverflow() {
     const tabsNav = document.querySelector('nav.flex.flex-wrap');
@@ -255,13 +200,11 @@ export function setupTabsOverflow() {
         moreTabsBtn._clickHandler = handleMoreTabsBtnClick;
     }
 
-    if (typeof clickOutsideTabsHandler === 'function') {
-        if (document._clickOutsideTabsHandler) {
-            document.removeEventListener('click', document._clickOutsideTabsHandler, true);
-        }
-        document.addEventListener('click', clickOutsideTabsHandler, true);
-        document._clickOutsideTabsHandler = clickOutsideTabsHandler;
+    if (document._clickOutsideTabsHandler) {
+        document.removeEventListener('click', document._clickOutsideTabsHandler, true);
     }
+    document.addEventListener('click', clickOutsideTabsHandler, true);
+    document._clickOutsideTabsHandler = clickOutsideTabsHandler;
 
     if (window.ResizeObserver) {
         if (tabsNav._resizeObserverInstance) {
@@ -283,7 +226,8 @@ export function setupTabsOverflow() {
 }
 
 /**
- * Обработчик клика по кнопке "Еще"
+ * Обработчик клика по кнопке "Ещё"
+ * @param {Event} e - Событие клика
  */
 export function handleMoreTabsBtnClick(e) {
     e.stopPropagation();
@@ -297,7 +241,8 @@ export function handleMoreTabsBtnClick(e) {
 }
 
 /**
- * Обработчик клика вне области вкладок
+ * Обработчик клика вне выпадающего меню
+ * @param {Event} e - Событие клика
  */
 export function clickOutsideTabsHandler(e) {
     const currentDropdown = document.getElementById('moreTabsDropdown');
@@ -335,7 +280,7 @@ export function clickOutsideTabsHandler(e) {
 }
 
 /**
- * Обработчик изменения размера для вкладок
+ * Обработчик изменения размера окна
  */
 export function handleTabsResize() {
     clearTimeout(State.tabsResizeTimeout);
@@ -344,12 +289,6 @@ export function handleTabsResize() {
         if (currentDropdown && !currentDropdown.classList.contains('hidden')) {
             currentDropdown.classList.add('hidden');
         }
-        if (typeof updateVisibleTabs === 'function') {
-            updateVisibleTabs();
-        } else {
-            console.error(
-                '[handleTabsResize v13_FIXED] ERROR: updateVisibleTabs function is not defined!',
-            );
-        }
+        updateVisibleTabs();
     }, 250);
 }

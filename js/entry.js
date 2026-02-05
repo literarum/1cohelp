@@ -25,6 +25,9 @@ import { setDependencies } from './app.js';
         populateBookmarkFolders: window.populateBookmarkFolders,
         loadingOverlayManager: window.loadingOverlayManager,
         DEFAULT_MAIN_ALGORITHM: window.DEFAULT_MAIN_ALGORITHM,
+        loadFoldersList: window.loadFoldersList,
+        removeEscapeHandler: window.removeEscapeHandler,
+        getVisibleModals: window.getVisibleModals,
     };
 
     setDependencies(deps);
