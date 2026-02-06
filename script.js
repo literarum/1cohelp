@@ -478,6 +478,10 @@ import {
     applyPanelOrderAndVisibility as applyPanelOrderAndVisibilityModule,
 } from './js/components/tabs.js';
 
+// Раннее определение setActiveTab для передачи в setUIInitDependencies и initUI
+const setActiveTab = async (tabId, warningJustAccepted = false) =>
+    setActiveTabModule(tabId, warningJustAccepted);
+
 // Client Data System
 import {
     setClientDataDependencies,
@@ -997,11 +1001,7 @@ const initExternalLinksSystem = initExternalLinksSystemModule;
 const initBlacklistSystem = initBlacklistSystemModule;
 const initReloadButton = initReloadButtonModule;
 
-// setActiveTab теперь импортируется из js/components/tabs.js
-// Определяем раньше, чтобы использовать в setUIInitDependencies
-async function setActiveTab(tabId, warningJustAccepted = false) {
-    return setActiveTabModule(tabId, warningJustAccepted);
-}
+// setActiveTab уже определена выше (после импорта tabs.js)
 const initFullscreenToggles = initFullscreenTogglesModule;
 const setupHotkeys = setupHotkeysModule;
 const initUI = initUIModule;

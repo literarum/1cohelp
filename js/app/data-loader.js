@@ -282,6 +282,10 @@ export async function loadFromIndexedDB() {
             console.error('[loadFromIndexedDB] algorithms не определен! Зависимости не установлены.');
             return false;
         }
+        if (!DEFAULT_MAIN_ALGORITHM || typeof DEFAULT_OTHER_SECTIONS !== 'object') {
+            console.error('[loadFromIndexedDB] DEFAULT_MAIN_ALGORITHM или DEFAULT_OTHER_SECTIONS не заданы.');
+            return false;
+        }
         try {
             algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
             Object.keys(DEFAULT_OTHER_SECTIONS).forEach((section) => {
