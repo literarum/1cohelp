@@ -151,7 +151,7 @@ export async function loadUserPreferences() {
 
         State.userPreferences = { ...finalSettings };
         // Вызываем saveUserPreferences напрямую из модуля
-        await saveUserPreferencesInternal();
+        await saveUserPreferences();
 
         console.log(
             `${LOG_PREFIX} Загрузка и синхронизация пользовательских настроек завершена. Итоговые userPreferences:`,
@@ -218,9 +218,3 @@ export async function saveUserPreferences() {
     }
 }
 
-/**
- * Сохраняет пользовательские настройки в IndexedDB
- */
-export async function saveUserPreferences() {
-    return saveUserPreferencesInternal();
-}
