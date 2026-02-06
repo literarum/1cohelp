@@ -942,6 +942,9 @@ async function appInit(context = 'normal') {
     return appInitModule(context);
 }
 
+// showAlgorithmDetail теперь импортируется из js/components/algorithms-renderer.js
+const showAlgorithmDetail = showAlgorithmDetailModule;
+
 // App Init Dependencies
 setAppInitDependencies({
     loadingOverlayManager,
@@ -1225,9 +1228,6 @@ const renderMainAlgorithm = renderMainAlgorithmModule;
 // loadMainAlgoCollapseState и saveMainAlgoCollapseState теперь импортируются из js/components/main-algorithm.js
 const loadMainAlgoCollapseState = loadMainAlgoCollapseStateModule;
 const saveMainAlgoCollapseState = saveMainAlgoCollapseStateModule;
-
-// showAlgorithmDetail теперь импортируется из js/components/algorithms-renderer.js
-const showAlgorithmDetail = showAlgorithmDetailModule;
 
 // loadFromIndexedDB и saveDataToIndexedDB теперь импортируются из js/app/data-loader.js
 async function loadFromIndexedDB() {
