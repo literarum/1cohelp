@@ -77,11 +77,13 @@ export async function loadUserPreferences() {
         employeeExtension: '',
     };
 
-    if (!State.db) {
+    if (!State || !State.db) {
         console.warn(
-            `${LOG_PREFIX} База данных не инициализирована. Используются дефолтные State.userPreferences.`,
+            `${LOG_PREFIX} State или база данных не инициализирована. Используются дефолтные State.userPreferences.`,
         );
-        State.userPreferences = { ...defaultPreferences };
+        if (State) {
+            State.userPreferences = { ...defaultPreferences };
+        }
         return;
     }
 
@@ -196,9 +198,9 @@ export async function loadUserPreferences() {
  */
 export async function saveUserPreferences() {
     const LOG_PREFIX = '[saveUserPreferences V2 - Unified]';
-    if (!State.db) {
+    if (!State || !State.db) {
         console.error(
-            `${LOG_PREFIX} База данных не инициализирована. Настройки не могут быть сохранены.`,
+            `${LOG_PREFIX} State или база данных не инициализирована. Настройки не могут быть сохранены.`,
         );
         if (typeof showNotification === 'function') {
             showNotification('Ошибка: Не удалось сохранить настройки (БД недоступна).', 'error');
