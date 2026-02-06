@@ -172,7 +172,7 @@ export async function loadUserPreferences() {
                     `${LOG_PREFIX} Добавлена новая панель "${panelId}" с видимостью по умолчанию.`,
                 );
             }
-        }););
+        });
 
         finalSettings.panelOrder = effectiveOrder;
         finalSettings.panelVisibility = effectiveVisibility;
