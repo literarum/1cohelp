@@ -985,11 +985,6 @@ setAppInitDependencies({
 });
 console.log('[script.js] Зависимости модуля appInit установлены');
 
-// appInit теперь импортируется из js/app/app-init.js
-async function appInit(context = 'normal') {
-    return appInitModule(context);
-}
-
 window.onload = async () => {
     console.log('window.onload: Страница полностью загружена.');
     const appContent = document.getElementById('appContent');
