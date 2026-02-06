@@ -37,13 +37,25 @@ export async function loadUserPreferences() {
     const LOG_PREFIX = '[loadUserPreferences V2 - Unified]';
     console.log(`${LOG_PREFIX} Запуск единой функции загрузки и миграции настроек.`);
 
+    if (!DEFAULT_UI_SETTINGS) {
+        console.error(`${LOG_PREFIX} DEFAULT_UI_SETTINGS не установлен! Используются значения по умолчанию.`);
+        DEFAULT_UI_SETTINGS = {
+            themeMode: 'dark',
+            primaryColor: '#9333EA',
+            fontSize: 80,
+            borderRadius: 2,
+            contentDensity: 3,
+            mainLayout: 'horizontal',
+        };
+    }
+
     const defaultPreferences = {
-        theme: DEFAULT_UI_SETTINGS.themeMode,
-        primaryColor: DEFAULT_UI_SETTINGS.primaryColor,
-        fontSize: DEFAULT_UI_SETTINGS.fontSize,
-        borderRadius: DEFAULT_UI_SETTINGS.borderRadius,
-        contentDensity: DEFAULT_UI_SETTINGS.contentDensity,
-        mainLayout: DEFAULT_UI_SETTINGS.mainLayout,
+        theme: DEFAULT_UI_SETTINGS.themeMode || 'dark',
+        primaryColor: DEFAULT_UI_SETTINGS.primaryColor || '#9333EA',
+        fontSize: DEFAULT_UI_SETTINGS.fontSize || 80,
+        borderRadius: DEFAULT_UI_SETTINGS.borderRadius || 2,
+        contentDensity: DEFAULT_UI_SETTINGS.contentDensity || 3,
+        mainLayout: DEFAULT_UI_SETTINGS.mainLayout || 'horizontal',
         panelOrder: [...defaultPanelOrder],
         panelVisibility: defaultPanelOrder.map(
             (id) => !(id === 'sedoTypes' || id === 'blacklistedClients'),

@@ -2182,6 +2182,11 @@ setUISettingsModalDependencies({
 console.log('[script.js] Зависимости модуля UI Settings Modal установлены');
 
 // UI Settings Dependencies
+// defaultPanelVisibility вычисляется динамически на основе defaultPanelOrder
+const defaultPanelVisibility = defaultPanelOrder.map(
+    (id) => !(id === 'sedoTypes' || id === 'blacklistedClients'),
+);
+
 setUISettingsDependencies({
     State,
     DEFAULT_UI_SETTINGS,
