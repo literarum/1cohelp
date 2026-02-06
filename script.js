@@ -851,6 +851,9 @@ function removeEscapeHandler(modalElement) {
 // Примечание: debounce уже доступен напрямую из импорта, не нужно создавать константу
 const setupClearButton = setupClearButtonModule;
 
+// Алиасы для функций модальных окон закладок
+const showEditBookmarkModal = showEditBookmarkModalModule;
+
 // Инициализируем обработчик beforeunload
 initBeforeUnloadHandlerModule();
 
@@ -1057,6 +1060,84 @@ setAppInitDependencies({
     initUI,
 });
 console.log('[script.js] Зависимости модуля appInit установлены');
+
+// ============================================================================
+// УСТАНОВКА ЗАВИСИМОСТЕЙ ДЛЯ МОДУЛЕЙ (ДО window.onload)
+// ============================================================================
+// Важно: все зависимости должны быть установлены ДО вызова appInit в window.onload
+
+// Data Loader Dependencies - устанавливаем ПЕРВЫМИ, так как loadFromIndexedDB вызывается рано
+setDataLoaderDependencies({
+    DEFAULT_MAIN_ALGORITHM,
+    DEFAULT_OTHER_SECTIONS,
+    algorithms,
+    renderAllAlgorithms,
+    renderMainAlgorithm,
+    loadBookmarks: typeof loadBookmarksModule !== 'undefined' ? loadBookmarksModule : loadBookmarks,
+    loadReglaments: typeof loadReglamentsModule !== 'undefined' ? loadReglamentsModule : null,
+    loadCibLinks: typeof loadCibLinksModule !== 'undefined' ? loadCibLinksModule : null,
+    loadExtLinks,
+    getClientData,
+    showNotification,
+});
+console.log('[script.js] Зависимости модуля Data Loader установлены');
+
+// Ext Links Init Dependencies - устанавливаем ДО вызова initExternalLinksSystem
+// ВАЖНО: Используем модули напрямую, так как wrapper функции определены позже
+setExtLinksInitDependencies({
+    State,
+    showAddEditExtLinkModal: showAddEditExtLinkModalModule,
+    showOrganizeExtLinkCategoriesModal: showOrganizeExtLinkCategoriesModalModule,
+    filterExtLinks: filterExtLinksModule, // Используем модуль, так как wrapper определен позже
+    handleExtLinkAction: handleExtLinkActionModule,
+    handleViewToggleClick: handleViewToggleClickModule,
+    loadExtLinks: loadExtLinksModule, // Используем модуль, так как wrapper определен позже
+    populateExtLinkCategoryFilter: populateExtLinkCategoryFilterModule, // Используем модуль, так как wrapper определен позже
+    getAllExtLinks,
+    renderExtLinks: renderExtLinksModule,
+    debounce,
+    setupClearButton,
+});
+console.log('[script.js] Зависимости модуля Ext Links Init установлены');
+
+// Bookmarks Dependencies - устанавливаем ДО вызова initBookmarkSystem
+setBookmarksDependencies({
+    isFavorite,
+    getFavoriteButtonHTML,
+    showAddBookmarkModal,
+    showBookmarkDetail,
+    showOrganizeFoldersModal,
+    showNotification,
+    debounce,
+    setupClearButton,
+    loadFoldersList,
+    removeEscapeHandler,
+    getVisibleModals,
+    addEscapeHandler,
+    handleSaveFolderSubmit,
+    getAllFromIndex,
+    State,
+    showEditBookmarkModal,
+    deleteBookmark,
+    showBookmarkDetailModal,
+    handleViewBookmarkScreenshots,
+});
+console.log('[script.js] Зависимости модуля Bookmarks установлены');
+
+// UI Init Dependencies - устанавливаем ДО вызова initUI
+setUIInitDependencies({
+    State,
+    setActiveTab,
+    getVisibleModals,
+    getTopmostModal,
+    toggleModalFullscreen,
+    showNotification,
+    renderFavoritesPage,
+    updateVisibleTabs,
+    showBlacklistWarning,
+    hotkeysModalConfig,
+});
+console.log('[script.js] Зависимости модуля UI Init установлены');
 
 window.onload = async () => {
     console.log('window.onload: Страница полностью загружена.');
@@ -4217,22 +4298,7 @@ setExtLinksActionsDependencies({
 });
 console.log('[script.js] Зависимости модуля Ext Links Actions установлены');
 
-// Ext Links Init Dependencies
-setExtLinksInitDependencies({
-    State,
-    showAddEditExtLinkModal: showAddEditExtLinkModalModule,
-    showOrganizeExtLinkCategoriesModal: showOrganizeExtLinkCategoriesModalModule,
-    filterExtLinks: filterExtLinksModule,
-    handleExtLinkAction: handleExtLinkActionModule,
-    handleViewToggleClick: handleViewToggleClickModule,
-    loadExtLinks: loadExtLinksModule,
-    populateExtLinkCategoryFilter: populateExtLinkCategoryFilterModule,
-    getAllExtLinks,
-    renderExtLinks: renderExtLinksModule,
-    debounce,
-    setupClearButton,
-});
-console.log('[script.js] Зависимости модуля Ext Links Init установлены');
+// Ext Links Init Dependencies уже установлены выше перед window.onload
 
 // Favorites System Dependencies
 setFavoritesDependencies({
@@ -4562,21 +4628,7 @@ setAlgorithmsRendererDependencies({
 });
 console.log('[script.js] Зависимости модуля Algorithms Renderer установлены');
 
-// Data Loader Dependencies
-setDataLoaderDependencies({
-    DEFAULT_MAIN_ALGORITHM,
-    DEFAULT_OTHER_SECTIONS,
-    algorithms,
-    renderAllAlgorithms,
-    renderMainAlgorithm,
-    loadBookmarks: typeof loadBookmarksModule !== 'undefined' ? loadBookmarksModule : loadBookmarks,
-    loadReglaments: typeof loadReglamentsModule !== 'undefined' ? loadReglamentsModule : null,
-    loadCibLinks: typeof loadCibLinksModule !== 'undefined' ? loadCibLinksModule : null,
-    loadExtLinks,
-    getClientData,
-    showNotification,
-});
-console.log('[script.js] Зависимости модуля Data Loader установлены');
+// Data Loader Dependencies уже установлены выше перед window.onload
 
 // User Preferences Dependencies уже установлены выше на строке 2157
 

@@ -50,6 +50,10 @@ export async function loadFromIndexedDB() {
         console.warn(
             'База данных не инициализирована. Используются только дефолтные данные для алгоритмов.',
         );
+        if (!algorithms) {
+            console.error('[loadFromIndexedDB] algorithms не определен! Зависимости не установлены.');
+            return false;
+        }
         algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
         Object.keys(DEFAULT_OTHER_SECTIONS).forEach((section) => {
             algorithms[section] = JSON.parse(JSON.stringify(DEFAULT_OTHER_SECTIONS[section] || []));
@@ -73,6 +77,10 @@ export async function loadFromIndexedDB() {
             console.log(
                 '[loadFromIndexedDB] Данные алгоритмов не найдены в БД, инициализация дефолтами.',
             );
+            if (!algorithms) {
+                console.error('[loadFromIndexedDB] algorithms не определен перед инициализацией дефолтами!');
+                return false;
+            }
             algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
             Object.keys(DEFAULT_OTHER_SECTIONS).forEach((section) => {
                 algorithms[section] = JSON.parse(
@@ -88,10 +96,18 @@ export async function loadFromIndexedDB() {
             typeof loadedAlgoData.main === 'object' &&
             loadedAlgoData.main !== null
         ) {
+            if (!algorithms) {
+                console.error('[loadFromIndexedDB] algorithms не определен! Зависимости не установлены.');
+                return false;
+            }
             const mainHasContent =
                 loadedAlgoData.main.title ||
                 (loadedAlgoData.main.steps && loadedAlgoData.main.steps.length > 0);
             if (mainHasContent || loadedDataUsed) {
+                if (!algorithms) {
+                    console.error('[loadFromIndexedDB] algorithms не определен перед установкой main!');
+                    return false;
+                }
                 algorithms.main = loadedAlgoData.main;
                 if (!algorithms.main.id) algorithms.main.id = 'main';
                 if (Array.isArray(algorithms.main.steps)) {
@@ -262,12 +278,20 @@ export async function loadFromIndexedDB() {
         return true;
     } catch (error) {
         console.error('КРИТИЧЕСКАЯ ОШИБКА в loadFromIndexedDB:', error);
-        algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
-        Object.keys(DEFAULT_OTHER_SECTIONS).forEach((section) => {
-            algorithms[section] = JSON.parse(JSON.stringify(DEFAULT_OTHER_SECTIONS[section] || []));
-        });
-        if (mainTitleElement) mainTitleElement.textContent = algorithms.main.title;
-        if (typeof renderAllAlgorithms === 'function') renderAllAlgorithms();
+        if (!algorithms) {
+            console.error('[loadFromIndexedDB] algorithms не определен! Зависимости не установлены.');
+            return false;
+        }
+        try {
+            algorithms.main = JSON.parse(JSON.stringify(DEFAULT_MAIN_ALGORITHM));
+            Object.keys(DEFAULT_OTHER_SECTIONS).forEach((section) => {
+                algorithms[section] = JSON.parse(JSON.stringify(DEFAULT_OTHER_SECTIONS[section] || []));
+            });
+            if (mainTitleElement) mainTitleElement.textContent = algorithms.main.title;
+            if (typeof renderAllAlgorithms === 'function') renderAllAlgorithms();
+        } catch (fallbackError) {
+            console.error('[loadFromIndexedDB] Ошибка при восстановлении из дефолтных данных:', fallbackError);
+        }
         return false;
     }
 }
