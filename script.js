@@ -969,7 +969,9 @@ const initHotkeysModal = initHotkeysModalModule;
 const initClearDataFunctionality = initClearDataFunctionalityModule;
 const applyInitialUISettings = applyInitialUISettingsModule;
 
-// initViewToggles определяется ниже на строке 1711
+// initViewToggles теперь импортируется из js/ui/view-manager.js
+const initViewToggles = initViewTogglesModule;
+
 // initClientDataSystem определяется ниже на строке 3123 как function declaration (hoisting работает)
 // initUICustomization не найдена - возможно, была удалена или переименована
 // Определяем как пустую функцию для совместимости
