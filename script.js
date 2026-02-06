@@ -1735,7 +1735,7 @@ const initStepInteractions = initStepInteractionsModule;
 const initCollapseAllButtons = initCollapseAllButtonsModule;
 
 // Функции работы с видами отображения теперь импортируются из js/ui/view-manager.js
-const initViewToggles = initViewTogglesModule;
+// initViewToggles уже определена выше на строке 973
 const loadViewPreferences = loadViewPreferencesModule;
 const applyDefaultViews = applyDefaultViewsModule;
 const saveViewPreference = saveViewPreferenceModule;
