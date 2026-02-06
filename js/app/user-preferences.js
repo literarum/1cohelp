@@ -189,7 +189,9 @@ export async function loadUserPreferences() {
         );
     } catch (error) {
         console.error(`${LOG_PREFIX} Ошибка при загрузке/миграции настроек:`, error);
-        State.userPreferences = { ...defaultPreferences };
+        if (State) {
+            State.userPreferences = { ...defaultPreferences };
+        }
     }
 }
 
