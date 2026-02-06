@@ -2496,9 +2496,7 @@ function forceReloadApp() {
 }
 
 // Wrapper для модуля app-reload.js
-function initReloadButton() {
-    return initReloadButtonModule();
-}
+// initReloadButton уже определена выше на строке 964
 
 // Wrapper-ы для модуля algorithms.js (Algorithm Editing State)
 function getCurrentEditState() {
@@ -3045,9 +3043,7 @@ const showAddModal = showAddModalModule;
 // See: js/features/blacklist.js
 // Wrapper functions below maintain backward compatibility.
 
-function initBlacklistSystem() {
-    return initBlacklistSystemModule();
-}
+// initBlacklistSystem уже определена выше на строке 963
 
 async function exportBlacklistToExcel() {
     return exportBlacklistToExcelModule();
