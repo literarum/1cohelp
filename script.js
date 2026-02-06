@@ -847,7 +847,8 @@ function removeEscapeHandler(modalElement) {
 }
 
 // debounce и setupClearButton импортируются из js/utils/helpers.js
-const debounce = debounce;
+// debounce уже импортирован напрямую, setupClearButton нужно создать алиас
+// Примечание: debounce уже доступен напрямую из импорта, не нужно создавать константу
 const setupClearButton = setupClearButtonModule;
 
 // Инициализируем обработчик beforeunload
