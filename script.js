@@ -2598,11 +2598,6 @@ function setupExtensionFieldListeners() {
     return setupExtensionFieldListenersModule();
 }
 
-// Wrapper для модуля helpers.js
-function setupClearButton(inputId, buttonId, actionCallback) {
-    return setupClearButtonModule(inputId, buttonId, actionCallback);
-}
-
 // setupHotkeys уже определена выше на строке 966
 
 // toggleActiveSectionView теперь импортируется из js/ui/view-manager.js
