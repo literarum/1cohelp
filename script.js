@@ -1686,8 +1686,7 @@ async function saveNewAlgorithm() {
     return saveNewAlgorithmModule();
 }
 
-// initUI теперь импортируется из js/ui/init.js
-const initUI = initUIModule;
+// initUI уже определена выше на строке 967
 
 // setActiveTab теперь импортируется из js/components/tabs.js
 async function setActiveTab(tabId, warningJustAccepted = false) {
