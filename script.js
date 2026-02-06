@@ -2118,8 +2118,7 @@ async function applyInitialUISettings() {
     return applyInitialUISettingsModule();
 }
 
-// initClearDataFunctionality теперь импортируется из js/ui/systems-init.js
-const initClearDataFunctionality = initClearDataFunctionalityModule;
+// initClearDataFunctionality уже определена выше на строке 969
 
 // clearAllApplicationData теперь импортируется из js/app/data-clear.js
 async function clearAllApplicationData(progressCallback) {
@@ -2478,7 +2477,7 @@ const initFullscreenToggles = () => {
         editAlgorithmModalConfig,
         addAlgorithmModalConfig,
     ];
-    initFullscreenTogglesModule(modalConfigs);
+    initFullscreenToggles(modalConfigs);
 };
 
 // toggleModalFullscreen теперь импортируется из js/ui/modals-manager.js
@@ -2976,8 +2975,7 @@ async function showBookmarkDetailModal(bookmarkId) {
 
 // getCurrentBookmarkFormState - imported from js/components/bookmarks.js
 
-// initHotkeysModal теперь импортируется из js/ui/init.js
-const initHotkeysModal = initHotkeysModalModule;
+// initHotkeysModal уже определена выше на строке 968
 
 // Wrapper для модуля Lightbox
 function showImageAtIndex(index, blobs, stateManager, elements) {
