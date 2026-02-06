@@ -1973,6 +1973,10 @@ const showOrganizeFoldersModal = showOrganizeFoldersModalModule;
 const filterBookmarks = filterBookmarksModule;
 const populateBookmarkFolders = populateBookmarkFoldersModule;
 const loadFoldersList = loadFoldersListModule;
+const handleSaveFolderSubmit = handleSaveFolderSubmitModule;
+
+// getAllFromIndex импортируется напрямую из js/db/indexeddb.js (строка 88)
+// Используем напрямую
 
 // Wrapper для модуля Screenshots
 function attachBookmarkScreenshotHandlers(formElement) {
