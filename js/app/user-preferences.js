@@ -49,6 +49,14 @@ export async function loadUserPreferences() {
         };
     }
 
+    if (!defaultPanelOrder || !Array.isArray(defaultPanelOrder)) {
+        console.error(`${LOG_PREFIX} defaultPanelOrder не установлен или не является массивом! Используются значения по умолчанию.`);
+        const fallbackPanelOrder = tabsConfig && Array.isArray(tabsConfig) 
+            ? tabsConfig.map((t) => t.id)
+            : ['main', 'program', 'links', 'extLinks', 'skzi', 'lk1c', 'webReg', 'reglaments', 'bookmarks', 'shablony'];
+        defaultPanelOrder = fallbackPanelOrder;
+    }
+
     const defaultPreferences = {
         theme: DEFAULT_UI_SETTINGS.themeMode || 'dark',
         primaryColor: DEFAULT_UI_SETTINGS.primaryColor || '#9333EA',

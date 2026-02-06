@@ -1972,6 +1972,7 @@ const showAddBookmarkModal = showAddBookmarkModalModule;
 const showOrganizeFoldersModal = showOrganizeFoldersModalModule;
 const filterBookmarks = filterBookmarksModule;
 const populateBookmarkFolders = populateBookmarkFoldersModule;
+const loadFoldersList = loadFoldersListModule;
 
 // Wrapper для модуля Screenshots
 function attachBookmarkScreenshotHandlers(formElement) {
@@ -2152,6 +2153,16 @@ function _onSystemThemeChange(e) {
 async function applyPreviewSettings(settings) {
     return applyPreviewSettingsModule(settings);
 }
+
+// User Preferences Dependencies - устанавливаем ДО использования в appInit
+setUserPreferencesDependencies({
+    State,
+    DEFAULT_UI_SETTINGS,
+    defaultPanelOrder,
+    tabsConfig,
+    showNotification,
+});
+console.log('[script.js] Зависимости модуля User Preferences установлены');
 
 // Preview Settings Dependencies
 setPreviewSettingsDependencies({
@@ -4526,15 +4537,7 @@ setDataLoaderDependencies({
 });
 console.log('[script.js] Зависимости модуля Data Loader установлены');
 
-// User Preferences Dependencies
-setUserPreferencesDependencies({
-    State,
-    DEFAULT_UI_SETTINGS,
-    defaultPanelOrder,
-    tabsConfig,
-    showNotification,
-});
-console.log('[script.js] Зависимости модуля User Preferences установлены');
+// User Preferences Dependencies уже установлены выше на строке 2157
 
 // Data Clear Dependencies
 setDataClearDependencies({
