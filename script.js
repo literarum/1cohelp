@@ -2469,16 +2469,9 @@ function linkify(text) {
     return linkifyModule(text);
 }
 
-// initFullscreenToggles теперь импортируется из js/ui/modals-manager.js
-// Обертка для совместимости с существующим кодом
-const initFullscreenToggles = () => {
-    const modalConfigs = [
-        algorithmDetailModalConfig,
-        editAlgorithmModalConfig,
-        addAlgorithmModalConfig,
-    ];
-    initFullscreenToggles(modalConfigs);
-};
+// initFullscreenToggles уже определена выше на строке 965
+// Вызываем её с конфигами модальных окон при необходимости
+// (используется напрямую из модуля, обертка не нужна)
 
 // toggleModalFullscreen теперь импортируется из js/ui/modals-manager.js
 const toggleModalFullscreen = toggleModalFullscreenModule;
