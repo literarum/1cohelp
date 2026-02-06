@@ -25,7 +25,6 @@ let showAddEditExtLinkModal = null;
 let showOrganizeExtLinkCategoriesModal = null;
 let handleExtLinkAction = null;
 let handleViewToggleClick = null;
-let populateExtLinkCategoryFilter = null;
 
 /**
  * Устанавливает зависимости для компонента внешних ссылок
@@ -43,7 +42,6 @@ export function setExtLinksDependencies(deps) {
     if (deps.showOrganizeExtLinkCategoriesModal !== undefined) showOrganizeExtLinkCategoriesModal = deps.showOrganizeExtLinkCategoriesModal;
     if (deps.handleExtLinkAction !== undefined) handleExtLinkAction = deps.handleExtLinkAction;
     if (deps.handleViewToggleClick !== undefined) handleViewToggleClick = deps.handleViewToggleClick;
-    if (deps.populateExtLinkCategoryFilter !== undefined) populateExtLinkCategoryFilter = deps.populateExtLinkCategoryFilter;
 }
 
 // ============================================================================

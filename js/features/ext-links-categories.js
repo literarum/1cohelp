@@ -22,7 +22,6 @@ let addEscapeHandler = null;
 let getVisibleModals = null;
 let renderExtLinks = null;
 let getAllExtLinks = null;
-let populateExtLinkCategoryFilter = null;
 
 export function setExtLinksCategoriesDependencies(deps) {
     if (deps.State !== undefined) State = deps.State;
@@ -38,7 +37,6 @@ export function setExtLinksCategoriesDependencies(deps) {
     if (deps.getVisibleModals !== undefined) getVisibleModals = deps.getVisibleModals;
     if (deps.renderExtLinks !== undefined) renderExtLinks = deps.renderExtLinks;
     if (deps.getAllExtLinks !== undefined) getAllExtLinks = deps.getAllExtLinks;
-    if (deps.populateExtLinkCategoryFilter !== undefined) populateExtLinkCategoryFilter = deps.populateExtLinkCategoryFilter;
 }
 
 /**
