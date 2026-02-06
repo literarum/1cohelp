@@ -952,6 +952,27 @@ const showReglamentsForCategory = showReglamentsForCategoryModule;
 // debounce теперь импортируется из js/utils/helpers.js
 // (уже импортирован выше, используем напрямую)
 
+// Функции инициализации систем - определяем константы для использования в зависимостях
+// initSearchSystem импортируется напрямую из js/features/search.js (строка 189)
+// initTimerSystem импортируется напрямую из js/features/timer.js (строка 142)
+// initSedoTypesSystem импортируется напрямую из js/features/sedo.js (строка 177)
+const initCibLinkSystem = initCibLinkSystemModule;
+const initReglamentsSystem = initReglamentsSystemModule;
+const initBookmarkSystem = initBookmarkSystemModule;
+const initExternalLinksSystem = initExternalLinksSystemModule;
+const initBlacklistSystem = initBlacklistSystemModule;
+const initReloadButton = initReloadButtonModule;
+const initFullscreenToggles = initFullscreenTogglesModule;
+const setupHotkeys = setupHotkeysModule;
+const initUI = initUIModule;
+const initHotkeysModal = initHotkeysModalModule;
+const initClearDataFunctionality = initClearDataFunctionalityModule;
+const applyInitialUISettings = applyInitialUISettingsModule;
+
+// initViewToggles определяется ниже на строке 1711
+// initClientDataSystem определяется ниже на строке 3123 как function declaration (hoisting работает)
+// initUICustomization нужно найти
+
 // showNotification и showBookmarkDetailModal определены ниже как function declarations
 // Благодаря hoisting они доступны здесь, но мы не можем их переопределить
 // Поэтому используем их напрямую в зависимостях
