@@ -27,7 +27,6 @@ let handleExtLinkAction = null;
 let handleViewToggleClick = null;
 let loadExtLinks = null;
 let populateExtLinkCategoryFilter = null;
-let renderExtLinks = null;
 
 /**
  * Устанавливает зависимости для компонента внешних ссылок
@@ -47,7 +46,6 @@ export function setExtLinksDependencies(deps) {
     if (deps.handleViewToggleClick !== undefined) handleViewToggleClick = deps.handleViewToggleClick;
     if (deps.loadExtLinks !== undefined) loadExtLinks = deps.loadExtLinks;
     if (deps.populateExtLinkCategoryFilter !== undefined) populateExtLinkCategoryFilter = deps.populateExtLinkCategoryFilter;
-    if (deps.renderExtLinks !== undefined) renderExtLinks = deps.renderExtLinks;
 }
 
 // ============================================================================
