@@ -159,12 +159,15 @@ export async function loadUserPreferences() {
         currentPanelIds.forEach((panelId, index) => {
             if (!processedIds.has(panelId)) {
                 effectiveOrder.push(panelId);
-                effectiveVisibility.push(actualDefaultPanelVisibility[index]);
+                const defaultVisibility = index < actualDefaultPanelVisibility.length 
+                    ? actualDefaultPanelVisibility[index]
+                    : !(panelId === 'sedoTypes' || panelId === 'blacklistedClients');
+                effectiveVisibility.push(defaultVisibility);
                 console.log(
                     `${LOG_PREFIX} Добавлена новая панель "${panelId}" с видимостью по умолчанию.`,
                 );
             }
-        });
+        }););
 
         finalSettings.panelOrder = effectiveOrder;
         finalSettings.panelVisibility = effectiveVisibility;
