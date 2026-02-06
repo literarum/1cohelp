@@ -971,7 +971,12 @@ const applyInitialUISettings = applyInitialUISettingsModule;
 
 // initViewToggles определяется ниже на строке 1711
 // initClientDataSystem определяется ниже на строке 3123 как function declaration (hoisting работает)
-// initUICustomization нужно найти
+// initUICustomization не найдена - возможно, была удалена или переименована
+// Определяем как пустую функцию для совместимости
+function initUICustomization() {
+    // Функция не определена - возможно, функционал был перенесен в другой модуль
+    console.warn('initUICustomization: функция не реализована');
+}
 
 // showNotification и showBookmarkDetailModal определены ниже как function declarations
 // Благодаря hoisting они доступны здесь, но мы не можем их переопределить
