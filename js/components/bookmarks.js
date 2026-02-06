@@ -330,29 +330,172 @@ export async function getAllBookmarks() {
 
 /**
  * Загружает и отображает закладки
+ * Создает папки по умолчанию и примеры закладок, если их нет
  */
 export async function loadBookmarks() {
-    const container = document.getElementById('bookmarksContainer');
-    if (!container) {
-        console.error('[loadBookmarks] Контейнер #bookmarksContainer не найден.');
-        return;
+    if (!State || !State.db) {
+        console.error('База данных не инициализирована. Загрузка закладок невозможна.');
+        if (typeof showNotification === 'function')
+            showNotification('Ошибка: База данных недоступна.', 'error');
+        await renderBookmarkFolders([]);
+        await renderBookmarks([]);
+        return false;
     }
 
+    let folders = [];
+    let bookmarks = [];
+    let instructionsFolderId = null;
+    let firstFolderId = null;
+
     try {
-        const bookmarks = await getAllBookmarks();
-        const folders = await getAllFromIndexedDB('bookmarkFolders');
-        const folderMap = {};
-        if (folders && Array.isArray(folders)) {
-            folders.forEach((folder) => {
-                folderMap[folder.id] = folder;
-            });
+        folders = await getAllFromIndexedDB('bookmarkFolders');
+        console.log(`loadBookmarks: Найдено ${folders?.length || 0} существующих папок.`);
+
+        if (!folders || folders.length === 0) {
+            console.log('Папки не найдены, создаем папки по умолчанию...');
+            const defaultFoldersData = [
+                { name: 'Общие', color: 'blue', dateAdded: new Date().toISOString() },
+                { name: 'Важное', color: 'red', dateAdded: new Date().toISOString() },
+                { name: 'Инструкции', color: 'green', dateAdded: new Date().toISOString() },
+            ];
+
+            const savedFolderIds = await Promise.all(
+                defaultFoldersData.map((folder) => saveToIndexedDB('bookmarkFolders', folder)),
+            );
+
+            const createdFoldersWithIds = defaultFoldersData.map((folder, index) => ({
+                ...folder,
+                id: savedFolderIds[index],
+            }));
+            console.log('Папки по умолчанию созданы:', createdFoldersWithIds);
+
+            if (typeof updateSearchIndex === 'function') {
+                await Promise.all(
+                    createdFoldersWithIds.map((folder) =>
+                        updateSearchIndex('bookmarkFolders', folder.id, folder, 'add', null).catch(
+                            (err) =>
+                                console.error(
+                                    `Ошибка индексации папки по умолчанию ${folder.id} ('${folder.name}'):`,
+                                    err,
+                                ),
+                        ),
+                    ),
+                );
+            }
+            folders = createdFoldersWithIds;
         }
 
-        await renderBookmarks(bookmarks, folderMap);
+        await renderBookmarkFolders(folders || []);
+
+        if (folders && folders.length > 0) {
+            const instructionsFolder = folders.find((f) => f.name === 'Инструкции');
+            if (instructionsFolder) {
+                instructionsFolderId = instructionsFolder.id;
+            }
+            firstFolderId = folders[0]?.id;
+        }
+
+        bookmarks = await getAllFromIndexedDB('bookmarks');
+        console.log(`loadBookmarks: Найдено ${bookmarks?.length || 0} существующих закладок.`);
+
+        if ((!bookmarks || bookmarks.length === 0) && folders && folders.length > 0) {
+            console.log('Закладки не найдены, создаем примеры закладок...');
+            if (firstFolderId === null && folders.length > 0) {
+                firstFolderId = folders[0].id;
+            }
+
+            const targetFolderIdForKB = instructionsFolderId ?? firstFolderId;
+
+            const sampleBookmarksData = [
+                {
+                    title: 'База знаний КриптоПро',
+                    url: 'https://support.cryptopro.ru/index.php?/Knowledgebase/List',
+                    description: 'Официальная база знаний КриптоПро.',
+                    folder: targetFolderIdForKB,
+                    dateAdded: new Date().toISOString(),
+                },
+                {
+                    title: 'База знаний Рутокен',
+                    url: 'https://dev.rutoken.ru/',
+                    description: 'Официальная база знаний Рутокен.',
+                    folder: targetFolderIdForKB,
+                    dateAdded: new Date().toISOString(),
+                },
+            ];
+
+            const savedBookmarkIds = await Promise.all(
+                sampleBookmarksData.map((bookmark) => saveToIndexedDB('bookmarks', bookmark)),
+            );
+            const bookmarksWithIds = sampleBookmarksData.map((bookmark, index) => ({
+                ...bookmark,
+                id: savedBookmarkIds[index],
+            }));
+            console.log('Примеры закладок созданы:', bookmarksWithIds);
+
+            if (typeof updateSearchIndex === 'function') {
+                await Promise.all(
+                    bookmarksWithIds.map((bookmark) => {
+                        if (bookmark.folder !== ARCHIVE_FOLDER_ID) {
+                            return updateSearchIndex(
+                                'bookmarks',
+                                bookmark.id,
+                                bookmark,
+                                'add',
+                                null,
+                            ).catch((err) =>
+                                console.error(
+                                    `Ошибка индексации примера закладки ${bookmark.id} ('${bookmark.title}'):`,
+                                    err,
+                                ),
+                            );
+                        }
+                        return Promise.resolve();
+                    }),
+                );
+            }
+            bookmarks = bookmarksWithIds;
+        }
+
+        const folderMap = (folders || []).reduce((map, folder) => {
+            if (folder && typeof folder.id !== 'undefined') {
+                map[folder.id] = folder;
+            }
+            return map;
+        }, {});
+
+        const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
+        let initialBookmarksToRender;
+        if (bookmarkFolderFilter && bookmarkFolderFilter.value === ARCHIVE_FOLDER_ID) {
+            initialBookmarksToRender = (bookmarks || []).filter(
+                (bm) => bm.folder === ARCHIVE_FOLDER_ID,
+            );
+        } else if (bookmarkFolderFilter && bookmarkFolderFilter.value !== '') {
+            initialBookmarksToRender = (bookmarks || []).filter(
+                (bm) =>
+                    String(bm.folder) === String(bookmarkFolderFilter.value) &&
+                    bm.folder !== ARCHIVE_FOLDER_ID,
+            );
+        } else {
+            initialBookmarksToRender = (bookmarks || []).filter(
+                (bm) => bm.folder !== ARCHIVE_FOLDER_ID,
+            );
+        }
+
+        await renderBookmarks(initialBookmarksToRender, folderMap);
+
+        console.log(
+            `Загрузка закладок завершена. Загружено ${folders?.length || 0} папок и ${
+                bookmarks?.length || 0
+            } закладок (показано ${initialBookmarksToRender.length}).`,
+        );
+        return true;
     } catch (error) {
-        console.error('[loadBookmarks] Ошибка загрузки закладок:', error);
-        container.innerHTML =
-            '<p class="text-red-500 dark:text-red-400 text-center p-4">Ошибка загрузки закладок.</p>';
+        console.error('Критическая ошибка при загрузке закладок или папок:', error);
+        await renderBookmarkFolders([]);
+        await renderBookmarks([]);
+        if (typeof showNotification === 'function')
+            showNotification('Критическая ошибка загрузки данных закладок.', 'error');
+        return false;
     }
 }
 

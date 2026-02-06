@@ -1,8 +1,9 @@
 'use strict';
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, linkify } from '../utils/html.js';
 import { getStepContentAsText, getSectionName, formatExampleForTextarea, deepEqual } from '../utils/helpers.js';
 import { State } from '../app/state.js';
+import { renderMainAlgorithm } from './main-algorithm.js';
 
 // ============================================================================
 // КОМПОНЕНТ РАБОТЫ С АЛГОРИТМАМИ
@@ -30,6 +31,12 @@ let attachScreenshotHandlers = null;
 let updateStepNumbers = null;
 let toggleStepCollapse = null;
 let Sortable = null;
+
+// Дополнительные зависимости для showAlgorithmDetail
+let ExportService = null;
+let renderScreenshotIcon = null;
+let handleViewScreenshotClick = null;
+let openAnimatedModal = null;
 
 /**
  * Устанавливает зависимости для компонента алгоритмов
@@ -299,9 +306,8 @@ export function getAlgorithmText(algoData) {
  * Рендерит все алгоритмы
  */
 export function renderAllAlgorithms() {
-    if (typeof window.renderMainAlgorithm === 'function') {
-        window.renderMainAlgorithm();
-    }
+    // Используем импортированную функцию вместо window.renderMainAlgorithm
+    renderMainAlgorithm();
     renderAlgorithmCards('program');
     renderAlgorithmCards('skzi');
     renderAlgorithmCards('webReg');

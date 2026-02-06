@@ -7,6 +7,10 @@ import { tabsConfig } from '../config.js';
 // Зависимости модуля
 let deps = {
     setActiveTab: null,
+    showBlacklistWarning: null,
+    renderFavoritesPage: null,
+    updateVisibleTabs: null,
+    getVisibleModals: null,
 };
 
 /**
@@ -344,7 +348,9 @@ export function handleTabsResize() {
         if (currentDropdown && !currentDropdown.classList.contains('hidden')) {
             currentDropdown.classList.add('hidden');
         }
-        if (typeof updateVisibleTabs === 'function') {
+        if (deps.updateVisibleTabs && typeof deps.updateVisibleTabs === 'function') {
+            deps.updateVisibleTabs();
+        } else if (typeof updateVisibleTabs === 'function') {
             updateVisibleTabs();
         } else {
             console.error(
@@ -352,4 +358,127 @@ export function handleTabsResize() {
             );
         }
     }, 250);
+}
+
+// ============================================================================
+// ФУНКЦИЯ АКТИВАЦИИ ВКЛАДКИ
+// ============================================================================
+
+/**
+ * Активирует указанную вкладку с анимацией
+ * @param {string} tabId - ID вкладки для активации
+ * @param {boolean} warningJustAccepted - флаг, что предупреждение было принято
+ */
+export async function setActiveTab(tabId, warningJustAccepted = false) {
+    const targetTabId = tabId + 'Tab';
+    const targetContentId = tabId + 'Content';
+
+    const allTabButtons = document.querySelectorAll('.tab-btn');
+    const allTabContents = document.querySelectorAll('.tab-content');
+    const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
+
+    const FADE_DURATION = 150;
+
+    console.log(`[setActiveTab v.Corrected] Активация вкладки: ${tabId}`);
+
+    if (
+        tabId === 'blacklistedClients' &&
+        State.userPreferences.showBlacklistUsageWarning &&
+        !warningJustAccepted
+    ) {
+        if (deps.showBlacklistWarning && typeof deps.showBlacklistWarning === 'function') {
+            deps.showBlacklistWarning();
+        } else if (typeof showBlacklistWarning === 'function') {
+            showBlacklistWarning();
+        } else {
+            console.error('Функция showBlacklistWarning не найдена!');
+        }
+        return;
+    }
+
+    if (showFavoritesHeaderButton) {
+        showFavoritesHeaderButton.classList.toggle('text-primary', tabId === 'favorites');
+    }
+
+    allTabButtons.forEach((button) => {
+        const isActive = button.id === targetTabId && tabId !== 'favorites';
+        if (isActive) {
+            button.classList.add('tab-active');
+            button.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
+        } else {
+            button.classList.remove('tab-active');
+            button.classList.add('text-gray-500', 'dark:text-gray-400', 'border-transparent');
+        }
+    });
+
+    if (State.currentSection === tabId && !warningJustAccepted) {
+        console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} уже активна. Выход.`);
+        return;
+    }
+
+    const previousSection = State.currentSection;
+    State.currentSection = tabId;
+    localStorage.setItem('lastActiveTabCopilot1CO', tabId);
+
+    const targetContent = document.getElementById(targetContentId);
+    let currentActiveContent = null;
+
+    allTabContents.forEach((content) => {
+        if (!content.classList.contains('hidden')) {
+            currentActiveContent = content;
+        }
+    });
+
+    if (currentActiveContent && currentActiveContent !== targetContent) {
+        currentActiveContent.classList.add('is-hiding');
+
+        setTimeout(() => {
+            currentActiveContent.classList.add('hidden');
+            currentActiveContent.classList.remove('is-hiding');
+
+            if (targetContent) {
+                targetContent.classList.add('is-hiding');
+                targetContent.classList.remove('hidden');
+
+                requestAnimationFrame(() => {
+                    targetContent.classList.remove('is-hiding');
+                });
+            }
+        }, FADE_DURATION);
+    } else if (targetContent) {
+        targetContent.classList.add('is-hiding');
+        targetContent.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            targetContent.classList.remove('is-hiding');
+        });
+    }
+
+    if (targetContent && tabId === 'favorites') {
+        if (deps.renderFavoritesPage && typeof deps.renderFavoritesPage === 'function') {
+            await deps.renderFavoritesPage();
+        } else if (typeof renderFavoritesPage === 'function') {
+            await renderFavoritesPage();
+        } else {
+            console.error('setActiveTab: Функция renderFavoritesPage не найдена!');
+        }
+    }
+
+    if (deps.updateVisibleTabs && typeof deps.updateVisibleTabs === 'function') {
+        requestAnimationFrame(deps.updateVisibleTabs);
+    } else if (typeof updateVisibleTabs === 'function') {
+        requestAnimationFrame(updateVisibleTabs);
+    }
+
+    console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} успешно активирована с анимацией.`);
+    requestAnimationFrame(() => {
+        const visibleModals = deps.getVisibleModals && typeof deps.getVisibleModals === 'function'
+            ? deps.getVisibleModals()
+            : typeof getVisibleModals === 'function'
+            ? getVisibleModals()
+            : [];
+        if (visibleModals.length === 0) {
+            document.body.classList.remove('modal-open');
+            document.body.classList.remove('overflow-hidden');
+        }
+    });
 }

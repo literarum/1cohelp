@@ -43,7 +43,6 @@ export const CLIENT_NOTES_FONT_SIZE_STEP = 5;
 // ============================================================================
 // ВНЕШНИЕ РЕСУРСЫ
 // ============================================================================
-export const TELEFONY_DOC_ID = '1lDCKpFcBIB4gRCI7_Ppsepy140YWdFtziut67xr6GTw';
 export const SHABLONY_DOC_ID = '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4';
 
 // ============================================================================
@@ -128,10 +127,6 @@ export const FIELD_WEIGHTS = {
         text: 1.0,
         url: 0.7,
         notes: 1.0,
-    },
-    telefony: {
-        header: 1.5,
-        cell: 1.0,
     },
     shablony: {
         h1: 3.0,

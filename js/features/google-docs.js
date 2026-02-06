@@ -1,8 +1,9 @@
 'use strict';
 
 import { State } from '../app/state.js';
-import { escapeHtml, highlightTextInString, normalizeBrokenEntities } from '../utils/html.js';
+import { escapeHtml, highlightTextInString, normalizeBrokenEntities, decodeBasicEntitiesOnce, linkify } from '../utils/html.js';
 import { NotificationService } from '../services/notification.js';
+import { SHABLONY_DOC_ID } from '../constants.js';
 
 // ============================================================================
 // GOOGLE DOCS INTEGRATION
@@ -36,25 +37,15 @@ function showNotification(message, type = 'success', duration = 5000) {
 }
 
 // Store original data for search
-let originalTelefonyData = [];
 let originalShablonyData = [];
 
 // Getter functions for search module
-export function getOriginalTelefonyData() {
-    return originalTelefonyData;
-}
-
 export function getOriginalShablonyData() {
     return originalShablonyData;
 }
 
 // Section configurations
 const GOOGLE_DOC_SECTIONS = [
-    {
-        id: 'telefony',
-        docId: '1lDCKpFcBIB4gRCI7_Ppsepy140YWdFtziut67xr6GTw',
-        title: 'Телефоны',
-    },
     { 
         id: 'shablony', 
         docId: '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4', 
@@ -115,49 +106,103 @@ export async function fetchGoogleDocs(docIds, force = false) {
         return [];
     }
 
-    const API_BASE_URL =
+    const BASE_URL =
         'https://script.google.com/macros/s/AKfycby5ak0hPZF7_YJnhqYD8g1M2Ck6grzq11mpKqPFIWaX9_phJe5H_97cXmnClXKg1Nrl/exec';
-    const docIdsParam = docIds.join(',');
-    const cacheBuster = force ? `&v=${Date.now()}` : `&v=${Date.now()}`;
-    const url = `${API_BASE_URL}?docIds=${docIdsParam}${cacheBuster}`;
+    const params = new URLSearchParams();
+    params.append('docIds', docIds.join(','));
+    params.append('v', new Date().getTime());
+    if (force) {
+        params.append('nocache', 'true');
+    }
 
-    console.log(`URL для запроса: ${url}`);
+    const requestUrl = `${BASE_URL}?${params.toString()}`;
+    console.log('URL для запроса:', requestUrl);
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(requestUrl);
         if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
+            throw new Error(`Ошибка загрузки: статус ${response.status}`);
         }
 
-        const rawData = await response.json();
-        const results = [];
+        const results = await response.json();
+        console.log('[fetchGoogleDocs] Получен ответ от API:', results, 'Тип:', typeof results, 'Является массивом:', Array.isArray(results));
+        if (results.error) {
+            throw new Error(`Ошибка от сервера: ${results.message}`);
+        }
 
-        if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
-            for (const docId of docIds) {
-                if (rawData[docId]) {
-                    const docData = rawData[docId];
-                    if (docData.error) {
-                        console.error(`Ошибка загрузки документа ${docId}: ${docData.error}`);
-                        results.push({ docId, data: [], error: docData.error });
-                    } else if (Array.isArray(docData)) {
-                        results.push({ docId, data: docData, error: null });
-                    } else if (docData.content && Array.isArray(docData.content)) {
-                        results.push({ docId, data: docData.content, error: null });
-                    } else {
-                        results.push({ docId, data: [], error: 'Неизвестный формат данных' });
-                    }
-                } else {
-                    results.push({ docId, data: [], error: 'Документ не найден в ответе' });
+        // API может возвращать массив результатов напрямую: [{ status: 'success', content: { type: 'paragraphs', data: [...] } }, ...]
+        if (Array.isArray(results)) {
+            console.log('[fetchGoogleDocs] Обработка массива результатов, длина:', results.length);
+            return results.map((item, index) => {
+                // Извлекаем данные: приоритет item.content.data, затем item.data, затем item.content (если это массив)
+                let data = [];
+                if (item.content && item.content.data && Array.isArray(item.content.data)) {
+                    data = item.content.data;
+                } else if (item.data && Array.isArray(item.data)) {
+                    data = item.data;
+                } else if (item.content && Array.isArray(item.content)) {
+                    data = item.content;
+                } else if (Array.isArray(item)) {
+                    data = item;
                 }
-            }
-        } else if (Array.isArray(rawData) && docIds.length === 1) {
-            results.push({ docId: docIds[0], data: rawData, error: null });
-        } else {
-            console.error('Неожиданный формат ответа от API:', rawData);
-            docIds.forEach((id) => results.push({ docId: id, data: [], error: 'Неверный формат' }));
+                const result = {
+                    docId: docIds[index] || docIds[0],
+                    status: item.status || 'success',
+                    content: item.content || { type: 'paragraphs', data: [] },
+                    message: item.message,
+                    data: data,
+                    error: item.status === 'error' ? (item.message || 'Ошибка загрузки') : null,
+                };
+                console.log(`[fetchGoogleDocs] Обработан элемент ${index}:`, result, 'Извлечённые данные:', data);
+                return result;
+            });
         }
 
-        return results;
+        // API возвращает объект с полем content (массив результатов)
+        // Каждый результат имеет: { status: 'success', content: { type: 'paragraphs', data: [...] }, message: ... }
+        if (results && results.content && Array.isArray(results.content)) {
+            return results.content.map((item, index) => {
+                // Извлекаем данные: приоритет item.content.data, затем item.data, затем item.content (если это массив)
+                let data = [];
+                if (item.content && item.content.data && Array.isArray(item.content.data)) {
+                    data = item.content.data;
+                } else if (item.data && Array.isArray(item.data)) {
+                    data = item.data;
+                } else if (item.content && Array.isArray(item.content)) {
+                    data = item.content;
+                } else if (Array.isArray(item)) {
+                    data = item;
+                }
+                return {
+                    docId: docIds[index] || docIds[0],
+                    status: item.status || 'success',
+                    content: item.content || { type: 'paragraphs', data: [] },
+                    message: item.message,
+                    data: data,
+                    error: item.status === 'error' ? (item.message || 'Ошибка загрузки') : null,
+                };
+            });
+        }
+
+        // Fallback: если структура другая, пытаемся извлечь данные
+        if (results && typeof results === 'object' && !Array.isArray(results)) {
+            return docIds.map((docId) => {
+                const docData = results[docId];
+                if (!docData) {
+                    return { docId, data: [], error: 'Документ не найден в ответе' };
+                }
+                if (docData.error) {
+                    return { docId, data: [], error: docData.error };
+                }
+                const data = Array.isArray(docData)
+                    ? docData
+                    : docData.content?.data || docData.data || docData.content || docData.paragraphs || [];
+                return { docId, data: Array.isArray(data) ? data : [], error: null };
+            });
+        }
+
+        console.error('Неожиданный формат ответа от API:', results);
+        return docIds.map((id) => ({ docId: id, data: [], error: 'Неверный формат ответа' }));
     } catch (error) {
         console.error(`Ошибка при загрузке документов: ${error.message}`);
         return docIds.map((id) => ({ docId: id, data: [], error: error.message }));
@@ -188,22 +233,20 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
             return;
         }
 
-        if (parentContainerId === 'doc-content-telefony') {
-            console.log(
-                '[renderGoogleDocContent CORRECTED] Обнаружен особый случай: рендеринг таблицы телефонов. Используется специальный парсер.',
-            );
-            originalTelefonyData = result.data;
-            renderPhoneDirectoryTable(container, result.data);
-            return;
-        }
-
         if (parentContainerId === 'doc-content-shablony') {
             console.log(
-                '[renderGoogleDocContent CORRECTED] Обнаружен особый случай: рендеринг документа "Шаблоны". Используется парсер стилизованных параграфов.',
+                '[renderGoogleDocContent] Рендеринг документа "Шаблоны".',
             );
-            const parsedBlocks = parseShablonyContent(result.data);
-            originalShablonyData = parsedBlocks;
-            renderShablonyBlocks(container, parsedBlocks);
+            // Извлекаем данные: result.data или result.content.data
+            const rawData = result.data || result.content?.data || [];
+            if (!Array.isArray(rawData) || rawData.length === 0) {
+                console.warn('[renderGoogleDocContent] Шаблоны: данные пусты или неверный формат.', result);
+                container.innerHTML = '<p class="p-4 text-center text-gray-500">Шаблоны не найдены.</p>';
+                return;
+            }
+            // Данные уже должны быть массивом строк параграфов
+            originalShablonyData = rawData;
+            renderStyledParagraphs(container, rawData);
             return;
         }
 
@@ -228,78 +271,7 @@ function renderParagraphs(container, data) {
 }
 
 /**
- * Render phone directory table
- */
-export function renderPhoneDirectoryTable(container, data, options = {}) {
-    const LOG_PREFIX = '[Phone Table Parser v7 ROBUST-STYLING-WITH-INDEX]';
-    console.log(`%c${LOG_PREFIX} Запуск функции рендеринга.`, 'color: blue; font-weight: bold;');
-
-    const { scale = 1.0, fontScale = 1.0, searchQuery = '' } = options;
-    const highlight = (text) => {
-        if (!text || typeof text !== 'string') return '';
-        if (!searchQuery) return escapeHtml(text);
-        if (typeof highlightTextInString === 'function') {
-            return highlightTextInString(text, searchQuery);
-        }
-        return escapeHtml(text);
-    };
-
-    if (!container || typeof container.appendChild !== 'function') {
-        console.error(`${LOG_PREFIX} КРИТИЧЕСКАЯ ОШИБКА: Передан невалидный контейнер.`);
-        return;
-    }
-
-    if (!data || !Array.isArray(data) || data.length === 0) {
-        if (searchQuery) {
-            container.innerHTML = `<p class="p-4 text-center text-gray-500">По запросу "${escapeHtml(
-                searchQuery,
-            )}" ничего не найдено.</p>`;
-        } else {
-            container.innerHTML =
-                '<p class="p-4 text-center text-gray-500">Данные отсутствуют.</p>';
-        }
-        return;
-    }
-
-    const headers = Object.keys(
-        data.find(
-            (item) => typeof item === 'object' && item !== null && Object.keys(item).length > 0,
-        ) || {},
-    );
-
-    if (headers.length === 0) {
-        console.error(`${LOG_PREFIX} ОШИБКА: Не удалось определить заголовки.`);
-        container.innerHTML = '<p class="p-4 text-center text-red-500">Ошибка формата данных.</p>';
-        return;
-    }
-
-    // Build table HTML
-    const tableHtml = `
-        <table class="w-full border-collapse text-sm">
-            <thead class="bg-gray-100 dark:bg-gray-700 sticky top-0">
-                <tr>
-                    ${headers.map((h) => `<th class="px-3 py-2 text-left font-semibold border-b dark:border-gray-600">${escapeHtml(h)}</th>`).join('')}
-                </tr>
-            </thead>
-            <tbody>
-                ${data
-                    .map(
-                        (row, idx) => `
-                    <tr class="${idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-750'} hover:bg-blue-50 dark:hover:bg-gray-700">
-                        ${headers.map((h) => `<td class="px-3 py-2 border-b dark:border-gray-600">${highlight(String(row[h] || ''))}</td>`).join('')}
-                    </tr>
-                `,
-                    )
-                    .join('')}
-            </tbody>
-        </table>
-    `;
-
-    container.innerHTML = tableHtml;
-}
-
-/**
- * Parse Shablony content into blocks
+ * Parse Shablony content into blocks (для поиска)
  */
 export function parseShablonyContent(data) {
     if (!Array.isArray(data)) return [];
@@ -345,79 +317,130 @@ export function parseShablonyContent(data) {
 }
 
 /**
- * Render Shablony blocks
+ * Render styled paragraphs for Shablony (из старого проекта)
  */
-function renderShablonyBlocks(container, blocks, searchQuery = '') {
-    if (!blocks || blocks.length === 0) {
+function renderStyledParagraphs(container, data, searchQuery = '') {
+    if (!container) {
+        console.error('renderStyledParagraphs: Передан невалидный контейнер.');
+        return;
+    }
+
+    const highlight = (text) => {
+        if (!text || typeof text !== 'string') return '';
+        text = normalizeBrokenEntities(text);
+        if (!searchQuery) {
+            return linkify ? linkify(decodeBasicEntitiesOnce(text)) : escapeHtml(text);
+        }
+        const highlighted = highlightTextInString
+            ? highlightTextInString(text, searchQuery)
+                  .replace(/<mark[^>]*>/g, '##MARK_START##')
+                  .replace(/<\/mark>/g, '##MARK_END##')
+            : text;
+        const linked = linkify ? linkify(decodeBasicEntitiesOnce(highlighted)) : escapeHtml(highlighted);
+        return linked
+            .replace(/##MARK_START##/g, '<mark class="search-term-highlight">')
+            .replace(/##MARK_END##/g, '</mark>');
+    };
+
+    if (!data || data.length === 0) {
         if (searchQuery) {
-            container.innerHTML = `<p class="p-4 text-center text-gray-500">По запросу "${escapeHtml(searchQuery)}" ничего не найдено.</p>`;
+            container.innerHTML = `<p class="text-gray-500">По запросу "${escapeHtml(searchQuery)}" ничего не найдено.</p>`;
         } else {
-            container.innerHTML = '<p class="p-4 text-center text-gray-500">Шаблоны не найдены.</p>';
+            container.innerHTML = '<p class="text-gray-500">Шаблоны не найдены.</p>';
         }
         return;
     }
 
     const fragment = document.createDocumentFragment();
+    let currentBlockWrapper = null;
+    let blockIndex = -1;
 
-    blocks.forEach((block) => {
-        const div = document.createElement('div');
-        div.className = `shablony-block copyable-block level-${block.level} mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors`;
-        div.dataset.originalIndex = block.originalIndex;
+    const createBlockWrapper = (index, level) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'shablony-block p-3 rounded-lg';
+        wrapper.dataset.blockIndex = index;
 
-        const titleClass = block.level === 1 
-            ? 'text-lg font-bold text-primary' 
-            : block.level === 2 
-            ? 'text-base font-semibold text-gray-700 dark:text-gray-300' 
-            : 'text-sm font-medium text-gray-600 dark:text-gray-400';
+        if (level === 2) {
+            wrapper.classList.add(
+                'transition-colors',
+                'duration-200',
+                'hover:bg-gray-100',
+                'dark:hover:bg-gray-800/50',
+                'copyable-block',
+                'group',
+            );
+            wrapper.title = 'Нажмите, чтобы скопировать содержимое шаблона в буфер обмена';
+            wrapper.style.cursor = 'pointer';
+        }
 
-        const titleHtml = searchQuery 
-            ? highlightTextInString(block.title, searchQuery) 
-            : escapeHtml(block.title);
-        
-        const contentHtml = searchQuery 
-            ? highlightTextInString(block.content, searchQuery) 
-            : escapeHtml(block.content);
+        return wrapper;
+    };
 
-        div.innerHTML = `
-            <div class="${titleClass} mb-2">${titleHtml}</div>
-            <div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">${contentHtml}</div>
-        `;
+    data.forEach((p) => {
+        const trimmedP = normalizeBrokenEntities(p).trim();
+        if (trimmedP === '') return;
 
-        fragment.appendChild(div);
+        let level = 0;
+        if (trimmedP.startsWith('⏩')) level = 1;
+        else if (trimmedP.startsWith('➧')) level = 2;
+        else if (trimmedP.startsWith('▸')) level = 3;
+
+        if (level > 0) {
+            blockIndex++;
+            currentBlockWrapper = createBlockWrapper(blockIndex, level);
+
+            const headerTag = `h${level + 1}`;
+            const header = document.createElement(headerTag);
+
+            const classMap = {
+                h2: 'text-2xl font-bold text-gray-900 dark:text-gray-100 mt-6 mb-4 pb-2 border-gray-300 dark:border-gray-600 text-center',
+                h3: 'text-xl font-bold text-gray-800 dark:text-gray-200 mt-5 mb-3',
+                h4: 'text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2',
+            };
+
+            header.className = classMap[headerTag];
+            header.innerHTML = highlight(trimmedP.slice(1).trim());
+            currentBlockWrapper.appendChild(header);
+            fragment.appendChild(currentBlockWrapper);
+        } else if (currentBlockWrapper) {
+            if (
+                trimmedP.startsWith('•') ||
+                trimmedP.startsWith('* ') ||
+                trimmedP.startsWith('- ')
+            ) {
+                let list = currentBlockWrapper.querySelector('ul');
+                if (!list) {
+                    list = document.createElement('ul');
+                    list.className = 'list-disc list-inside space-y-1 mb-2 pl-4';
+                    currentBlockWrapper.appendChild(list);
+                }
+                const li = document.createElement('li');
+                li.innerHTML = highlight(trimmedP.slice(1).trim());
+                list.appendChild(li);
+            } else {
+                const pElem = document.createElement('p');
+                pElem.className = 'mb-2';
+                pElem.innerHTML = highlight(trimmedP.replace(/\*(.*?)\*/g, '<strong>$1</strong>'));
+                currentBlockWrapper.appendChild(pElem);
+            }
+        }
     });
 
     container.innerHTML = '';
     container.appendChild(fragment);
-}
 
-/**
- * Handle telefony search
- */
-export function handleTelefonySearch() {
-    const searchInput = document.getElementById('telefony-search-input');
-    const clearBtn = document.getElementById('telefony-search-clear-btn');
-    const container = document.getElementById('doc-content-telefony');
+    const createSeparator = () => {
+        const separator = document.createElement('div');
+        separator.className = 'w-full h-px bg-gray-200 dark:bg-gray-700 my-4';
+        return separator;
+    };
 
-    if (!searchInput || !container) return;
-
-    const query = searchInput.value.trim().toLowerCase();
-    
-    if (clearBtn) {
-        clearBtn.classList.toggle('hidden', query.length === 0);
-    }
-
-    if (!query) {
-        renderPhoneDirectoryTable(container, originalTelefonyData);
-        return;
-    }
-
-    const filteredData = originalTelefonyData.filter((row) => {
-        return Object.values(row).some((value) => 
-            String(value).toLowerCase().includes(query)
-        );
+    const blocksToSeparate = container.querySelectorAll('.shablony-block');
+    blocksToSeparate.forEach((block, index) => {
+        if (index < blocksToSeparate.length - 1) {
+            block.after(createSeparator());
+        }
     });
-
-    renderPhoneDirectoryTable(container, filteredData, { searchQuery: query });
 }
 
 /**
@@ -437,16 +460,16 @@ export function handleShablonySearch() {
     }
 
     if (!query) {
-        renderShablonyBlocks(container, originalShablonyData);
+        renderStyledParagraphs(container, originalShablonyData);
         return;
     }
 
-    const filteredBlocks = originalShablonyData.filter((block) => {
-        return block.title.toLowerCase().includes(query) || 
-               block.content.toLowerCase().includes(query);
+    const filteredData = originalShablonyData.filter((p) => {
+        const text = typeof p === 'string' ? p : String(p);
+        return text.toLowerCase().includes(query);
     });
 
-    renderShablonyBlocks(container, filteredBlocks, query);
+    renderStyledParagraphs(container, filteredData, query);
 }
 
 /**
@@ -467,9 +490,7 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
 
     const hudId = `gdoc-${targetContainerId}`;
     const humanLabel =
-        targetContainerId === 'doc-content-telefony'
-            ? 'Телефоны'
-            : targetContainerId === 'doc-content-shablony'
+        targetContainerId === 'doc-content-shablony'
             ? 'Шаблоны'
             : 'Документ';
     
@@ -507,11 +528,14 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
         if (typeof window.updateSearchIndex === 'function') {
             const sectionId = targetContainerId.replace('doc-content-', '');
             console.log(
-                `[ИНДЕКСАЦИЯ] Запуск updateSearchIndex для ${sectionId} (ID: ${docId}) по сырым данным.`,
+                `[ИНДЕКСАЦИЯ] Запуск updateSearchIndex для ${sectionId} (ID: ${docId}).`,
             );
             try {
-                const rawData = results[0]?.data || [];
-                await window.updateSearchIndex(sectionId, docId, rawData, 'add');
+                if (docId === SHABLONY_DOC_ID && sectionId === 'shablony') {
+                    const rawData = results[0]?.data || results[0]?.content?.data || [];
+                    const blocks = parseShablonyContent(rawData);
+                    await window.updateSearchIndex('shablony', docId, blocks, 'update');
+                }
             } catch (indexError) {
                 console.error(`Ошибка индексации для ${sectionId}:`, indexError);
             }
@@ -561,9 +585,6 @@ export function initGoogleDocSections() {
         tabContents.forEach((content) => mainContentArea.appendChild(content));
     }
 
-    const debouncedTelefonySearch = typeof debounce === 'function' 
-        ? debounce(handleTelefonySearch, 300) 
-        : handleTelefonySearch;
     const debouncedShablonySearch = typeof debounce === 'function' 
         ? debounce(handleShablonySearch, 300) 
         : handleShablonySearch;
@@ -608,18 +629,14 @@ export function initGoogleDocSections() {
 
             const searchInput = document.getElementById(`${section.id}-search-input`);
             const clearBtn = document.getElementById(`${section.id}-search-clear-btn`);
-            const searchHandler = section.id === 'telefony' 
-                ? debouncedTelefonySearch 
-                : debouncedShablonySearch;
 
             if (searchInput) {
-                searchInput.addEventListener('input', searchHandler);
+                searchInput.addEventListener('input', debouncedShablonySearch);
             }
             if (clearBtn) {
                 clearBtn.addEventListener('click', () => {
                     if (searchInput) searchInput.value = '';
-                    if (section.id === 'telefony') handleTelefonySearch();
-                    else handleShablonySearch();
+                    handleShablonySearch();
                 });
             }
 
@@ -627,7 +644,7 @@ export function initGoogleDocSections() {
                 const docContainer = document.getElementById(`doc-content-${section.id}`);
                 if (docContainer && typeof window.copyToClipboard === 'function') {
                     docContainer.addEventListener('click', (event) => {
-                        const block = event.target.closest('.shablony-block.copyable-block');
+                        const block = event.target.closest('.shablony-block');
                         if (!block) return;
 
                         if (event.target.closest('a')) {
@@ -661,8 +678,6 @@ if (typeof window !== 'undefined') {
     window.loadAndRenderGoogleDoc = loadAndRenderGoogleDoc;
     window.renderGoogleDocContent = renderGoogleDocContent;
     window.fetchGoogleDocs = fetchGoogleDocs;
-    window.handleTelefonySearch = handleTelefonySearch;
     window.handleShablonySearch = handleShablonySearch;
     window.parseShablonyContent = parseShablonyContent;
-    window.renderPhoneDirectoryTable = renderPhoneDirectoryTable;
 }

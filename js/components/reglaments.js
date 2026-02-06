@@ -70,7 +70,8 @@ export function populateReglamentCategoryDropdowns() {
         select.innerHTML = '<option value="">Выберите категорию</option>';
 
         const fragment = document.createDocumentFragment();
-        const sortedCategories = Object.entries(categoryDisplayInfo).sort(([, a], [, b]) =>
+        const categoriesForSelect = categoryDisplayInfo && typeof categoryDisplayInfo === 'object' ? categoryDisplayInfo : {};
+        const sortedCategories = Object.entries(categoriesForSelect).sort(([, a], [, b]) =>
             a.title.localeCompare(b.title),
         );
 
@@ -217,7 +218,8 @@ export function renderReglamentCategories() {
     }
     categoryGrid.innerHTML = '';
 
-    Object.entries(categoryDisplayInfo).forEach(([categoryId, info]) => {
+    const categories = categoryDisplayInfo && typeof categoryDisplayInfo === 'object' ? categoryDisplayInfo : {};
+    Object.entries(categories).forEach(([categoryId, info]) => {
         const categoryElement = createCategoryElement(
             categoryId,
             info.title,
@@ -249,7 +251,7 @@ export async function showReglamentsForCategory(categoryId) {
         return;
     }
 
-    const title = categoryDisplayInfo[categoryId]?.title || categoryId;
+    const title = categoryDisplayInfo?.[categoryId]?.title || categoryId;
     currentCategoryTitleEl.textContent = title;
 
     categoryGridElement.classList.add('hidden');
@@ -656,7 +658,7 @@ export async function showReglamentDetail(reglamentId) {
 
         if (metaElement) {
             const categoryInfo = reglament.category
-                ? categoryDisplayInfo[reglament.category]
+                ? categoryDisplayInfo?.[reglament.category]
                 : null;
             const categoryName = categoryInfo
                 ? categoryInfo.title

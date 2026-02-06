@@ -15,7 +15,6 @@ export const tabsConfig = [
     { id: 'webReg', name: 'Веб-Регистратор', icon: 'fa-plug' },
     { id: 'reglaments', name: 'Регламенты', icon: 'fa-clipboard-list' },
     { id: 'bookmarks', name: 'Закладки', icon: 'fa-bookmark' },
-    { id: 'telefony', name: 'Телефоны', icon: 'fa-phone-alt' },
     { id: 'shablony', name: 'Шаблоны', icon: 'fa-file-invoice' },
     { id: 'sedoTypes', name: 'Типы сообщений СЭДО', icon: 'fa-comments' },
     {

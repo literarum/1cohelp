@@ -18,6 +18,17 @@ let getFavoriteButtonHTML = null;
 let showNotification = null;
 let State = null;
 let applyCurrentView = null;
+let debounce = null;
+let filterExtLinks = null;
+let setupClearButton = null;
+let showAddEditExtLinkModal = null;
+let showOrganizeExtLinkCategoriesModal = null;
+let handleExtLinkAction = null;
+let handleViewToggleClick = null;
+let loadExtLinks = null;
+let populateExtLinkCategoryFilter = null;
+let getAllExtLinks = null;
+let renderExtLinks = null;
 
 /**
  * Устанавливает зависимости для компонента внешних ссылок
@@ -28,6 +39,17 @@ export function setExtLinksDependencies(deps) {
     if (deps.showNotification !== undefined) showNotification = deps.showNotification;
     if (deps.State !== undefined) State = deps.State;
     if (deps.applyCurrentView !== undefined) applyCurrentView = deps.applyCurrentView;
+    if (deps.debounce !== undefined) debounce = deps.debounce;
+    if (deps.filterExtLinks !== undefined) filterExtLinks = deps.filterExtLinks;
+    if (deps.setupClearButton !== undefined) setupClearButton = deps.setupClearButton;
+    if (deps.showAddEditExtLinkModal !== undefined) showAddEditExtLinkModal = deps.showAddEditExtLinkModal;
+    if (deps.showOrganizeExtLinkCategoriesModal !== undefined) showOrganizeExtLinkCategoriesModal = deps.showOrganizeExtLinkCategoriesModal;
+    if (deps.handleExtLinkAction !== undefined) handleExtLinkAction = deps.handleExtLinkAction;
+    if (deps.handleViewToggleClick !== undefined) handleViewToggleClick = deps.handleViewToggleClick;
+    if (deps.loadExtLinks !== undefined) loadExtLinks = deps.loadExtLinks;
+    if (deps.populateExtLinkCategoryFilter !== undefined) populateExtLinkCategoryFilter = deps.populateExtLinkCategoryFilter;
+    if (deps.getAllExtLinks !== undefined) getAllExtLinks = deps.getAllExtLinks;
+    if (deps.renderExtLinks !== undefined) renderExtLinks = deps.renderExtLinks;
 }
 
 // ============================================================================
@@ -243,9 +265,44 @@ export function initExternalLinksSystem() {
     console.warn('[ext-links.js] initExternalLinksSystem не определена в window.');
 }
 
+/**
+ * Загружает категории внешних ссылок и инициализирует State.extLinkCategoryInfo
+ */
 export async function loadExtLinks() {
-    if (typeof window.loadExtLinks === 'function') {
-        return window.loadExtLinks();
+    if (!State || !State.db) {
+        console.warn('loadExtLinks: База данных не инициализирована.');
+        if (State) {
+            State.extLinkCategoryInfo = {};
+        }
+        return;
     }
-    console.warn('[ext-links.js] loadExtLinks не определена в window.');
+
+    try {
+        const categories = await getAllFromIndexedDB('extLinkCategories');
+        
+        // Инициализируем State.extLinkCategoryInfo как объект, если его нет
+        if (!State.extLinkCategoryInfo) {
+            State.extLinkCategoryInfo = {};
+        }
+
+        // Заполняем State.extLinkCategoryInfo данными из БД
+        if (categories && categories.length > 0) {
+            categories.forEach((cat) => {
+                if (cat && typeof cat.id !== 'undefined') {
+                    State.extLinkCategoryInfo[cat.id] = {
+                        name: cat.name || 'Без названия',
+                        color: cat.color || 'gray',
+                    };
+                }
+            });
+            console.log(`loadExtLinks: Загружено ${categories.length} категорий внешних ссылок.`);
+        } else {
+            console.log('loadExtLinks: Категории внешних ссылок не найдены. State.extLinkCategoryInfo пуст.');
+        }
+    } catch (error) {
+        console.error('Ошибка при загрузке категорий внешних ссылок:', error);
+        if (State && !State.extLinkCategoryInfo) {
+            State.extLinkCategoryInfo = {};
+        }
+    }
 }

@@ -1,0 +1,37 @@
+<div
+                id="customizeUIModal"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center hidden"
+            >
+                <div class="flex items-center justify-center min-h-full">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-screen flex flex-col modal-inner-container overflow-hidden"
+                    >
+                        <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between items-center gap-4">
+                                <h2 class="text-2xl font-bold">Настройки</h2>
+                                <div class="flex items-center gap-3">
+                                    <div class="relative">
+                                        <span
+                                            id="employeeExtensionDisplay"
+                                            class="inline-block px-4 py-2 text-base border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-w-[180px] text-center align-middle"
+                                            title="Клик для редактирования"
+                                        >
+                                        </span>
+                                        <input
+                                            type="text"
+                                            id="employeeExtensionInput"
+                                            class="inline-block px-4 py-2 text-base border-2 border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-900 hidden min-w-[180px] align-middle"
+                                            maxlength="4"
+                                            pattern="\d*"
+                                            title="Введите доб. номер"
+                                        />
+                                    </div>
+                                    <button
+                                        id="closeCustomizeUIModalBtn"
+                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        title="Закрыть"
+                                    >
+                                        <i class="fas fa-times text-xl"></i>
+                                    </button>
+                                </div>
+                            </div>

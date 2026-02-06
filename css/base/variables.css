@@ -1,0 +1,65 @@
+/* =================================================================== */
+/*    CSS ПЕРЕМЕННЫЕ (Variables)                                      */
+/* =================================================================== */
+
+:root {
+    /* Основной акцентный цвет */
+    --color-primary-default: #5d5cde;
+    --scrollbar-thumb-bg: var(--override-scrollbar-thumb-light, var(--color-border));
+    --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border));
+    --color-primary: var(--color-primary-default);
+
+    --modal-backdrop-blur: 8px;
+
+    /* Переменные для опасных действий */
+    --color-red-text: #dc2626;
+    --color-red-border: #fca5a5;
+    --color-red-hover-bg: rgba(220, 38, 38, 0.1);
+
+    /* Стили для подсветки текста при поиске */
+    --search-highlight-text-bg-light: #fff352;
+    --search-highlight-text-color-light: #333333;
+    --search-highlight-text-bg-dark: #ffd700;
+    --search-highlight-text-color-dark: #1a1a1a;
+
+    /* Стили для подсветки блоков при поиске */
+    --exact-match-border-color-light: #28a745;
+    --exact-match-border-color-dark: #38c172;
+    --element-highlight-bg-light: rgba(255, 220, 100, 0.2);
+    --element-highlight-outline-light: rgba(255, 180, 50, 0.5);
+    --element-highlight-bg-dark: rgba(184, 134, 11, 0.25);
+    --element-highlight-outline-dark: rgba(218, 165, 32, 0.6);
+
+    /* Стили для кастомного скроллбара */
+    --scrollbar-track-color-light: rgba(0, 0, 0, 0.05);
+    --scrollbar-track-color-dark: rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb-opacity: 0.65;
+    --scrollbar-thumb-hover-opacity: 0.85;
+    --scrollbar-thumb-bg: var(--override-scrollbar-thumb-light, var(--color-border));
+    --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border));
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not(.dark) {
+        --scrollbar-thumb-bg: var(
+            --override-scrollbar-thumb-dark,
+            rgba(255, 255, 255, 0.35)
+        );
+        --scrollbar-thumb-hover-bg: var(--color-hover-subtle, rgba(255, 255, 255, 0.5));
+        --scrollbar-track-color-light: var(
+            --override-scrollbar-track-dark,
+            rgba(255, 255, 255, 0.06)
+        );
+    }
+}
+
+html.dark {
+    --scrollbar-thumb-bg: var(
+        --override-scrollbar-thumb-dark,
+        var(--color-border-interactive)
+    );
+    --scrollbar-thumb-hover-bg: var(
+        --color-hover-subtle,
+        var(--color-border-interactive)
+    );
+}

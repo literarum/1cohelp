@@ -1,0 +1,35 @@
+<div
+            id="hotkeysModal"
+            class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto"
+        >
+            <div class="flex items-center justify-center min-h-full">
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+                >
+                    <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                        <div class="flex justify-between items-center">
+                            <h2
+                                class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center"
+                            >
+                                <i class="fas fa-keyboard mr-3 text-primary"></i>Горячие клавиши и
+                                управление
+                            </h2>
+                            <div class="flex items-center flex-shrink-0">
+                                <button
+                                    id="toggleFullscreenHotkeysBtn"
+                                    type="button"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Развернуть на весь экран"
+                                >
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                                <button
+                                    id="closeHotkeysModalBtn"
+                                    type="button"
+                                    class="p-2 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Закрыть (Esc)"
+                                >
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>

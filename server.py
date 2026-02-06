@@ -9,7 +9,8 @@ import socketserver
 import os
 import sys
 
-PORT = 8000
+# Порт для локальной разработки (можно сменить, если занят)
+PORT = 8765
 
 class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -20,11 +21,12 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
     
     def guess_type(self, path):
-        mimetype, encoding = super().guess_type(path)
-        # Убеждаемся, что HTML файлы имеют правильный Content-Type
+        result = super().guess_type(path)
+        mimetype = result[0] if isinstance(result, tuple) else result
+        # Убеждаемся, что HTML и JS имеют правильный Content-Type
         if path.endswith('.html'):
             return 'text/html; charset=utf-8'
-        elif path.endswith('.js'):
+        if path.endswith('.js'):
             return 'application/javascript; charset=utf-8'
         return mimetype
     
@@ -39,13 +41,18 @@ if __name__ == "__main__":
     # Определяем директорию скрипта
     script_dir = os.path.dirname(os.path.abspath(__file__ if '__file__' in globals() else '.'))
     os.chdir(script_dir)
-    
-    with socketserver.TCPServer(("", PORT), MyHTTPRequestHandler) as httpd:
-        print(f"[START] Server running at http://localhost:{PORT}")
-        print(f"[DIR] Working directory: {os.getcwd()}")
-        print(f"[STOP] Press Ctrl+C to stop")
-        print("-" * 50)
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\n[STOP] Server stopped")
+
+    try:
+        httpd = socketserver.TCPServer(("", PORT), MyHTTPRequestHandler)
+    except OSError as e:
+        if getattr(e, "winerror", None) == 10048 or "Address already in use" in str(e):
+            print(f"[ERROR] Port {PORT} is busy. Change PORT in server.py or stop the other process.")
+        raise SystemExit(1)
+    print(f"[START] Server: http://localhost:{PORT}/")
+    print(f"[DIR]   Folder: {os.getcwd()}")
+    print(f"[STOP] Press Ctrl+C to stop")
+    print("-" * 50)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[STOP] Server stopped")

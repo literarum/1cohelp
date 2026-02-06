@@ -254,10 +254,6 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
                     openLightboxHandler,
                     modalState,
                 );
-            } else {
-                modalState.contentArea.innerHTML =
-                    '<p class="text-center text-red-500 dark:text-red-400 p-6">Ошибка: Функция отображения миниатюр недоступна.</p>';
-            }
         } else {
             renderScreenshotList(
                     modalState.contentArea,
@@ -266,10 +262,6 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
                     null,
                     modalState,
                 );
-            } else {
-                modalState.contentArea.innerHTML =
-                    '<p class="text-center text-red-500 dark:text-red-400 p-6">Ошибка: Функция отображения списка недоступна.</p>';
-            }
         }
     };
 

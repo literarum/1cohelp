@@ -13,7 +13,6 @@ import {
     MIN_TOKEN_LEN_FOR_INDEX,
     CACHE_TTL,
     FIELD_WEIGHTS,
-    TELEFONY_DOC_ID,
     SHABLONY_DOC_ID,
     CATEGORY_INFO_KEY,
 } from '../constants.js';
@@ -39,7 +38,6 @@ import {
 import { 
     fetchGoogleDocs, 
     parseShablonyContent, 
-    getOriginalTelefonyData, 
     getOriginalShablonyData 
 } from './google-docs.js';
 
@@ -403,28 +401,6 @@ export function getTextForItem(storeName, itemData) {
     };
 
     switch (storeName) {
-        case 'telefony':
-            const headers = Object.keys(itemData).filter((key) => !key.startsWith('_'));
-            const firstColumnKey = headers[0];
-            const otherColumnKeys = headers.slice(1);
-            const isSectionHeader =
-                itemData[firstColumnKey] &&
-                otherColumnKeys.every(
-                    (key) => !itemData[key] || String(itemData[key]).trim() === '',
-                );
-
-            if (isSectionHeader) {
-                textsByField.header = itemData[firstColumnKey];
-            } else {
-                textsByField.cell = Object.values(itemData)
-                    .filter(
-                        (val) =>
-                            typeof val === 'string' && val.trim() !== '' && !val.startsWith('_'),
-                    )
-                    .join(' ');
-            }
-            break;
-
         case 'shablony':
             if (itemData.title) {
                 textsByField[`h${itemData.level || 3}`] = itemData.title;
@@ -903,7 +879,7 @@ export async function removeFromSearchIndex(itemId, itemType) {
 export async function updateSearchIndex(storeName, itemId, newItemData, operation, oldItemData = null) {
     const LOG_PREFIX_USI = `[updateSearchIndex V4 - Google Docs Logic]`;
 
-    if (storeName === 'telefony' || storeName === 'shablony') {
+    if (storeName === 'shablony') {
         const docId = itemId;
         console.log(
             `${LOG_PREFIX_USI} Начало индексации для Google Doc: ${storeName} (ID: ${docId})`,
@@ -913,17 +889,7 @@ export async function updateSearchIndex(storeName, itemId, newItemData, operatio
         console.log(`${LOG_PREFIX_USI} Старые записи для ${docId} удалены из индекса.`);
 
         if (operation !== 'delete' && Array.isArray(newItemData)) {
-            if (storeName === 'telefony') {
-                const rows = newItemData;
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    await updateSearchIndexForItem(
-                        { ...row, _internal_row_index: i },
-                        'telefony',
-                        docId,
-                    );
-                }
-            } else if (storeName === 'shablony') {
+            if (storeName === 'shablony') {
                 const blocks = newItemData;
                 for (let i = 0; i < blocks.length; i++) {
                     const block = blocks[i];
@@ -1093,7 +1059,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         return;
     }
 
-    if (storeName === 'telefony' || storeName === 'shablony') {
+    if (storeName === 'shablony') {
         const textsByField = getTextForItem(storeName, itemData);
         if (Object.keys(textsByField).length === 0) return;
 
@@ -1128,7 +1094,6 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
 
             const refDetails = {
                 field: fieldKey,
-                ...(storeName === 'telefony' && { rowIndex: blockOrRowIndex }),
                 ...(storeName === 'shablony' && {
                     blockIndex: blockOrRowIndex,
                     title: itemData.title,
@@ -1703,38 +1668,26 @@ export async function buildInitialSearchIndex(progressCallback) {
             }
         }
 
-        const googleDocSources = [
-            { name: 'telefony', docId: TELEFONY_DOC_ID },
-            { name: 'shablony', docId: SHABLONY_DOC_ID },
-        ];
-
-        for (const gdSource of googleDocSources) {
-            try {
-                const results = await fetchGoogleDocs([gdSource.docId], false);
-                const data = results?.[0]?.content?.data || [];
-                if (gdSource.name === 'telefony') {
-                    data.forEach((row, i) =>
-                        processItemInMemory({ ...row, _internal_row_index: i }, 'telefony'),
-                    );
-                } else if (gdSource.name === 'shablony') {
-                    const blocks = parseShablonyContent(data);
-                    blocks.forEach((block) =>
-                        processItemInMemory(
-                            { ...block, _internal_block_index: block.originalIndex },
-                            'shablony',
-                        ),
-                    );
-                }
-            } catch (error) {
-                console.error(
-                    `${LOG_PREFIX_BUILD} Error processing Google Doc ${gdSource.name}:`,
-                    error,
-                );
-                overallSuccess = false;
-            } finally {
-                processedItems++;
-                if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
-            }
+        try {
+            const results = await fetchGoogleDocs([SHABLONY_DOC_ID], false);
+            const data = results?.[0]?.data || results?.[0]?.content?.data || [];
+            const blocks = parseShablonyContent(data);
+            blocks.forEach((block) =>
+                processItemInMemory(
+                    { ...block, _internal_block_index: block.originalIndex },
+                    'shablony',
+                ),
+            );
+            processedItems++;
+            if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
+        } catch (error) {
+            console.error(
+                `${LOG_PREFIX_BUILD} Error processing Google Doc shablony:`,
+                error,
+            );
+            overallSuccess = false;
+            processedItems++;
+            if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
         }
 
         console.log(
@@ -2213,7 +2166,7 @@ async function loadFullDataForResults(docEntries) {
         loadedData.set(storeName, storeData);
 
         try {
-            if (storeName === 'telefony' || storeName === 'shablony') {
+            if (storeName === 'shablony') {
                 ids.forEach((id) => {
                     storeData.set(String(id), { id: id, _isPlaceholder: true });
                 });
@@ -2303,9 +2256,7 @@ async function processSearchResults(candidateDocs, normalizedQuery, originalQuer
         const ref = entry.ref;
         const itemData = entry.itemData;
 
-        if (ref.store === 'telefony' && ref.rowIndex !== undefined) {
-            groupKey = `telefony:${ref.id}:${ref.rowIndex}`;
-        } else if (ref.store === 'shablony' && ref.blockIndex !== undefined) {
+        if (ref.store === 'shablony' && ref.blockIndex !== undefined) {
             groupKey = `shablony:${ref.id}:${ref.blockIndex}`;
         } else {
             let actualItemIdValue;
@@ -2436,28 +2387,6 @@ async function processSearchResults(candidateDocs, normalizedQuery, originalQuer
 function convertItemToSearchResult(ref, itemData, score) {
     const storeName = ref.store;
     const itemIdFromRef = ref.id;
-
-    if (storeName === 'telefony') {
-        const docId = itemIdFromRef;
-        const rowIndex = ref.rowIndex;
-        const allRows = getOriginalTelefonyData() || [];
-        const rowData = allRows[rowIndex];
-
-        if (rowData) {
-            return {
-                section: 'telefony',
-                type: 'telefony_row',
-                id: `${docId}_row_${rowIndex}`,
-                title:
-                    Object.values(rowData).find((val) => val && String(val).trim()) ||
-                    `Строка #${rowIndex + 1}`,
-                description: Object.values(rowData).join(' | '),
-                score: score || 0,
-                rowIndex: rowIndex,
-            };
-        }
-        return null;
-    }
 
     if (storeName === 'shablony') {
         const docId = itemIdFromRef;
@@ -2774,10 +2703,6 @@ export function renderSearchResults(results, query) {
                 iconClass = 'fa-columns';
                 typeText = 'Раздел';
                 break;
-            case 'telefony_row':
-                iconClass = 'fa-phone-alt';
-                typeText = 'Телефоны';
-                break;
             case 'shablony_block':
                 iconClass = 'fa-file-invoice';
                 typeText = 'Шаблоны';
@@ -2910,15 +2835,6 @@ export async function handleSearchResultClick(result) {
     try {
         let tabId, itemSelector;
         switch (result.type) {
-            case 'telefony_row':
-                tabId = 'telefony';
-                itemSelector = `#doc-content-telefony tr[data-row-index="${result.rowIndex}"]`;
-                await tryScrollAndHighlight(
-                    tabId,
-                    itemSelector,
-                    result.highlightTerm || result.title,
-                );
-                break;
             case 'shablony_block':
                 tabId = 'shablony';
                 itemSelector = `#doc-content-shablony div[data-block-index="${result.blockIndex}"]`;
