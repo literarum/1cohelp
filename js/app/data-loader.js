@@ -38,7 +38,7 @@ export async function loadFromIndexedDB() {
     console.log('Запуск loadFromIndexedDB (v2, без clientData логики)...');
 
     const mainTitleElement = document.querySelector('#mainContent h2');
-    if (mainTitleElement) {
+    if (mainTitleElement && DEFAULT_MAIN_ALGORITHM && DEFAULT_MAIN_ALGORITHM.title) {
         mainTitleElement.textContent = DEFAULT_MAIN_ALGORITHM.title;
     } else {
         console.warn(

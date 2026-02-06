@@ -820,6 +820,32 @@ const SAVE_BUTTON_SELECTORS =
 const hasBlockingModalsOpen = hasBlockingModalsOpenModule;
 const getTopmostModal = getTopmostModalModule;
 
+// Escape handlers для модальных окон
+function addEscapeHandler(modalElement) {
+    if (!modalElement || modalElement._escapeHandlerInstance) return;
+    
+    const handleEscape = (event) => {
+        if (event.key === 'Escape') {
+            const visibleModals = getVisibleModals();
+            const topmost = getTopmostModal(visibleModals);
+            if (topmost && topmost.id === modalElement.id) {
+                modalElement.classList.add('hidden');
+                removeEscapeHandler(modalElement);
+                event.stopPropagation();
+            }
+        }
+    };
+    
+    modalElement._escapeHandlerInstance = handleEscape;
+    document.addEventListener('keydown', handleEscape);
+}
+
+function removeEscapeHandler(modalElement) {
+    if (!modalElement || !modalElement._escapeHandlerInstance) return;
+    document.removeEventListener('keydown', modalElement._escapeHandlerInstance);
+    delete modalElement._escapeHandlerInstance;
+}
+
 // Инициализируем обработчик beforeunload
 initBeforeUnloadHandlerModule();
 
@@ -3415,7 +3441,18 @@ async function initClientDataSystem() {
     }
 
     console.log(`${LOG_PREFIX} Инициализация системы данных клиента полностью завершена.`);
-    ensureBodyScrollUnlocked();
+    // ensureBodyScrollUnlocked вызывается внутри createClientNotesInnPreview при необходимости
+    // Убеждаемся, что нет открытых модальных окон перед разблокировкой скролла
+    try {
+        const visibleModals = typeof getVisibleModals === 'function' ? getVisibleModals() : [];
+        if (visibleModals.length === 0) {
+            document.body.classList.remove('modal-open', 'overflow-hidden');
+            if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
+            if (document.documentElement.style.overflow === 'hidden') document.documentElement.style.overflow = '';
+        }
+    } catch (e) {
+        console.warn('[initClientDataSystem] Ошибка при проверке модальных окон:', e);
+    }
 }
 
 function ensureInnPreviewStyles() {
