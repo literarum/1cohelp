@@ -2646,9 +2646,6 @@ function handleGlobalHotkey(event) {
 
 async function showBookmarkDetailModal(bookmarkId) {
     const modalId = 'bookmarkDetailModal';
-
-async function showBookmarkDetailModal(bookmarkId) {
-    const modalId = 'bookmarkDetailModal';
     let modal = document.getElementById(modalId);
     const isNewModal = !modal;
 
@@ -4566,3 +4563,4 @@ if (typeof initCollapseAllButtons === 'function') window.initCollapseAllButtons 
 if (typeof initHotkeysModal === 'function') window.initHotkeysModal = initHotkeysModal;
 if (typeof initClearDataFunctionality === 'function') window.initClearDataFunctionality = initClearDataFunctionality;
 if (typeof showNoInnModal === 'function') window.showNoInnModal = showNoInnModal;
+
