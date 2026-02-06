@@ -441,7 +441,7 @@ await loadTemplateIntoElement('modals/algorithm-modal.html', '#container');
 **Отчет подготовлен:** 6 февраля 2026  
 **Ветка:** safe-work  
 **Статус:** ✅ Все изменения запушены в GitHub  
-**Последний коммит:** db95c1e
+**Последний коммит:** 4ea1c21
 
 ---
 
