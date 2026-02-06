@@ -952,17 +952,9 @@ const showReglamentsForCategory = showReglamentsForCategoryModule;
 // debounce теперь импортируется из js/utils/helpers.js
 // (уже импортирован выше, используем напрямую)
 
-// Объявляем функции, которые будут определены позже, но используются в зависимостях
-// Они будут определены как function declarations ниже, что позволяет использовать их до определения
-function showNotification(message, type, duration) {
-    // Эта функция будет переопределена ниже, но объявляем здесь для использования в зависимостях
-    return NotificationService.add(message, type, { duration });
-}
-
-async function showBookmarkDetailModal(bookmarkId) {
-    // Эта функция будет переопределена ниже, но объявляем здесь для использования в зависимостях
-    throw new Error('showBookmarkDetailModal not yet initialized');
-}
+// showNotification и showBookmarkDetailModal определены ниже как function declarations
+// Благодаря hoisting они доступны здесь, но мы не можем их переопределить
+// Поэтому используем их напрямую в зависимостях
 
 // App Init Dependencies
 setAppInitDependencies({
