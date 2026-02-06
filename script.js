@@ -996,6 +996,12 @@ const initBookmarkSystem = initBookmarkSystemModule;
 const initExternalLinksSystem = initExternalLinksSystemModule;
 const initBlacklistSystem = initBlacklistSystemModule;
 const initReloadButton = initReloadButtonModule;
+
+// setActiveTab теперь импортируется из js/components/tabs.js
+// Определяем раньше, чтобы использовать в setUIInitDependencies
+async function setActiveTab(tabId, warningJustAccepted = false) {
+    return setActiveTabModule(tabId, warningJustAccepted);
+}
 const initFullscreenToggles = initFullscreenTogglesModule;
 const setupHotkeys = setupHotkeysModule;
 const initUI = initUIModule;
@@ -1802,10 +1808,7 @@ async function saveNewAlgorithm() {
 
 // initUI уже определена выше на строке 967
 
-// setActiveTab теперь импортируется из js/components/tabs.js
-async function setActiveTab(tabId, warningJustAccepted = false) {
-    return setActiveTabModule(tabId, warningJustAccepted);
-}
+// setActiveTab уже определена выше на строке 1000
 
 // renderAlgorithmCards теперь импортируется из js/components/algorithms.js
 
