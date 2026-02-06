@@ -51,10 +51,12 @@ export async function loadUserPreferences() {
 
     if (!defaultPanelOrder || !Array.isArray(defaultPanelOrder)) {
         console.error(`${LOG_PREFIX} defaultPanelOrder не установлен или не является массивом! Используются значения по умолчанию.`);
-        const fallbackPanelOrder = tabsConfig && Array.isArray(tabsConfig) 
-            ? tabsConfig.map((t) => t.id)
-            : ['main', 'program', 'links', 'extLinks', 'skzi', 'lk1c', 'webReg', 'reglaments', 'bookmarks', 'shablony'];
-        defaultPanelOrder = fallbackPanelOrder;
+        if (!tabsConfig || !Array.isArray(tabsConfig)) {
+            console.error(`${LOG_PREFIX} tabsConfig также не установлен! Используются жестко заданные значения.`);
+            defaultPanelOrder = ['main', 'program', 'links', 'extLinks', 'skzi', 'lk1c', 'webReg', 'reglaments', 'bookmarks', 'shablony'];
+        } else {
+            defaultPanelOrder = tabsConfig.map((t) => t.id);
+        }
     }
 
     const defaultPreferences = {
@@ -133,7 +135,10 @@ export async function loadUserPreferences() {
             }
         }
 
-        const currentPanelIds = tabsConfig.map((t) => t.id);
+        // Вычисляем currentPanelIds с проверкой на null/undefined
+        const currentPanelIds = (tabsConfig && Array.isArray(tabsConfig)) 
+            ? tabsConfig.map((t) => t.id)
+            : (Array.isArray(defaultPanelOrder) ? defaultPanelOrder : []);
         const knownPanelIds = new Set(currentPanelIds);
         const actualDefaultPanelVisibility = currentPanelIds.map(
             (id) => !(id === 'sedoTypes' || id === 'blacklistedClients'),
