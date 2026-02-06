@@ -1960,10 +1960,7 @@ function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
     return createBookmarkElementModule(bookmark, folderMap, viewMode);
 }
 
-// Wrapper для модуля bookmarks
-function initBookmarkSystem() {
-    return initBookmarkSystemModule();
-}
+// initBookmarkSystem уже определена выше на строке 961
 
 // Bookmarks modal functions теперь импортируются из js/features/bookmarks-modal.js
 const ensureBookmarkModal = ensureBookmarkModalModule;
@@ -2002,10 +1999,7 @@ async function getAllBookmarks() {
     return getAllBookmarksModule();
 }
 
-// initExternalLinksSystem теперь импортируется из js/features/ext-links-init.js
-async function initExternalLinksSystem() {
-    return initExternalLinksSystemModule();
-}
+// initExternalLinksSystem уже определена выше на строке 962
 
 // loadExtLinks теперь импортируется из js/components/ext-links.js
 async function loadExtLinks() {
@@ -2113,10 +2107,7 @@ async function resetUISettingsInModal() {
 // ============================================================================
 // resetUISettingsInModal - imported from ui-settings-modal.js module
 
-// applyInitialUISettings теперь импортируется из js/ui/ui-settings.js
-async function applyInitialUISettings() {
-    return applyInitialUISettingsModule();
-}
+// applyInitialUISettings уже определена выше на строке 970
 
 // initClearDataFunctionality уже определена выше на строке 969
 
@@ -2561,10 +2552,7 @@ function setupClearButton(inputId, buttonId, actionCallback) {
     return setupClearButtonModule(inputId, buttonId, actionCallback);
 }
 
-// setupHotkeys теперь импортируется из js/ui/hotkeys-handler.js
-function setupHotkeys() {
-    return setupHotkeysModule();
-}
+// setupHotkeys уже определена выше на строке 966
 
 // toggleActiveSectionView теперь импортируется из js/ui/view-manager.js
 const toggleActiveSectionView = toggleActiveSectionViewModule;
