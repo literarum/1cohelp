@@ -360,6 +360,93 @@ export function handleTabsResize() {
     }, 250);
 }
 
+/**
+ * Применяет порядок и видимость панелей
+ * @param {Array<string>} order - Массив ID панелей в нужном порядке
+ * @param {Array<boolean>} visibility - Массив флагов видимости для каждой панели
+ */
+export function applyPanelOrderAndVisibility(order, visibility) {
+    if (!Array.isArray(order) || !Array.isArray(visibility) || order.length !== visibility.length) {
+        console.error(
+            '[applyPanelOrderAndVisibility] Неверные параметры: order и visibility должны быть массивами одинаковой длины.',
+        );
+        return;
+    }
+
+    const tabsNav = document.querySelector('header + .border-b nav.flex');
+    if (!tabsNav) {
+        console.warn('[applyPanelOrderAndVisibility] Навигация вкладок не найдена.');
+        return;
+    }
+
+    // Создаём карту видимости для быстрого доступа
+    const visibilityMap = {};
+    order.forEach((panelId, index) => {
+        visibilityMap[panelId] = visibility[index];
+    });
+
+    // Применяем порядок и видимость
+    order.forEach((panelId) => {
+        const tabButton = document.getElementById(`${panelId}Tab`);
+        if (tabButton) {
+            const shouldBeVisible = visibilityMap[panelId] !== false;
+            tabButton.classList.toggle('hidden', !shouldBeVisible);
+        }
+    });
+
+    // Переупорядочиваем вкладки в DOM согласно order
+    const fragment = document.createDocumentFragment();
+    const processedIds = new Set();
+
+    order.forEach((panelId) => {
+        const tabButton = document.getElementById(`${panelId}Tab`);
+        if (tabButton && !processedIds.has(panelId)) {
+            fragment.appendChild(tabButton);
+            processedIds.add(panelId);
+        }
+    });
+
+    // Добавляем оставшиеся вкладки, которых нет в order
+    const allTabs = Array.from(tabsNav.querySelectorAll('.tab-btn:not(#moreTabsBtn)'));
+    allTabs.forEach((tab) => {
+        const tabId = tab.id.replace('Tab', '');
+        if (!processedIds.has(tabId)) {
+            fragment.appendChild(tab);
+            processedIds.add(tabId);
+        }
+    });
+
+    // Очищаем навигацию и добавляем вкладки в новом порядке
+    const moreTabsBtn = document.getElementById('moreTabsBtn');
+    const moreTabsContainer = moreTabsBtn?.parentNode;
+    
+    // Сохраняем кнопку "Еще" если она есть
+    if (moreTabsContainer && moreTabsBtn) {
+        tabsNav.innerHTML = '';
+        tabsNav.appendChild(fragment);
+        tabsNav.appendChild(moreTabsContainer);
+    } else {
+        tabsNav.innerHTML = '';
+        tabsNav.appendChild(fragment);
+        if (moreTabsBtn) {
+            tabsNav.appendChild(moreTabsBtn);
+        }
+    }
+
+    // Обновляем видимость вкладок
+    if (deps.updateVisibleTabs && typeof deps.updateVisibleTabs === 'function') {
+        requestAnimationFrame(() => {
+            deps.updateVisibleTabs();
+        });
+    } else if (typeof updateVisibleTabs === 'function') {
+        requestAnimationFrame(() => {
+            updateVisibleTabs();
+        });
+    }
+
+    console.log('[applyPanelOrderAndVisibility] Порядок и видимость панелей применены.');
+}
+
 // ============================================================================
 // ФУНКЦИЯ АКТИВАЦИИ ВКЛАДКИ
 // ============================================================================
