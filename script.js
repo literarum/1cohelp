@@ -846,6 +846,10 @@ function removeEscapeHandler(modalElement) {
     delete modalElement._escapeHandlerInstance;
 }
 
+// debounce и setupClearButton импортируются из js/utils/helpers.js
+const debounce = debounce;
+const setupClearButton = setupClearButtonModule;
+
 // Инициализируем обработчик beforeunload
 initBeforeUnloadHandlerModule();
 
@@ -4230,7 +4234,7 @@ setExtLinksInitDependencies({
     getAllExtLinks,
     renderExtLinks: renderExtLinksModule,
     debounce,
-    setupClearButton: setupClearButtonModule,
+    setupClearButton,
 });
 console.log('[script.js] Зависимости модуля Ext Links Init установлены');
 
