@@ -393,15 +393,15 @@ const NotificationService = {
                     (typeof linkify === 'function'
                         ? linkify(message)
                         : typeof escapeHtml === 'function'
-                        ? escapeHtml(message)
-                        : message)
+                          ? escapeHtml(message)
+                          : message)
             ) {
                 messageSpan.innerHTML =
                     typeof linkify === 'function'
                         ? linkify(message)
                         : typeof escapeHtml === 'function'
-                        ? escapeHtml(message)
-                        : message;
+                          ? escapeHtml(message)
+                          : message;
             }
             if (existing.timeoutId) {
                 clearTimeout(existing.timeoutId);
@@ -688,8 +688,8 @@ const NotificationService = {
             typeof linkify === 'function'
                 ? linkify(message)
                 : typeof escapeHtml === 'function'
-                ? escapeHtml(message)
-                : message;
+                  ? escapeHtml(message)
+                  : message;
         contentWrapper.appendChild(messageSpan);
 
         notificationElement.appendChild(contentWrapper);
@@ -3807,8 +3807,8 @@ async function saveUISettings() {
             Array.isArray(defaultPanelOrder) && defaultPanelOrder.length
                 ? [...defaultPanelOrder]
                 : Array.isArray(tabsConfig)
-                ? tabsConfig.map((t) => t.id)
-                : [];
+                  ? tabsConfig.map((t) => t.id)
+                  : [];
         const order =
             Array.isArray(userPreferences?.panelOrder) && userPreferences.panelOrder.length
                 ? [...userPreferences.panelOrder]
@@ -4078,6 +4078,37 @@ const DEFAULT_SEDO_DATA = {
     id: SEDO_CONFIG_KEY,
     articleLinks: ['https://track.astral.ru/support/pages/viewpage.action?pageId=11404156'],
     tables: [
+        {
+            title: 'СЭДО: Важные ограничения и примечания',
+            isStaticList: true,
+            items: [
+                'Последнее обновление: 19.01.2026 (Григорьев Олег Олегович).',
+                'Промежуток между выбранной датой начала и датой конца — не более 7 дней (рекомендуемый интервал по умолчанию от серверной группы — 3 дня). Иначе список отправок может отображаться некорректно.',
+                'По отправкам, совершенным до 21.05.2024, цепочки транзакций не выстраиваются: можно найти запросы (тип 100) и ответы (тип 101), но определить, какой конкретно ответ относится к конкретному запросу, невозможно.',
+                'Также существуют типы, по которым цепочки транзакций не выстраиваются (актуально на 08.08.2024). В исходном материале список типов свернут («Нажмите здесь для раскрытия…»).',
+            ],
+        },
+        {
+            title: 'СЭДО: Представителям центров компетенций',
+            isStaticList: true,
+            items: [
+                'Для консультации клиентов по отправкам СЭДО перевести звонок на первую линию: 1СО ТП1 (ДТС).',
+                'Озвучить специалисту реквизиты для поиска отправки и передать клиента.',
+            ],
+        },
+        {
+            title: 'СЭДО: Поиск отправки — поля и отличия параметров',
+            isStaticList: true,
+            items: [
+                'Для начала поиска: в поле 1 выбрать КО; в поле 2 — параметр поиска; в поле 3 — значение; далее нажать кнопку «Показать».',
+                'Регистрационный номер Абонента — поиск по рег. номеру СФР/ФСС клиента (пользователя 1С).',
+                'Регистрационный номер Страхователя — поиск по рег. номеру СФР/ФСС налогоплательщика (НП) в УП.',
+                'Проверка подписки (рег. номер, ИНН, КПП, ОГРН, ОГРНИП) — проверка подписки по реквизитам организации.',
+                'Проверка МЧД СФР — поиск по ИНН или UUID (поиск по рег. номеру не осуществляется).',
+                'При активном поиске можно открыть меню с описанием транзакции и увидеть полный текст ошибки нажатием на кнопку RAW JSON.',
+            ],
+        },
+
         {
             title: 'Входящие сообщения СЭДО: Сообщения по проактивному назначению пособий и прямым выплатам',
             columns: ['Код', 'Сообщение в спецификации СЭДО (код, название)', 'Где увидеть в 1С'],
@@ -5384,8 +5415,8 @@ function renderSedoTableRowAsVerticalBlock(
             typeof linkify === 'function'
                 ? linkify(cellValue)
                 : typeof escapeHtml === 'function'
-                ? escapeHtml(cellValue)
-                : cellValue;
+                  ? escapeHtml(cellValue)
+                  : cellValue;
 
         fieldDiv.appendChild(labelSpan);
         fieldDiv.appendChild(valueSpan);
@@ -17334,8 +17365,8 @@ function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
         const colorName = folder.color || 'gray';
         folderBadgeHTML = `
             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-800 dark:bg-${colorName}-900 dark:text-${colorName}-200" title="Папка: ${escapeHtml(
-            folder.name,
-        )}">
+                folder.name,
+            )}">
                 <i class="fas fa-folder mr-1 opacity-75"></i>${escapeHtml(folder.name)}
             </span>`;
     } else if (bookmark.folder) {
@@ -17443,8 +17474,8 @@ function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
         const descriptionHTML = safeDescription
             ? `<p class="bookmark-description text-gray-600 dark:text-gray-300 text-sm line-clamp-3" title="${safeDescription}">${safeDescription}</p>`
             : bookmark.url
-            ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>'
-            : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>';
+              ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>'
+              : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>';
 
         const mainContentHTML = `
             <div class="flex-grow min-w-0 mb-3">
@@ -17476,8 +17507,8 @@ function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
         const listDescText = safeDescription
             ? truncateText(safeDescription, 70)
             : bookmark.url
-            ? escapeHtml(bookmark.url)
-            : 'Текстовая заметка';
+              ? escapeHtml(bookmark.url)
+              : 'Текстовая заметка';
 
         const mainContentHTML = `
             <div class="flex items-center w-full min-w-0">
@@ -19032,8 +19063,8 @@ function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards') {
         const colorName = categoryData.color || 'gray';
         categoryBadgeHTML = `
             <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-${colorName}-100 text-${colorName}-800 dark:bg-${colorName}-900 dark:text-${colorName}-200" title="Папка: ${escapeHtml(
-            categoryData.name,
-        )}">
+                categoryData.name,
+            )}">
                 <i class="fas fa-tag mr-1 opacity-75"></i>${escapeHtml(categoryData.name)}
             </span>`;
     } else if (link.category) {
@@ -23752,8 +23783,8 @@ async function handleExtLinkAction(event) {
     const action = actionButton
         ? actionButton.dataset.action
         : target.closest('[data-action="open-link"]')
-        ? 'open-link'
-        : null;
+          ? 'open-link'
+          : null;
 
     if (!action) return;
 
@@ -24461,22 +24492,22 @@ function hsbToRgb(h, s, b) {
     const t = b * (1 - (1 - f) * s);
     switch (i % 6) {
         case 0:
-            (r = b), (g = t), (v = p);
+            ((r = b), (g = t), (v = p));
             break;
         case 1:
-            (r = q), (g = b), (v = p);
+            ((r = q), (g = b), (v = p));
             break;
         case 2:
-            (r = p), (g = b), (v = t);
+            ((r = p), (g = b), (v = t));
             break;
         case 3:
-            (r = p), (g = q), (v = b);
+            ((r = p), (g = q), (v = b));
             break;
         case 4:
-            (r = t), (g = p), (v = b);
+            ((r = t), (g = p), (v = b));
             break;
         case 5:
-            (r = b), (g = p), (v = q);
+            ((r = b), (g = p), (v = q));
             break;
     }
     return {
@@ -24855,10 +24886,10 @@ async function applyInitialUISettings() {
                 Array.isArray(userPreferences?.panelOrder) && userPreferences.panelOrder.length
                     ? [...userPreferences.panelOrder]
                     : Array.isArray(defaultPanelOrder) && defaultPanelOrder.length
-                    ? [...defaultPanelOrder]
-                    : Array.isArray(tabsConfig)
-                    ? tabsConfig.map((t) => t.id)
-                    : [];
+                      ? [...defaultPanelOrder]
+                      : Array.isArray(tabsConfig)
+                        ? tabsConfig.map((t) => t.id)
+                        : [];
             const visArr =
                 Array.isArray(userPreferences?.panelVisibility) &&
                 userPreferences.panelVisibility.length === order.length
@@ -26138,8 +26169,8 @@ function toggleModalFullscreen(
             part === 'modal'
                 ? modalElement
                 : part === 'innerContainer'
-                ? innerContainer
-                : contentArea;
+                  ? innerContainer
+                  : contentArea;
         if (element && classes && classes.length > 0) {
             element.classList.remove(...classes);
         }
@@ -26150,8 +26181,8 @@ function toggleModalFullscreen(
             part === 'modal'
                 ? modalElement
                 : part === 'innerContainer'
-                ? innerContainer
-                : contentArea;
+                  ? innerContainer
+                  : contentArea;
         if (element && classes && classes.length > 0) {
             element.classList.add(...classes);
         }
@@ -26298,8 +26329,8 @@ function getCurrentEditState() {
                 isMainAlgorithm && exampleInput
                     ? exampleInput.value.trim()
                     : isMainAlgorithm
-                    ? ''
-                    : undefined,
+                      ? ''
+                      : undefined,
             additionalInfoText: additionalInfoTextarea ? additionalInfoTextarea.value.trim() : '',
             additionalInfoShowTop: additionalInfoPosTopCheckbox
                 ? additionalInfoPosTopCheckbox.checked
@@ -29935,25 +29966,25 @@ function renderBlacklistTable(entries) {
         tr.innerHTML = `
             <td class="px-4 py-4 text-sm font-medium text-gray-800 dark:text-gray-100">
                 <div class="truncate" title="${escapeHtml(entry.organizationName)}">${highlight(
-            entry.organizationName,
-        )}</div>
+                    entry.organizationName,
+                )}</div>
             </td>
             <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono">
                 <div class="truncate" title="${escapeHtml(entry.inn || '-')}">${highlight(
-            entry.inn || '-',
-        )}</div>
+                    entry.inn || '-',
+                )}</div>
             </td>
             <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono">
                 <div class="truncate" title="${escapeHtml(entry.phone || '-')}">${highlight(
-            entry.phone || '-',
-        )}</div>
+                    entry.phone || '-',
+                )}</div>
             </td>
             <td class="px-4 py-4 text-sm text-center">${levelHtml}</td>
             <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">${dateAddedStr}</td>
             <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
                 <div class="truncate" title="${escapeHtml(entry.notes || '')}">${highlight(
-            entry.notes || '',
-        )}</div>
+                    entry.notes || '',
+                )}</div>
             </td>
             <td class="px-4 py-4 text-right text-sm font-medium">
                 <button class="text-primary hover:text-secondary p-1" data-action="edit" title="Редактировать"><i class="fas fa-edit"></i></button>
@@ -32219,8 +32250,8 @@ async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
         targetContainerId === 'doc-content-telefony'
             ? 'Телефоны'
             : targetContainerId === 'doc-content-shablony'
-            ? 'Шаблоны'
-            : 'Документ';
+              ? 'Шаблоны'
+              : 'Документ';
     if (window.BackgroundStatusHUD && typeof BackgroundStatusHUD.startTask === 'function') {
         BackgroundStatusHUD.startTask(hudId, humanLabel, { weight: 0.4, total: 4 });
         BackgroundStatusHUD.updateTask(hudId, 0, 4);
@@ -33452,8 +33483,8 @@ function mountPdfSection(hostEl, parentType, parentId) {
             const safeName = String(displayName).replace(
                 /[<>&"']/g,
                 (s) =>
-                    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s] ||
-                    s),
+                    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[s] ||
+                    s,
             );
             const sizeBytes =
                 typeof item?.size === 'number' && item.size > 0 ? item.size : item?.blob?.size || 0;
@@ -33464,8 +33495,10 @@ function mountPdfSection(hostEl, parentType, parentId) {
               <div class="truncate pr-2" title="${safeName}">
                 <span class="font-medium">${safeName}</span>
                 <span class="ml-2 text-xs text-gray-500">${sizeText}${
-                uploadedAt ? ` • ${uploadedAt.toLocaleString?.() || uploadedAt.toISOString()}` : ''
-            }</span>
+                    uploadedAt
+                        ? ` • ${uploadedAt.toLocaleString?.() || uploadedAt.toISOString()}`
+                        : ''
+                }</span>
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <button type="button" class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="dl">Скачать</button>
@@ -33752,7 +33785,7 @@ function attachAlgorithmAddPdfHandlers(addModal) {
                                   '&': '&amp;',
                                   '"': '&quot;',
                                   "'": '&#39;',
-                              }[s]),
+                              })[s],
                       );
             const sizeKb = formatKB(file.size);
             li.className =
@@ -33978,7 +34011,7 @@ function attachBookmarkPdfHandlers(form) {
                 typeof file?.name === 'string' && file.name.trim() ? file.name : `PDF ${idx + 1}`;
             const safe = displayName.replace(
                 /[<>&"']/g,
-                (s) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s]),
+                (s) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[s],
             );
             const sizeKb = Math.max(1, Math.round((file.size || 0) / 1024));
 
