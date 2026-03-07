@@ -1,8 +1,0 @@
-{
-    "name": "copilot-1co-site",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "node normalize-install-scripts.js"
-    }
-}
