@@ -1,5 +1,6 @@
 'use strict';
 
+import { getFromIndexedDB, getAllFromIndex } from '../db/indexeddb.js';
 import { escapeHtml, linkify } from '../utils/html.js';
 import { formatExampleForTextarea, getSectionName } from '../utils/helpers.js';
 
@@ -31,7 +32,17 @@ function formatMultiline(text) {
     return escaped.replace(/\n/g, '<br>');
 }
 
-function buildAlgorithmSectionExport(sectionKey) {
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        if (!(blob instanceof Blob)) return reject(new Error('Not a Blob'));
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(new Error('FileReader failed'));
+        r.readAsDataURL(blob);
+    });
+}
+
+async function buildAlgorithmSectionExport(sectionKey) {
     const sectionAlgorithms = algorithms?.[sectionKey];
     if (!Array.isArray(sectionAlgorithms) || sectionAlgorithms.length === 0) {
         return null;
@@ -45,18 +56,14 @@ function buildAlgorithmSectionExport(sectionKey) {
     title.textContent = `Алгоритмы: ${getSectionName(sectionKey)}`;
     wrapper.appendChild(title);
 
-    sectionAlgorithms.forEach((algorithm, index) => {
-        if (!algorithm) return;
-        const card = document.createElement('div');
-        card.className = 'algorithm-step bg-white border border-gray-200 rounded-lg p-4 space-y-3';
+    for (let index = 0; index < sectionAlgorithms.length; index++) {
+        const algorithm = sectionAlgorithms[index];
+        if (!algorithm) continue;
 
-        const heading = document.createElement('div');
-        heading.className = 'flex items-center gap-2';
-        const headingTitle = document.createElement('h2');
-        headingTitle.className = 'text-lg font-semibold';
-        headingTitle.textContent = algorithm.title || `Алгоритм ${index + 1}`;
-        heading.appendChild(headingTitle);
-        card.appendChild(heading);
+        const algorithmTitle = document.createElement('h2');
+        algorithmTitle.className = 'text-lg font-semibold';
+        algorithmTitle.textContent = algorithm.title || `Алгоритм ${index + 1}`;
+        wrapper.appendChild(algorithmTitle);
 
         const description =
             algorithm.description ||
@@ -67,47 +74,76 @@ function buildAlgorithmSectionExport(sectionKey) {
             const descEl = document.createElement('p');
             descEl.className = 'text-sm text-gray-700';
             descEl.innerHTML = linkify(formatMultiline(description));
-            card.appendChild(descEl);
+            wrapper.appendChild(descEl);
         }
 
         if (Array.isArray(algorithm.steps) && algorithm.steps.length > 0) {
-            const list = document.createElement('ol');
-            list.className = 'space-y-3 text-sm';
-            algorithm.steps.forEach((step, stepIndex) => {
-                if (!step) return;
-                const item = document.createElement('li');
-                item.className = 'border-l-4 border-primary/60 pl-3 py-2 bg-gray-50 rounded-md';
+            for (let stepIndex = 0; stepIndex < algorithm.steps.length; stepIndex++) {
+                const step = algorithm.steps[stepIndex];
+                if (!step) continue;
+                const stepCard = document.createElement('div');
+                stepCard.className = 'algorithm-step';
 
-                const stepTitle = escapeHtml(step.title || `Шаг ${stepIndex + 1}`);
+                const stepTitleEl = document.createElement('h3');
+                stepTitleEl.textContent = step.title || `Шаг ${stepIndex + 1}`;
+                stepCard.appendChild(stepTitleEl);
+
                 const descriptionText =
                     typeof step.description === 'string'
                         ? step.description
                         : formatExampleForTextarea(step.description);
                 const exampleText = formatExampleForTextarea(step.example);
-
-                let html = `<div class="font-semibold">${stepTitle}</div>`;
-                if (descriptionText) {
-                    html += `<div class="text-gray-700 mt-1">${formatMultiline(
-                        descriptionText,
-                    )}</div>`;
+                const parts = [];
+                if (descriptionText) parts.push(descriptionText);
+                if (exampleText) parts.push(exampleText);
+                if (parts.length > 0) {
+                    const body = document.createElement('div');
+                    body.textContent = parts.join('\n\n');
+                    stepCard.appendChild(body);
                 }
                 if (step.additionalInfoText) {
-                    html += `<div class="text-gray-600 mt-1">${formatMultiline(
-                        step.additionalInfoText,
-                    )}</div>`;
+                    const caption = document.createElement('div');
+                    caption.className = 'pdf-caption';
+                    caption.textContent = step.additionalInfoText;
+                    stepCard.appendChild(caption);
                 }
-                if (exampleText) {
-                    html += `<div class="text-gray-500 mt-2">${formatMultiline(exampleText)}</div>`;
+                let screenshots = [];
+                if (Array.isArray(step.screenshotIds) && step.screenshotIds.length > 0) {
+                    try {
+                        screenshots = (
+                            await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))
+                        ).filter(Boolean);
+                    } catch (_) {}
                 }
-                // Здесь уже готовая безопасная HTML-разметка; повторный linkify на whole HTML давал артефакты в PDF.
-                item.innerHTML = html;
-                list.appendChild(item);
-            });
-            card.appendChild(list);
+                if (screenshots.length === 0 && algorithm.id != null) {
+                    try {
+                        const parentKey = String(algorithm.id);
+                        const byParent = await getAllFromIndex('screenshots', 'parentId', parentKey);
+                        screenshots = (byParent || []).filter(
+                            (s) => s && s.stepIndex === stepIndex && s.parentType === 'algorithm',
+                        );
+                    } catch (_) {}
+                }
+                if (screenshots.length > 0) {
+                    const container = document.createElement('div');
+                    container.className = 'export-pdf-image-container';
+                    for (const sc of screenshots) {
+                        if (sc.blob instanceof Blob) {
+                            try {
+                                const dataUrl = await blobToDataUrl(sc.blob);
+                                const img = document.createElement('img');
+                                img.src = dataUrl;
+                                img.alt = '';
+                                container.appendChild(img);
+                            } catch (_) {}
+                        }
+                    }
+                    if (container.children.length) stepCard.appendChild(container);
+                }
+                wrapper.appendChild(stepCard);
+            }
         }
-
-        wrapper.appendChild(card);
-    });
+    }
 
     return wrapper;
 }
@@ -129,20 +165,22 @@ export function initAlgorithmsPdfExportSystem() {
         if (button._pdfExportHandler) {
             button.removeEventListener('click', button._pdfExportHandler);
         }
-        button._pdfExportHandler = () => {
+        button._pdfExportHandler = async () => {
             if (!ExportService) {
                 showNotification?.('Сервис экспорта PDF недоступен.', 'error');
                 return;
             }
-            const content = buildAlgorithmSectionExport(sectionKey);
+            const content = await buildAlgorithmSectionExport(sectionKey);
             if (!content) {
                 showNotification?.('В разделе нет алгоритмов для экспорта.', 'warning');
                 return;
             }
             const filename = `Алгоритмы_${getSectionName(sectionKey)}`;
+            const sectionAlgorithms = algorithms?.[sectionKey] ?? [];
             ExportService.exportElementToPdf(content, filename, {
                 type: 'algorithm-section',
                 section: sectionKey,
+                algorithms: sectionAlgorithms,
             });
         };
         button.addEventListener('click', button._pdfExportHandler);

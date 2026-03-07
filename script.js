@@ -1518,7 +1518,7 @@ setOnloadHandlerDependencies({
     backgroundStatusHUD: window.BackgroundStatusHUD || null,
     afterInitCallbacks: [
         () => {
-            setAlgorithmsPdfExportDependencies({ algorithms, ExportService, showNotification });
+            setAlgorithmsPdfExportDependencies({ algorithms, ExportService, showNotification, getFromIndexedDB });
             if (typeof initAlgorithmsPdfExportSystem === 'function')
                 initAlgorithmsPdfExportSystem();
         },

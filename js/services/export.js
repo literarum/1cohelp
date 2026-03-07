@@ -22,11 +22,14 @@ const CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * MARGIN_PT;
 const BODY_FONT_SIZE = 11;
 const LINE_HEIGHT_RATIO = 1.5;
 const HEADING_SIZES = { 1: 18, 2: 16, 3: 14, 4: 12 };
-const BLOCK_SPACING_PT = 10;
-const HEADING_BOTTOM_SPACING_PT = 14;
-const STEP_INDENT_PT = 14;
+const BLOCK_SPACING_PT = 6;
+const HEADING_BOTTOM_SPACING_PT = 10;
+const STEP_INDENT_PT = 12;
 const SEPARATOR_LINE_THICKNESS_PT = 0.35;
-const SEPARATOR_GAP_PT = 10;
+const SEPARATOR_GAP_PT = 6;
+const ALGORITHM_CARD_GAP_PT = 18;
+const DESC_FONT_SIZE = 10;
+const CAPTION_FONT_SIZE = 9;
 
 const HIDDEN_SELECTORS =
     'button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, ' +
@@ -69,11 +72,30 @@ function extractPdfContent(root) {
         const isStep = el.classList?.contains('algorithm-step') || el.classList?.contains('reglament-item');
 
         if (isStep) {
-            const text = (el.innerText || '').trim();
+            const fullText = (el.innerText || '').trim();
             const imgs = Array.from(el.querySelectorAll('img'))
                 .map((img) => img.src)
                 .filter((src) => src && (src.startsWith('data:') || src.startsWith('http')));
-            blocks.push({ type: 'block', text, images: imgs.length ? imgs : undefined });
+            const stepHeading = el.querySelector('h2, h3, h4');
+            const headingText = stepHeading?.textContent?.trim();
+            if (headingText && fullText) {
+                const restText = fullText.startsWith(headingText)
+                    ? fullText.slice(headingText.length).trim()
+                    : fullText;
+                const headingLevel = stepHeading.tagName.toLowerCase() === 'h2' ? 2 : 4;
+                blocks.push({ type: 'heading', level: headingLevel, text: headingText });
+                if (restText || (imgs && imgs.length > 0)) {
+                    blocks.push({ type: 'block', text: restText || '', images: imgs.length ? imgs : undefined });
+                }
+            } else {
+                blocks.push({ type: 'block', text: fullText, images: imgs.length ? imgs : undefined });
+            }
+            return;
+        }
+
+        if (el.classList?.contains('pdf-caption')) {
+            const text = (el.textContent || '').trim();
+            if (text) blocks.push({ type: 'caption', text });
             return;
         }
 
@@ -229,8 +251,13 @@ async function buildPdfFromContent(contentBlocks, opts) {
 
     const blocks = contentBlocks.length ? contentBlocks : [{ type: 'paragraph', text: 'Нет контента для экспорта.' }];
 
+    let prevBlock = null;
+
     for (const block of blocks) {
         if (block.type === 'heading') {
+            if (block.level === 2 && prevBlock !== null) {
+                y -= ALGORITHM_CARD_GAP_PT;
+            }
             const text = sanitizeTextForPdf(block.text);
             const fontSize = HEADING_SIZES[block.level] || 16;
             const lineHeight = fontSize * LINE_HEIGHT_RATIO;
@@ -260,31 +287,59 @@ async function buildPdfFromContent(contentBlocks, opts) {
                 color: rgb(0.18, 0.18, 0.22),
             });
             y = lineY - SEPARATOR_GAP_PT;
+            prevBlock = block;
             continue;
         }
 
         if (block.type === 'paragraph' || block.type === 'list') {
+            const isDescription =
+                block.type === 'paragraph' &&
+                prevBlock?.type === 'heading' &&
+                prevBlock?.level === 2;
+            const fontSize = isDescription ? DESC_FONT_SIZE : BODY_FONT_SIZE;
+            const textColor = isDescription ? rgb(0.35, 0.35, 0.4) : rgb(0.18, 0.18, 0.22);
             const indent = block.type === 'list' ? STEP_INDENT_PT : 0;
             const raw = sanitizeTextForPdf(block.text);
             const segments = raw.split(/\n/).map((s) => s.trim()).filter(Boolean);
             const lines = [];
             for (const seg of segments) {
                 const text = block.type === 'list' ? '• ' + seg : seg;
-                lines.push(...wrapText(text, font, BODY_FONT_SIZE, maxWidthPt - indent));
+                lines.push(...wrapText(text, font, fontSize, maxWidthPt - indent));
             }
-            const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
+            const lineHeight = fontSize * LINE_HEIGHT_RATIO;
             ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
             for (const line of lines) {
                 page.drawText(line, {
                     x: MARGIN_PT + indent,
-                    y: y - BODY_FONT_SIZE,
-                    size: BODY_FONT_SIZE,
+                    y: y - fontSize,
+                    size: fontSize,
                     font,
-                    color: rgb(0.18, 0.18, 0.22),
+                    color: textColor,
                 });
                 y -= lineHeight;
             }
             y -= BLOCK_SPACING_PT;
+            prevBlock = block;
+            continue;
+        }
+
+        if (block.type === 'caption') {
+            const raw = sanitizeTextForPdf(block.text);
+            const lines = wrapText(raw, font, CAPTION_FONT_SIZE, maxWidthPt - STEP_INDENT_PT);
+            const lineHeight = CAPTION_FONT_SIZE * LINE_HEIGHT_RATIO;
+            ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT * 0.5);
+            for (const line of lines) {
+                page.drawText(line, {
+                    x: MARGIN_PT + STEP_INDENT_PT,
+                    y: y - CAPTION_FONT_SIZE,
+                    size: CAPTION_FONT_SIZE,
+                    font,
+                    color: rgb(0.45, 0.45, 0.5),
+                });
+                y -= lineHeight;
+            }
+            y -= BLOCK_SPACING_PT * 0.5;
+            prevBlock = block;
             continue;
         }
 
@@ -335,6 +390,7 @@ async function buildPdfFromContent(contentBlocks, opts) {
                     }
                 }
             }
+            prevBlock = block;
         }
     }
 
@@ -429,21 +485,59 @@ export const ExportService = {
         try {
             if (loadingOverlayManager) loadingOverlayManager.updateProgress(20, 'Обработка контента...');
 
+            const blobToDataUrl = (blob) =>
+                new Promise((resolve, reject) => {
+                    if (!(blob instanceof Blob)) return reject(new Error('Not a Blob'));
+                    const r = new FileReader();
+                    r.onload = () => resolve(r.result);
+                    r.onerror = () => reject(new Error('FileReader failed'));
+                    r.readAsDataURL(blob);
+                });
+
             if (context.type === 'algorithm' && context.data && Array.isArray(context.data.steps)) {
                 const stepsInClone = clone.querySelectorAll('.algorithm-step');
-                const blobToDataUrl = (blob) =>
-                    new Promise((resolve, reject) => {
-                        if (!(blob instanceof Blob)) return reject(new Error('Not a Blob'));
-                        const r = new FileReader();
-                        r.onload = () => resolve(r.result);
-                        r.onerror = () => reject(new Error('FileReader failed'));
-                        r.readAsDataURL(blob);
-                    });
                 for (let i = 0; i < context.data.steps.length; i++) {
                     const step = context.data.steps[i];
                     const stepEl = stepsInClone[i];
                     if (!stepEl || !Array.isArray(step.screenshotIds) || step.screenshotIds.length === 0) continue;
                     const screenshots = (await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))).filter(Boolean);
+                    const container = document.createElement('div');
+                    container.className = 'export-pdf-image-container';
+                    for (const sc of screenshots) {
+                        if (sc.blob instanceof Blob) {
+                            try {
+                                const dataUrl = await blobToDataUrl(sc.blob);
+                                const img = document.createElement('img');
+                                img.src = dataUrl;
+                                img.alt = '';
+                                container.appendChild(img);
+                            } catch (_) {}
+                        }
+                    }
+                    if (container.children.length) stepEl.appendChild(container);
+                }
+            } else if (
+                context.type === 'algorithm-section' &&
+                Array.isArray(context.algorithms) &&
+                context.algorithms.length > 0
+            ) {
+                const stepsInClone = clone.querySelectorAll('.algorithm-step');
+                const stepsFlat = context.algorithms.flatMap((algo) =>
+                    (algo.steps || []).map((step, stepIndex) => ({ algo, step, stepIndex })),
+                );
+                for (let k = 0; k < stepsFlat.length && k < stepsInClone.length; k++) {
+                    const { step } = stepsFlat[k];
+                    const stepEl = stepsInClone[k];
+                    if (!stepEl || stepEl.querySelector('.export-pdf-image-container img')) continue;
+                    const screenshotIds = Array.isArray(step.screenshotIds) ? step.screenshotIds : [];
+                    const screenshots =
+                        screenshotIds.length > 0
+                            ? (
+                                  await Promise.all(
+                                      screenshotIds.map((id) => getFromIndexedDB('screenshots', id)),
+                                  )
+                              ).filter(Boolean)
+                            : [];
                     const container = document.createElement('div');
                     container.className = 'export-pdf-image-container';
                     for (const sc of screenshots) {
