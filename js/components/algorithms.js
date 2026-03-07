@@ -536,7 +536,7 @@ export function initStepSorting(containerElement, isMainAlgoWithGroups = false) 
         ? '.step-drag-handle, .main-algo-group-drag-handle'
         : '.step-drag-handle';
 
-    containerElement.sortableInstance = new SortableLib(containerElement, {
+    const sortableOptions = {
         animation: 150,
         handle,
         ghostClass: 'sortable-ghost',
@@ -556,7 +556,13 @@ export function initStepSorting(containerElement, isMainAlgoWithGroups = false) 
                 console.log('Изменения в окне добавления после перетаскивания.');
             }
         },
-    });
+    };
+
+    if (isMainAlgoWithGroups) {
+        sortableOptions.filter = '.edit-main-algo-group-steps';
+    }
+
+    containerElement.sortableInstance = new SortableLib(containerElement, sortableOptions);
 
     if (isMainAlgoWithGroups) {
         containerElement.querySelectorAll('.edit-main-algo-group-steps').forEach((groupBody) => {

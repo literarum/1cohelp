@@ -851,9 +851,12 @@ export async function saveAlgorithm() {
         showNotification('Алгоритм успешно сохранен.');
         if (resetInitialEditState) resetInitialEditState();
         if (editModal) editModal.classList.add('hidden');
-        if (getVisibleModals && getVisibleModals().length === 0) {
-            document.body.classList.remove('modal-open');
-        }
+        requestAnimationFrame(() => {
+            if (!getVisibleModals || getVisibleModals().length === 0) {
+                document.body.classList.remove('modal-open');
+                document.body.classList.remove('overflow-hidden');
+            }
+        });
     } else {
         console.error(
             `[Save Algorithm v7 (Robust TX)] Сохранение алгоритма ${algorithmIdStr} НЕ УДАЛОСЬ.`,

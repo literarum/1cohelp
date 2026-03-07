@@ -35,9 +35,11 @@ let toggleTimer = null;
 let resetTimer = null;
 let adjustTimerDuration = null;
 let showAppConfirm = null;
+let hasBlockingModalsOpen = null;
 
 let searchEscClearHandler = null;
 let altRReloadHandler = null;
+let ctrlRReloadHandler = null;
 
 export function setHotkeysDependencies(deps) {
     if (deps.showNoInnModal !== undefined) showNoInnModal = deps.showNoInnModal;
@@ -78,6 +80,8 @@ export function setHotkeysDependencies(deps) {
     if (deps.resetTimer !== undefined) resetTimer = deps.resetTimer;
     if (deps.adjustTimerDuration !== undefined) adjustTimerDuration = deps.adjustTimerDuration;
     if (deps.showAppConfirm !== undefined) showAppConfirm = deps.showAppConfirm;
+    if (deps.hasBlockingModalsOpen !== undefined)
+        hasBlockingModalsOpen = deps.hasBlockingModalsOpen;
 }
 
 /**
@@ -159,7 +163,7 @@ export function setupHotkeys() {
         event.preventDefault();
         event.stopPropagation();
         const clearMap = {
-            searchInput: 'clearSearchBtn',
+            searchInput: 'clearSearchInputBtn',
             linkSearchInput: 'clearLinkSearchInputBtn',
             extLinkSearchInput: 'clearExtLinkSearchBtn',
             bookmarkSearchInput: 'clearBookmarkSearchBtn',
@@ -197,6 +201,43 @@ export function setupHotkeys() {
         }
     };
     document.addEventListener('keydown', altRReloadHandler, false);
+
+    // Ctrl/Cmd+R: при открытом модальном окне в режиме редактирования показываем
+    // централизованное модальное окно приложения вместо нативного диалога браузера.
+    // Кнопку перезагрузки браузера перехватить нельзя — для неё остаётся beforeunload.
+    if (ctrlRReloadHandler) {
+        document.removeEventListener('keydown', ctrlRReloadHandler, false);
+    }
+    ctrlRReloadHandler = (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        if (event.code !== 'KeyR' || event.altKey || event.shiftKey) return;
+        const ae = document.activeElement;
+        const isInputFocused =
+            ae &&
+            (ae.tagName === 'INPUT' ||
+                ae.tagName === 'TEXTAREA' ||
+                ae.isContentEditable);
+        if (isInputFocused) return;
+        if (typeof hasBlockingModalsOpen !== 'function' || !hasBlockingModalsOpen()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const message =
+            'Вы уверены, что хотите перезагрузить страницу? Несохранённые изменения в открытой форме будут потеряны.';
+        if (typeof showAppConfirm === 'function') {
+            showAppConfirm({
+                title: 'Перезагрузка страницы',
+                message,
+                confirmText: 'Перезагрузить',
+                cancelText: 'Отмена',
+                confirmClass: 'bg-primary hover:bg-secondary text-white',
+            }).then((ok) => {
+                if (ok) window.location.reload();
+            });
+        } else {
+            if (window.confirm(message)) window.location.reload();
+        }
+    };
+    document.addEventListener('keydown', ctrlRReloadHandler, false);
 
     console.log('Глобальные хоткеи и дополнительные перехватчики инициализированы.');
 }

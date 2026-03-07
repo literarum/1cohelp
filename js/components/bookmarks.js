@@ -56,6 +56,27 @@ function getFolderDotClasses(colorName) {
     return FOLDER_DOT_CLASSES[key] || FOLDER_DOT_CLASSES.gray;
 }
 
+/** Порядок цветов папок для сортировки «от красной к зелёной» */
+const FOLDER_COLOR_SORT_ORDER = [
+    'red',
+    'orange',
+    'yellow',
+    'green',
+    'teal',
+    'blue',
+    'indigo',
+    'purple',
+    'pink',
+    'rose',
+    'gray',
+];
+
+function getFolderColorSortIndex(colorName) {
+    const key = normalizeFolderColor(colorName);
+    const idx = FOLDER_COLOR_SORT_ORDER.indexOf(key);
+    return idx >= 0 ? idx : FOLDER_COLOR_SORT_ORDER.length;
+}
+
 // ============================================================================
 // КОМПОНЕНТ РАБОТЫ С ЗАКЛАДКАМИ
 // ============================================================================
@@ -376,6 +397,68 @@ export function initBookmarkSystem() {
         bookmarkFolderFilter.dataset.listenerAttached = 'true';
         console.log('Обработчик для bookmarkFolderFilter добавлен в initBookmarkSystem.');
     }
+
+    const sortControls = document.getElementById('bookmarksSortControls');
+    if (sortControls && !sortControls.dataset.sortHandlersAttached) {
+        const baseClass =
+            'h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border';
+        const inactiveClass =
+            `${baseClass} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`;
+        const activeClass = `${baseClass} border-transparent bg-primary text-white hover:bg-secondary`;
+
+        const updateBookmarksSortButtonsUI = () => {
+            const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'desc' };
+            const criteriaToBtnId = {
+                date: 'sortBookmarksByDate',
+                title: 'sortBookmarksByTitle',
+                folder: 'sortBookmarksByFolder',
+            };
+            ['date', 'title', 'folder'].forEach((criteria) => {
+                const btn = document.getElementById(criteriaToBtnId[criteria]);
+                if (!btn) return;
+                btn.className = sortState.criteria === criteria ? activeClass : inactiveClass;
+                const icon = btn.querySelector('.sort-icon');
+                if (icon) {
+                    icon.className =
+                        sortState.criteria === criteria
+                            ? `sort-icon fas ${sortState.direction === 'desc' ? 'fa-arrow-down' : 'fa-arrow-up'} ml-1 w-3 opacity-100`
+                            : 'sort-icon fas ml-1 w-3 opacity-0';
+                }
+            });
+        };
+
+        const handleBookmarksSortClick = (criteria) => {
+            if (!GlobalState.currentBookmarksSort) {
+                GlobalState.currentBookmarksSort = { criteria: 'date', direction: 'desc' };
+            }
+            if (GlobalState.currentBookmarksSort.criteria === criteria) {
+                GlobalState.currentBookmarksSort.direction =
+                    GlobalState.currentBookmarksSort.direction === 'desc' ? 'asc' : 'desc';
+            } else {
+                GlobalState.currentBookmarksSort.criteria = criteria;
+                GlobalState.currentBookmarksSort.direction = 'desc';
+            }
+            updateBookmarksSortButtonsUI();
+            if (typeof filterBookmarks === 'function') filterBookmarks();
+        };
+
+        const dateBtn = document.getElementById('sortBookmarksByDate');
+        const titleBtn = document.getElementById('sortBookmarksByTitle');
+        const folderBtn = document.getElementById('sortBookmarksByFolder');
+        if (dateBtn) {
+            dateBtn.addEventListener('click', () => handleBookmarksSortClick('date'));
+        }
+        if (titleBtn) {
+            titleBtn.addEventListener('click', () => handleBookmarksSortClick('title'));
+        }
+        if (folderBtn) {
+            folderBtn.addEventListener('click', () => handleBookmarksSortClick('folder'));
+        }
+        updateBookmarksSortButtonsUI();
+        sortControls.dataset.sortHandlersAttached = 'true';
+        console.log('Кнопки сортировки закладок инициализированы в initBookmarkSystem.');
+    }
+
     populateBookmarkFolders();
     if (State && State.db) {
         loadBookmarks();
@@ -552,7 +635,12 @@ export async function loadBookmarks() {
             );
         }
 
-        await renderBookmarks(initialBookmarksToRender, folderMap);
+        const sortedToRender = sortBookmarksList(
+            initialBookmarksToRender,
+            folderMap,
+            GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'desc' },
+        );
+        await renderBookmarks(sortedToRender, folderMap);
 
         console.log(
             `Загрузка закладок завершена. Загружено ${folders?.length || 0} папок и ${
@@ -568,6 +656,49 @@ export async function loadBookmarks() {
             showNotification('Критическая ошибка загрузки данных закладок.', 'error');
         return false;
     }
+}
+
+/**
+ * Сортирует массив закладок по текущим настройкам (без мутации исходного массива).
+ * @param {Array} bookmarks - массив закладок
+ * @param {Object} folderMap - объект id папки -> { color, name, ... }
+ * @param {{ criteria: string, direction: string }} sortState - currentBookmarksSort из State
+ * @returns {Array} новый отсортированный массив
+ */
+function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
+    if (!bookmarks || bookmarks.length === 0) return [...(bookmarks || [])];
+    const criteria = sortState.criteria || 'date';
+    const direction = sortState.direction || 'desc';
+    const mult = direction === 'desc' ? -1 : 1;
+
+    return [...bookmarks].sort((a, b) => {
+        if (criteria === 'date') {
+            const tsA = new Date(a.dateAdded || a.dateUpdated || 0).getTime();
+            const tsB = new Date(b.dateAdded || b.dateUpdated || 0).getTime();
+            if (tsA !== tsB) return (tsA - tsB) * mult;
+            return (a.id || 0) - (b.id || 0);
+        }
+        if (criteria === 'title') {
+            const titleA = (a.title || '').trim().toLowerCase();
+            const titleB = (b.title || '').trim().toLowerCase();
+            const cmp = titleA.localeCompare(titleB, 'ru');
+            if (cmp !== 0) return cmp * mult;
+            return (a.id || 0) - (b.id || 0);
+        }
+        if (criteria === 'folder') {
+            const folderA = a.folder != null ? folderMap[a.folder] : null;
+            const folderB = b.folder != null ? folderMap[b.folder] : null;
+            const colorA = folderA && folderA.color ? getFolderColorSortIndex(folderA.color) : FOLDER_COLOR_SORT_ORDER.length;
+            const colorB = folderB && folderB.color ? getFolderColorSortIndex(folderB.color) : FOLDER_COLOR_SORT_ORDER.length;
+            if (colorA !== colorB) return (colorA - colorB) * mult;
+            const nameA = (folderA && folderA.name) || '';
+            const nameB = (folderB && folderB.name) || '';
+            const cmp = nameA.localeCompare(nameB, 'ru');
+            if (cmp !== 0) return cmp * mult;
+            return (a.id || 0) - (b.id || 0);
+        }
+        return 0;
+    });
 }
 
 /**
@@ -865,7 +996,9 @@ export async function filterBookmarks() {
             });
         }
 
-        renderBookmarks(bookmarksToDisplay, folderMap);
+        const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'desc' };
+        const sortedToDisplay = sortBookmarksList(bookmarksToDisplay, folderMap, sortState);
+        renderBookmarks(sortedToDisplay, folderMap);
 
         if (typeof window.ensureBookmarksScroll === 'function') {
             window.ensureBookmarksScroll();

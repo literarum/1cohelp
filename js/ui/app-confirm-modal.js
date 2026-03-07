@@ -27,6 +27,7 @@ export function setAppConfirmModalDependencies(deps) {
  * @param {string} [options.confirmText='Да']
  * @param {string} [options.cancelText='Отмена']
  * @param {string} [options.confirmClass='bg-primary hover:bg-secondary text-white']
+ * @param {boolean} [options.messageIsHtml=false] — если true, message вставляется как HTML (innerHTML).
  * @returns {Promise<boolean>} true — подтверждение, false — отмена.
  */
 export function showAppConfirm(options = {}) {
@@ -36,6 +37,7 @@ export function showAppConfirm(options = {}) {
         confirmText = 'Да',
         cancelText = 'Отмена',
         confirmClass = 'bg-primary hover:bg-secondary text-white',
+        messageIsHtml = false,
     } = options;
 
     const modal = document.getElementById('appConfirmModal');
@@ -55,7 +57,11 @@ export function showAppConfirm(options = {}) {
     }
 
     if (titleEl) titleEl.textContent = title;
-    messageEl.textContent = message;
+    if (messageIsHtml) {
+        messageEl.innerHTML = message;
+    } else {
+        messageEl.textContent = message;
+    }
     enhanceModalAccessibility(modal, {
         labelledBy: 'appConfirmModalTitle',
         describedBy: 'appConfirmModalMessage',

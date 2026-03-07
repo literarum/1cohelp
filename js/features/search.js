@@ -3301,7 +3301,7 @@ export async function handleSearchResultClick(result) {
 export function initSearchSystem() {
     const searchInput = document.getElementById('searchInput');
     const searchResultsContainer = document.getElementById('searchResults');
-    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const clearSearchBtn = document.getElementById('clearSearchInputBtn');
     const searchFieldFilters = document.querySelectorAll('.search-field-filter');
 
     if (!searchInput) {

@@ -303,7 +303,9 @@ export function initFullscreenToggles(modalConfigs) {
 }
 
 /**
- * Инициализирует обработчик beforeunload для блокирующих модальных окон
+ * Инициализирует обработчик beforeunload для блокирующих модальных окон.
+ * При перезагрузке через Ctrl/Cmd+R показывается модальное окно приложения (см. hotkeys-handler).
+ * Для кнопки перезагрузки браузера API не позволяет показать своё окно — остаётся нативный диалог.
  */
 export function initBeforeUnloadHandler() {
     window.addEventListener('beforeunload', (event) => {

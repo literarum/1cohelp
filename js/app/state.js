@@ -46,6 +46,7 @@ export const State = {
     allBlacklistEntriesCache: [],
     currentBlacklistSearchQuery: '',
     currentBlacklistSort: { criteria: 'level', direction: 'desc' },
+    currentBookmarksSort: { criteria: 'date', direction: 'desc' },
 
     // Состояние экспорта/импорта
     isExportOperationInProgress: false,

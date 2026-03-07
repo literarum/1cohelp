@@ -217,10 +217,6 @@ export async function renderMainAlgorithm() {
               )
             : [];
     const collapsedSet = new Set(validIndices);
-    if (collapsedSet.size === 0 && mainSteps.length > 0) {
-        const firstCollapsible = mainSteps.findIndex((s) => !!s?.isCollapsible);
-        if (firstCollapsible >= 0) collapsedSet.add(firstCollapsible);
-    }
 
     if (mainSteps.length === 0) {
         const emptyP = document.createElement('p');

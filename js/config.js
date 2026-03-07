@@ -206,7 +206,7 @@ export const hotkeysModalConfig = {
     classToggleConfig: {
         normal: {
             modal: ['p-4'],
-            innerContainer: ['max-w-3xl', 'max-h-[90vh]', 'rounded-lg', 'shadow-xl'],
+            innerContainer: ['max-w-6xl', 'max-h-[85vh]', 'rounded-lg', 'shadow-xl'],
             contentArea: ['p-6'],
         },
         fullscreen: {

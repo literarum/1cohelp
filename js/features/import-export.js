@@ -191,20 +191,34 @@ export async function importReglaments(reglaments) {
  * Выполняет принудительное резервное копирование перед импортом
  */
 export async function performForcedBackup() {
-    const backupWarningMessage =
+    const backupWarningMessagePlain =
         'Создать резервную копию текущей базы данных перед импортом?\n\n' +
         'ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.\n\n' +
         "Нажмите 'ОК', чтобы создать резервную копию (рекомендуется).\n" +
         "Нажмите 'Отмена', чтобы продолжить импорт без резервной копии (на свой страх и риск).";
-    const userAgreesToBackup = deps.showAppConfirm
-        ? await deps.showAppConfirm({
-              title: 'Резервное копирование перед импортом',
-              message: backupWarningMessage,
-              confirmText: 'Сделать бэкап',
-              cancelText: 'Без бэкапа',
-              confirmClass: 'bg-amber-600 hover:bg-amber-700 text-white',
-          })
-        : window.confirm(backupWarningMessage);
+    const backupWarningMessageHtml =
+        '<p class="mb-3">Создать резервную копию текущей базы данных перед импортом?</p>' +
+        '<p class="mb-3"><span class="app-confirm-warning-caps text-red-600 dark:text-red-400 font-semibold underline uppercase">ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.</span></p>' +
+        '<p class="mb-2">Нажмите «ОК», чтобы создать резервную копию (рекомендуется).</p>' +
+        '<p>Нажмите «Отмена», чтобы продолжить импорт без резервной копии (на свой страх и риск).</p>';
+    let userAgreesToBackup;
+    if (deps.showAppConfirm) {
+        document.body.classList.add('app-backup-warning-perimeter-pulse');
+        try {
+            userAgreesToBackup = await deps.showAppConfirm({
+                title: 'Резервное копирование перед импортом',
+                message: backupWarningMessageHtml,
+                messageIsHtml: true,
+                confirmText: 'Сделать бэкап',
+                cancelText: 'Без бэкапа',
+                confirmClass: 'bg-amber-600 hover:bg-amber-700 text-white',
+            });
+        } finally {
+            document.body.classList.remove('app-backup-warning-perimeter-pulse');
+        }
+    } else {
+        userAgreesToBackup = window.confirm(backupWarningMessagePlain);
+    }
 
     deps.NotificationService?.dismissImportant('critical-backup-warning-prompt');
 
