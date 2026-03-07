@@ -89,12 +89,18 @@ function extractPdfContent(root) {
             if (!text) return;
             if (tag === 'pre' && (text.includes('\n\n') || /Шаг\s*\d+[\s:]/i.test(text))) {
                 const segments = text.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
-                for (const seg of segments) {
+                for (let segIndex = 0; segIndex < segments.length; segIndex++) {
+                    const seg = segments[segIndex];
                     const firstLine = seg.split('\n')[0].trim();
                     const rest = seg.includes('\n') ? seg.split('\n').slice(1).join('\n').trim() : '';
-                    if (/^Шаг\s*\d+[\s:]/i.test(firstLine)) {
+                    const isSingleLine = !seg.includes('\n');
+                    if (segIndex === 0 && isSingleLine && firstLine.length <= 100) {
+                        blocks.push({ type: 'heading', level: 2, text: firstLine });
+                    } else if (/^Шаг\s*\d+[\s:]/i.test(firstLine)) {
                         blocks.push({ type: 'heading', level: 4, text: firstLine });
                         if (rest) blocks.push({ type: 'paragraph', text: rest });
+                    } else if (isSingleLine && firstLine.length <= 90) {
+                        blocks.push({ type: 'heading', level: 3, text: firstLine });
                     } else {
                         blocks.push({ type: 'paragraph', text: seg });
                     }
@@ -184,7 +190,14 @@ async function buildPdfFromContent(contentBlocks, opts) {
 
     const pdfDoc = await PDFLib.PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
-    const font = await pdfDoc.embedFont(opts.fontBytes);
+    let font;
+    try {
+        font = await pdfDoc.embedFont(opts.fontBytes);
+    } catch (embedErr) {
+        throw new Error(
+            'Шрифт PT Serif не удалось встроить в PDF. Откройте приложение с веб-сервера (не через file://).',
+        );
+    }
     const rgb = PDFLib.rgb || PDFLib.RGB || ((r, g, b) => ({ type: 'RGB', red: r, green: g, blue: b }));
 
     let page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
@@ -320,6 +333,12 @@ const FONT_FILENAME = 'PT_Serif-Web-Regular.ttf';
  */
 async function loadPdfFontBytes() {
     const candidates = [];
+    if (typeof window !== 'undefined' && (document.baseURI || window.location.href)) {
+        try {
+            const base = document.baseURI || window.location.href;
+            candidates.push(new URL('fonts/' + FONT_FILENAME, base).href);
+        } catch (_) {}
+    }
     try {
         candidates.push(new URL('../../fonts/' + FONT_FILENAME, import.meta.url).href);
     } catch (_) {}
