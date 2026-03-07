@@ -13,22 +13,41 @@ export function setLoadingOverlayManager(manager) {
     loadingOverlayManager = manager;
 }
 
-// A4 в пунктах (1 mm ≈ 2.83465 pt)
+// A4 в пунктах (1 mm ≈ 2.83465 pt). Стиль в духе Apple: воздух, мягкая типографика, чёткая иерархия.
 const A4_WIDTH_PT = 595.28;
 const A4_HEIGHT_PT = 841.89;
-const MARGIN_MM = 20;
+const MARGIN_MM = 25;
 const MARGIN_PT = MARGIN_MM * 2.83465;
 const CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * MARGIN_PT;
 const BODY_FONT_SIZE = 11;
-const LINE_HEIGHT_RATIO = 1.4;
+const LINE_HEIGHT_RATIO = 1.5;
 const HEADING_SIZES = { 1: 18, 2: 16, 3: 14, 4: 12 };
-const BLOCK_SPACING_PT = 8;
-const HEADING_BOTTOM_SPACING_PT = 12;
-const STEP_INDENT_PT = 12;
+const BLOCK_SPACING_PT = 10;
+const HEADING_BOTTOM_SPACING_PT = 14;
+const STEP_INDENT_PT = 14;
+const SEPARATOR_LINE_THICKNESS_PT = 0.35;
+const SEPARATOR_GAP_PT = 10;
 
 const HIDDEN_SELECTORS =
     'button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, ' +
     '.view-screenshot-btn, .copyable-step-active, [id="noInnLink_main_1"]';
+
+/**
+ * Удаляет HTML-теги из строки и заменяет <br> на перенос строки, чтобы в PDF не попадал сырой HTML.
+ * Не трогает символы < > вне тегов (например "a < b" остаётся как есть для последовательностей не как тег).
+ * @param {string} text
+ * @returns {string}
+ */
+function sanitizeTextForPdf(text) {
+    if (!text || typeof text !== 'string') return '';
+    let s = String(text)
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[^\S\n]+/g, ' ')
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .trim();
+    return s;
+}
 
 /**
  * Извлекает из DOM плоский список блоков для PDF: заголовки, параграфы, списки, шаги (с изображениями).
@@ -67,7 +86,22 @@ function extractPdfContent(root) {
 
         if ((tag === 'p' || tag === 'pre') && !el.closest('.algorithm-step, .reglament-item')) {
             const text = (el.textContent || '').trim();
-            if (text) blocks.push({ type: 'paragraph', text });
+            if (!text) return;
+            if (tag === 'pre' && (text.includes('\n\n') || /Шаг\s*\d+[\s:]/i.test(text))) {
+                const segments = text.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
+                for (const seg of segments) {
+                    const firstLine = seg.split('\n')[0].trim();
+                    const rest = seg.includes('\n') ? seg.split('\n').slice(1).join('\n').trim() : '';
+                    if (/^Шаг\s*\d+[\s:]/i.test(firstLine)) {
+                        blocks.push({ type: 'heading', level: 4, text: firstLine });
+                        if (rest) blocks.push({ type: 'paragraph', text: rest });
+                    } else {
+                        blocks.push({ type: 'paragraph', text: seg });
+                    }
+                }
+            } else {
+                blocks.push({ type: 'paragraph', text });
+            }
             return;
         }
 
@@ -169,28 +203,47 @@ async function buildPdfFromContent(contentBlocks, opts) {
 
     for (const block of blocks) {
         if (block.type === 'heading') {
+            const text = sanitizeTextForPdf(block.text);
             const fontSize = HEADING_SIZES[block.level] || 16;
             const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-            ensureSpace(lineHeight + HEADING_BOTTOM_SPACING_PT);
-            const lines = wrapText(block.text, font, fontSize, maxWidthPt);
+            const lines = wrapText(text, font, fontSize, maxWidthPt);
+            const headingBlockHeight =
+                lines.length * lineHeight +
+                HEADING_BOTTOM_SPACING_PT +
+                SEPARATOR_LINE_THICKNESS_PT +
+                SEPARATOR_GAP_PT;
+            ensureSpace(headingBlockHeight);
             for (const line of lines) {
                 page.drawText(line, {
                     x: MARGIN_PT,
                     y: y - fontSize,
                     size: fontSize,
                     font,
-                    color: rgb(0, 0, 0),
+                    color: rgb(0.08, 0.08, 0.1),
                 });
                 y -= fontSize * LINE_HEIGHT_RATIO;
             }
             y -= HEADING_BOTTOM_SPACING_PT;
+            const lineY = y;
+            page.drawLine({
+                start: { x: MARGIN_PT, y: lineY },
+                end: { x: MARGIN_PT + CONTENT_WIDTH_PT, y: lineY },
+                thickness: SEPARATOR_LINE_THICKNESS_PT,
+                color: rgb(0.18, 0.18, 0.22),
+            });
+            y = lineY - SEPARATOR_GAP_PT;
             continue;
         }
 
         if (block.type === 'paragraph' || block.type === 'list') {
             const indent = block.type === 'list' ? STEP_INDENT_PT : 0;
-            const text = block.type === 'list' ? '• ' + block.text : block.text;
-            const lines = wrapText(text, font, BODY_FONT_SIZE, maxWidthPt - indent);
+            const raw = sanitizeTextForPdf(block.text);
+            const segments = raw.split(/\n/).map((s) => s.trim()).filter(Boolean);
+            const lines = [];
+            for (const seg of segments) {
+                const text = block.type === 'list' ? '• ' + seg : seg;
+                lines.push(...wrapText(text, font, BODY_FONT_SIZE, maxWidthPt - indent));
+            }
             const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
             ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
             for (const line of lines) {
@@ -199,7 +252,7 @@ async function buildPdfFromContent(contentBlocks, opts) {
                     y: y - BODY_FONT_SIZE,
                     size: BODY_FONT_SIZE,
                     font,
-                    color: rgb(0.11, 0.09, 0.15),
+                    color: rgb(0.18, 0.18, 0.22),
                 });
                 y -= lineHeight;
             }
@@ -208,8 +261,11 @@ async function buildPdfFromContent(contentBlocks, opts) {
         }
 
         if (block.type === 'block') {
-            if (block.text) {
-                const lines = wrapText(block.text, font, BODY_FONT_SIZE, maxWidthPt - STEP_INDENT_PT);
+            const blockText = sanitizeTextForPdf(block.text);
+            if (blockText) {
+                const segments = blockText.split(/\n/).map((s) => s.trim()).filter(Boolean);
+                const lines = [];
+                for (const seg of segments) lines.push(...wrapText(seg, font, BODY_FONT_SIZE, maxWidthPt - STEP_INDENT_PT));
                 const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
                 ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
                 for (const line of lines) {
@@ -218,7 +274,7 @@ async function buildPdfFromContent(contentBlocks, opts) {
                         y: y - BODY_FONT_SIZE,
                         size: BODY_FONT_SIZE,
                         font,
-                        color: rgb(0.11, 0.09, 0.15),
+                        color: rgb(0.18, 0.18, 0.22),
                     });
                     y -= lineHeight;
                 }
@@ -257,19 +313,36 @@ async function buildPdfFromContent(contentBlocks, opts) {
     return pdfDoc.save();
 }
 
+const FONT_FILENAME = 'PT_Serif-Web-Regular.ttf';
+
 /**
- * Загружает байты шрифта для pdf-lib (кириллица). Путь относительно index (site).
+ * Загружает байты шрифта для pdf-lib (кириллица). Пробует путь относительно модуля, затем относительно документа.
  */
 async function loadPdfFontBytes() {
+    const candidates = [];
     try {
-        const fontUrl = new URL('../../fonts/PT_Serif-Web-Regular.ttf', import.meta.url).href;
-        const res = await fetch(fontUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.arrayBuffer();
-    } catch (e) {
-        console.error('[PDF Export] Ошибка загрузки шрифта:', e);
-        return null;
+        candidates.push(new URL('../../fonts/' + FONT_FILENAME, import.meta.url).href);
+    } catch (_) {}
+    if (typeof window !== 'undefined' && window.location) {
+        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
+        candidates.push(base + '/fonts/' + FONT_FILENAME);
+        candidates.push(base + '/site/fonts/' + FONT_FILENAME);
     }
+    for (const fontUrl of candidates) {
+        try {
+            const res = await fetch(fontUrl);
+            if (!res.ok) continue;
+            const buf = await res.arrayBuffer();
+            if (buf && buf.byteLength > 0) {
+                console.log('[PDF Export] Шрифт PT Serif загружен:', fontUrl);
+                return buf;
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+    console.error('[PDF Export] Ошибка загрузки шрифта: ни один URL не сработал.', candidates);
+    return null;
 }
 
 let cachedFontBytes = null;
