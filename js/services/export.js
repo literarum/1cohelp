@@ -91,16 +91,31 @@ function extractPdfContent(root) {
                 const segments = text.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
                 for (let segIndex = 0; segIndex < segments.length; segIndex++) {
                     const seg = segments[segIndex];
-                    const firstLine = seg.split('\n')[0].trim();
-                    const rest = seg.includes('\n') ? seg.split('\n').slice(1).join('\n').trim() : '';
-                    const isSingleLine = !seg.includes('\n');
-                    if (segIndex === 0 && isSingleLine && firstLine.length <= 100) {
-                        blocks.push({ type: 'heading', level: 2, text: firstLine });
-                    } else if (/^Шаг\s*\d+[\s:]/i.test(firstLine)) {
+                    const lines = seg.split('\n').map((s) => s.trim()).filter(Boolean);
+                    const firstLine = lines[0] || '';
+                    const restLines = lines.slice(1);
+                    const rest = restLines.join('\n').trim();
+                    const isSingleLine = restLines.length === 0;
+                    const looksLikeList = /^[\s•\-*]\s/.test(firstLine) || /^\d+[.)]\s/.test(firstLine);
+                    const firstShort =
+                        !looksLikeList && firstLine.length <= (segIndex === 0 ? 100 : 90);
+                    if (/^Шаг\s*\d+[\s:]/i.test(firstLine)) {
                         blocks.push({ type: 'heading', level: 4, text: firstLine });
                         if (rest) blocks.push({ type: 'paragraph', text: rest });
-                    } else if (isSingleLine && firstLine.length <= 90) {
-                        blocks.push({ type: 'heading', level: 3, text: firstLine });
+                    } else if (isSingleLine && firstShort) {
+                        blocks.push({ type: 'heading', level: segIndex === 0 ? 2 : 3, text: firstLine });
+                    } else if (
+                        firstShort &&
+                        restLines.length === 1 &&
+                        restLines[0].length <= 90 &&
+                        !/^[\s•\-*]\s/.test(restLines[0]) &&
+                        !/^\d+[.)]\s/.test(restLines[0])
+                    ) {
+                        blocks.push({ type: 'heading', level: segIndex === 0 ? 2 : 3, text: firstLine });
+                        blocks.push({ type: 'heading', level: 3, text: restLines[0] });
+                    } else if (firstShort && rest) {
+                        blocks.push({ type: 'heading', level: segIndex === 0 ? 2 : 3, text: firstLine });
+                        blocks.push({ type: 'paragraph', text: rest });
                     } else {
                         blocks.push({ type: 'paragraph', text: seg });
                     }
@@ -455,13 +470,30 @@ export const ExportService = {
                 if (fontBytes) cachedFontBytes = fontBytes;
             }
             if (!fontBytes) {
-                NotificationService.add('Не удалось загрузить шрифт для PDF.', 'error', { important: true });
+                const isFileProtocol =
+                    typeof window !== 'undefined' &&
+                    (window.location?.protocol === 'file:' || document.baseURI?.startsWith('file:'));
+                const msg = isFileProtocol
+                    ? 'Шрифт для PDF не загружается при открытии через file://. Запустите приложение с веб-сервера: в папке site выполните «npx serve .» или «python -m http.server 8080» и откройте в браузере http://localhost:8080'
+                    : 'Не удалось загрузить шрифт для PDF. Проверьте, что в папке site есть папка fonts с файлом PT_Serif-Web-Regular.ttf.';
+                NotificationService.add(msg, 'error', { important: true, duration: 12000 });
                 this.isExporting = false;
                 if (loadingOverlayManager) await loadingOverlayManager.hideAndDestroy();
                 return;
             }
 
             if (loadingOverlayManager) loadingOverlayManager.updateProgress(50, 'Генерация PDF...');
+
+            if (!(fontBytes instanceof ArrayBuffer) || fontBytes.byteLength < 1000) {
+                NotificationService.add(
+                    'Ошибка: данные шрифта для PDF некорректны. Запустите приложение с веб-сервера (не file://).',
+                    'error',
+                    { important: true },
+                );
+                this.isExporting = false;
+                if (loadingOverlayManager) await loadingOverlayManager.hideAndDestroy();
+                return;
+            }
 
             const getImageBytes = (dataUrl) => {
                 if (!dataUrl || !dataUrl.startsWith('data:')) return Promise.resolve(null);
