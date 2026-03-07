@@ -218,11 +218,11 @@ export function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards')
             'ext-link-item view-item group relative flex flex-col justify-between p-4 rounded-lg shadow-sm bg-white dark:bg-gray-700 transition-shadow duration-200 border border-gray-200 dark:border-gray-700 h-full';
 
         const mainContentHTML = `
-            <div class="flex-grow min-w-0 cursor-pointer pt-10" data-action="open-link">
+            <div class="flex-grow min-w-0 cursor-pointer pt-10 mb-3" data-action="open-link">
                 <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 mb-1 truncate w-full" title="${safeTitle}">${safeTitle}</h3>
                 <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mb-2 line-clamp-2 w-full" title="${safeDescription}">${safeDescription}</p>
             </div>
-            <div class="ext-link-meta mt-auto pt-1 border-t border-gray-200 dark:border-gray-600 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <div class="ext-link-meta mt-auto pt-2 border-t border-gray-200 dark:border-gray-600 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 ${categoryBadgeHTML}
                 ${urlHostnameHTML}
             </div>

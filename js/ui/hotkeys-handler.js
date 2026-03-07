@@ -1052,7 +1052,7 @@ export async function handleGlobalHotkey(event) {
                 if (typeof exportClientDataToTxt === 'function') {
                     exportClientDataToTxt();
                 } else {
-                    console.warn('Ctrl+Shift+D: Функция exportClientDataToTxt не найдена.');
+                    console.warn('Ctrl/Cmd+Shift+D: Функция exportClientDataToTxt не найдена.');
                     if (typeof showNotification === 'function') {
                         showNotification('Функция сохранения заметок недоступна.', 'error');
                     }
@@ -1080,7 +1080,7 @@ export async function handleGlobalHotkey(event) {
                             clearClientData();
                         } else {
                             console.warn(
-                                'Ctrl+Shift+Backspace: Функция clearClientData не найдена.',
+                                'Ctrl/Cmd+Shift+Backspace: Функция clearClientData не найдена.',
                             );
                             clientNotes.value = '';
                             if (typeof showNotification === 'function') {
@@ -1096,7 +1096,7 @@ export async function handleGlobalHotkey(event) {
                         showNotification('Поле данных по обращению уже пусто.', 'info');
                     }
                 } else {
-                    console.warn('Ctrl+Shift+Backspace: Поле #clientNotes не найдено.');
+                    console.warn('Ctrl/Cmd+Shift+Backspace: Поле #clientNotes не найдено.');
                 }
                 return;
             }
@@ -1110,7 +1110,7 @@ export async function handleGlobalHotkey(event) {
                 if (showHotkeysBtn) {
                     showHotkeysBtn.click();
                 } else {
-                    console.warn('Ctrl+Shift+H: Кнопка #showHotkeysBtn не найдена.');
+                    console.warn('Ctrl/Cmd+Shift+H: Кнопка #showHotkeysBtn не найдена.');
                     if (typeof showNotification === 'function') {
                         showNotification(
                             'Не удалось найти кнопку для отображения горячих клавиш.',

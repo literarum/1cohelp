@@ -1,19 +1,278 @@
 'use strict';
-/* global html2pdf */
 
 import { NotificationService } from './notification.js';
 import { getFromIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
-// СЕРВИС ЭКСПОРТА В PDF
+// СЕРВИС ЭКСПОРТА В PDF (pdf-lib — текст копируемый, без контейнера)
 // ============================================================================
 
-// loadingOverlayManager будет импортирован позже или определен глобально
 let loadingOverlayManager = null;
 
 export function setLoadingOverlayManager(manager) {
     loadingOverlayManager = manager;
 }
+
+// A4 в пунктах (1 mm ≈ 2.83465 pt)
+const A4_WIDTH_PT = 595.28;
+const A4_HEIGHT_PT = 841.89;
+const MARGIN_MM = 20;
+const MARGIN_PT = MARGIN_MM * 2.83465;
+const CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * MARGIN_PT;
+const BODY_FONT_SIZE = 11;
+const LINE_HEIGHT_RATIO = 1.4;
+const HEADING_SIZES = { 1: 18, 2: 16, 3: 14, 4: 12 };
+const BLOCK_SPACING_PT = 8;
+const HEADING_BOTTOM_SPACING_PT = 12;
+const STEP_INDENT_PT = 12;
+
+const HIDDEN_SELECTORS =
+    'button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, ' +
+    '.view-screenshot-btn, .copyable-step-active, [id="noInnLink_main_1"]';
+
+/**
+ * Извлекает из DOM плоский список блоков для PDF: заголовки, параграфы, списки, шаги (с изображениями).
+ * @param {Element} root
+ * @returns {{ type: string, level?: number, text: string, images?: string[] }[]}
+ */
+function extractPdfContent(root) {
+    const blocks = [];
+    if (!root || !root.querySelector) return blocks;
+
+    const hiddenSet = new Set();
+    root.querySelectorAll(HIDDEN_SELECTORS).forEach((el) => hiddenSet.add(el));
+
+    function walk(el) {
+        if (!el || hiddenSet.has(el)) return;
+        if (el.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tag = el.tagName.toLowerCase();
+        const isStep = el.classList?.contains('algorithm-step') || el.classList?.contains('reglament-item');
+
+        if (isStep) {
+            const text = (el.innerText || '').trim();
+            const imgs = Array.from(el.querySelectorAll('img'))
+                .map((img) => img.src)
+                .filter((src) => src && (src.startsWith('data:') || src.startsWith('http')));
+            blocks.push({ type: 'block', text, images: imgs.length ? imgs : undefined });
+            return;
+        }
+
+        if (['h1', 'h2', 'h3', 'h4'].includes(tag) && !el.closest('.algorithm-step, .reglament-item')) {
+            const level = parseInt(tag.charAt(1), 10);
+            const text = (el.textContent || '').trim();
+            if (text) blocks.push({ type: 'heading', level, text });
+            return;
+        }
+
+        if ((tag === 'p' || tag === 'pre') && !el.closest('.algorithm-step, .reglament-item')) {
+            const text = (el.textContent || '').trim();
+            if (text) blocks.push({ type: 'paragraph', text });
+            return;
+        }
+
+        if (tag === 'li') {
+            const text = (el.textContent || '').trim();
+            if (text) blocks.push({ type: 'list', text });
+            return;
+        }
+
+        for (let i = 0; i < el.children.length; i++) {
+            walk(el.children[i]);
+        }
+    }
+
+    walk(root);
+    return blocks;
+}
+
+/**
+ * Разбивает текст на строки по maxWidth (в пунктах) с учётом ширины шрифта.
+ * @param {string} text
+ * @param {object} font - pdf-lib PDFFont
+ * @param {number} fontSize
+ * @param {number} maxWidthPt
+ * @returns {string[]}
+ */
+function wrapText(text, font, fontSize, maxWidthPt) {
+    if (!text || !font) return [];
+    const words = text.split(/\s+/);
+    const lines = [];
+    let current = '';
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        const candidate = current ? current + ' ' + word : word;
+        const w = font.widthOfTextAtSize(candidate, fontSize);
+        if (w <= maxWidthPt) {
+            current = candidate;
+        } else {
+            if (current) lines.push(current);
+            const wordW = font.widthOfTextAtSize(word, fontSize);
+            if (wordW <= maxWidthPt) {
+                current = word;
+            } else {
+                let rest = word;
+                while (rest) {
+                    let chunk = '';
+                    for (let j = 0; j < rest.length; j++) {
+                        const c = chunk + rest[j];
+                        if (font.widthOfTextAtSize(c, fontSize) <= maxWidthPt) chunk = c;
+                        else break;
+                    }
+                    if (chunk) {
+                        lines.push(chunk);
+                        rest = rest.slice(chunk.length);
+                    } else {
+                        lines.push(rest);
+                        rest = '';
+                    }
+                }
+                current = '';
+            }
+        }
+    }
+    if (current) lines.push(current);
+    return lines;
+}
+
+/**
+ * Строит PDF из блоков контента: реальный текст (копируемый), без визуального контейнера.
+ * @param {object} contentBlocks - массив из extractPdfContent
+ * @param {object} opts - { fontBytes: ArrayBuffer, getImageBytes?, isJpg? }
+ * @returns {Promise<Uint8Array>}
+ */
+async function buildPdfFromContent(contentBlocks, opts) {
+    const PDFLib = typeof window !== 'undefined' ? window.PDFLib : null;
+    const fontkit = typeof window !== 'undefined' ? window.fontkit : null;
+    if (!PDFLib || !fontkit) {
+        throw new Error('pdf-lib или fontkit не загружены');
+    }
+
+    const pdfDoc = await PDFLib.PDFDocument.create();
+    pdfDoc.registerFontkit(fontkit);
+    const font = await pdfDoc.embedFont(opts.fontBytes);
+    const rgb = PDFLib.rgb || PDFLib.RGB || ((r, g, b) => ({ type: 'RGB', red: r, green: g, blue: b }));
+
+    let page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
+    let y = A4_HEIGHT_PT - MARGIN_PT;
+    const bottomLimit = MARGIN_PT;
+    const maxWidthPt = CONTENT_WIDTH_PT;
+
+    function ensureSpace(neededPt) {
+        if (y - neededPt < bottomLimit) {
+            page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
+            y = A4_HEIGHT_PT - MARGIN_PT;
+        }
+    }
+
+    const blocks = contentBlocks.length ? contentBlocks : [{ type: 'paragraph', text: 'Нет контента для экспорта.' }];
+
+    for (const block of blocks) {
+        if (block.type === 'heading') {
+            const fontSize = HEADING_SIZES[block.level] || 16;
+            const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+            ensureSpace(lineHeight + HEADING_BOTTOM_SPACING_PT);
+            const lines = wrapText(block.text, font, fontSize, maxWidthPt);
+            for (const line of lines) {
+                page.drawText(line, {
+                    x: MARGIN_PT,
+                    y: y - fontSize,
+                    size: fontSize,
+                    font,
+                    color: rgb(0, 0, 0),
+                });
+                y -= fontSize * LINE_HEIGHT_RATIO;
+            }
+            y -= HEADING_BOTTOM_SPACING_PT;
+            continue;
+        }
+
+        if (block.type === 'paragraph' || block.type === 'list') {
+            const indent = block.type === 'list' ? STEP_INDENT_PT : 0;
+            const text = block.type === 'list' ? '• ' + block.text : block.text;
+            const lines = wrapText(text, font, BODY_FONT_SIZE, maxWidthPt - indent);
+            const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
+            ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
+            for (const line of lines) {
+                page.drawText(line, {
+                    x: MARGIN_PT + indent,
+                    y: y - BODY_FONT_SIZE,
+                    size: BODY_FONT_SIZE,
+                    font,
+                    color: rgb(0.11, 0.09, 0.15),
+                });
+                y -= lineHeight;
+            }
+            y -= BLOCK_SPACING_PT;
+            continue;
+        }
+
+        if (block.type === 'block') {
+            if (block.text) {
+                const lines = wrapText(block.text, font, BODY_FONT_SIZE, maxWidthPt - STEP_INDENT_PT);
+                const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
+                ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
+                for (const line of lines) {
+                    page.drawText(line, {
+                        x: MARGIN_PT + STEP_INDENT_PT,
+                        y: y - BODY_FONT_SIZE,
+                        size: BODY_FONT_SIZE,
+                        font,
+                        color: rgb(0.11, 0.09, 0.15),
+                    });
+                    y -= lineHeight;
+                }
+                y -= BLOCK_SPACING_PT;
+            }
+            if (block.images && block.images.length && opts.getImageBytes) {
+                for (const dataUrl of block.images) {
+                    try {
+                        const bytes = await opts.getImageBytes(dataUrl);
+                        if (!bytes || bytes.length === 0) continue;
+                        const isJpg = opts.isJpg ? opts.isJpg(dataUrl) : /^data:image\/jpe?g/i.test(dataUrl);
+                        const img = isJpg
+                            ? await pdfDoc.embedJpg(bytes)
+                            : await pdfDoc.embedPng(bytes);
+                        const dims = img.scale(1);
+                        const maxImgWidth = CONTENT_WIDTH_PT;
+                        const scale = dims.width > maxImgWidth ? maxImgWidth / dims.width : 1;
+                        const drawWidth = dims.width * scale;
+                        const drawHeight = dims.height * scale;
+                        ensureSpace(drawHeight + BLOCK_SPACING_PT);
+                        page.drawImage(img, {
+                            x: MARGIN_PT,
+                            y: y - drawHeight,
+                            width: drawWidth,
+                            height: drawHeight,
+                        });
+                        y -= drawHeight + BLOCK_SPACING_PT;
+                    } catch (e) {
+                        console.warn('[PDF Export] Не удалось встроить изображение:', e);
+                    }
+                }
+            }
+        }
+    }
+
+    return pdfDoc.save();
+}
+
+/**
+ * Загружает байты шрифта для pdf-lib (кириллица). Путь относительно index (site).
+ */
+async function loadPdfFontBytes() {
+    try {
+        const fontUrl = new URL('../../fonts/PT_Serif-Web-Regular.ttf', import.meta.url).href;
+        const res = await fetch(fontUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.arrayBuffer();
+    } catch (e) {
+        console.error('[PDF Export] Ошибка загрузки шрифта:', e);
+        return null;
+    }
+}
+
+let cachedFontBytes = null;
 
 export const ExportService = {
     isExporting: false,
@@ -21,89 +280,10 @@ export const ExportService = {
 
     init() {
         if (this.styleElement) return;
-
         this.styleElement = document.createElement('style');
         this.styleElement.id = 'export-pdf-styles';
-        this.styleElement.textContent = `
-        @media print {
-            .export-to-pdf-content, .export-to-pdf-content * {
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-        }
-        body > .export-pdf-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 210mm;
-            background-color: #ffffff;
-            opacity: 0;
-            pointer-events: none;
-            z-index: -1;
-        }
-        .export-to-pdf-content {
-            color: #111827;
-            background-color: #ffffff;
-            font-family: 'Times New Roman', serif;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        .export-to-pdf-content .dark, .export-to-pdf-content .dark\\:bg-gray-800 {
-             background-color: #ffffff;
-        }
-        .export-to-pdf-content h1, .export-to-pdf-content h2, .export-to-pdf-content h3, .export-to-pdf-content h4 {
-            color: #000000 !important;
-            page-break-after: avoid;
-        }
-        .export-to-pdf-content p, .export-to-pdf-content li, .export-to-pdf-content span, .export-to-pdf-content div {
-             color: #111827 !important;
-        }
-        .export-to-pdf-content br {
-            display: block;
-            margin-top: 0.25em;
-        }
-        .export-to-pdf-content a {
-            color: #5858da !important;
-            text-decoration: underline !important;
-        }
-        .export-to-pdf-content .algorithm-step, .export-to-pdf-content .reglament-item {
-            page-break-inside: avoid;
-            border: 1px solid #e5e7eb;
-            box-shadow: none;
-            background-color: #f9fafb;
-        }
-        .export-to-pdf-content .algorithm-step {
-            break-inside: avoid-page;
-        }
-        .export-to-pdf-content code, .export-to-pdf-content pre {
-             background-color: #f3f4f6 !important;
-             border: 1px solid #d1d5db !important;
-             color: #1f2937 !important;
-        }
-        .export-to-pdf-content button,
-        .export-to-pdf-content .fav-btn-placeholder-modal-reglament,
-        .export-to-pdf-content .toggle-favorite-btn,
-        .export-to-pdf-content .view-screenshot-btn,
-        .export-to-pdf-content #noInnLink_main_1,
-        .export-to-pdf-content .copyable-step-active {
-            display: none !important;
-        }
-        .export-pdf-image-container {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px dashed #d1d5db;
-            page-break-inside: avoid;
-        }
-        .export-pdf-image-container img {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin-top: 0.5rem;
-            border: 1px solid #d1d5db;
-        }
-    `;
+        this.styleElement.textContent = '';
         document.head.appendChild(this.styleElement);
-        console.log('ExportService initialized with print styles (FIXED).');
     },
 
     async exportElementToPdf(element, filename = 'document', context = {}) {
@@ -113,190 +293,119 @@ export const ExportService = {
         }
         if (!element) {
             NotificationService.add('Ошибка: элемент для экспорта не найден.', 'error');
-            console.error("exportElementToPdf: 'element' is null or undefined.");
             return;
         }
-        if (typeof html2pdf === 'undefined') {
-            NotificationService.add(
-                'Ошибка: Библиотека для экспорта в PDF не загружена.',
-                'error',
-                { important: true },
-            );
-            console.error('html2pdf library is not available.');
+
+        const PDFLib = typeof window !== 'undefined' ? window.PDFLib : null;
+        const fontkit = typeof window !== 'undefined' ? window.fontkit : null;
+        if (!PDFLib) {
+            NotificationService.add('Библиотека PDF (pdf-lib) не загружена.', 'error', { important: true });
+            return;
+        }
+        if (!fontkit) {
+            NotificationService.add('Модуль fontkit для PDF не загружен.', 'error', { important: true });
             return;
         }
 
         this.isExporting = true;
         if (loadingOverlayManager) {
             loadingOverlayManager.createAndShow();
-            loadingOverlayManager.updateProgress(10, 'Подготовка документа к экспорту...');
+            loadingOverlayManager.updateProgress(10, 'Подготовка документа...');
         }
 
         const cleanFilename = filename.replace(/[^a-zа-я0-9\s-_]/gi, '').trim() || 'export';
         const finalFilename = `${cleanFilename}.pdf`;
 
-        const container = document.createElement('div');
-        container.className = 'export-pdf-container';
-
         const clone = element.cloneNode(true);
-        clone.classList.add('export-to-pdf-content');
-
-        clone.style.maxHeight = 'none';
-        clone.style.height = 'auto';
-        clone.style.overflow = 'visible';
+        clone.querySelectorAll?.('button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, .view-screenshot-btn, .copyable-step-active').forEach((el) => el.remove());
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            if (loadingOverlayManager) {
-                loadingOverlayManager.updateProgress(20, 'Обработка изображений...');
-            }
+            if (loadingOverlayManager) loadingOverlayManager.updateProgress(20, 'Обработка контента...');
 
             if (context.type === 'algorithm' && context.data && Array.isArray(context.data.steps)) {
-                const algorithmData = context.data;
                 const stepsInClone = clone.querySelectorAll('.algorithm-step');
-
-                const allImageLoadPromises = [];
-
-                const blobToBase64 = (blob) =>
+                const blobToDataUrl = (blob) =>
                     new Promise((resolve, reject) => {
-                        if (!blob || !(blob instanceof Blob)) {
-                            return reject(new Error('Input is not a valid Blob object.'));
-                        }
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.onerror = () =>
-                            reject(new Error('FileReader failed to read the blob.'));
-                        reader.readAsDataURL(blob);
+                        if (!(blob instanceof Blob)) return reject(new Error('Not a Blob'));
+                        const r = new FileReader();
+                        r.onload = () => resolve(r.result);
+                        r.onerror = () => reject(new Error('FileReader failed'));
+                        r.readAsDataURL(blob);
                     });
-
-                for (let i = 0; i < algorithmData.steps.length; i++) {
-                    const stepData = algorithmData.steps[i];
-                    const stepElementInClone = stepsInClone[i];
-
-                    if (
-                        stepElementInClone &&
-                        Array.isArray(stepData.screenshotIds) &&
-                        stepData.screenshotIds.length > 0
-                    ) {
-                        const screenshotPromises = stepData.screenshotIds.map((id) =>
-                            getFromIndexedDB('screenshots', id),
-                        );
-                        const screenshots = (await Promise.all(screenshotPromises)).filter(Boolean);
-
-                        if (screenshots.length > 0) {
-                            const imageContainer = document.createElement('div');
-                            imageContainer.className = 'export-pdf-image-container';
-
-                            for (const screenshot of screenshots) {
-                                if (screenshot.blob instanceof Blob) {
-                                    const imageLoadPromise = new Promise(
-                                        // eslint-disable-next-line no-async-promise-executor
-                                        async (resolve, reject) => {
-                                            try {
-                                                const base64Data = await blobToBase64(
-                                                    screenshot.blob,
-                                                );
-                                                const img = document.createElement('img');
-                                                img.alt = `Скриншот для шага ${i + 1}`;
-
-                                                img.onload = () => {
-                                                    console.log(
-                                                        `[PDF Export] Изображение для шага ${i} успешно загружено в DOM.`,
-                                                    );
-                                                    resolve();
-                                                };
-                                                img.onerror = () => {
-                                                    console.error(
-                                                        `[PDF Export] Ошибка загрузки изображения для шага ${i}.`,
-                                                    );
-                                                    reject(
-                                                        new Error(
-                                                            `Image loading failed for step ${i}`,
-                                                        ),
-                                                    );
-                                                };
-
-                                                img.src = base64Data;
-                                                imageContainer.appendChild(img);
-                                            } catch (error) {
-                                                console.error(
-                                                    `Ошибка конвертации Blob для скриншота ${screenshot.id}:`,
-                                                    error,
-                                                );
-                                                reject(error);
-                                            }
-                                        },
-                                    );
-                                    allImageLoadPromises.push(imageLoadPromise);
-                                }
-                            }
-                            stepElementInClone.appendChild(imageContainer);
+                for (let i = 0; i < context.data.steps.length; i++) {
+                    const step = context.data.steps[i];
+                    const stepEl = stepsInClone[i];
+                    if (!stepEl || !Array.isArray(step.screenshotIds) || step.screenshotIds.length === 0) continue;
+                    const screenshots = (await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))).filter(Boolean);
+                    const container = document.createElement('div');
+                    container.className = 'export-pdf-image-container';
+                    for (const sc of screenshots) {
+                        if (sc.blob instanceof Blob) {
+                            try {
+                                const dataUrl = await blobToDataUrl(sc.blob);
+                                const img = document.createElement('img');
+                                img.src = dataUrl;
+                                img.alt = '';
+                                container.appendChild(img);
+                            } catch (_) {}
                         }
                     }
-                }
-
-                if (allImageLoadPromises.length > 0) {
-                    console.log(
-                        `[PDF Export] Ожидание загрузки ${allImageLoadPromises.length} изображений...`,
-                    );
-                    await Promise.all(allImageLoadPromises);
-                    console.log(`[PDF Export] Все изображения успешно загружены.`);
+                    if (container.children.length) stepEl.appendChild(container);
                 }
             }
 
-            if (loadingOverlayManager) {
-                loadingOverlayManager.updateProgress(50, 'Генерация PDF...');
+            const contentBlocks = extractPdfContent(clone);
+            if (loadingOverlayManager) loadingOverlayManager.updateProgress(40, 'Загрузка шрифта...');
+
+            let fontBytes = cachedFontBytes;
+            if (!fontBytes) {
+                fontBytes = await loadPdfFontBytes();
+                if (fontBytes) cachedFontBytes = fontBytes;
             }
-            document.body.appendChild(container);
-            container.appendChild(clone);
+            if (!fontBytes) {
+                NotificationService.add('Не удалось загрузить шрифт для PDF.', 'error', { important: true });
+                this.isExporting = false;
+                if (loadingOverlayManager) await loadingOverlayManager.hideAndDestroy();
+                return;
+            }
 
-            await new Promise((resolve) =>
-                requestAnimationFrame(() => requestAnimationFrame(resolve)),
-            );
-            console.log('[PDF Export] Render frame has passed, proceeding to generate PDF.');
+            if (loadingOverlayManager) loadingOverlayManager.updateProgress(50, 'Генерация PDF...');
 
-            const estimatedStepCount = clone.querySelectorAll('.algorithm-step').length;
-            const bigDocument =
-                estimatedStepCount > 35 ||
-                clone.textContent.length > 120000 ||
-                clone.scrollHeight > 14000;
-
-            const opt = {
-                margin: [10, 7, 10, 7],
-                filename: finalFilename,
-                image: { type: 'jpeg', quality: bigDocument ? 0.95 : 0.98 },
-                html2canvas: {
-                    scale: bigDocument ? 1.5 : 2,
-                    useCORS: true,
-                    logging: false,
-                    scrollY: 0,
-                    backgroundColor: '#ffffff',
-                },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: {
-                    mode: bigDocument ? ['css', 'legacy'] : ['css', 'avoid-all'],
-                    before: '.page-break-before',
-                    avoid: '.algorithm-step',
-                },
+            const getImageBytes = (dataUrl) => {
+                if (!dataUrl || !dataUrl.startsWith('data:')) return Promise.resolve(null);
+                const base64 = dataUrl.split(',')[1];
+                if (!base64) return Promise.resolve(null);
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                return Promise.resolve(bytes);
             };
+            const isJpg = (dataUrl) => /^data:image\/jpe?g/i.test(dataUrl);
 
-            await html2pdf().from(clone).set(opt).save();
+            const pdfBytes = await buildPdfFromContent(contentBlocks, {
+                fontBytes,
+                getImageBytes,
+                isJpg,
+            });
 
-            if (loadingOverlayManager) {
-                loadingOverlayManager.updateProgress(90, 'Экспорт завершен.');
-            }
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = finalFilename;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            if (loadingOverlayManager) loadingOverlayManager.updateProgress(90, 'Готово.');
             NotificationService.add('Документ успешно экспортирован в PDF.', 'success');
         } catch (error) {
             console.error('Ошибка при экспорте в PDF:', error);
             NotificationService.add(
-                `Произошла ошибка при экспорте в PDF: ${error.message}`,
+                `Ошибка при экспорте в PDF: ${error?.message || String(error)}`,
                 'error',
                 { important: true },
             );
         } finally {
-            if (document.body.contains(container)) {
-                document.body.removeChild(container);
-            }
             if (loadingOverlayManager) {
                 loadingOverlayManager.updateProgress(100);
                 await loadingOverlayManager.hideAndDestroy();
@@ -306,5 +415,4 @@ export const ExportService = {
     },
 };
 
-// Автоинициализация при загрузке модуля
 ExportService.init();

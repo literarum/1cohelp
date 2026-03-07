@@ -203,7 +203,7 @@ export async function initClientDataSystem() {
     console.log(`${LOG_PREFIX} Новый обработчик 'input' с debounce и await успешно привязан.`);
 
     State.clientNotesKeydownHandler = (event) => {
-        if (event.key === 'Enter' && event.ctrlKey) {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
             event.preventDefault();
             const textarea = event.target;
             const value = textarea.value;

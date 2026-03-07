@@ -139,18 +139,16 @@ export function initHotkeysModal() {
     const hotkeysModal = document.getElementById('hotkeysModal');
     const closeHotkeysModalBtn = document.getElementById('closeHotkeysModalBtn');
     const okHotkeysModalBtn = document.getElementById('okHotkeysModalBtn');
-    const fullscreenBtn = document.getElementById('toggleFullscreenHotkeysBtn');
 
     if (
         !showHotkeysBtn ||
         !hotkeysModal ||
         !closeHotkeysModalBtn ||
-        !okHotkeysModalBtn ||
-        !fullscreenBtn
+        !okHotkeysModalBtn
     ) {
         console.warn(
-            'Не найдены все элементы для модального окна горячих клавиш ' +
-                '(#showHotkeysBtn, #hotkeysModal, #closeHotkeysModalBtn, #okHotkeysModalBtn, #toggleFullscreenHotkeysBtn). ' +
+            'Не найдены обязательные элементы для модального окна горячих клавиш ' +
+                '(#showHotkeysBtn, #hotkeysModal, #closeHotkeysModalBtn, #okHotkeysModalBtn). ' +
                 'Функциональность может быть нарушена.',
         );
         return;
@@ -233,31 +231,7 @@ export function initHotkeysModal() {
         hotkeysModal.dataset.overlayListenerAttached = 'true';
     }
 
-    if (fullscreenBtn && !fullscreenBtn.dataset.fullscreenListenerAttached) {
-        fullscreenBtn.addEventListener('click', () => {
-            if (typeof toggleModalFullscreen === 'function' && hotkeysModalConfig) {
-                toggleModalFullscreen(
-                    hotkeysModalConfig.modalId,
-                    hotkeysModalConfig.buttonId,
-                    hotkeysModalConfig.classToggleConfig,
-                    hotkeysModalConfig.innerContainerSelector,
-                    hotkeysModalConfig.contentAreaSelector,
-                );
-            } else {
-                console.error(
-                    'Функция toggleModalFullscreen не найдена или конфигурация отсутствует!',
-                );
-                if (typeof showNotification === 'function') {
-                    showNotification(
-                        'Ошибка: Функция переключения полноэкранного режима недоступна.',
-                        'error',
-                    );
-                }
-            }
-        });
-        fullscreenBtn.dataset.fullscreenListenerAttached = 'true';
-        console.log(`Fullscreen listener attached to ${hotkeysModalConfig?.buttonId || 'unknown'}`);
-    }
+    // Fullscreen для модалки горячих клавиш вешается централизованно в initFullscreenToggles (modals-manager.js).
 
     console.log('Модальное окно горячих клавиш инициализировано.');
 }

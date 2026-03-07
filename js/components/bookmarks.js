@@ -407,7 +407,7 @@ export function initBookmarkSystem() {
         const activeClass = `${baseClass} border-transparent bg-primary text-white hover:bg-secondary`;
 
         const updateBookmarksSortButtonsUI = () => {
-            const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'desc' };
+            const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' };
             const criteriaToBtnId = {
                 date: 'sortBookmarksByDate',
                 title: 'sortBookmarksByTitle',
@@ -429,14 +429,14 @@ export function initBookmarkSystem() {
 
         const handleBookmarksSortClick = (criteria) => {
             if (!GlobalState.currentBookmarksSort) {
-                GlobalState.currentBookmarksSort = { criteria: 'date', direction: 'desc' };
+                GlobalState.currentBookmarksSort = { criteria: 'date', direction: 'asc' };
             }
             if (GlobalState.currentBookmarksSort.criteria === criteria) {
                 GlobalState.currentBookmarksSort.direction =
                     GlobalState.currentBookmarksSort.direction === 'desc' ? 'asc' : 'desc';
             } else {
                 GlobalState.currentBookmarksSort.criteria = criteria;
-                GlobalState.currentBookmarksSort.direction = 'desc';
+                GlobalState.currentBookmarksSort.direction = 'asc';
             }
             updateBookmarksSortButtonsUI();
             if (typeof filterBookmarks === 'function') filterBookmarks();
@@ -638,7 +638,7 @@ export async function loadBookmarks() {
         const sortedToRender = sortBookmarksList(
             initialBookmarksToRender,
             folderMap,
-            GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'desc' },
+            GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' },
         );
         await renderBookmarks(sortedToRender, folderMap);
 
@@ -668,7 +668,7 @@ export async function loadBookmarks() {
 function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
     if (!bookmarks || bookmarks.length === 0) return [...(bookmarks || [])];
     const criteria = sortState.criteria || 'date';
-    const direction = sortState.direction || 'desc';
+    const direction = sortState.direction || 'asc';
     const mult = direction === 'desc' ? -1 : 1;
 
     return [...bookmarks].sort((a, b) => {
@@ -996,7 +996,7 @@ export async function filterBookmarks() {
             });
         }
 
-        const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'desc' };
+        const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' };
         const sortedToDisplay = sortBookmarksList(bookmarksToDisplay, folderMap, sortState);
         renderBookmarks(sortedToDisplay, folderMap);
 

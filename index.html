@@ -51,21 +51,17 @@
             };
         </script>
         <!-- Production: use built CSS (npm run build:css). CDN only as fallback when built file is missing. -->
-        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260307-195902-4933c5d" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
-        <script
-            src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
-            integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
-            crossorigin="anonymous"
-            referrerpolicy="no-referrer"
-        ></script>
+        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260307-212443-d45195c" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
+        <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" crossorigin="anonymous"></script>
         <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         />
         <!-- Сначала основные стили (переменные темы и база), затем скроллбар и кнопки -->
-        <link rel="stylesheet" href="css/styles.css?v=legacy-20260307-195902-4933c5d" />
-        <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260307-195902-4933c5d" />
+        <link rel="stylesheet" href="css/styles.css?v=legacy-20260307-212443-d45195c" />
+        <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260307-212443-d45195c" />
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             #custom-loading-overlay {
@@ -1618,7 +1614,7 @@
                         <div id="xmlAnalyzerInputContainer" class="flex flex-col flex-1 min-h-0 overflow-hidden">
                             <div id="xmlAnalyzerInitialView" class="flex flex-col flex-grow">
                                 <div id="xmlAnalyzerDropZone" class="flex flex-col flex-grow min-h-0 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl overflow-hidden transition-colors">
-                                    <textarea id="xmlAnalyzerDataInput" class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none" placeholder="Вставьте XML рег.файла, JSON СЭДО, XML ЕФС из 1С или перетащите файл (.xml, .zip, .txt, .json)... (Ctrl+Enter для анализа)"></textarea>
+                                    <textarea id="xmlAnalyzerDataInput" class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none" placeholder="Вставьте XML рег.файла, JSON СЭДО, XML ЕФС из 1С или перетащите файл (.xml, .zip, .txt, .json)... (Ctrl/Cmd+Enter для анализа)"></textarea>
                                 </div>
                                 <div class="flex gap-2 mt-4">
                                     <button type="button" id="xmlAnalyzerLoadFileBtn" class="px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
@@ -2818,7 +2814,7 @@
                                         <li><code class="hotkey-code">Alt + T</code> — Тема (Авто/Светлая/Тёмная).</li>
                                         <li><code class="hotkey-code">Alt + V</code> — Вид списка (список/плитки).</li>
                                         <li><code class="hotkey-code">Alt + R</code> — Перезагрузка приложения.</li>
-                                        <li><code class="hotkey-code">Ctrl + Shift + H</code> — Это окно помощи.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + Shift + H</code> — Это окно помощи.</li>
                                         <li><code class="hotkey-code">Esc</code> — Закрыть окно / очистить поиск.</li>
                                     </ul>
                                 </section>
@@ -2835,8 +2831,8 @@
                                         <i class="fas fa-file-alt w-5 text-center text-primary mr-2"></i>Информация по обращению
                                     </h3>
                                     <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Ctrl + Enter</code> — Новый пункт нумерованного списка.</li>
-                                        <li><code class="hotkey-code">Ctrl + Shift + Backspace</code> — Очистить поле (с подтверждением).</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + Enter</code> — Новый пункт нумерованного списка.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + Shift + Backspace</code> — Очистить поле (с подтверждением).</li>
                                         <li><code class="hotkey-code">Alt + =</code> / <code class="hotkey-code">Alt + −</code> — Размер текста на Главной.</li>
                                     </ul>
                                 </section>
@@ -2845,12 +2841,12 @@
                                         <i class="fas fa-stopwatch w-5 text-center text-primary mr-2"></i>Таймер
                                     </h3>
                                     <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Ctrl + Alt + T</code> — Старт/пауза.</li>
-                                        <li><code class="hotkey-code">Ctrl + Alt + R</code> — Сброс.</li>
-                                        <li><code class="hotkey-code">Ctrl + Alt + +</code> / <code class="hotkey-code">−</code> — ±5 сек.</li>
-                                        <li>Кнопки <i class="fas fa-plus w-4 text-center"></i>/<i class="fas fa-minus w-4 text-center"></i>: ±5 сек; с <code class="hotkey-code">Ctrl</code> ±10 сек; с <code class="hotkey-code">Ctrl + Shift</code> ±30 сек.</li>
-                                        <li><code class="hotkey-code">Ctrl</code> + сброс — 00:00.</li>
-                                        <li class="text-gray-500 dark:text-gray-400 text-xs">macOS: <code class="hotkey-code">Ctrl + Option</code>.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + Alt + T</code> — Старт/пауза.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + Alt + R</code> — Сброс.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + Alt + +</code> / <code class="hotkey-code">−</code> — ±5 сек.</li>
+                                        <li>Кнопки <i class="fas fa-plus w-4 text-center"></i>/<i class="fas fa-minus w-4 text-center"></i>: ±5 сек; с <code class="hotkey-code">Ctrl/Cmd</code> ±10 сек; с <code class="hotkey-code">Ctrl/Cmd + Shift</code> ±30 сек.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd</code> + сброс — 00:00.</li>
+                                        <li class="text-gray-500 dark:text-gray-400 text-xs">macOS: <code class="hotkey-code">Ctrl + Option</code> или <code class="hotkey-code">⌘ + Option</code>.</li>
                                     </ul>
                                 </section>
                                 <section class="min-w-0">
@@ -2970,7 +2966,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260307-195902-4933c5d"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260307-195902-4933c5d"></script>
+        <script type="module" src="./script.js?v=legacy-20260307-212443-d45195c"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260307-212443-d45195c"></script>
     </body>
 </html>

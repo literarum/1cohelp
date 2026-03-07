@@ -721,10 +721,10 @@ export function resetTimer(event) {
     pauseTimer();
     stopTimerEndEffects();
 
-    if (event && event.ctrlKey) {
+    if (event && (event.ctrlKey || event.metaKey)) {
         timerCurrentSetDuration = 0;
         timeLeftVisual = 0;
-        console.log('Таймер сброшен в 00:00 (Ctrl+Click).');
+        console.log('Таймер сброшен в 00:00 (Ctrl/Cmd+Click).');
     } else {
         timerCurrentSetDuration = timerDefaultDuration;
         timeLeftVisual = timerCurrentSetDuration;
@@ -1102,18 +1102,19 @@ export function initTimerSystem() {
         resetTimer(event);
     });
 
+    const modKey = (e) => e.ctrlKey || e.metaKey;
     timerIncreaseButton.addEventListener('click', (event) => {
         if (State.activeEditingUnitElement) {
             cancelTimerEdit();
         }
-        const amount = event.ctrlKey && event.shiftKey ? 30 : event.ctrlKey ? 10 : 5;
+        const amount = modKey(event) && event.shiftKey ? 30 : modKey(event) ? 10 : 5;
         adjustTimerDuration(amount);
     });
     timerDecreaseButton.addEventListener('click', (event) => {
         if (State.activeEditingUnitElement) {
             cancelTimerEdit();
         }
-        const amount = event.ctrlKey && event.shiftKey ? -30 : event.ctrlKey ? -10 : -5;
+        const amount = modKey(event) && event.shiftKey ? -30 : modKey(event) ? -10 : -5;
         adjustTimerDuration(amount);
     });
 
