@@ -1,11 +1,18 @@
 'use strict';
 
 import { NotificationService } from './notification.js';
-import { getFromIndexedDB } from '../db/indexeddb.js';
+import {
+    getFromIndexedDB,
+    getAllFromIndex,
+    getAllFromIndexedDB,
+} from '../db/indexeddb.js';
 
 // ============================================================================
 // СЕРВИС ЭКСПОРТА В PDF (pdf-lib — текст копируемый, без контейнера)
 // ============================================================================
+
+/** Включить детальное логирование экспорта в PDF (источники скриншотов, дедуп, слияние блоков). */
+const PDF_EXPORT_DEBUG = true;
 
 let loadingOverlayManager = null;
 
@@ -30,6 +37,18 @@ const SEPARATOR_GAP_PT = 6;
 const ALGORITHM_CARD_GAP_PT = 18;
 const DESC_FONT_SIZE = 10;
 const CAPTION_FONT_SIZE = 9;
+
+// Режим «все алгоритмы»: компактные отступы, явное разделение алгоритмов и шагов, минимум пустого места.
+const ALGORITHM_SECTION_MARGIN_MM = 18;
+const ALGORITHM_SECTION_BLOCK_SPACING_PT = 4;
+const ALGORITHM_SECTION_STEP_GAP_PT = 3;
+const ALGORITHM_BREAK_GAP_PT = 22;
+const ALGORITHM_SEPARATOR_THICKNESS_PT = 1.4;
+const ALGORITHM_BAND_HEIGHT_PT = 14;
+const ALGORITHM_BAND_GRAY = 0.94;
+const STEP_SEPARATOR_THICKNESS_PT = 0.4;
+const STEP_SEPARATOR_GAP_PT = 4;
+const MAX_IMAGE_HEIGHT_RATIO = 0.52;
 
 const HIDDEN_SELECTORS =
     'button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, ' +
@@ -213,6 +232,41 @@ function wrapText(text, font, fontSize, maxWidthPt) {
 }
 
 /**
+ * Конвертирует data URL в PNG, если формат не JPEG и не PNG (pdf-lib поддерживает только их).
+ * @param {string} dataUrl
+ * @returns {Promise<string>} data URL (image/png или image/jpeg без изменений)
+ */
+function dataUrlToPngIfNeeded(dataUrl) {
+    if (!dataUrl || !dataUrl.startsWith('data:')) return Promise.resolve(dataUrl);
+    const mimeMatch = dataUrl.match(/^data:(image\/[^;]+)/i);
+    const mime = mimeMatch ? mimeMatch[1].toLowerCase() : '';
+    if (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png') {
+        return Promise.resolve(dataUrl);
+    }
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error('Canvas 2d context unavailable'));
+                    return;
+                }
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            } catch (e) {
+                reject(e);
+            }
+        };
+        img.onerror = () => reject(new Error('Image load failed'));
+        img.src = dataUrl;
+    });
+}
+
+/**
  * Строит PDF из блоков контента: реальный текст (копируемый), без визуального контейнера.
  * @param {object} contentBlocks - массив из extractPdfContent
  * @param {object} opts - { fontBytes: ArrayBuffer, getImageBytes?, isJpg? }
@@ -224,6 +278,15 @@ async function buildPdfFromContent(contentBlocks, opts) {
     if (!PDFLib || !fontkit) {
         throw new Error('pdf-lib или fontkit не загружены');
     }
+
+    const isAlgorithmSection = Boolean(opts.isAlgorithmSection);
+    const marginPt = isAlgorithmSection
+        ? ALGORITHM_SECTION_MARGIN_MM * 2.83465
+        : MARGIN_PT;
+    const contentWidthPt = A4_WIDTH_PT - 2 * marginPt;
+    const bottomLimit = marginPt;
+    const blockSpacingPt = isAlgorithmSection ? ALGORITHM_SECTION_BLOCK_SPACING_PT : BLOCK_SPACING_PT;
+    const maxImageHeightPt = isAlgorithmSection ? A4_HEIGHT_PT * MAX_IMAGE_HEIGHT_RATIO : A4_HEIGHT_PT;
 
     const pdfDoc = await PDFLib.PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
@@ -238,14 +301,12 @@ async function buildPdfFromContent(contentBlocks, opts) {
     const rgb = PDFLib.rgb || PDFLib.RGB || ((r, g, b) => ({ type: 'RGB', red: r, green: g, blue: b }));
 
     let page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
-    let y = A4_HEIGHT_PT - MARGIN_PT;
-    const bottomLimit = MARGIN_PT;
-    const maxWidthPt = CONTENT_WIDTH_PT;
+    let y = A4_HEIGHT_PT - marginPt;
 
     function ensureSpace(neededPt) {
         if (y - neededPt < bottomLimit) {
             page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
-            y = A4_HEIGHT_PT - MARGIN_PT;
+            y = A4_HEIGHT_PT - marginPt;
         }
     }
 
@@ -253,24 +314,47 @@ async function buildPdfFromContent(contentBlocks, opts) {
 
     let prevBlock = null;
 
-    for (const block of blocks) {
+    for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+        const block = blocks[blockIndex];
         if (block.type === 'heading') {
             if (block.level === 2 && prevBlock !== null) {
-                y -= ALGORITHM_CARD_GAP_PT;
+                const gapPt = isAlgorithmSection ? ALGORITHM_BREAK_GAP_PT : ALGORITHM_CARD_GAP_PT;
+                y -= gapPt;
+                if (isAlgorithmSection) {
+                    ensureSpace(ALGORITHM_BAND_HEIGHT_PT + ALGORITHM_SEPARATOR_THICKNESS_PT + SEPARATOR_GAP_PT + 30);
+                    const bandTop = y;
+                    const bandBottom = y - ALGORITHM_BAND_HEIGHT_PT;
+                    page.drawRectangle({
+                        x: marginPt,
+                        y: bandBottom,
+                        width: contentWidthPt,
+                        height: ALGORITHM_BAND_HEIGHT_PT,
+                        color: rgb(ALGORITHM_BAND_GRAY, ALGORITHM_BAND_GRAY, ALGORITHM_BAND_GRAY),
+                    });
+                    y = bandBottom;
+                    page.drawLine({
+                        start: { x: marginPt, y },
+                        end: { x: marginPt + contentWidthPt, y },
+                        thickness: ALGORITHM_SEPARATOR_THICKNESS_PT,
+                        color: rgb(0.25, 0.25, 0.3),
+                    });
+                    y -= SEPARATOR_GAP_PT;
+                }
             }
             const text = sanitizeTextForPdf(block.text);
             const fontSize = HEADING_SIZES[block.level] || 16;
             const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-            const lines = wrapText(text, font, fontSize, maxWidthPt);
+            const lines = wrapText(text, font, fontSize, contentWidthPt);
+            const sepThickness = block.level === 4 && isAlgorithmSection ? STEP_SEPARATOR_THICKNESS_PT : SEPARATOR_LINE_THICKNESS_PT;
             const headingBlockHeight =
                 lines.length * lineHeight +
                 HEADING_BOTTOM_SPACING_PT +
-                SEPARATOR_LINE_THICKNESS_PT +
+                sepThickness +
                 SEPARATOR_GAP_PT;
             ensureSpace(headingBlockHeight);
             for (const line of lines) {
                 page.drawText(line, {
-                    x: MARGIN_PT,
+                    x: marginPt,
                     y: y - fontSize,
                     size: fontSize,
                     font,
@@ -281,12 +365,12 @@ async function buildPdfFromContent(contentBlocks, opts) {
             y -= HEADING_BOTTOM_SPACING_PT;
             const lineY = y;
             page.drawLine({
-                start: { x: MARGIN_PT, y: lineY },
-                end: { x: MARGIN_PT + CONTENT_WIDTH_PT, y: lineY },
-                thickness: SEPARATOR_LINE_THICKNESS_PT,
-                color: rgb(0.18, 0.18, 0.22),
+                start: { x: marginPt, y: lineY },
+                end: { x: marginPt + contentWidthPt, y: lineY },
+                thickness: sepThickness,
+                color: block.level === 4 && isAlgorithmSection ? rgb(0.35, 0.35, 0.4) : rgb(0.18, 0.18, 0.22),
             });
-            y = lineY - SEPARATOR_GAP_PT;
+            y = lineY - (block.level === 4 && isAlgorithmSection ? STEP_SEPARATOR_GAP_PT : SEPARATOR_GAP_PT);
             prevBlock = block;
             continue;
         }
@@ -304,13 +388,13 @@ async function buildPdfFromContent(contentBlocks, opts) {
             const lines = [];
             for (const seg of segments) {
                 const text = block.type === 'list' ? '• ' + seg : seg;
-                lines.push(...wrapText(text, font, fontSize, maxWidthPt - indent));
+                lines.push(...wrapText(text, font, fontSize, contentWidthPt - indent));
             }
             const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-            ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
+            ensureSpace(lines.length * lineHeight + blockSpacingPt);
             for (const line of lines) {
                 page.drawText(line, {
-                    x: MARGIN_PT + indent,
+                    x: marginPt + indent,
                     y: y - fontSize,
                     size: fontSize,
                     font,
@@ -318,19 +402,19 @@ async function buildPdfFromContent(contentBlocks, opts) {
                 });
                 y -= lineHeight;
             }
-            y -= BLOCK_SPACING_PT;
+            y -= blockSpacingPt;
             prevBlock = block;
             continue;
         }
 
         if (block.type === 'caption') {
             const raw = sanitizeTextForPdf(block.text);
-            const lines = wrapText(raw, font, CAPTION_FONT_SIZE, maxWidthPt - STEP_INDENT_PT);
+            const lines = wrapText(raw, font, CAPTION_FONT_SIZE, contentWidthPt - STEP_INDENT_PT);
             const lineHeight = CAPTION_FONT_SIZE * LINE_HEIGHT_RATIO;
-            ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT * 0.5);
+            ensureSpace(lines.length * lineHeight + blockSpacingPt * 0.5);
             for (const line of lines) {
                 page.drawText(line, {
-                    x: MARGIN_PT + STEP_INDENT_PT,
+                    x: marginPt + STEP_INDENT_PT,
                     y: y - CAPTION_FONT_SIZE,
                     size: CAPTION_FONT_SIZE,
                     font,
@@ -338,7 +422,7 @@ async function buildPdfFromContent(contentBlocks, opts) {
                 });
                 y -= lineHeight;
             }
-            y -= BLOCK_SPACING_PT * 0.5;
+            y -= blockSpacingPt * 0.5;
             prevBlock = block;
             continue;
         }
@@ -348,12 +432,12 @@ async function buildPdfFromContent(contentBlocks, opts) {
             if (blockText) {
                 const segments = blockText.split(/\n/).map((s) => s.trim()).filter(Boolean);
                 const lines = [];
-                for (const seg of segments) lines.push(...wrapText(seg, font, BODY_FONT_SIZE, maxWidthPt - STEP_INDENT_PT));
+                for (const seg of segments) lines.push(...wrapText(seg, font, BODY_FONT_SIZE, contentWidthPt - STEP_INDENT_PT));
                 const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
-                ensureSpace(lines.length * lineHeight + BLOCK_SPACING_PT);
+                ensureSpace(lines.length * lineHeight + blockSpacingPt);
                 for (const line of lines) {
                     page.drawText(line, {
-                        x: MARGIN_PT + STEP_INDENT_PT,
+                        x: marginPt + STEP_INDENT_PT,
                         y: y - BODY_FONT_SIZE,
                         size: BODY_FONT_SIZE,
                         font,
@@ -361,30 +445,49 @@ async function buildPdfFromContent(contentBlocks, opts) {
                     });
                     y -= lineHeight;
                 }
-                y -= BLOCK_SPACING_PT;
+                y -= blockSpacingPt;
             }
             if (block.images && block.images.length && opts.getImageBytes) {
+                if (PDF_EXPORT_DEBUG) {
+                    const prefixes = block.images.map((u, i) => `#${i}:${(u && String(u).slice(0, 52)) || ''}...`);
+                    console.log('[PDF Export] buildPdf: blockIndex=', blockIndex, 'imagesCount=', block.images.length, 'dataUrlPrefixes=', prefixes);
+                }
                 for (const dataUrl of block.images) {
                     try {
-                        const bytes = await opts.getImageBytes(dataUrl);
+                        const dataUrlToEmbed = await dataUrlToPngIfNeeded(dataUrl);
+                        const bytes = await opts.getImageBytes(dataUrlToEmbed);
                         if (!bytes || bytes.length === 0) continue;
-                        const isJpg = opts.isJpg ? opts.isJpg(dataUrl) : /^data:image\/jpe?g/i.test(dataUrl);
-                        const img = isJpg
-                            ? await pdfDoc.embedJpg(bytes)
-                            : await pdfDoc.embedPng(bytes);
+                        const isJpg = /^data:image\/jpe?g/i.test(dataUrlToEmbed);
+                        let img = null;
+                        try {
+                            img = isJpg
+                                ? await pdfDoc.embedJpg(bytes)
+                                : await pdfDoc.embedPng(bytes);
+                        } catch (embedErr) {
+                            try {
+                                img = isJpg
+                                    ? await pdfDoc.embedPng(bytes)
+                                    : await pdfDoc.embedJpg(bytes);
+                            } catch (_) {
+                                throw embedErr;
+                            }
+                        }
+                        if (!img) continue;
                         const dims = img.scale(1);
-                        const maxImgWidth = CONTENT_WIDTH_PT;
-                        const scale = dims.width > maxImgWidth ? maxImgWidth / dims.width : 1;
+                        const scaleW = dims.width > contentWidthPt ? contentWidthPt / dims.width : 1;
+                        const scaleH = dims.height > maxImageHeightPt ? maxImageHeightPt / dims.height : 1;
+                        const scale = Math.min(scaleW, scaleH);
                         const drawWidth = dims.width * scale;
                         const drawHeight = dims.height * scale;
-                        ensureSpace(drawHeight + BLOCK_SPACING_PT);
+                        const imgGap = isAlgorithmSection ? ALGORITHM_SECTION_STEP_GAP_PT : blockSpacingPt;
+                        ensureSpace(drawHeight + imgGap);
                         page.drawImage(img, {
-                            x: MARGIN_PT,
+                            x: marginPt,
                             y: y - drawHeight,
                             width: drawWidth,
                             height: drawHeight,
                         });
-                        y -= drawHeight + BLOCK_SPACING_PT;
+                        y -= drawHeight + imgGap;
                     } catch (e) {
                         console.warn('[PDF Export] Не удалось встроить изображение:', e);
                     }
@@ -485,6 +588,8 @@ export const ExportService = {
         try {
             if (loadingOverlayManager) loadingOverlayManager.updateProgress(20, 'Обработка контента...');
 
+            let sectionStepDataUrls = null;
+            let allScreenshotsCount = 0;
             const blobToDataUrl = (blob) =>
                 new Promise((resolve, reject) => {
                     if (!(blob instanceof Blob)) return reject(new Error('Not a Blob'));
@@ -500,19 +605,38 @@ export const ExportService = {
                     const step = context.data.steps[i];
                     const stepEl = stepsInClone[i];
                     if (!stepEl || !Array.isArray(step.screenshotIds) || step.screenshotIds.length === 0) continue;
-                    const screenshots = (await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))).filter(Boolean);
-                    const container = document.createElement('div');
-                    container.className = 'export-pdf-image-container';
+                    let screenshots = (await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))).filter(Boolean);
+                    const seenIdsAlgo = new Set();
+                    screenshots = screenshots.filter((sc) => {
+                        const id = sc?.id;
+                        if (id != null && seenIdsAlgo.has(id)) return false;
+                        if (id != null) seenIdsAlgo.add(id);
+                        return true;
+                    });
+                    const dataUrlsAlgo = [];
                     for (const sc of screenshots) {
-                        if (sc.blob instanceof Blob) {
+                        let blob = sc?.blob;
+                        if (!(blob instanceof Blob) && blob != null) {
+                            if (blob instanceof ArrayBuffer || ArrayBuffer.isView(blob)) {
+                                blob = new Blob([blob]);
+                            } else {
+                                blob = null;
+                            }
+                        }
+                        if (blob instanceof Blob) {
                             try {
-                                const dataUrl = await blobToDataUrl(sc.blob);
-                                const img = document.createElement('img');
-                                img.src = dataUrl;
-                                img.alt = '';
-                                container.appendChild(img);
+                                dataUrlsAlgo.push(await blobToDataUrl(blob));
                             } catch (_) {}
                         }
+                    }
+                    const uniqueDataUrls = [...new Set(dataUrlsAlgo)];
+                    const container = document.createElement('div');
+                    container.className = 'export-pdf-image-container';
+                    for (const dataUrl of uniqueDataUrls) {
+                        const img = document.createElement('img');
+                        img.src = dataUrl;
+                        img.alt = '';
+                        container.appendChild(img);
                     }
                     if (container.children.length) stepEl.appendChild(container);
                 }
@@ -521,41 +645,158 @@ export const ExportService = {
                 Array.isArray(context.algorithms) &&
                 context.algorithms.length > 0
             ) {
-                const stepsInClone = clone.querySelectorAll('.algorithm-step');
                 const stepsFlat = context.algorithms.flatMap((algo) =>
                     (algo.steps || []).map((step, stepIndex) => ({ algo, step, stepIndex })),
                 );
-                for (let k = 0; k < stepsFlat.length && k < stepsInClone.length; k++) {
-                    const { step } = stepsFlat[k];
-                    const stepEl = stepsInClone[k];
-                    if (!stepEl || stepEl.querySelector('.export-pdf-image-container img')) continue;
+                let allScreenshotsRaw = [];
+                try {
+                    allScreenshotsRaw = await getAllFromIndexedDB('screenshots');
+                } catch (_) {}
+                const allScreenshots = Array.isArray(allScreenshotsRaw) ? allScreenshotsRaw : [];
+                allScreenshotsCount = allScreenshots.length;
+
+                sectionStepDataUrls = [];
+                if (PDF_EXPORT_DEBUG) {
+                    console.log('[PDF Export] algorithm-section: stepsFlat.length=', stepsFlat.length, ', allScreenshots=', allScreenshots.length);
+                }
+                for (let k = 0; k < stepsFlat.length; k++) {
+                    const { algo, step, stepIndex } = stepsFlat[k];
+                    let screenshots = [];
+                    let source = 'none';
                     const screenshotIds = Array.isArray(step.screenshotIds) ? step.screenshotIds : [];
-                    const screenshots =
-                        screenshotIds.length > 0
-                            ? (
-                                  await Promise.all(
-                                      screenshotIds.map((id) => getFromIndexedDB('screenshots', id)),
-                                  )
-                              ).filter(Boolean)
-                            : [];
-                    const container = document.createElement('div');
-                    container.className = 'export-pdf-image-container';
+                    if (screenshotIds.length > 0) {
+                        screenshots = (
+                            await Promise.all(
+                                screenshotIds.map((id) => getFromIndexedDB('screenshots', id)),
+                            )
+                        ).filter(Boolean);
+                        source = 'ids';
+                    }
+                    if (screenshots.length === 0 && algo.id != null) {
+                        try {
+                            const byParent = await getAllFromIndex(
+                                'screenshots',
+                                'parentId',
+                                String(algo.id),
+                            );
+                            screenshots = (byParent || []).filter(
+                                (s) =>
+                                    s &&
+                                    Number(s.stepIndex) === Number(stepIndex) &&
+                                    s.parentType === 'algorithm',
+                            );
+                            if (screenshots.length) source = 'index';
+                        } catch (_) {}
+                    }
+                    if (screenshots.length === 0 && allScreenshots.length > 0 && algo.id != null) {
+                        screenshots = allScreenshots.filter(
+                            (s) =>
+                                s &&
+                                s.parentType === 'algorithm' &&
+                                String(s.parentId) === String(algo.id) &&
+                                Number(s.stepIndex) === Number(stepIndex),
+                        );
+                        if (screenshots.length) source = 'all';
+                    }
+                    const beforeDedupe = screenshots.length;
+                    const seenIds = new Set();
+                    screenshots = screenshots.filter((sc) => {
+                        const id = sc?.id;
+                        if (id != null && seenIds.has(id)) return false;
+                        if (id != null) seenIds.add(id);
+                        return true;
+                    });
+                    const dataUrls = [];
                     for (const sc of screenshots) {
-                        if (sc.blob instanceof Blob) {
+                        let blob = sc?.blob;
+                        if (!(blob instanceof Blob) && blob != null) {
+                            if (blob instanceof ArrayBuffer || ArrayBuffer.isView(blob)) {
+                                blob = new Blob([blob]);
+                            } else {
+                                blob = null;
+                            }
+                        }
+                        if (blob instanceof Blob) {
                             try {
-                                const dataUrl = await blobToDataUrl(sc.blob);
-                                const img = document.createElement('img');
-                                img.src = dataUrl;
-                                img.alt = '';
-                                container.appendChild(img);
+                                dataUrls.push(await blobToDataUrl(blob));
                             } catch (_) {}
                         }
                     }
-                    if (container.children.length) stepEl.appendChild(container);
+                    const uniqueUrls = [...new Set(dataUrls)];
+                    if (PDF_EXPORT_DEBUG && (beforeDedupe > 0 || dataUrls.length > 0 || uniqueUrls.length > 0)) {
+                        console.log('[PDF Export] step', k, 'algoId=', algo?.id, 'stepIndex=', stepIndex, 'source=', source, 'screenshotsBeforeIdDedupe=', beforeDedupe, 'afterIdDedupe=', screenshots.length, 'dataUrlsBeforeSet=', dataUrls.length, 'afterSet=', uniqueUrls.length);
+                    }
+                    sectionStepDataUrls.push(uniqueUrls);
+                }
+                if (PDF_EXPORT_DEBUG) {
+                    const summary = sectionStepDataUrls.map((arr, i) => `s${i}:${arr.length}`).join(', ');
+                    console.log('[PDF Export] sectionStepDataUrls summary:', summary);
+                }
+                const stepsInClone = clone.querySelectorAll('.algorithm-step');
+                for (let k = 0; k < stepsFlat.length && k < stepsInClone.length; k++) {
+                    const stepEl = stepsInClone[k];
+                    const dataUrls = sectionStepDataUrls[k];
+                    // Remove any existing image containers so this step has exactly our images
+                    // (avoids duplicates from buildAlgorithmSectionExport and ensures correct order).
+                    stepEl.querySelectorAll('.export-pdf-image-container').forEach((c) => c.remove());
+                    if (!dataUrls?.length) continue;
+                    const container = document.createElement('div');
+                    container.className = 'export-pdf-image-container';
+                    for (const dataUrl of dataUrls) {
+                        const img = document.createElement('img');
+                        img.src = dataUrl;
+                        img.alt = '';
+                        container.appendChild(img);
+                    }
+                    stepEl.appendChild(container);
                 }
             }
 
             const contentBlocks = extractPdfContent(clone);
+            if (sectionStepDataUrls && sectionStepDataUrls.length > 0) {
+                if (PDF_EXPORT_DEBUG) {
+                    const blockCount = contentBlocks.filter((b) => b.type === 'block').length;
+                    console.log('[PDF Export] contentBlocks: total=', contentBlocks.length, ', type=block=', blockCount, ', sectionStepDataUrls.length=', sectionStepDataUrls.length);
+                    contentBlocks.forEach((b, i) => {
+                        if (b.type === 'block') console.log('[PDF Export] block from DOM before merge: blockIndex=', i, 'imagesFromDOM=', b.images?.length ?? 0);
+                    });
+                }
+                // For algorithm-section, do NOT overwrite block.images: extractPdfContent already
+                // read the correct images from the DOM (we injected them per step above). Overwriting
+                // by stepIdx would misalign when step count !== block count (e.g. a step with only
+                // a heading yields no block, so indices shift and images get assigned to wrong steps).
+                if (context.type !== 'algorithm-section') {
+                    let stepIdx = 0;
+                    for (let blockIndex = 0; blockIndex < contentBlocks.length; blockIndex++) {
+                        const block = contentBlocks[blockIndex];
+                        if (block.type === 'block') {
+                            const urls = stepIdx < sectionStepDataUrls.length && Array.isArray(sectionStepDataUrls[stepIdx])
+                                ? sectionStepDataUrls[stepIdx]
+                                : [];
+                            block.images = urls;
+                            if (PDF_EXPORT_DEBUG && urls.length > 0) {
+                                console.log('[PDF Export] merge: blockIndex=', blockIndex, 'stepIdx=', stepIdx, 'imagesCount=', urls.length);
+                            }
+                            stepIdx++;
+                        }
+                    }
+                }
+                const stepsWithImages = sectionStepDataUrls.filter((a) => a.length > 0).length;
+                const stepBlockCount = contentBlocks.filter((b) => b.type === 'block').length;
+                const blocksWithImages = contentBlocks.filter((b) => b.images?.length).length;
+                console.warn(
+                    '[PDF Export] algorithm-section: steps=',
+                    sectionStepDataUrls.length,
+                    ', allScreenshots=',
+                    allScreenshotsCount,
+                    ', stepsWithImages=',
+                    stepsWithImages,
+                    ', stepBlocks=',
+                    stepBlockCount,
+                    ', blocksWithImagesAfterMerge=',
+                    blocksWithImages,
+                );
+            }
             if (loadingOverlayManager) loadingOverlayManager.updateProgress(40, 'Загрузка шрифта...');
 
             let fontBytes = cachedFontBytes;
@@ -604,6 +845,7 @@ export const ExportService = {
                 fontBytes,
                 getImageBytes,
                 isJpg,
+                isAlgorithmSection: context.type === 'algorithm-section',
             });
 
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });
