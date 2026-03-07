@@ -3,13 +3,55 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Copilot 1СО</title>
+        <title>Copilot 1СО 2.0</title>
         <link
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
         <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-        <script src="https://cdn.tailwindcss.com"></script>
+        <script type="text/javascript">
+            window.__loadTailwindCDN = function() {
+                var s = document.createElement('script');
+                s.src = 'https://cdn.tailwindcss.com';
+                s.onload = function() {
+                    if (typeof tailwind !== 'undefined') {
+                        var tailwindConfig = {
+                            darkMode: 'class',
+                            theme: {
+                                extend: {
+                                    colors: {
+                                        primary: 'var(--color-primary, #9933FF)',
+                                        secondary: 'var(--color-secondary, #7B2FDF)',
+                                        blue: { 'DEFAULT': 'var(--color-primary, #5D5CDE)' }
+                                    },
+                                    borderRadius: {
+                                        none: '0px',
+                                        sm: 'calc(var(--border-radius, 8px) * 0.5)',
+                                        'DEFAULT': 'var(--border-radius, 8px)',
+                                        md: 'calc(var(--border-radius, 8px) * 0.75)',
+                                        lg: 'calc(var(--border-radius, 8px) * 1.25)',
+                                        xl: 'calc(var(--border-radius, 8px) * 1.75)',
+                                        '2xl': 'calc(var(--border-radius, 8px) * 2.25)',
+                                        '3xl': 'calc(var(--border-radius, 8px) * 3.0)',
+                                        full: '9999px'
+                                    },
+                                    spacing: {
+                                        content: 'var(--content-spacing, 1rem)',
+                                        'content-sm': 'calc(var(--content-spacing, 1rem) * 0.75)',
+                                        'content-lg': 'calc(var(--content-spacing, 1rem) * 1.5)'
+                                    }
+                                }
+                            },
+                            plugins: []
+                        };
+                        tailwind.config = tailwindConfig;
+                    }
+                };
+                document.head.appendChild(s);
+            };
+        </script>
+        <!-- Production: use built CSS (npm run build:css). CDN only as fallback when built file is missing. -->
+        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
         <script
             src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
             integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
@@ -17,2027 +59,124 @@
             referrerpolicy="no-referrer"
         ></script>
         <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-        <script>
-            tailwind.config = {
-                darkMode: 'class',
-                theme: {
-                    extend: {
-                        colors: {
-                            primary: 'var(--color-primary, #5D5CDE)',
-                            secondary: 'var(--color-secondary, #4B4AB2)',
-                            blue: {
-                                ...tailwind.colors.blue,
-                                DEFAULT: 'var(--color-primary, #5D5CDE)',
-                            },
-                        },
-
-                        borderRadius: {
-                            none: '0px',
-                            sm: 'calc(var(--border-radius, 8px) * 0.5)',
-                            DEFAULT: 'var(--border-radius, 8px)',
-                            md: 'calc(var(--border-radius, 8px) * 0.75)',
-                            lg: 'calc(var(--border-radius, 8px) * 1.25)',
-                            xl: 'calc(var(--border-radius, 8px) * 1.75)',
-                            '2xl': 'calc(var(--border-radius, 8px) * 2.25)',
-                            '3xl': 'calc(var(--border-radius, 8px) * 3.0)',
-                            full: '9999px',
-                        },
-
-                        spacing: {
-                            content: 'var(--content-spacing, 1rem)',
-                            'content-sm': 'calc(var(--content-spacing, 1rem) * 0.75)',
-                            'content-lg': 'calc(var(--content-spacing, 1rem) * 1.5)',
-                        },
-
-                        gap: (theme) => ({
-                            ...theme('spacing'),
-                        }),
-
-                        padding: (theme) => ({
-                            ...theme('spacing'),
-                        }),
-
-                        margin: (theme) => ({
-                            ...theme('spacing'),
-                        }),
-                    },
-                },
-            };
-        </script>
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         />
-        <style id="scrollbar-theme">
-            html {
-                color-scheme: light;
-            }
-            html.dark {
-                color-scheme: dark;
-            }
-
-            /* --- LIGHT ----------------------------------------------------------- */
-            html:not(.dark),
-            html:not(.dark) body {
-                scrollbar-color: var(--override-scrollbar-thumb-light, var(--color-border))
-                    var(--override-scrollbar-track-light, var(--color-surface-2)) !important;
-                scrollbar-width: thin;
-            }
-            /* Chromium/WebKit — корневой + вложенные */
-            html:not(.dark)::-webkit-scrollbar,
-            html:not(.dark) body::-webkit-scrollbar,
-            html:not(.dark) *::-webkit-scrollbar {
-                width: 12px;
-                height: 12px;
-            }
-            html:not(.dark)::-webkit-scrollbar-track,
-            html:not(.dark) body::-webkit-scrollbar-track,
-            html:not(.dark) *::-webkit-scrollbar-track {
-                background: var(
-                    --override-scrollbar-track-light,
-                    var(--color-surface-2)
-                ) !important;
-            }
-            html:not(.dark)::-webkit-scrollbar-thumb,
-            html:not(.dark) body::-webkit-scrollbar-thumb,
-            html:not(.dark) *::-webkit-scrollbar-thumb {
-                background: var(--override-scrollbar-thumb-light, var(--color-border)) !important;
-                border-radius: var(--border-radius) !important;
-                border: 2px solid var(--override-scrollbar-track-light, var(--color-surface-2)) !important;
-            }
-            html:not(.dark)::-webkit-scrollbar-corner,
-            html:not(.dark) body::-webkit-scrollbar-corner {
-                background: var(
-                    --override-scrollbar-track-light,
-                    var(--color-surface-2)
-                ) !important;
-            }
-
-            /* --- DARK ------------------------------------------------------------ */
-            html.dark,
-            html.dark body {
-                scrollbar-color: var(
-                        --override-scrollbar-thumb-dark,
-                        var(--color-border-interactive)
-                    )
-                    var(--override-scrollbar-track-dark, var(--color-surface-2)) !important;
-                scrollbar-width: thin;
-            }
-            html.dark::-webkit-scrollbar,
-            html.dark body::-webkit-scrollbar,
-            html.dark *::-webkit-scrollbar {
-                width: 12px;
-                height: 12px;
-            }
-            html.dark::-webkit-scrollbar-track,
-            html.dark body::-webkit-scrollbar-track,
-            html.dark *::-webkit-scrollbar-track {
-                background: var(--override-scrollbar-track-dark, var(--color-surface-2)) !important;
-            }
-            html.dark::-webkit-scrollbar-thumb,
-            html.dark body::-webkit-scrollbar-thumb,
-            html.dark *::-webkit-scrollbar-thumb {
-                background: var(
-                    --override-scrollbar-thumb-dark,
-                    var(--color-border-interactive)
-                ) !important;
-                border-radius: var(--border-radius) !important;
-                border: 2px solid var(--override-scrollbar-track-dark, var(--color-surface-2)) !important;
-            }
-            html.dark::-webkit-scrollbar-corner,
-            html.dark body::-webkit-scrollbar-corner {
-                background: var(--override-scrollbar-track-dark, var(--color-surface-2)) !important;
-            }
-
-            *::-webkit-scrollbar-thumb:hover {
-                background: var(--color-hover-subtle, var(--color-scrollbar-thumb));
-            }
-        </style>
-        <style id="buttons-radius-fix">
-            #clearAllDataBtn,
-            #resetUiBtn,
-            .btn-destructive,
-            .btn-destructive-all {
-                border-radius: var(--border-radius) !important;
-            }
-        </style>
-        <style>
-            /* =================================================================== */
-            /*    I. КОНФИГУРАЦИЯ И ГЛОБАЛЬНЫЕ СТИЛИ (Setup & Globals)           */
-            /* =================================================================== */
-
-            /* ----------------------------------- */
-            /*         1.1. CSS Переменные         */
-            /* ----------------------------------- */
-            :root {
-                /* Основной акцентный цвет */
-                --color-primary-default: #5d5cde;
-                --scrollbar-thumb-bg: var(--override-scrollbar-thumb-light, var(--color-border));
-                --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border));
-                --color-primary: var(--color-primary-default);
-
-                --modal-backdrop-blur: 8px;
-
-                /* Переменные для опасных действий */
-                --color-red-text: #dc2626;
-                --color-red-border: #fca5a5;
-                --color-red-hover-bg: rgba(220, 38, 38, 0.1);
-
-                /* Стили для подсветки текста при поиске */
-                --search-highlight-text-bg-light: #fff352;
-                --search-highlight-text-color-light: #333333;
-                --search-highlight-text-bg-dark: #ffd700;
-                --search-highlight-text-color-dark: #1a1a1a;
-
-                /* Стили для подсветки блоков при поиске */
-                --exact-match-border-color-light: #28a745;
-                --exact-match-border-color-dark: #38c172;
-                --element-highlight-bg-light: rgba(255, 220, 100, 0.2);
-                --element-highlight-outline-light: rgba(255, 180, 50, 0.5);
-                --element-highlight-bg-dark: rgba(184, 134, 11, 0.25);
-                --element-highlight-outline-dark: rgba(218, 165, 32, 0.6);
-
-                /* Стили для кастомного скроллбара */
-                --scrollbar-track-color-light: rgba(0, 0, 0, 0.05);
-                --scrollbar-track-color-dark: rgba(255, 255, 255, 0.05);
-                --scrollbar-thumb-opacity: 0.65;
-                --scrollbar-thumb-hover-opacity: 0.85;
-                --scrollbar-thumb-bg: var(--override-scrollbar-thumb-light, var(--color-border));
-                --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border));
-                --scrollbar-thumb-bg: var(--override-scrollbar-thumb-light, var(--color-border));
-                --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border));
-            }
-
-            @media (prefers-color-scheme: dark) {
-                :root:not(.dark) {
-                    --scrollbar-thumb-bg: var(
-                        --override-scrollbar-thumb-dark,
-                        rgba(255, 255, 255, 0.35)
-                    );
-                    --scrollbar-thumb-hover-bg: var(--color-hover-subtle, rgba(255, 255, 255, 0.5));
-                    --scrollbar-track-color-light: var(
-                        --override-scrollbar-track-dark,
-                        rgba(255, 255, 255, 0.06)
-                    );
-                }
-            }
-
-            html.dark {
-                --scrollbar-thumb-bg: var(
-                    --override-scrollbar-thumb-dark,
-                    var(--color-border-interactive)
-                );
-                --scrollbar-thumb-hover-bg: var(
-                    --color-hover-subtle,
-                    var(--color-border-interactive)
-                );
-            }
-
-            /* ----------------------------------- */
-            /*         1.2. Базовые стили          */
-            /* ----------------------------------- */
-            html {
-                height: 100%;
-            }
-
-            body {
-                display: flex;
-                flex-direction: column;
-                min-height: 100vh;
-            }
-
-            #appContent {
-                flex-grow: 1;
-            }
-
-            /* =================================================================== */
-            /*               II. КОМПОНЕНТЫ (Components)                         */
-            /* =================================================================== */
-
-            /* ----------------------------------- */
-            /*        2.1. Модальные окна          */
-            /* ----------------------------------- */
-            body.modal-open {
+        <!-- Сначала основные стили (переменные темы и база), затем скроллбар и кнопки -->
+        <link rel="stylesheet" href="css/styles.css" />
+        <link rel="stylesheet" href="css/inline-styles.css" />
+        <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
+        <style id="custom-loading-overlay-styles">
+            #custom-loading-overlay {
+                margin: 0;
                 overflow: hidden;
-            }
-
-            #customizeUIModal .modal-inner-container {
-                max-height: calc(100vh - 96px);
-                max-width: min(920px, calc(100vw - 96px));
-                display: flex;
-                flex-direction: column;
-            }
-            @media (max-width: 640px) {
-                #customizeUIModal .modal-inner-container {
-                    max-height: calc(100vh - 64px);
-                    max-width: calc(100vw - 32px);
-                }
-            }
-
-            #customizeUIModal .-mx-6 {
-                margin-left: 0 !important;
-                margin-right: 0 !important;
-            }
-            #customizeUIModal .-mb-6 {
-                margin-bottom: 0 !important;
-            }
-            #customizeUIModal .modal-inner-container .p-content.overflow-y-auto.flex-1 {
-                flex: 1 1 auto;
-                min-height: 0;
-                overflow: auto;
-            }
-
-            div:has(> #clearClientDataBtn) {
-                margin-left: 0 !important;
-                margin-right: 0 !important;
-                margin-bottom: 0 !important;
-                border-bottom-left-radius: 0.5rem;
-                border-bottom-right-radius: 0.5rem;
-            }
-
-            .modal-transition {
-                transition-property: opacity, transform;
-                transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-                transition-duration: 200ms;
-                opacity: 0;
-                transform: scale(0.95);
-            }
-
-            .modal-visible {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            :is(
-                    #algorithmModal,
-                    #editModal,
-                    #addModal,
-                    #customizeUIModal,
-                    #confirmClearDataModal,
-                    #cibLinkModal,
-                    #hotkeysModal,
-                    #screenshotLightbox,
-                    #screenshotViewerModal,
-                    #noInnModal,
-                    #addReglamentCategoryModal,
-                    #foldersModal,
-                    #reglamentModal,
-                    #reglamentDetailModal,
-                    #bookmarkModal,
-                    #bookmarkDetailModal,
-                    #extLinkModal,
-                    #sedoFullscreenOverlay
-                ) {
-                pointer-events: none;
-            }
-
-            :is(
-                    #algorithmModal,
-                    #editModal,
-                    #addModal,
-                    #customizeUIModal,
-                    #confirmClearDataModal,
-                    #cibLinkModal,
-                    #hotkeysModal,
-                    #screenshotLightbox,
-                    #screenshotViewerModal,
-                    #noInnModal,
-                    #addReglamentCategoryModal,
-                    #foldersModal,
-                    #reglamentModal,
-                    #reglamentDetailModal,
-                    #bookmarkModal,
-                    #bookmarkDetailModal,
-                    #extLinkModal,
-                    #sedoFullscreenOverlay,
-                    #extLinkCategoriesModal,
-
-                ):not(.hidden) {
-                pointer-events: auto;
-            }
-
-            :is(
-                    #algorithmModal,
-                    #editModal,
-                    #addModal,
-                    #customizeUIModal,
-                    #confirmClearDataModal,
-                    #cibLinkModal,
-                    #hotkeysModal,
-                    #screenshotLightbox,
-                    #screenshotViewerModal,
-                    #noInnModal,
-                    #addReglamentCategoryModal,
-                    #foldersModal,
-                    #reglamentModal,
-                    #reglamentDetailModal,
-                    #bookmarkModal,
-                    #bookmarkDetailModal,
-                    #extLinkModal,
-                    #sedoFullscreenOverlay,
-                    #extLinkCategoriesModal,
-
-                ):not(.hidden) {
-                -webkit-backdrop-filter: blur(var(--modal-backdrop-blur)) !important;
-                backdrop-filter: blur(var(--modal-backdrop-blur)) !important;
-            }
-
-            /* Стили для полноэкранного режима модальных окон */
-            .is-fullscreen {
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 100vw !important;
-                height: 100vh !important;
-                max-width: none !important;
-                max-height: none !important;
-                z-index: 90 !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-            }
-
-            .is-fullscreen > :is(.bg-white, .dark\:bg-gray-800) {
-                border-radius: 0 !important;
-                height: 100% !important;
-                width: 100% !important;
-                display: flex !important;
-                flex-direction: column !important;
-            }
-
-            /* Обеспечиваем скроллинг контента в полноэкранном режиме */
-            .is-fullscreen
-                :is(
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkModal .modal-content-area,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1
-                ) {
-                flex-grow: 1;
-                overflow-y: auto;
-                min-height: 0;
-            }
-
-            .is-fullscreen .edit-step .step-desc {
-                min-height: 150px;
-            }
-
-            /* ----------------------------------- */
-            /*       2.2. Кастомный скроллбар      */
-            /* ----------------------------------- */
-            :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                ) {
-                scrollbar-width: thin;
-                scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-light);
-            }
-
-            .dark
-                :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                ) {
-                scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-dark);
-            }
-
-            :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkModal .modal-content-area,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                )::-webkit-scrollbar {
-                width: 4px !important;
-                height: 4px !important;
-            }
-
-            :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                )::-webkit-scrollbar-track {
-                background-color: var(--scrollbar-track-color-light);
-                border-radius: 15px;
-            }
-
-            .dark
-                :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                )::-webkit-scrollbar-track {
-                background-color: var(--scrollbar-track-color-dark);
-            }
-
-            :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                )::-webkit-scrollbar-thumb {
-                background-color: var(
-                    --scrollbar-thumb-bg,
-                    var(--override-scrollbar-thumb-dark, var(--color-border-interactive))
-                ) !important;
-                border-radius: 15px;
-                border: 1px solid transparent !important;
-                background-clip: content-box !important;
-            }
-
-            :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                )::-webkit-scrollbar-thumb:hover {
-                background-color: var(
-                    --scrollbar-thumb-hover-bg,
-                    var(
-                        --color-hover-subtle,
-                        var(--override-scrollbar-thumb-dark, var(--color-border))
-                    )
-                ) !important;
-            }
-
-            :is(
-                    .custom-scrollbar,
-                    html,
-                    #searchResults,
-                    .modal-content-area-fullscreen-scroll,
-                    #algorithmSteps,
-                    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-                    #reglamentModal .modal-content-area,
-                    #reglamentDetailModal #reglamentDetailContent,
-                    #extLinkModal .modal-content-area,
-                    #cibLinkModal .modal-content-area,
-                    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-                    #bookmarkDetailModal #bookmarkDetailOuterContent,
-                    #addModal .p-content.overflow-y-auto.flex-1,
-                    #editModal .p-content.overflow-y-auto.flex-1,
-                    #customizeUIModal .p-content.overflow-y-auto.flex-1
-                )::-webkit-scrollbar-corner {
-                background: transparent;
-            }
-
-            #important-notifications-container.custom-scrollbar::-webkit-scrollbar {
-                width: 8px;
-            }
-
-            #important-notifications-container.custom-scrollbar::-webkit-scrollbar-track {
-                background: rgba(0, 0, 0, 0.1);
-                border-radius: 4px;
-            }
-
-            #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb {
-                background: rgba(0, 0, 0, 0.3);
-                border-radius: 4px;
-            }
-
-            #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background: rgba(0, 0, 0, 0.5);
-            }
-
-            .dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-track {
-                background: rgba(255, 255, 255, 0.05);
-            }
-
-            .dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb {
-                background: rgba(255, 255, 255, 0.15);
-            }
-
-            .dark
-                #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background: rgba(255, 255, 255, 0.25);
-            }
-
-            /* ----------------------------------- */
-            /*             2.3. Табы               */
-            /* ----------------------------------- */
-            .tab-btn {
-                transition: color 0.2s ease-in-out, border-color 0.2s ease-in-out;
-                position: relative;
-            }
-
-            #clientNotes.custom-scrollbar::-webkit-scrollbar {
-                width: 8px !important;
-            }
-            #clientNotes.custom-scrollbar::-webkit-scrollbar-thumb {
-                border-width: 1px;
-            }
-
-            .tab-btn.tab-active {
-                color: var(--color-primary) !important;
-                border-bottom-color: var(--color-primary);
-            }
-
-            .tab-btn.tab-active > * {
-                color: var(--color-primary) !important;
-            }
-
-            .tab-btn.tab-active i,
-            .tab-btn.tab-active svg {
-                color: var(--color-primary) !important;
-            }
-
-            #moreTabsDropdown a,
-            #moreTabsDropdown .overflow-dropdown-item {
-                text-decoration: none !important;
-            }
-
-            #moreTabsDropdown a:hover {
-                text-decoration: none !important;
-            }
-
-            #appContent #moreTabsDropdown a,
-            #appContent #moreTabsDropdown .overflow-dropdown-item {
-                text-decoration: none !important;
-            }
-            #appContent #moreTabsDropdown a:hover {
-                text-decoration: none !important;
-            }
-
-            .tab-btn.tab-active:hover {
-                color: var(--color-primary) !important;
-            }
-
-            .tab-btn.tab-active:hover::before {
-                transform: scaleY(0);
-                opacity: 0;
-                transition: none;
-            }
-
-            @media (min-width: 640px) {
-                .tab-btn i {
-                    margin-right: 0.35rem;
-                }
-            }
-
-            .tab-content {
-                transition: opacity 200ms ease-in-out;
-            }
-
-            .tab-content.is-hiding {
-                opacity: 0;
-            }
-
-            :is(
-                    #mainTab,
-                    #programTab,
-                    #linksTab,
-                    #extLinksTab,
-                    #skziTab,
-                    #lk1cTab,
-                    #webRegTab,
-                    #reglamentsTab,
-                    #bookmarksTab,
-                    #sedoTypesTab
-                ) {
-                padding-left: 0.4rem;
-                padding-right: 0.4rem;
-            }
-
-            /* ----------------------------------- */
-            /*      2.4. Результаты поиска         */
-            /* ----------------------------------- */
-            #searchResults {
-                transition: opacity 150ms ease-out, transform 150ms ease-out;
-                opacity: 0;
-                transform: translateY(-10px);
-                pointer-events: none;
-            }
-
-            #searchResults:not(.hidden) {
-                opacity: 1;
-                transform: translateY(0);
-                pointer-events: auto;
-            }
-
-            /* Подсветка точного совпадения */
-            .exact-match-highlight {
-                border-left: 4px solid var(--exact-match-border-color-light) !important;
-                padding-left: calc(0.75rem - 4px);
-                background-color: transparent !important;
-            }
-
-            .dark .exact-match-highlight,
-            .dark .exact-match-highlight-dark {
-                border-left-color: var(--exact-match-border-color-dark) !important;
-            }
-
-            .exact-match-highlight:hover {
-                background-color: rgba(0, 0, 0, 0.03) !important;
-            }
-
-            .dark .exact-match-highlight:hover {
-                background-color: rgba(255, 255, 255, 0.04) !important;
-            }
-
-            /* Активная подсветка элемента */
-            .search-highlight-active {
-                background-color: var(--element-highlight-bg-light) !important;
-                outline: 2px solid var(--element-highlight-outline-light) !important;
-                outline-offset: -2px;
-                transition: background-color 0.3s ease-out, outline-color 0.3s ease-out;
-                position: relative;
-                z-index: 1;
-            }
-
-            .dark .search-highlight-active {
-                background-color: var(--element-highlight-bg-dark) !important;
-                outline-color: var(--element-highlight-outline-dark) !important;
-            }
-
-            /* Подсветка искомого текста */
-            .search-term-highlight,
-            mark {
-                background-color: var(--search-highlight-text-bg-light);
-                color: var(--search-highlight-text-color-light);
-                padding: 0.08em 0.4em;
-                border-radius: 0.15em;
-                font-weight: 600;
-                box-shadow: none;
-            }
-
-            .dark .search-term-highlight,
-            .dark mark {
-                background-color: var(--search-highlight-text-bg-dark);
-                color: var(--search-highlight-text-color-dark);
-            }
-
-            .highlight-search-result-textarea {
-                transition: box-shadow 0.3s ease-in-out;
-                box-shadow: 0 0 8px 2px var(--color-primary, var(--color-primary-default));
-            }
-
-            /* ----------------------------------- */
-            /*      2.5. Сортируемые списки        */
-            /* ----------------------------------- */
-            .my-sortable-ghost {
-                background-color: #d1d5db;
-                opacity: 0.75;
-                border-radius: 0.375rem;
-            }
-
-            .dark .my-sortable-ghost {
-                background-color: #4b5563;
-            }
-
-            .sortable-ghost {
-                opacity: 0.4;
-                background-color: #e0e7ff;
-                border: 2px dashed var(--color-primary, #9333ea);
-            }
-
-            .sortable-drag {
-                opacity: 0.95;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-                transform: scale(1.02);
-                cursor: grabbing;
-            }
-
-            .step-drag-handle {
-                touch-action: none;
-            }
-
-            /* Сворачивание шагов */
-            .edit-step .step-body {
-                overflow: hidden;
-                transition: max-height 0.35s ease-in-out, opacity 0.3s ease-in-out,
-                    padding-top 0.35s ease-in-out, padding-bottom 0.35s ease-in-out,
-                    margin-top 0.35s ease-in-out, border-top-width 0.35s ease-in-out;
-                max-height: 2000px;
-                opacity: 1;
-                padding-top: 0.5rem;
-            }
-
-            .edit-step .step-toggle-icon {
-                transition: transform 0.3s ease-in-out;
-            }
-
-            .edit-step.is-collapsed .step-body {
-                max-height: 0;
-                opacity: 0;
-                padding-top: 0;
-                padding-bottom: 0;
-                margin-top: 0;
-            }
-
-            .edit-step.is-collapsed .step-toggle-icon {
-                transform: rotate(-90deg);
-            }
-
-            .step-title-preview {
-                pointer-events: none;
-            }
-
-            .algorithm-step.collapsible .collapsible-body {
-                overflow: hidden;
-                transition: max-height 0.35s cubic-bezier(0.22, 0.61, 0.36, 1),
-                    opacity 0.3s ease-in-out, padding-top 0.35s ease-in-out,
-                    padding-bottom 0.35s ease-in-out, margin-top 0.35s ease-in-out;
-                max-height: 2000px;
-                opacity: 1;
-            }
-            .algorithm-step.collapsible.is-collapsed .collapsible-body {
-                max-height: 0;
-                opacity: 0;
-                padding-top: 0;
-                padding-bottom: 0;
-                margin-top: 0;
-            }
-            .algorithm-step.collapsible h3 {
-                cursor: pointer;
-            }
-
-            /* ----------------------------------- */
-            /*         2.6. Color Picker           */
-            /* ----------------------------------- */
-            .color-swatch.ring-primary {
-                --tw-ring-color: var(--color-primary, var(--color-primary-default));
-            }
-
-            :is(#hue-handle, #saturation-handle, #brightness-handle) {
-                box-sizing: border-box;
-                z-index: 10;
-            }
-
-            #color-preview-swatch {
-                background-color: var(--color-primary, #9333ea);
-            }
-
-            #hue-slider-gradient {
-                background: linear-gradient(
-                    to right,
-                    red 0%,
-                    #ff0 17%,
-                    lime 33%,
-                    cyan 50%,
-                    blue 67%,
-                    #f0f 83%,
-                    red 100%
-                );
-            }
-
-            :is(#saturation-slider-gradient, #brightness-slider-gradient) {
-                transition: background 0.1s ease-out;
-            }
-
-            /* ----------------------------------- */
-            /*           2.7. Лайтбокс             */
-            /* ----------------------------------- */
-            #screenshotLightbox img {
-                box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
-            }
-
-            /* ----------------------------------- */
-            /*      2.8. Прочие компоненты         */
-            /* ----------------------------------- */
-            .reglament-item,
-            .cib-link-item {
-                cursor: pointer !important;
-            }
-
-            /* Таймер */
-            .timer-segment {
-                display: inline-block;
-                min-width: 2ch;
-                text-align: center;
-                padding: 0.5rem;
-                border-radius: 3px;
-                cursor: pointer;
-                transition: background-color 0.2s;
-                vertical-align: baseline;
-            }
-
-            .timer-colon {
-                display: inline-block;
-                padding: 0 0.1ch;
-                vertical-align: baseline;
-                user-select: none;
-            }
-
-            .timer-segment:hover,
-            .timer-segment:focus {
-                background-color: rgba(0, 0, 0, 0.1);
-            }
-
-            .dark .timer-segment:hover,
-            .dark .timer-segment:focus {
-                background-color: rgba(255, 255, 255, 0.1);
-            }
-
-            input.timer-input-active {
-                text-align: center;
-                border: 1px solid var(--color-primary, #5d5cde);
-                border-radius: 3px;
-                padding: 0;
-                min-width: 2ch;
-                width: 2.1ch;
-                box-sizing: border-box;
-                background-color: var(--input-bg-color, #fff);
-                color: var(--input-text-color, #000);
-                vertical-align: baseline;
-            }
-
-            .dark input.timer-input-active {
-                background-color: var(--input-bg-color-dark, #374151);
-                color: var(--input-text-color-dark, #e5e7eb);
-            }
-
-            /* =================================================================== */
-            /*              III. ДВИЖОК ТЕМИЗАЦИИ (Theming Engine)               */
-            /* =================================================================== */
-
-            /* ---------------------------------------------------- */
-            /*      3.1. Адаптивная семантическая палитра           */
-            /* ---------------------------------------------------- */
-            /* Эти переменные используются стандартными темами и служат основой для кастомных */
-            :root {
-                /* --- DEFAULT LIGHT --- */
-                --default-text-primary-light: #111827;
-                --default-text-secondary-light: #4b5563;
-                --default-text-placeholder-light: #9ca3af;
-                --default-background-light: #f9fafb;
-                --default-surface-1-light: #f3f4f6;
-                --default-surface-2-light: #ffffff;
-                --default-border-light: #d1d5db;
-                --default-border-interactive-light: #d1d5db;
-                --default-input-bg-light: #f9fafb;
-                --default-hover-subtle-light: rgba(0, 0, 0, 0.055);
-
-                /* --- USER OVERRIDES (LIGHT) — выставляются из JS при кастомизации --- */
-                /* пример: document.documentElement.style.setProperty('--override-surface-1-light', '#ededed'); */
-                /* по умолчанию не заданы, срабатывает fallback на default */
-
-                /* --- FINAL TOKENS (LIGHT) --- */
-                --color-text-primary: var(
-                    --override-text-primary-light,
-                    var(--default-text-primary-light)
-                );
-                --color-text-secondary: var(
-                    --override-text-secondary-light,
-                    var(--default-text-secondary-light)
-                );
-                --color-text-placeholder: var(
-                    --override-text-placeholder-light,
-                    var(--default-text-placeholder-light)
-                );
-                --color-background: var(
-                    --override-background-light,
-                    var(--default-background-light)
-                );
-                --color-surface-1: var(--override-surface-1-light, var(--default-surface-1-light));
-                --color-surface-2: var(--override-surface-2-light, var(--default-surface-2-light));
-                --color-border: var(--override-border-light, var(--default-border-light));
-                --color-border-interactive: var(
-                    --override-border-interactive-light,
-                    var(--default-border-interactive-light)
-                );
-                --color-input-bg: var(--override-input-bg-light, var(--default-input-bg-light));
-                --color-hover-subtle: var(
-                    --override-hover-light,
-                    var(--default-hover-subtle-light)
-                );
-            }
-
-            .dark {
-                /* --- DEFAULT DARK --- */
-                --default-text-primary-dark: #f9fafb;
-                --default-text-secondary-dark: #9ca3af;
-                --default-text-placeholder-dark: #6b7280;
-                --default-background-dark: #111827;
-                --default-surface-1-dark: #1f2937;
-                --default-surface-2-dark: #374151;
-                --default-border-dark: #374151;
-                --default-border-interactive-dark: #4b5563;
-                --default-input-bg-dark: #374151;
-                --default-hover-subtle-dark: rgba(255, 255, 255, 0.06);
-
-                /* --- USER OVERRIDES (DARK) --- */
-                /* пример: document.documentElement.style.setProperty('--override-surface-1-dark', '#263140'); */
-
-                /* --- FINAL TOKENS (DARK) --- */
-                --color-text-primary: var(
-                    --override-text-primary-dark,
-                    var(--default-text-primary-dark)
-                );
-                --color-text-secondary: var(
-                    --override-text-secondary-dark,
-                    var(--default-text-secondary-dark)
-                );
-                --color-text-placeholder: var(
-                    --override-text-placeholder-dark,
-                    var(--default-text-placeholder-dark)
-                );
-                --color-background: var(--override-background-dark, var(--default-background-dark));
-                --color-surface-1: var(--override-surface-1-dark, var(--default-surface-1-dark));
-                --color-surface-2: var(--override-surface-2-dark, var(--default-surface-2-dark));
-                --color-border: var(--override-border-dark, var(--default-border-dark));
-                --color-border-interactive: var(
-                    --override-border-interactive-dark,
-                    var(--default-border-interactive-dark)
-                );
-                --color-input-bg: var(--override-input-bg-dark, var(--default-input-bg-dark));
-                --color-hover-subtle: var(--override-hover-dark, var(--default-hover-subtle-dark));
-            }
-
-            /* --- ГЛОБАЛЬНАЯ НОРМАЛИЗАЦИЯ НЕЙТРАЛЬНЫХ HOVER (всегда) --- */
-            /* 1) Обычные hover:* */
-            :where(
-                    .hover\:bg-gray-50,
-                    .hover\:bg-gray-100,
-                    .hover\:bg-gray-200,
-                    .hover\:bg-gray-300,
-                    .hover\:bg-gray-400,
-                    .hover\:bg-gray-500,
-                    .hover\:bg-gray-600,
-                    .hover\:bg-gray-700,
-                    .hover\:bg-gray-700\/50,
-                    .hover\:bg-gray-800\/50,
-                    .hover\:bg-slate-700,
-                    .hover\:bg-white\/10,
-                    .hover\:bg-black\/10,
-                    .dark\:hover\:bg-gray-500,
-                    .dark\:hover\:bg-gray-600,
-                    .dark\:hover\:bg-gray-700,
-                    .dark\:hover\:bg-gray-700\/50,
-                    .dark\:hover\:bg-gray-800\/50,
-                    .dark\:hover\:bg-slate-700,
-                    .dark\:hover\:bg-white\/10
-                ):hover {
-                background-color: var(--color-hover-subtle) !important;
-            }
-            /* 2) group-hover:* */
-            .group:hover
-                :where(
-                    .group-hover\:bg-gray-50,
-                    .group-hover\:bg-gray-100,
-                    .group-hover\:bg-gray-200,
-                    .group-hover\:bg-gray-700,
-                    .group-hover\:bg-gray-800\/50,
-                    .group-hover\:bg-slate-700,
-                    .group-hover\:bg-white\/10,
-                    .group-hover\:bg-black\/10,
-                    .dark\:group-hover\:bg-gray-700,
-                    .dark\:group-hover\:bg-gray-800\/50,
-                    .dark\:group-hover\:bg-slate-700,
-                    .dark\:group-hover\:bg-white\/10
-                ) {
-                background-color: var(--color-hover-subtle) !important;
-            }
-
-            /* ----------------------------------------------------------- */
-            /*      3.2. Глобальные переопределения для кастомной темы     */
-            /* ----------------------------------------------------------- */
-            /* Этот блок активируется JS через класс .custom-background-active на body. */
-
-            /* --- ОСНОВНОЙ ФОН И ТЕКСТ --- */
-            body.custom-background-active .tab-btn.tab-active,
-            .tab-btn.tab-active {
-                color: var(--color-primary) !important;
-            }
-            body.custom-background-active .tab-btn.tab-active > *,
-            .tab-btn.tab-active > * {
-                color: var(--color-primary) !important;
-            }
-            .tab-btn.tab-active i,
-            .tab-btn.tab-active svg {
-                color: var(--color-primary) !important;
-            }
-
-            #appContent #moreTabsDropdown a,
-            #appContent #moreTabsDropdown .overflow-dropdown-item {
-                text-decoration: none !important;
-            }
-            #appContent #moreTabsDropdown a:hover {
-                text-decoration: none !important;
-            }
-
-            #showFavoritesHeaderBtn,
-            #timerToggleButton,
-            #timerResetButton,
-            #timerDecreaseButton,
-            #timerIncreaseButton,
-            #themeToggle,
-            #clearSearchInputBtn,
-            #customizeUIBtn,
-            #exportDataBtn,
-            #importDataBtn,
-            #forceReloadBtn,
-            #showHotkeysBtn {
-                color: var(--color-primary) !important;
-            }
-            #showFavoritesHeaderBtn i,
-            #timerToggleButton i,
-            #timerResetButton i,
-            #timerDecreaseButton i,
-            #timerIncreaseButton i,
-            #themeToggle i,
-            #clearSearchInputBtn i,
-            #customizeUIBtn i,
-            #exportDataBtn i,
-            #importDataBtn i,
-            #forceReloadBtn i,
-            #showHotkeysBtn i {
-                color: var(--color-primary) !important;
-            }
-
-            #appSlogan {
-                color: var(--color-primary) !important;
-            }
-
-            body.custom-background-active #clearClientDataBtn {
-                background-color: var(--color-surface-2) !important;
-                border: 1px solid var(--color-border) !important;
-                color: var(--color-text-primary) !important;
-            }
-
-            #editMainBtn,
-            #editMainBtn > * {
-                background-color: var(--color-primary) !important;
-                color: var(--color-text-primary) !important;
-            }
-
-            body.custom-background-active {
-                color: var(--color-text-primary) !important;
-                background-color: var(--color-background) !important;
-            }
-
-            body.custom-background-active
-                :is(
-                    h1,
-                    h2,
-                    h3,
-                    h4,
-                    h5,
-                    h6,
-                    p,
-                    span,
-                    a,
-                    button,
-                    li,
-                    dt,
-                    dd,
-                    strong,
-                    em,
-                    small,
-                    mark,
-                    blockquote,
-                    code,
-                    kbd,
-                    pre,
-                    .text-gray-900,
-                    .text-gray-800,
-                    .text-gray-700,
-                    .text-gray-600,
-                    .dark\:text-gray-100,
-                    .dark\:text-gray-200,
-                    .dark\:text-gray-300
-                ) {
-                color: var(--color-text-primary) !important;
-            }
-
-            body.custom-background-active
-                :is(.text-gray-600, .text-gray-500, .dark\:text-gray-300, .dark\:text-gray-400) {
-                color: var(--color-text-secondary) !important;
-            }
-
-            /* --- ФОНЫ И ПОВЕРХНОСТИ (КОРРЕКТНАЯ ДВУХСЛОЙНАЯ СИСТЕМА) --- */
-            /* --- СЛОЙ 1: Подложки, заголовки и менее важные фоны --- */
-            body.custom-background-active
-                :is(
-                    .bg-gray-100,
-                    .bg-gray-50,
-                    .bg-gray-200,
-                    .dark\:bg-slate-600,
-                    .dark\:bg-gray-700,
-                    .dark\:bg-gray-700\/50,
-                    .dark\:bg-gray-700\/60,
-                    .dark\:bg-gray-800,
-                    #timerDisplay,
-                    .cib-link-item code,
-                    .edit-step .step-header,
-                    .bg-gray-50.dark\:bg-gray-700,
-                    #addModal .bg-gray-100.dark\:bg-gray-700,
-                    #editModal .bg-gray-50.dark\:bg-gray-800,
-                    #sedoFullscreenContent .bg-gray-50
-                ) {
-                background-color: var(--color-surface-1) !important;
-            }
-
-            /* --- СЛОЙ 2: Карточки, модальные окна, выпадающие меню (основной контент) --- */
-            /* Для светлых и темных тем: используется семантическая переменная для основного контента. */
-            body.custom-background-active
-                :is(
-                    .bg-white,
-                    .dark\:bg-slate-800,
-                    #blacklistTableContainer,
-                    .google-doc-table > thead,
-                    #moreTabsDropdown,
-                    .tab-content > .p-4,
-                    button.bg-gray-200,
-                    button.bg-gray-300,
-                    .modal-inner-container,
-                    #algorithmModal .bg-white.dark\:bg-gray-800,
-                    #addModal .bg-white.dark\:bg-gray-800,
-                    #editModal .bg-white.dark\:bg-gray-800,
-                    #customizeUIModal .bg-white.dark\:bg-gray-800,
-                    #confirmClearDataModal .bg-white.dark\:bg-gray-800,
-                    #cibLinkModal .bg-white.dark\:bg-gray-800,
-                    #hotkeysModal .bg-white.dark\:bg-gray-800,
-                    #noInnModal .bg-white.dark\:bg-gray-800,
-                    #reglamentDetailModal .bg-white.dark\:bg-gray-800,
-                    #bookmarkDetailModal .bg-white.dark\:bg-gray-800,
-                    #extLinkModal .bg-white.dark\:bg-gray-800
-                ) {
-                background-color: var(--color-surface-2) !important;
-            }
-
-            .reglament-category {
-                background-color: var(--color-surface-2) !important;
-            }
-
-            /* --- ГРАНИЦЫ И РАЗДЕЛИТЕЛИ --- */
-            body.custom-background-active
-                :is(
-                    .border,
-                    .border-t,
-                    .border-r,
-                    .border-b,
-                    .border-l,
-                    .border-gray-200,
-                    .border-gray-300,
-                    .dark\:border-gray-600,
-                    .dark\:border-gray-700,
-                    .dark\:border-slate-500,
-                    .dark\:border-slate-600,
-                    .divide-y > :not([hidden]) ~ :not([hidden]),
-                    .divide-x > :not([hidden]) ~ :not([hidden]),
-                    .google-doc-table th,
-                    .google-doc-table td
-                ) {
-                border-color: var(--color-border) !important;
-            }
-
-            body.custom-background-active :is(.h-px.bg-gray-200, .h-px.dark\:bg-gray-700) {
-                background-color: var(--color-border) !important;
-            }
-            body.custom-background-active :is(.bg-gray-200, .dark\:bg-slate-600) {
-                background-color: var(--color-surface-1) !important;
-            }
-
-            /* --- ФОРМЫ (INPUT, TEXTAREA, SELECT) --- */
-            body.custom-background-active :is(input, textarea, select) {
-                background-color: var(--color-input-bg) !important;
-                color: var(--color-text-primary) !important;
-                border-color: var(--color-border-interactive) !important;
-            }
-
-            body.custom-background-active ::-webkit-input-placeholder {
-                color: var(--color-text-secondary) !important;
-                opacity: 1 !important;
-            }
-
-            body.custom-background-active ::-moz-placeholder {
-                color: var(--color-text-secondary) !important;
-                opacity: 1 !important;
-            }
-
-            body.custom-background-active :-ms-input-placeholder {
-                color: var(--color-text-secondary) !important;
-                opacity: 1 !important;
-            }
-
-            body.custom-background-active ::placeholder {
-                color: var(--color-text-secondary) !important;
-                opacity: 1 !important;
-            }
-
-            /* --- КНОПКИ --- */
-            /* 1. Основные кнопки */
-            body.custom-background-active
-                :is(
-                    #editSedoTypesBtn,
-                    #addBlacklistEntryBtn,
-                    #force-refresh-telefony-btn,
-                    #force-refresh-shablony-btn,
-                    #saveAlgorithmBtn,
-                    #saveNewAlgorithmBtn,
-                    #saveCibLinkBtn,
-                    #addProgramAlgorithmBtn,
-                    #addSkziAlgorithmBtn,
-                    #addLk1cAlgorithmBtn,
-                    #addWebRegAlgorithmBtn,
-                    #addLinkBtn,
-                    #addReglamentBtn,
-                    #addBookmarkBtn,
-                    #organizeBookmarksBtn,
-                    #addExtLinkBtn,
-                    #saveUISettingsBtn,
-                    #sedoMainEditButton,
-                    #editMainBtn,
-                    button.bg-primary,
-                    button:not([class*='bg-gray']):not([class*='bg-red']):not(
-                            [class*='bg-transparent']
-                        ):not(.tab-btn):not(.view-toggle):not(#timerDisplay button):not(
-                            .btn-destructive
-                        )
-                ) {
-                background-color: var(--color-primary);
-                color: var(--color-text-primary) !important;
-                box-shadow: none !important;
-                transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-            }
-
-            /* Правило-гарант для иконок и вложенных элементов. */
-            body.custom-background-active
-                :is(
-                    #editSedoTypesBtn,
-                    #addBlacklistEntryBtn,
-                    #force-refresh-telefony-btn,
-                    #force-refresh-shablony-btn,
-                    #saveAlgorithmBtn,
-                    #saveNewAlgorithmBtn,
-                    #saveCibLinkBtn,
-                    #addProgramAlgorithmBtn,
-                    #addSkziAlgorithmBtn,
-                    #addLk1cAlgorithmBtn,
-                    #addWebRegAlgorithmBtn,
-                    #addLinkBtn,
-                    #addReglamentBtn,
-                    #addBookmarkBtn,
-                    #organizeBookmarksBtn,
-                    #addExtLinkBtn,
-                    #saveUISettingsBtn,
-                    #sedoMainEditButton,
-                    #editMainBtn,
-                    button.bg-primary,
-                    button:not([class*='bg-gray']):not([class*='bg-red']):not(
-                            [class*='bg-transparent']
-                        ):not(.tab-btn):not(.view-toggle):not(#timerDisplay button):not(
-                            .btn-destructive
-                        )
-                )
-                > * {
-                color: var(--color-text-primary) !important;
-                transition: color 0.2s ease-in-out;
-            }
-
-            body.custom-background-active
-                :is(
-                    #editSedoTypesBtn,
-                    #addBlacklistEntryBtn,
-                    #force-refresh-telefony-btn,
-                    #force-refresh-shablony-btn,
-                    #saveAlgorithmBtn,
-                    #saveNewAlgorithmBtn,
-                    #saveCibLinkBtn,
-                    #addProgramAlgorithmBtn,
-                    #addSkziAlgorithmBtn,
-                    #addLk1cAlgorithmBtn,
-                    #addWebRegAlgorithmBtn,
-                    #addLinkBtn,
-                    #addReglamentBtn,
-                    #addBookmarkBtn,
-                    #organizeBookmarksBtn,
-                    #addExtLinkBtn,
-                    #saveUISettingsBtn,
-                    #sedoMainEditButton,
-                    #editMainBtn,
-                    button.bg-primary,
-                    button:not([class*='bg-gray']):not([class*='bg-red']):not(
-                            [class*='bg-transparent']
-                        ):not(.tab-btn):not(.view-toggle):not(#timerDisplay button):not(
-                            .btn-destructive
-                        )
-                ):hover {
-                background-color: var(--color-primary) !important;
-                color: white !important;
-            }
-
-            #clearClientDataBtn {
-                background-color: var(--color-surface-2) !important;
-                border: 1px solid var(--color-border) !important;
-                color: var(--color-text-primary) !important;
-                box-shadow: none !important;
-            }
-            #clearClientDataBtn > * {
-                color: var(--color-text-primary) !important;
-            }
-            #clearClientDataBtn:hover {
-                background-color: var(--color-hover-subtle) !important;
-                transition: background-color ease 0.3s;
-            }
-
-            /* Primary: Сохранить .txt */
-            #exportTextBtn {
-                background-color: var(--color-primary) !important;
-                color: var(--color-text-primary) !important;
-                border: none !important; /* гасим border-b из классов */
-                box-shadow: none !important;
-                transition: background-color ease 0.3s;
-            }
-            #exportTextBtn > * {
-                color: var(--color-text-primary) !important;
-            }
-            #exportTextBtn:hover {
-                background-color: var(--color-primary-hover) !important;
-            }
-
-            #resetUiBtn:hover {
-                background-color: var(--color-hover-subtle);
-                transition: background-color ease 0.3s;
-            }
-
-            #resetUiBtn {
-                transition: background-color ease 0.3s;
-            }
-
-            #clearAllDataBtn {
-                background-color: var(--color-red-hover-bg);
-                padding: 0 1rem;
-                transition: background-color ease 0.3s;
-            }
-
-            #clearAllDataBtn:hover {
-                background-color: var(--color-red-text);
-                transition: background-color ease 0.3s;
-            }
-
-            #confirmAndClearDataBtn {
-                background-color: red;
-            }
-
-            body.custom-background-active
-                :is(
-                    #editSedoTypesBtn,
-                    #addBlacklistEntryBtn,
-                    #force-refresh-telefony-btn,
-                    #force-refresh-shablony-btn,
-                    #saveAlgorithmBtn,
-                    #saveNewAlgorithmBtn,
-                    #saveCibLinkBtn,
-                    #addProgramAlgorithmBtn,
-                    #addSkziAlgorithmBtn,
-                    #addLk1cAlgorithmBtn,
-                    #addWebRegAlgorithmBtn,
-                    #addLinkBtn,
-                    #addReglamentBtn,
-                    #addBookmarkBtn,
-                    #organizeBookmarksBtn,
-                    #addExtLinkBtn,
-                    #saveUISettingsBtn,
-                    #sedoMainEditButton,
-                    #editMainBtn,
-                    button.bg-primary,
-                    button:not([class*='bg-gray']):not([class*='bg-red']):not(
-                            [class*='bg-transparent']
-                        ):not(.tab-btn):not(.view-toggle):not(#timerDisplay button):not(
-                            .btn-destructive
-                        )
-                ):hover
-                > * {
-                color: white !important;
-            }
-
-            /* 2. Второстепенные кнопки (Secondary Actions) - логика не меняется. */
-            body.custom-background-active button:is(.bg-gray-200, .bg-gray-300, .bg-gray-100) {
-                background-color: var(--color-surface-1) !important;
-                color: var(--color-text-primary) !important;
-                box-shadow: none !important;
-            }
-
-            body.custom-background-active
-                button:is(.bg-gray-200, .bg-gray-300, .bg-gray-100):hover {
-                background-color: var(--color-hover-subtle) !important;
-            }
-
-            /* 3. Опасные/Разрушительные кнопки (Destructive Actions) - ИСКЛЮЧЕНИЕ ИЗ ПРАВИЛ. */
-            body.custom-background-active .btn-destructive,
-            body.custom-background-active .btn-destructive > * {
-                color: var(--color-red-text) !important;
-            }
-
-            body.custom-background-active .btn-destructive {
-                background-color: transparent !important;
-                border: 1px solid var(--color-red-border) !important;
-                box-shadow: none !important;
-                padding: 0.5rem 1rem;
-            }
-
-            body.custom-background-active .btn-destructive:hover {
-                background-color: var(--color-red-hover-bg) !important;
-                border-color: var(--color-red-text) !important;
-            }
-
-            .btn-destructive-all,
-            .btn-destructive-all > * {
-                color: white !important;
-                border: none !important;
-            }
-
-            /* ===== Спец-исключения для модалки очистки данных ===== */
-            body.custom-background-active #confirmClearDataModal #clearDataWarningBox {
-                background-color: #fffbeb !important;
-                border-color: #fde68a !important;
-                color: #92400e !important;
-            }
-            html.dark body.custom-background-active #confirmClearDataModal #clearDataWarningBox {
-                background-color: rgba(120, 53, 15, 0.5) !important;
-                border-color: #92400e !important;
-                color: #fde68a !important;
-            }
-
-            body.custom-background-active
-                #confirmClearDataModal
-                #clearDataWarningBox
-                #exportBeforeClearBtn,
-            html.dark
-                body.custom-background-active
-                #confirmClearDataModal
-                #clearDataWarningBox
-                #exportBeforeClearBtn {
-                background: transparent !important;
-                color: inherit !important;
-                border: none !important;
-                text-decoration: underline !important;
-            }
-            body.custom-background-active
-                #confirmClearDataModal
-                #clearDataWarningBox
-                #exportBeforeClearBtn:hover {
-                color: #7c2d12 !important;
-            }
-            html.dark
-                body.custom-background-active
-                #confirmClearDataModal
-                #clearDataWarningBox
-                #exportBeforeClearBtn:hover {
-                color: #fde68a !important;
-            }
-            body.custom-background-active
-                #confirmClearDataModal
-                :is(h2 .fa-exclamation-triangle, .text-red-600, .dark\:text-red-500) {
-                color: var(--color-red-text, #dc2626) !important;
-            }
-            body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn {
-                background-color: var(--color-red-text, #dc2626) !important;
-                color: #fff !important;
-                border-color: var(--color-red-text, #dc2626) !important;
-            }
-            body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn:hover {
-                background-color: var(--color-red-hover-bg, #ef4444) !important;
-                border-color: var(--color-red-text, #dc2626) !important;
-            }
-            body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
-                background-color: #e5e7eb !important;
-                color: #374151 !important;
-                border-color: #d1d5db !important;
-            }
-            html.dark body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
-                background-color: #374151 !important;
-                color: #e5e7eb !important;
-                border-color: #4b5563 !important;
-            }
-            body.custom-background-active #confirmClearDataModal .bg-gray-50 {
-                background-color: #f9fafb !important;
-            }
-            html.dark body.custom-background-active #confirmClearDataModal .dark\:bg-gray-700 {
-                background-color: #374151 !important;
-            }
-
-            /* --- ССЫЛКИ --- */
-            /* Правило для заголовков и элементов, которые не являются ссылками, но используют акцентный цвет */
-            body.custom-background-active .text-primary {
-                color: var(--color-primary) !important;
-            }
-
-            /* Правило для настоящих ссылок <a> */
-            body.custom-background-active #appContent a {
-                color: var(--color-text-primary) !important;
-                text-decoration: underline !important;
-                text-underline-offset: 3px;
-                text-decoration-color: var(--color-primary) !important;
-                transition: color 0.2s ease-in-out, text-decoration-color 0.2s ease-in-out;
-            }
-
-            body.custom-background-active #appContent a:hover {
-                color: var(--color-primary) !important;
-                text-decoration-color: var(--color-secondary) !important;
-            }
-
-            /* --- ТЕГИ И УВЕДОМЛЕНИЯ (ALERTS) --- */
-            /* Адаптивные теги/метки */
-            body.custom-background-active
-                :is(
-                    .bg-green-100,
-                    .bg-yellow-100,
-                    .bg-red-100,
-                    .bg-blue-100,
-                    .bg-purple-100,
-                    .bg-indigo-100,
-                    .bg-pink-100,
-                    .bg-orange-100,
-                    .bg-teal-100,
-                    .bg-cyan-100,
-                    .bg-amber-100,
-                    .bg-lime-100,
-                    .bg-emerald-100,
-                    .bg-sky-100,
-                    .dark\:bg-green-900,
-                    .dark\:bg-yellow-900,
-                    .dark\:bg-red-900,
-                    .dark\:bg-blue-900,
-                    .dark\:bg-purple-900,
-                    .dark\:bg-indigo-900,
-                    .dark\:bg-pink-900,
-                    .dark\:bg-orange-900,
-                    .dark\:bg-teal-900,
-                    .dark\:bg-cyan-900,
-                    .dark\:bg-amber-900,
-                    .dark\:bg-lime-900,
-                    .dark\:bg-emerald-900,
-                    .dark\:bg-sky-900
-                ) {
-                background-color: var(--color-surface-1) !important;
-                border: 1px solid var(--color-border) !important;
-            }
-
-            body.custom-background-active
-                :is(
-                    .text-green-800,
-                    .text-yellow-800,
-                    .text-red-800,
-                    .text-blue-800,
-                    .text-purple-800,
-                    .text-indigo-800,
-                    .text-pink-800,
-                    .text-orange-800,
-                    .text-teal-800,
-                    .text-cyan-800,
-                    .text-amber-800,
-                    .text-lime-800,
-                    .text-emerald-800,
-                    .text-sky-800,
-                    .dark\:text-green-200,
-                    .dark\:text-yellow-200,
-                    .dark\:text-red-200,
-                    .dark\:text-blue-200,
-                    .dark\:text-purple-200,
-                    .dark\:text-indigo-200,
-                    .dark\:text-pink-200,
-                    .dark\:text-orange-200,
-                    .dark\:text-teal-200,
-                    .dark\:text-cyan-200,
-                    .dark\:text-amber-200,
-                    .dark\:text-lime-200,
-                    .dark\:text-emerald-200,
-                    .dark\:text-sky-200
-                ) {
-                color: var(--color-text-secondary) !important;
-            }
-
-            /* Адаптивные информационные панели (Alerts) */
-            body.custom-background-active
-                :is(
-                    .bg-blue-50,
-                    .dark\:bg-blue-900\/50,
-                    .bg-yellow-50,
-                    .dark\:bg-yellow-900\/50,
-                    .bg-green-50,
-                    .bg-red-50
-                ) {
-                background-color: var(--color-surface-2) !important;
-                border-left-width: 4px;
-            }
-
-            body.custom-background-active
-                :is(
-                    .text-blue-800,
-                    .dark\:text-blue-200,
-                    .text-yellow-800,
-                    .dark\:text-yellow-200,
-                    .text-green-800,
-                    .text-red-800
-                ) {
-                color: var(--color-text-primary) !important;
-            }
-
-            /* --- СПЕЦИФИЧЕСКИЕ КОМПОНЕНТЫ --- */
-            /* Hover для блоков в "Шаблонах" */
-            body.custom-background-active .shablony-block.copyable-block:hover {
-                background-color: var(--color-hover-subtle) !important;
-            }
-
-            body.custom-background-active :is(nav, div):has(> .tab-btn) {
-                background-color: transparent !important;
-                box-shadow: none !important;
-                border-bottom: none !important;
-            }
-
-            body.custom-background-active .force-transparent {
-                background: transparent !important;
-                background-color: transparent !important;
-                box-shadow: none !important;
-                border: none !important;
-            }
-
-            body.custom-background-active
-                #customizeUIModal
-                .p-content
-                > div[class*='space-y']
-                > div {
-                background-color: transparent !important;
-                box-shadow: none !important;
-            }
-
-            /* ---------------------------------------------------- */
-            /*      3.3. Кастомное фоновое изображение              */
-            /* ---------------------------------------------------- */
-            body.custom-bg-image-active::before {
-                content: '';
+                height: 100vh;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 position: fixed;
                 top: 0;
                 left: 0;
-                width: 100vw;
-                height: 100vh;
-                z-index: -1;
-                background-image: var(--custom-background-image);
-                background-size: contain;
-                background-position: center center;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-                background-color: var(--color-background);
+                width: 100%;
+                height: 100%;
+                z-index: 99999;
+                background-color: #0a0a1a;
+                display: flex;
+                justify-content: center;
+                align-items: center;
             }
-
-            body.custom-bg-image-active.theme-light-text::before {
-                filter: brightness(0.6);
-            }
-
-            body.custom-bg-image-active.theme-dark-text::before {
-                filter: brightness(1.5) contrast(0.9);
-            }
-
-            body.custom-bg-image-active {
-                background-color: transparent !important;
-            }
-
-            #backgroundImagePreview {
-                width: 128px;
-                height: 72px;
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-            }
-
-            body.custom-background-active
-                #customizeUIModal
-                .p-content
-                button:not(#saveUISettingsBtn):not(.btn-destructive) {
-                background: transparent !important;
-                background-color: transparent !important;
-                box-shadow: none !important;
-            }
-
-            /* =================================================================== */
-            /*           IV. УТИЛИТЫ И АНИМАЦИИ (Utilities & Animations)         */
-            /* =================================================================== */
-
-            /* ----------------------------------- */
-            /*           4.1. Анимации             */
-            /* ----------------------------------- */
-            @keyframes pulse-highlight {
-                0% {
-                    transform: scale(1);
-                    box-shadow: 0 0 0 0 rgba(255, 180, 50, 0.4);
-                }
-
-                50% {
-                    transform: scale(1.01);
-                    box-shadow: 0 0 3px 6px rgba(255, 180, 50, 0);
-                }
-
-                100% {
-                    transform: scale(1);
-                    box-shadow: 0 0 0 0 rgba(255, 180, 50, 0);
-                }
-            }
-
-            .search-highlight-pulse {
-                animation: pulse-highlight 1.3s ease-in-out;
-            }
-
-            @keyframes shake {
-                10%,
-                90% {
-                    transform: translate3d(-1px, 0, 0);
-                }
-
-                20%,
-                80% {
-                    transform: translate3d(2px, 0, 0);
-                }
-
-                30%,
-                50%,
-                70% {
-                    transform: translate3d(-4px, 0, 0);
-                }
-
-                40%,
-                60% {
-                    transform: translate3d(4px, 0, 0);
-                }
-            }
-
-            .notification-updated-shake {
-                animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-                transform: translate3d(0, 0, 0);
-            }
-
-            /* ----------------------------------- */
-            /*        4.2. Вспомогательные классы  */
-            /* ----------------------------------- */
-            #appContent.content-hidden-initial {
-                opacity: 0;
-                visibility: hidden;
-            }
-
-            #appContent.content-fading-in {
-                opacity: 1;
-                visibility: visible;
-                transition: opacity 0.6s ease-in;
-            }
-
-            /* ----------------------------------- */
-            /*             4.3. Копирайт           */
-            /* ----------------------------------- */
-            #app-copyright {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-                    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-                color: #9ca3af;
-                background-color: transparent;
-                z-index: 10;
-                transition: color 0.2s ease-in-out;
-                padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
-            }
-
-            .dark #app-copyright {
-                color: #4b5563;
-            }
-
-            #app-copyright a {
-                color: inherit;
-                text-decoration: none;
-            }
-
-            #app-copyright a:hover {
-                text-decoration: underline;
-                color: var(--color-primary, #5d5cde);
-            }
-
-            #showFavoritesHeaderBtn,
-            #timerToggleButton,
-            #timerResetButton,
-            #timerDecreaseButton,
-            #timerIncreaseButton,
-            #themeToggle,
-            #exportDataBtn,
-            #importDataBtn,
-            #forceReloadBtn,
-            #showHotkeysBtn {
-                color: var(--color-primary) !important;
-            }
-            #showFavoritesHeaderBtn i,
-            #timerToggleButton i,
-            #timerResetButton i,
-            #timerDecreaseButton i,
-            #timerIncreaseButton i,
-            #themeToggle i,
-            #exportDataBtn i,
-            #importDataBtn i,
-            #forceReloadBtn i,
-            #showHotkeysBtn i {
-                color: var(--color-primary) !important;
-            }
-
-            #editMainBtn,
-            #editMainBtn > * {
-                background-color: var(--color-primary) !important;
-                color: var(--color-text-primary) !important;
-            }
-
-            :root:not(.dark) {
-                --color-primary-hover: var(--color-secondary);
-            }
-            html.dark,
-            :root.dark {
-                --color-primary-hover: var(--color-secondary);
-            }
-
-            @supports (color: color-mix(in srgb, white, black)) {
-                :root:not(.dark) {
-                    --color-primary-hover: color-mix(in srgb, var(--color-primary) 80%, black);
-                }
-                html.dark,
-                :root.dark {
-                    --color-primary-hover: color-mix(in srgb, var(--color-primary) 80%, white);
-                }
-            }
-
-            html:not(.dark) [class~='bg-primary']:hover,
-            html.dark [class~='bg-primary']:hover {
-                background-color: var(--color-primary-hover) !important;
-            }
-
-            /* ========================= Elevation / Тени уровней ========================= */
-            /* Светлая тема: более насыщённые тени */
-            :root:not(.dark) {
-                --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
-                --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.18), 0 2px 3px rgba(0, 0, 0, 0.12),
-                    0 0 0 1px rgba(0, 0, 0, 0.05);
-                --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.22), 0 6px 5px rgba(0, 0, 0, 0.14),
-                    0 0 0 1px rgba(0, 0, 0, 0.04);
-                --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.25), 0 12px 10px rgba(0, 0, 0, 0.16);
-            }
-            /* Тёмная тема: глубже тени + тонкий светлый контур для отделения от фона */
-            html.dark,
-            :root.dark {
-                --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.463), 0 0 0 1px rgba(255, 255, 255, 0.08);
-                --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.3), 0 2px 15px rgba(0, 0, 0, 0.3),
-                    0 0 0 1px rgba(255, 255, 255, 0.06);
-                --shadow-lg: 0 14px 18px rgba(0, 0, 0, 0.486), 0 6px 14px rgba(0, 0, 0, 0.453),
-                    0 0 0 1px rgba(255, 255, 255, 0.05);
-                --shadow-xl: 0 28px 6px rgba(0, 0, 0, 0.5), 0 14px 8px rgba(0, 0, 0, 0.44),
-                    0 0 0 1px rgba(255, 255, 255, 0.04);
-            }
-            /* Переопределяем стандартные shadow-классы Tailwind на семантические значения */
-            .shadow-sm {
-                box-shadow: var(--shadow-sm) !important;
-            }
-            .shadow-md {
-                box-shadow: var(--shadow-md) !important;
-            }
-            .shadow-lg {
-                box-shadow: var(--shadow-lg) !important;
-            }
-            .shadow-xl {
-                box-shadow: var(--shadow-xl) !important;
-            }
-
-            .pdf-drop-overlay {
-                padding: 8px;
-                box-sizing: border-box;
-                display: grid;
-                place-items: center;
-            }
-            .pdf-drop-overlay .pdf-drop-msg {
+            #custom-loading-overlay #loadingCanvas {
                 position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                max-width: calc(100% - 16px);
-                text-align: center;
-                white-space: normal;
-                word-break: break-word;
-                overflow-wrap: anywhere;
-                line-height: 1.2;
-                font-size: clamp(10px, 1.8vw, 14px);
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 1;
             }
-
-            /*Прочие стили*/
-            .bookmark-item.view-item {
-                margin-block: 2px;
+            #custom-loading-overlay .loading-text {
+                position: absolute;
+                bottom: 12%;
+                left: 50%;
+                transform: translateX(-50%);
+                max-width: 90%;
+                padding: 0 20px;
+                box-sizing: border-box;
+                font-size: 20px;
+                letter-spacing: 1px;
+                line-height: 1.4;
+                font-weight: 600;
+                z-index: 10;
+                background: linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2);
+                background-size: 250% 100%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                text-fill-color: transparent;
+                animation: gradient-text-flow-smooth 4s linear infinite;
+                text-align: center;
+            }
+            #custom-loading-overlay #animated-dots {
+                display: inline-block;
+                min-width: 25px;
+                text-align: left;
+            }
+            #custom-loading-overlay #animated-dots::before {
+                content: ".";
+                animation: ellipsis-content-for-span 1.5s infinite steps(1, end);
+            }
+            #custom-loading-overlay .progress-indicator-container {
+                position: absolute;
+                bottom: 5%;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 280px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                z-index: 10;
+            }
+            #custom-loading-overlay .progress-bar-line-track {
+                width: 100%;
+                height: 6px;
+                background-color: rgba(138, 43, 226, 0.15);
+                border-radius: 3px;
+                margin-bottom: 8px;
+                overflow: hidden;
+                box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+            }
+            #custom-loading-overlay .progress-bar-line {
+                width: 0%;
+                height: 100%;
+                background: linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2);
+                background-size: 300% 100%;
+                border-radius: 3px;
+                transition: width 0.25s ease-out;
+                animation: progress-gradient-flow 2s linear infinite;
+            }
+            @keyframes progress-gradient-flow {
+                0% { background-position: 0% center; }
+                100% { background-position: -300% center; }
+            }
+            #custom-loading-overlay .progress-percentage-text {
+                font-size: 14px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                background: linear-gradient(120deg, #9333ea, #c084fc, #9333ea);
+                background-size: 200% 100%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                text-fill-color: transparent;
+                animation: gradient-text-flow-smooth 3s linear infinite;
+            }
+            @keyframes gradient-text-flow-smooth {
+                0% { background-position: 0% center; }
+                100% { background-position: -250% center; }
+            }
+            @keyframes ellipsis-content-for-span {
+                0% { content: "."; }
+                33% { content: ".."; }
+                66% { content: "..."; }
+                100% { content: "."; }
             }
         </style>
     </head>
@@ -2045,7 +184,328 @@
     <body
         class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-200"
     >
+        <!-- Оверлей загрузки первым в body — виден с первого кадра, до загрузки скриптов -->
+        <div id="custom-loading-overlay">
+            <canvas id="loadingCanvas"></canvas>
+            <div class="loading-text" id="loadingText">Загрузка<span id="animated-dots"></span></div>
+            <div class="progress-indicator-container">
+                <div class="progress-bar-line-track">
+                    <div class="progress-bar-line" id="progressBarLine"></div>
+                </div>
+                <div class="progress-percentage-text" id="progressPercentageText">0%</div>
+            </div>
+        </div>
+
+        <!-- Контейнер для toast-уведомлений (fixed, top-right) -->
+        <div
+            id="notification-container"
+            style="position:fixed;top:20px;right:20px;z-index:200000;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:min(380px,calc(100vw - 40px));"
+        ></div>
+
+        <!-- Ранняя анимация сферы - запускается сразу, до загрузки модулей -->
+        <script>
+        (function() {
+            'use strict';
+            const canvas = document.getElementById('loadingCanvas');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            let animationFrameId = null;
+            let width, height, centerX, centerY;
+            let particles = [];
+            let globalTime = 0;
+            let rotationX = 0;
+            let rotationY = 0;
+            let lastFrameTime = null;
+            /* Скорость вращения: при 60fps (16ms/кадр) даёт те же значения, что и раньше — плавно при любой частоте кадров */
+            const ROTATION_DELTA_NORM = 1 / 16;
+            let exitScaleStartTime = 0;
+            const EXIT_DURATION_MS = 700;
+            const EXIT_MAX_SCALE = 4;
+            
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+            
+            function getCurrentExitScale() {
+                if (!exitScaleStartTime) return 1;
+                const elapsed = performance.now() - exitScaleStartTime;
+                const t = Math.min(elapsed / EXIT_DURATION_MS, 1);
+                return 1 + (EXIT_MAX_SCALE - 1) * easeOutCubic(t);
+            }
+            
+            // Палитра цветов по умолчанию с весами (долями)
+            const colorPaletteWithWeights = [
+                { color: [17, 24, 39, 1], weight: 42.587 },   // #111827
+                { color: [31, 41, 55, 1], weight: 24.853 },   // #1F2937
+                { color: [55, 65, 81, 1], weight: 18.895 },   // #374151
+                { color: [147, 51, 234, 1], weight: 0.623 },  // #9333EA
+                { color: [30, 40, 54, 1], weight: 0.516 },     // #1E2836
+                { color: [15, 22, 36, 1], weight: 0.453 },     // #0F1624
+                { color: [29, 39, 53, 1], weight: 0.439 },    // #1D2735
+                { color: [15, 22, 37, 1], weight: 0.379 },     // #0F1625
+                { color: [28, 38, 52, 1], weight: 0.374 },     // #1C2634
+                { color: [75, 85, 99, 1], weight: 0.340 },     // #4B5563
+                { color: [243, 244, 246, 1], weight: 0.309 },  // #F3F4F6
+                { color: [15, 22, 35, 1], weight: 0.285 },     // #0F1623
+                { color: [25, 33, 42, 1], weight: 0.276 },     // #19212A
+                { color: [41, 49, 60, 1], weight: 0.273 },     // #29313C
+                { color: [24, 32, 44, 1], weight: 0.271 },     // #18202C
+            ];
+
+            // Функция для взвешенного выбора цвета
+            function getWeightedRandomColor() {
+                const totalWeight = colorPaletteWithWeights.reduce((sum, item) => sum + item.weight, 0);
+                let random = Math.random() * totalWeight;
+                for (const item of colorPaletteWithWeights) {
+                    random -= item.weight;
+                    if (random <= 0) {
+                        return item.color;
+                    }
+                }
+                return colorPaletteWithWeights[0].color; // fallback
+            }
+
+            const config = {
+                particleCount: 2200,
+                sphereBaseRadius: 4,
+                focalLength: 250,
+                rotationSpeedX: 0.0003,
+                rotationSpeedY: 0.002,
+                breathAmplitude: 0.09,
+                breathSpeed: 0.01,
+                petalCount: 15,
+                petalStrength: 0.2,
+                baseParticleMinSize: 0.45,
+                baseParticleMaxSize: 1.1,
+                colorPalette: [
+                    [160, 90, 220, 1],
+                    [190, 110, 245, 0.95],
+                    [130, 60, 200, 0.95],
+                    [210, 120, 250, 1],
+                    [120, 120, 240, 1],
+                    [90, 90, 210, 0.95],
+                    [235, 170, 255, 0.9],
+                ],
+                backgroundColor: 'rgba(0, 0, 0, 0)',
+            };
+            
+            class Particle {
+                constructor() {
+                    const u = Math.random();
+                    const v = Math.random();
+                    const theta = 2 * Math.PI * u;
+                    const phi = Math.acos(2 * v - 1);
+                    this.baseR_factor = 0.75 + Math.random() * 0.25;
+                    const petalModulation = 1 + config.petalStrength * Math.sin(phi) * Math.cos(
+                        config.petalCount * theta + Math.PI / (Math.random() > 0.5 ? 2 : 1)
+                    );
+                    const effectiveR_factor = this.baseR_factor * petalModulation;
+                    this.x0 = effectiveR_factor * Math.sin(phi) * Math.cos(theta);
+                    this.y0 = effectiveR_factor * Math.sin(phi) * Math.sin(theta);
+                    this.z0 = effectiveR_factor * Math.cos(phi);
+                    const colorData = config.colorPalette[Math.floor(Math.random() * config.colorPalette.length)];
+                    this.color_r = colorData[0];
+                    this.color_g = colorData[1];
+                    this.color_b = colorData[2];
+                    this.baseAlphaMultiplier = colorData[3];
+                    this.baseSize = config.baseParticleMinSize + Math.random() * (config.baseParticleMaxSize - config.baseParticleMinSize);
+                    this.noiseAmp = 0.03 + Math.random() * 0.04;
+                    this.noiseFreq = 0.005 + Math.random() * 0.01;
+                    this.noisePhaseX = Math.random() * Math.PI * 2;
+                    this.noisePhaseY = Math.random() * Math.PI * 2;
+                    this.noisePhaseZ = Math.random() * Math.PI * 2;
+                    this.screenX = 0;
+                    this.screenY = 0;
+                    this.projectedSize = 0;
+                    this.alphaFactor = 0;
+                    this.depth = 0;
+                    this.currentDisplaySize = 0;
+                }
+                
+                projectAndTransform(currentSphereRadius, breathPulse) {
+                    const timeBasedNoisePhase = globalTime * this.noiseFreq;
+                    const dX = Math.sin(this.noisePhaseX + timeBasedNoisePhase) * this.noiseAmp;
+                    const dY = Math.cos(this.noisePhaseY + timeBasedNoisePhase) * this.noiseAmp;
+                    const dZ = Math.sin(this.noisePhaseZ + timeBasedNoisePhase) * this.noiseAmp;
+                    let x = this.x0 + dX;
+                    let y = this.y0 + dY;
+                    let z = this.z0 + dZ;
+                    let tempX_rotY = x * Math.cos(rotationY) - z * Math.sin(rotationY);
+                    let tempZ_rotY = x * Math.sin(rotationY) + z * Math.cos(rotationY);
+                    x = tempX_rotY;
+                    z = tempZ_rotY;
+                    let tempY_rotX = y * Math.cos(rotationX) - z * Math.sin(rotationX);
+                    let tempZ_rotX = y * Math.sin(rotationX) + z * Math.cos(rotationX);
+                    y = tempY_rotX;
+                    z = tempZ_rotX;
+                    const exitScale = getCurrentExitScale();
+                    const dynamicSphereRadius = currentSphereRadius * (1 + breathPulse * config.breathAmplitude) * exitScale;
+                    const perspectiveFactor = config.focalLength / (config.focalLength - z * dynamicSphereRadius * 0.8);
+                    this.screenX = centerX + x * dynamicSphereRadius * perspectiveFactor;
+                    this.screenY = centerY + y * dynamicSphereRadius * perspectiveFactor;
+                    const normalizedDepth = z;
+                    this.projectedSize = Math.max(0.1, this.baseSize * perspectiveFactor * ((normalizedDepth + 1.2) / 2.2));
+                    this.alphaFactor = Math.max(0.1, Math.min(1, ((normalizedDepth + 1.5) / 2.5) * this.baseAlphaMultiplier));
+                    this.depth = z;
+                    this.currentDisplaySize = this.projectedSize;
+                }
+                
+                draw() {
+                    if (this.currentDisplaySize <= 0.15) return;
+                    const mainAlpha = this.alphaFactor;
+                    if (mainAlpha <= 0.02) return;
+                    const mainSize = this.currentDisplaySize;
+                    
+                    const haloLayers = [
+                        { sizeFactor: 5, alphaFactor: 0.12 },
+                        { sizeFactor: 3.5, alphaFactor: 0.18 },
+                        { sizeFactor: 2.2, alphaFactor: 0.28 },
+                    ];
+                    
+                    for (const layer of haloLayers) {
+                        const haloSize = mainSize * layer.sizeFactor;
+                        const haloAlpha = mainAlpha * layer.alphaFactor;
+                        if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
+                        const gradient = ctx.createRadialGradient(
+                            this.screenX, this.screenY, haloSize * 0.1,
+                            this.screenX, this.screenY, haloSize
+                        );
+                        gradient.addColorStop(0, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`);
+                        gradient.addColorStop(0.6, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.4})`);
+                        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    const coreGradient = ctx.createRadialGradient(
+                        this.screenX, this.screenY, 0,
+                        this.screenX, this.screenY, mainSize
+                    );
+                    coreGradient.addColorStop(0, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`);
+                    coreGradient.addColorStop(1, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`);
+                    ctx.fillStyle = coreGradient;
+                    ctx.beginPath();
+                    ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+            
+            function setupCanvas() {
+                const dpr = window.devicePixelRatio || 1;
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.resetTransform();
+                ctx.scale(dpr, dpr);
+                centerX = width / 2;
+                centerY = height / 2;
+                config.sphereBaseRadius = Math.min(width, height) * 0.1584;
+            }
+            
+            function init() {
+                setupCanvas();
+                particles = [];
+                for (let i = 0; i < config.particleCount; i++) {
+                    particles.push(new Particle());
+                }
+            }
+            
+            function animate(now) {
+                now = now || performance.now();
+                const delta = lastFrameTime != null ? Math.min(now - lastFrameTime, 50) : 16;
+                lastFrameTime = now;
+                globalTime++;
+                const d = delta * ROTATION_DELTA_NORM;
+                rotationX += config.rotationSpeedX * d;
+                rotationY += config.rotationSpeedY * d;
+                
+                ctx.fillStyle = config.backgroundColor;
+                ctx.clearRect(0, 0, width, height);
+                
+                const breathPulse = Math.sin(globalTime * config.breathSpeed);
+                
+                // Оптимизированный цикл: вычисляем и рисуем в одном проходе
+                // Используем обычный for вместо forEach для лучшей производительности
+                for (let i = 0; i < particles.length; i++) {
+                    const particle = particles[i];
+                    particle.projectAndTransform(config.sphereBaseRadius, breathPulse);
+                    particle.draw();
+                }
+                
+                animationFrameId = requestAnimationFrame(animate);
+            }
+            
+            function setExitStartTime() {
+                exitScaleStartTime = performance.now();
+            }
+            
+            function getExitPromise() {
+                return new Promise(function(resolve) {
+                    setTimeout(resolve, EXIT_DURATION_MS + 100);
+                });
+            }
+            
+            function resizeHandler() {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                init();
+                if (!animationFrameId) {
+                    animationFrameId = requestAnimationFrame(animate);
+                }
+            }
+            
+            function start() {
+                init();
+                if (!animationFrameId) {
+                    animationFrameId = requestAnimationFrame(animate);
+                }
+                if (window._earlySphereAnimation) window._earlySphereAnimation.isRunning = true;
+            }
+            
+            function stop() {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                if (window._earlySphereAnimation) window._earlySphereAnimation.isRunning = false;
+            }
+            
+            function getState() {
+                return {
+                    globalTime: globalTime,
+                    rotationX: rotationX,
+                    rotationY: rotationY
+                };
+            }
+            
+            // Запускаем анимацию сразу
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', start);
+            } else {
+                start();
+            }
+            
+            window.addEventListener('resize', resizeHandler);
+            
+            // Сохраняем ссылку для плавного перехода к основной анимации
+            window._earlySphereAnimation = {
+                isRunning: false,
+                start: start,
+                stop: stop,
+                resize: resizeHandler,
+                getState: getState,
+                setExitStartTime: setExitStartTime,
+                getExitPromise: getExitPromise
+            };
+        })();
+        </script>
         <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
+            <div id="staticHeaderWrapper">
             <header class="mb-4">
                 <div class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-3">
                     <div>
@@ -2308,6 +768,22 @@
                         <i class="fas fa-user-secret mr-1"></i>
                         <span class="hidden sm:inline">Черный список жаб</span>
                     </button>
+                    <button
+                        id="fnsCertTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        aria-controls="fnsCertContent"
+                    >
+                        <i class="fas fa-certificate mr-1"></i>
+                        <span class="hidden sm:inline">Проверка сертификата на отзыв</span>
+                    </button>
+                    <button
+                        id="xmlAnalyzerTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        aria-controls="xmlAnalyzerContent"
+                    >
+                        <i class="fas fa-file-code mr-1"></i>
+                        <span class="hidden sm:inline">Анализатор XML</span>
+                    </button>
                     <div class="relative group ml-auto md:ml-1 shrink-0">
                         <button
                             id="moreTabsBtn"
@@ -2322,28 +798,39 @@
                     </div>
                 </nav>
             </div>
+            </div>
 
             <!-- Главная -->
             <div id="mainContent" class="tab-content">
                 <div class="p-content rounded-lg shadow-md">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-content">
-                        <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
-                            <div
-                                class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-content-sm"
-                            >
-                                <h2 class="text-xl font-bold flex-shrink min-w-0">
-                                    Главный алгоритм работы (значения можно редактировать под ваши
-                                    нужды)
-                                </h2>
+                        <div id="mainAlgoCard" class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                            <div class="flex flex-nowrap justify-between items-center gap-2 mb-2 min-w-0">
+                                <div id="mainAlgoToolbar" class="flex flex-nowrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 min-w-0 shrink">
+                                    <label class="flex items-center gap-1 cursor-pointer shrink-0">
+                                        <input type="checkbox" id="mainAlgoHeadersOnly" class="form-checkbox h-3.5 w-3.5 text-primary rounded border-gray-300 dark:border-gray-600">
+                                        <span class="whitespace-nowrap">Только заголовки</span>
+                                    </label>
+                                    <span class="text-gray-400 dark:text-gray-500 shrink-0">|</span>
+                                    <span class="flex items-center gap-1 shrink-0">
+                                        <span>Вид:</span>
+                                        <button type="button" id="mainAlgoDensityNormal" class="main-algo-density-btn px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs" data-density="normal">Обычный</button>
+                                        <button type="button" id="mainAlgoDensityCompact" class="main-algo-density-btn px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs" data-density="compact">Компактный</button>
+                                    </span>
+                                </div>
                                 <button
                                     id="editMainBtn"
-                                    class="p-1.5 lg:px-3 lg:py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition sm:self-start flex-shrink-0 border-b"
+                                    class="p-1 lg:px-2 lg:py-1 bg-primary hover:bg-secondary text-white rounded-md transition flex-shrink-0 text-xs lg:text-sm"
                                     title="Редактировать"
                                 >
                                     <i class="fas fa-edit fa-xs lg:mr-1"></i>
                                     <span class="hidden lg:inline">Редактировать</span>
                                 </button>
                             </div>
+                            <h2 class="text-xl font-bold flex-shrink min-w-0 mb-content-sm">
+                                Главный алгоритм работы (значения можно редактировать под ваши
+                                нужды)
+                            </h2>
                             <div id="mainAlgorithm" class="space-y-content-sm">
                                 <div
                                     class="algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm border-l-4 border-primary"
@@ -2417,17 +904,32 @@
 
                         <div class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md">
                             <div
-                                class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-content-sm"
+                                class="flex flex-row flex-nowrap justify-between items-center gap-3 mb-content-sm"
                             >
-                                <h2 class="text-lg font-bold">Информация по обращению</h2>
-                                <div class="flex justify-end gap-2 p-2">
+                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0">Информация по обращению</h2>
+                                <div class="flex flex-row flex-nowrap items-center justify-end gap-2 flex-shrink-0">
+                                    <button
+                                        type="button"
+                                        id="openClientNotesWindowBtn"
+                                        class="p-2 lg:px-3 lg:py-1.5 min-w-[5.5rem] bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition text-sm flex items-center justify-center shrink-0"
+                                        title="Открыть в отдельном окне (в этой вкладке)"
+                                    >
+                                        <i class="fas fa-window-restore"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="openClientNotesPopupBtn"
+                                        class="p-2 lg:px-3 lg:py-1.5 min-w-[5.5rem] bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition text-sm flex items-center justify-center shrink-0"
+                                        title="Открыть в отдельном окне (можно закрепить поверх всех через PowerToys или Floaty)"
+                                    >
+                                        <i class="fas fa-thumbtack"></i>
+                                    </button>
                                     <button
                                         id="clearClientDataBtn"
-                                        class="p-2 lg:px-3 lg:py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition text-sm flex items-center border-b"
-                                        title="Очистить"
+                                        class="p-2 lg:px-3 lg:py-1.5 min-w-[5.5rem] bg-primary hover:bg-secondary text-white rounded-md transition text-sm flex items-center justify-center shrink-0"
+                                        title="Удалить"
                                     >
-                                        <i class="fas fa-trash"></i>
-                                        <span class="hidden lg:inline lg:ml-1">Очистить</span>
+                                        <span>Удалить</span>
                                     </button>
                                 </div>
                             </div>
@@ -2438,7 +940,7 @@
                                     id="clientNotes"
                                     rows="20"
                                     placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
-                                    class="w-full p-1 resize-none bg-gray-50 dark:bg-gray-800 border-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 custom-scrollbar"
+                                    class="w-full p-1 resize-y bg-gray-50 dark:bg-gray-800 border-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 custom-scrollbar"
                                 ></textarea>
                             </div>
                         </div>
@@ -2472,6 +974,13 @@
                                     <i class="fas fa-list"></i>
                                 </button>
                             </div>
+                            <button
+                                type="button"
+                                data-algorithm-export="programAlgorithms"
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition"
+                            >
+                                Экспорт всех алгоритмов в PDF
+                            </button>
                             <button
                                 id="addProgramAlgorithmBtn"
                                 class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
@@ -2516,6 +1025,13 @@
                                 </button>
                             </div>
                             <button
+                                type="button"
+                                data-algorithm-export="skziAlgorithms"
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition"
+                            >
+                                Экспорт всех алгоритмов в PDF
+                            </button>
+                            <button
                                 id="addSkziAlgorithmBtn"
                                 class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
                             >
@@ -2559,6 +1075,13 @@
                                 </button>
                             </div>
                             <button
+                                type="button"
+                                data-algorithm-export="lk1cAlgorithms"
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition"
+                            >
+                                Экспорт всех алгоритмов в PDF
+                            </button>
+                            <button
                                 id="addLk1cAlgorithmBtn"
                                 class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
                             >
@@ -2601,6 +1124,13 @@
                                     <i class="fas fa-list"></i>
                                 </button>
                             </div>
+                            <button
+                                type="button"
+                                data-algorithm-export="webRegAlgorithms"
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition"
+                            >
+                                Экспорт всех алгоритмов в PDF
+                            </button>
                             <button
                                 id="addWebRegAlgorithmBtn"
                                 class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
@@ -2775,14 +1305,16 @@
                                 role="group"
                             >
                                 <button
-                                    class="view-toggle p-1.5 rounded"
+                                    type="button"
+                                    class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300"
                                     data-view="cards"
                                     title="Вид карточек"
                                 >
                                     <i class="fas fa-th-large"></i>
                                 </button>
                                 <button
-                                    class="view-toggle p-1.5 rounded"
+                                    type="button"
+                                    class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300"
                                     data-view="list"
                                     title="Вид списка"
                                 >
@@ -2790,16 +1322,16 @@
                                 </button>
                             </div>
                             <button
-                                id="addBookmarkBtn"
-                                class="px-3 py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition flex items-center"
-                            >
-                                <i class="fas fa-plus mr-2"></i>Добавить
-                            </button>
-                            <button
                                 id="organizeBookmarksBtn"
                                 class="px-3 py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition flex items-center"
                             >
                                 <i class="fas fa-folder mr-2"></i>Управление папками
+                            </button>
+                            <button
+                                id="addBookmarkBtn"
+                                class="px-3 py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition flex items-center"
+                            >
+                                <i class="fas fa-plus mr-2"></i>Добавить
                             </button>
                         </div>
                     </div>
@@ -2898,7 +1430,7 @@
                         class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content"
                     >
                         <h2 class="text-2xl font-bold">Внешние ресурсы</h2>
-                        <div class="flex items-center gap-2 flex-wrap">
+                        <div class="flex items-center gap-2 flex-wrap flex-shrink-0">
                             <div
                                 class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5"
                             >
@@ -2919,7 +1451,8 @@
                             </div>
                             <button
                                 id="addExtLinkBtn"
-                                class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
+                                type="button"
+                                class="min-w-[7rem] px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition inline-flex items-center justify-center"
                             >
                                 <i class="fas fa-plus mr-2"></i>Добавить
                             </button>
@@ -2988,12 +1521,131 @@
                 </div>
             </div>
 
+            <!-- Проверка сертификата на отзыв: зона загрузки, кнопка сброса, результат -->
+            <div id="fnsCertContent" class="tab-content hidden" aria-labelledby="fnsCertTab">
+                <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md fns-cert-shell">
+                    <h2 class="text-2xl font-bold mb-3 text-gray-900 dark:text-gray-100">Проверка сертификата (БЕТА)</h2>
+                    <div id="fnsCertProbeStatus" class="hidden mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm">
+                        <span class="inline-block w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true"></span>
+                        <span class="text-sm text-gray-600 dark:text-gray-300">Проверяем подключение…</span>
+                    </div>
+                    <div id="fnsCertInstallGate" class="hidden"></div>
+                    <div id="fnsCertMainBlock" class="hidden">
+                        <p id="fnsCertWelcome" class="text-gray-700 dark:text-gray-300 text-sm sm:text-base mb-2 max-w-3xl">
+                            Перетащите файл или выберите его вручную по клику на поле ниже.
+                        </p>
+                        <p class="text-sm sm:text-base text-green-700 dark:text-green-400 mb-4 flex items-center gap-2">
+                            <i class="fas fa-shield-alt text-base sm:text-lg"></i>
+                            <span>Сертификат остается только на вашем компьютере и не загружается на сервер.</span>
+                        </p>
+                        <div class="bg-white dark:bg-gray-700 p-6 rounded-xl border border-gray-200 dark:border-gray-600 space-y-4">
+                            <div id="fnsCertDropZone" class="fns-drop-zone border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-gray-50/50 dark:hover:bg-gray-600/30 transition-colors duration-200">
+                                <input type="file" id="fnsCertFileInput" accept=".pem,.cer,.crt,.der" class="hidden" />
+                                <p id="fnsCertDropZoneHint" class="text-gray-600 dark:text-gray-400 text-sm transition-colors duration-150">
+                                    <i class="fas fa-certificate mr-2 text-gray-400"></i>
+                                    Перетащите сертификат сюда или нажмите для выбора
+                                </p>
+                            </div>
+                            <div id="fnsCertInfo" class="text-sm text-gray-700 dark:text-gray-200"></div>
+                            <div id="fnsCrlDetails" class="text-sm text-gray-600 dark:text-gray-300 hidden"></div>
+                            <div class="flex flex-col sm:flex-row sm:items-stretch gap-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                <button
+                                    type="button"
+                                    id="fnsCertResetBtn"
+                                    class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-secondary text-white shadow-sm transition-colors"
+                                >
+                                    <i class="fas fa-rotate-left mr-2"></i>
+                                    <span>Сброс</span>
+                                </button>
+                                <div id="fnsCrlStatus" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 min-h-[2.5rem] leading-relaxed">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XMLизатор -->
+            <div id="xmlAnalyzerContent" class="tab-content hidden p-4" aria-labelledby="xmlAnalyzerTab">
+                <div class="xml-analyzer-shell h-full flex flex-col gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">XMLизатор</h2>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button type="button" id="xmlAnalyzerResetBtn" class="flex-shrink-0 px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i class="fas fa-redo mr-1"></i>Сбросить
+                            </button>
+                            <button type="button" id="xmlAnalyzerAnalyzeBtn" class="flex-shrink-0 min-w-[140px] font-bold py-2 px-4 rounded-lg bg-primary hover:bg-secondary text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center" disabled>
+                                <span id="xmlAnalyzerAnalyzeBtnContent">Анализировать</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+                        <div id="xmlAnalyzerInputContainer" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                            <div id="xmlAnalyzerInitialView" class="flex flex-col flex-grow">
+                                <div id="xmlAnalyzerDropZone" class="flex flex-col flex-grow min-h-0 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl overflow-hidden transition-colors">
+                                    <textarea id="xmlAnalyzerDataInput" class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none" placeholder="Вставьте XML рег.файла, JSON СЭДО, XML ЕФС из 1С или перетащите файл (.xml, .zip, .txt, .json)... (Ctrl+Enter для анализа)"></textarea>
+                                </div>
+                                <div class="flex gap-2 mt-4">
+                                    <button type="button" id="xmlAnalyzerLoadFileBtn" class="px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                        <i class="fas fa-upload mr-1"></i>Загрузить для анализа
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="xmlAnalyzerCertManagerWrapper" class="hidden flex-col h-full bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 p-4">
+                                <h3 class="text-lg font-bold mb-2">Менеджер сертификатов</h3>
+                                <input type="search" id="xmlAnalyzerCertSearch" placeholder="Поиск по ИНН, названию, ФИО..." class="w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 mb-4">
+                                <div id="xmlAnalyzerCertList" class="flex-grow overflow-y-auto space-y-2 min-h-[100px]"></div>
+                                <div id="xmlAnalyzerCertPlaceholder" class="hidden text-center text-gray-500 dark:text-gray-400 py-4">Сертификаты не найдены.</div>
+                                <button type="button" id="xmlAnalyzerExportZipBtn" class="w-full mt-4 py-2 rounded-lg bg-gray-500 hover:bg-gray-600 text-white font-semibold disabled:opacity-50" disabled>Экспортировать все в ZIP</button>
+                            </div>
+                        </div>
+                        <div id="xmlAnalyzerOutputContainer" class="flex-1 min-h-0 hidden bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 overflow-y-auto">
+                            <div id="xmlAnalyzerPlaceholder" class="flex flex-col items-center justify-center text-center p-8 text-gray-500 dark:text-gray-400">
+                                <i class="fas fa-file-code text-4xl mb-4"></i>
+                                <p class="font-semibold">Готов к анализу</p>
+                                <p class="text-sm mt-1">Вставьте текст или выберите файл слева</p>
+                            </div>
+                            <div id="xmlAnalyzerOutput" class="p-6 hidden"></div>
+                        </div>
+                    </div>
+                    <div id="xmlAnalyzerNotificationContainer" class="fixed bottom-5 right-5 max-w-sm space-y-3 z-50 pointer-events-none"></div>
+                </div>
+                <div id="xmlAnalyzerCertModalOverlay" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm items-center justify-center p-4 z-[60]">
+                    <div id="xmlAnalyzerCertModal" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                        <header class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600">
+                            <h3 class="text-xl font-bold">Свойства сертификата</h3>
+                            <button type="button" id="xmlAnalyzerModalClose" class="h-8 w-8 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600">×</button>
+                        </header>
+                        <div id="xmlAnalyzerModalContent" class="flex-grow p-6 overflow-y-auto"></div>
+                    </div>
+                </div>
+                <div id="xmlAnalyzerSedoRawJsonViewer" class="hidden p-4 mt-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600"><pre class="text-xs overflow-auto max-h-64 whitespace-pre-wrap"></pre></div>
+                <template id="xmlAnalyzerAccordionSectionTemplate">
+                    <details class="overflow-hidden p-0 border border-gray-200 dark:border-gray-600 rounded-xl mb-3">
+                        <summary class="text-lg font-semibold cursor-pointer list-none flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><span class="accordion-title"></span><span class="accordion-toggle-container"><svg class="w-6 h-6 text-gray-500 accordion-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></span></summary>
+                        <div class="accordion-content p-4 rounded-b-xl border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50"></div>
+                    </details>
+                </template>
+                <template id="xmlAnalyzerInfoRowTemplate">
+                    <div class="flex justify-between items-start border-b border-dashed border-gray-200 dark:border-gray-700 py-2"><span class="info-key font-bold text-gray-600 dark:text-gray-400 pr-4"></span><span class="info-value text-right text-gray-800 dark:text-gray-200"></span></div>
+                </template>
+                <template id="xmlAnalyzerSedoRowTemplate">
+                    <tr class="sedo-message-row border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 cursor-pointer" title="Нажмите, чтобы увидеть полные данные"><td class="p-2 align-top"><span class="font-mono font-bold sedo-type"></span></td><td class="p-2 align-top"><span class="font-semibold sedo-sender"></span></td><td class="p-2 align-top"><p class="font-semibold text-gray-800 dark:text-gray-100 sedo-title"></p><p class="mt-1 text-xs sedo-status"></p></td><td class="p-2 align-top font-mono text-xs"><div class="sedo-date"></div><div class="sedo-delivered-at"></div></td></tr>
+                </template>
+                <template id="xmlAnalyzerCertListItemTemplate">
+                    <div class="cert-list-item flex items-center justify-between gap-4 p-3 rounded-lg hover:bg-sky-500/10 transition-colors cursor-pointer" title="Нажмите для просмотра деталей"><div class="cert-info flex-grow min-w-0"><p class="cert-org font-semibold truncate"></p><p class="cert-fio text-sm text-gray-500 dark:text-gray-400 truncate"></p><p class="cert-thumbprint text-xs font-mono text-gray-400 dark:text-gray-500 truncate"></p></div><div class="download-button-container flex-shrink-0"></div></div>
+                </template>
+                <template id="xmlAnalyzerLogEntryTemplate">
+                    <div class="log-entry p-3 rounded-lg bg-black/5 dark:bg-white/5"><div class="flex justify-between items-center"><span class="log-event font-semibold text-gray-800 dark:text-gray-200"></span><span class="log-date text-xs text-gray-500"></span></div><p class="log-level text-sm"></p><div class="log-comment-wrapper"></div></div>
+                </template>
+            </div>
+
             <!-- Модальные окна -->
             <div
                 id="algorithmModal"
-                class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto p-4"
             >
-                <div class="flex items-center justify-center min-h-full">
+                <div class="flex items-center justify-center min-h-full py-6">
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full">
                         <div class="p-content border-b border-gray-200 dark:border-gray-700">
                             <div
@@ -3034,7 +1686,7 @@
                         </div>
                         <div
                             id="algorithmSteps"
-                            class="p-content space-y-content-sm overflow-y-auto max-h-[calc(90vh-150px)]"
+                            class="p-content space-y-3 overflow-y-auto max-h-[calc(90vh-150px)]"
                         ></div>
                     </div>
                 </div>
@@ -3045,7 +1697,7 @@
                 id="editModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
             >
-                <div class="flex items-center justify-center min-h-full">
+                <div class="flex items-center justify-center min-h-full py-6">
                     <div
                         class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] flex flex-col"
                     >
@@ -3093,8 +1745,8 @@
                                 >
                                 <textarea
                                     id="algorithmDescription"
-                                    rows="3"
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    rows="6"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 modal-description-field min-h-[10rem]"
                                 ></textarea>
                             </div>
                             <h3 class="text-xl font-bold mb-3 text-gray-800 dark:text-gray-200">
@@ -3138,7 +1790,7 @@
             >
                 <div class="flex items-center justify-center min-h-full">
                     <div
-                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col"
                     >
                         <div class="p-content border-b border-gray-200 dark:border-gray-700">
                             <div class="flex justify-between items-center">
@@ -3185,8 +1837,8 @@
                                 >
                                 <textarea
                                     id="newAlgorithmDesc"
-                                    rows="3"
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                    rows="6"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 modal-description-field min-h-[10rem]"
                                 ></textarea>
                             </div>
 
@@ -3240,17 +1892,18 @@
                                     <div class="relative">
                                         <span
                                             id="employeeExtensionDisplay"
-                                            class="inline-block px-4 py-2 text-base border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-w-[180px] text-center align-middle"
+                                            class="employee-extension-field inline-block px-5 py-3 text-xl font-bold border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-w-[280px] text-center align-middle"
                                             title="Клик для редактирования"
                                         >
                                         </span>
                                         <input
                                             type="text"
                                             id="employeeExtensionInput"
-                                            class="inline-block px-4 py-2 text-base border-2 border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-900 hidden min-w-[180px] align-middle"
+                                            class="employee-extension-field inline-block px-5 py-3 text-xl font-bold border-2 border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-900 hidden min-w-[280px] align-middle"
                                             maxlength="4"
                                             pattern="\d*"
-                                            title="Введите доб. номер"
+                                            placeholder="Введите свой добавочный"
+                                            title="Введите свой добавочный"
                                         />
                                     </div>
                                     <button
@@ -3267,37 +1920,6 @@
                         <div class="p-content overflow-y-auto flex-1">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-content-lg">
                                 <div>
-                                    <div class="mb-content">
-                                        <label
-                                            class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                            >Ориентация главного экрана</label
-                                        >
-                                        <div class="flex space-x-3 mt-2">
-                                            <label class="flex items-center">
-                                                <input
-                                                    type="radio"
-                                                    name="mainLayout"
-                                                    value="horizontal"
-                                                    class="form-radio text-primary focus:ring-primary mr-2"
-                                                    checked
-                                                />
-                                                <span class="text-gray-700 dark:text-gray-300"
-                                                    >Горизонтальная</span
-                                                >
-                                            </label>
-                                            <label class="flex items-center">
-                                                <input
-                                                    type="radio"
-                                                    name="mainLayout"
-                                                    value="vertical"
-                                                    class="form-radio text-primary focus:ring-primary mr-2"
-                                                />
-                                                <span class="text-gray-700 dark:text-gray-300"
-                                                    >Вертикальная</span
-                                                >
-                                            </label>
-                                        </div>
-                                    </div>
                                     <div class="mb-content">
                                         <label
                                             class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
@@ -3669,6 +2291,68 @@
                                                 осторожностью.
                                             </p>
                                         </div>
+
+                                        <div
+                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                        >
+                                            <label
+                                                for="toggleStaticHeader"
+                                                class="flex items-center cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    id="toggleStaticHeader"
+                                                    name="staticHeader"
+                                                    class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                                                />
+                                                <span
+                                                    class="ml-3 text-sm text-gray-700 dark:text-gray-300"
+                                                    >Статичная панель</span
+                                                >
+                                            </label>
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
+                                            >
+                                                При включении шапка приложения остаётся закреплённой
+                                                сверху при прокрутке страницы.
+                                            </p>
+                                        </div>
+
+                                        <div
+                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                            id="manualHealthRunSection"
+                                        >
+                                            <div class="flex flex-wrap items-center gap-3">
+                                                <label
+                                                    for="toggleManualHealthRun"
+                                                    class="flex items-center cursor-pointer"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        id="toggleManualHealthRun"
+                                                        name="manualHealthRun"
+                                                        class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                                                    />
+                                                    <span
+                                                        class="ml-3 text-sm text-gray-700 dark:text-gray-300"
+                                                        >Ручной прогон систем</span
+                                                    >
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    id="runManualHealthCheckBtn"
+                                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <i class="fas fa-stethoscope mr-2"></i>Запустить полную проверку
+                                                </button>
+                                            </div>
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
+                                            >
+                                                Запускает полную диагностику: localStorage, IndexedDB, поисковый индекс,
+                                                алгоритмы, хранилища, автосохранение. Отчёт отображается в модальном окне.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3706,6 +2390,31 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно полного отчёта о состоянии здоровья приложения -->
+            <div
+                id="healthReportModal"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 overflow-y-auto flex items-center justify-center"
+            >
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col my-8">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <h2 class="text-xl font-bold">
+                            <i class="fas fa-heartbeat mr-2 text-primary"></i>Состояние здоровья приложения
+                        </h2>
+                        <button
+                            type="button"
+                            id="healthReportModalClose"
+                            class="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                            aria-label="Закрыть"
+                        >
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div id="healthReportModalBody" class="health-report-body p-4 overflow-y-auto flex-1 text-sm">
+                        <!-- Контент заполняется динамически -->
                     </div>
                 </div>
             </div>
@@ -3784,28 +2493,112 @@
                 </div>
             </div>
 
+            <!-- Модальное окно подтверждения выхода без сохранения -->
+            <div
+                id="unsavedConfirmModal"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 overflow-y-auto"
+                aria-modal="true"
+                role="dialog"
+                aria-labelledby="unsavedConfirmModalTitle"
+            >
+                <div class="flex items-center justify-center min-h-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700">
+                        <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                            <h2 id="unsavedConfirmModalTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                <i class="fas fa-exclamation-circle mr-2 text-amber-500"></i>Выход без сохранения
+                            </h2>
+                        </div>
+                        <div class="p-content">
+                            <p id="unsavedConfirmModalMessage" class="text-gray-700 dark:text-gray-300">
+                                Изменения не сохранены. Вы действительно хотите выйти без сохранения?
+                            </p>
+                        </div>
+                        <div class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg">
+                            <button type="button" id="unsavedConfirmCancelBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition font-medium">
+                                Отмена
+                            </button>
+                            <button type="button" id="unsavedConfirmLeaveBtn" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-md transition font-medium">
+                                Да, выйти без сохранения
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Универсальное модальное окно подтверждения/алерта (в стилистике приложения) -->
+            <div
+                id="appConfirmModal"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 overflow-y-auto"
+                aria-modal="true"
+                role="dialog"
+                aria-labelledby="appConfirmModalTitle"
+            >
+                <div class="flex items-center justify-center min-h-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700">
+                        <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                            <h2 id="appConfirmModalTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                <i class="fas fa-info-circle mr-2 text-primary"></i>Подтверждение
+                            </h2>
+                        </div>
+                        <div class="p-content">
+                            <p id="appConfirmModalMessage" class="text-gray-700 dark:text-gray-300"></p>
+                        </div>
+                        <div id="appConfirmModalButtons" class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно "Вернись к клиенту" (таймер): большое, пульсирующий неоново-красный стиль -->
+            <div
+                id="timerReturnToClientModal"
+                class="fixed inset-0 bg-black bg-opacity-60 hidden z-[75] p-4 overflow-y-auto timer-return-to-client-modal"
+                aria-modal="true"
+                role="dialog"
+                aria-labelledby="timerReturnToClientModalTitle"
+            >
+                <div class="flex items-center justify-center min-h-full">
+                    <div id="timerReturnToClientModalBox" class="timer-return-to-client-modal-box bg-gray-900 rounded-xl shadow-2xl max-w-2xl w-full border-4 border-red-500 p-8 text-center">
+                        <h2 id="timerReturnToClientModalTitle" class="text-2xl sm:text-3xl font-bold text-white uppercase tracking-wide mb-4">
+                            Вернись к клиенту, потом всё остальное!
+                        </h2>
+                        <p class="text-xl text-red-200 mb-6">
+                            Не получай снижение в прослушке!
+                        </p>
+                        <button
+                            type="button"
+                            id="timerReturnToClientModalCloseBtn"
+                            class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition"
+                        >
+                            Понятно
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Модальное окно Ссылки 1С -->
             <div
                 id="cibLinkModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
             >
                 <div class="flex items-center justify-center min-h-full">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full">
-                        <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                        <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                             <div class="flex justify-between items-center">
-                                <h2 id="cibLinkModalTitle" class="text-xl font-bold">
+                                <h2 id="cibLinkModalTitle" class="text-2xl font-bold text-gray-900 dark:text-gray-100">
                                     Добавить ссылку 1С
                                 </h2>
                                 <button
+                                    type="button"
                                     class="close-modal p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    title="Закрыть"
+                                    title="Закрыть (Esc)"
                                 >
                                     <i class="fas fa-times text-xl"></i>
                                 </button>
                             </div>
                         </div>
-                        <form id="cibLinkForm">
-                            <div class="p-content space-y-4">
+                        <form id="cibLinkForm" class="flex flex-col flex-1 min-h-0">
+                            <div class="p-content overflow-y-auto flex-1 space-y-4">
                                 <input type="hidden" id="cibLinkId" />
                                 <div>
                                     <label
@@ -3817,7 +2610,7 @@
                                         type="text"
                                         id="cibLinkTitle"
                                         required
-                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     />
                                 </div>
                                 <div>
@@ -3831,7 +2624,7 @@
                                         id="cibLinkValue"
                                         required
                                         placeholder="e1cib/list/РегистрСведений.ЧтоТоТам"
-                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     />
                                 </div>
                                 <div>
@@ -3842,18 +2635,16 @@
                                     >
                                     <textarea
                                         id="cibLinkDescription"
-                                        rows="3"
-                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                        rows="5"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 modal-description-field min-h-[10rem]"
                                     ></textarea>
                                 </div>
                             </div>
-                            <div
-                                class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto"
-                            >
+                            <div class="p-content border-t border-gray-200 dark:border-gray-600 flex-shrink-0">
                                 <div class="flex justify-end gap-2">
                                     <button
                                         type="button"
-                                        class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition"
+                                        class="cancel-modal px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition"
                                     >
                                         Отмена
                                     </button>
@@ -4020,11 +2811,10 @@
                                         </li>
                                         <li>
                                             <code class="hotkey-code"
-                                                >Ctr + ЛКМ (внутри поля ввода данных по
-                                                клиенту)</code
+                                                >Ctrl (Win/Linux) или Cmd (Mac) + ЛКМ</code
                                             >
-                                            Позволяет по единичному нажатию комбинации сразу и
-                                            удобно копировать ИНН клиента в буфер обмена (при
+                                            — внутри поля ввода данных по клиенту: по одному нажатию
+                                            комбинации копирует ИНН клиента в буфер обмена (при
                                             наличии фокуса в поле ввода).
                                         </li>
                                     </ul>
@@ -4114,30 +2904,22 @@
                                             <b>Таймер:</b>
                                             <ul class="list-disc list-inside pl-5 mt-1 space-y-1">
                                                 <li>
-                                                    Нажатие
-                                                    <i class="fas fa-play w-4 text-center"></i> /
-                                                    <i class="fas fa-pause w-4 text-center"></i>:
-                                                    Старт/Пауза.
+                                                    <code class="hotkey-code">Ctrl + Alt + T</code> — Старт/пауза.
                                                 </li>
                                                 <li>
-                                                    Нажатие
-                                                    <i class="fas fa-undo w-4 text-center"></i>:
-                                                    Сброс на стандартное время.
+                                                    <code class="hotkey-code">Ctrl + Alt + R</code> — Сброс.
                                                 </li>
                                                 <li>
-                                                    <code class="hotkey-code">Ctrl</code> + Нажатие
-                                                    <i class="fas fa-undo w-4 text-center"></i>:
-                                                    Сброс на 00:00.
+                                                    <code class="hotkey-code">Ctrl + Alt + +</code> / <code class="hotkey-code">Ctrl + Alt + −</code> — Увеличить/уменьшить время на 5 сек.
                                                 </li>
                                                 <li>
-                                                    Нажатие
-                                                    <i class="fas fa-plus w-4 text-center"></i>:
-                                                    Увеличить время.
+                                                    Кнопки <i class="fas fa-plus w-4 text-center"></i>/<i class="fas fa-minus w-4 text-center"></i>: без модификатора ±5 сек, с <code class="hotkey-code">Ctrl</code> ±10 сек, с <code class="hotkey-code">Ctrl + Shift</code> ±30 сек.
                                                 </li>
                                                 <li>
-                                                    Нажатие
-                                                    <i class="fas fa-minus w-4 text-center"></i>:
-                                                    Уменьшить время.
+                                                    <code class="hotkey-code">Ctrl</code> + кнопка сброса — Сброс на 00:00.
+                                                </li>
+                                                <li class="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                                                    На macOS: используйте <code class="hotkey-code">Ctrl + Option</code> (не Cmd).
                                                 </li>
                                             </ul>
                                         </li>
@@ -4233,6 +3015,16 @@
             </div>
         </div>
 
+        <!-- Кнопки прокрутки вверх/вниз для длинных страниц -->
+        <div id="scrollNavButtons" class="fixed right-6 bottom-24 z-40 flex flex-col gap-2 opacity-0 pointer-events-none transition-opacity duration-200" aria-hidden="true">
+            <button type="button" id="scrollUpBtn" class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Прокрутить вверх">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+            <button type="button" id="scrollDownBtn" class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Прокрутить вниз">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
+
         <div id="app-copyright" class="p-3 text-center text-2xs">
             Copilot 1CO by @guthleifur -
             <a
@@ -4245,6 +3037,30 @@
             для репорта об ошибках и предложений по усовершенстованию
         </div>
 
-        <script src="./script.js"></script>
+        <script type="module">
+            // Обработка ошибок загрузки модулей
+            window.addEventListener('error', (event) => {
+                console.error('Ошибка загрузки:', event);
+                const filename = event.filename || event.target?.src || '';
+                if (filename && (filename.includes('.js') || filename.includes('module'))) {
+                    const appContent = document.getElementById('appContent');
+                    if (appContent && appContent.classList.contains('hidden')) {
+                        appContent.classList.remove('hidden');
+                        console.error('Обнаружена ошибка загрузки модуля. Показываем контент.');
+                    }
+                }
+            }, true);
+            
+            // Обработка необработанных промисов
+            window.addEventListener('unhandledrejection', (event) => {
+                console.error('Необработанная ошибка промиса:', event.reason);
+                const appContent = document.getElementById('appContent');
+                if (appContent && appContent.classList.contains('hidden')) {
+                    appContent.classList.remove('hidden');
+                }
+            });
+        </script>
+        <script type="module" src="./script.js?v=20260307-pr129-164157"></script>
+        <script type="module" src="./js/entry.js?v=20260307-pr129-164157"></script>
     </body>
 </html>

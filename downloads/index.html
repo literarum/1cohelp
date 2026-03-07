@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Скачать приложение — проверка отзыва сертификата | Copilot 1СО 2.0</title>
+    <link
+        rel="icon"
+        href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon</title><defs><style>.sos-text{font-family:sans-serif;font-size:12px;font-weight:bold;fill:%23DC2626}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text" text-anchor="middle" dominant-baseline="central">SOS</text></svg>'
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { primary: '#9933FF', secondary: '#7B2FDF' } } }
+        };
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        a.download-link:hover { opacity: 0.9; transform: translateY(-1px); }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="max-w-2xl mx-auto px-4 py-10">
+        <a href="/" class="inline-block text-primary hover:underline mb-6">← Назад на сайт</a>
+        <h1 class="text-2xl font-semibold mb-2">Приложение для автоматической проверки отзыва сертификата</h1>
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+            Установите приложение один раз на компьютер. После запуска проверка отзыва на сайте будет работать автоматически — вводить команды не нужно. При желании можно включить автозапуск при входе в систему.
+        </p>
+        <div id="downloadArea" class="space-y-4">
+            <button
+                id="downloadBtn"
+                type="button"
+                class="download-link w-full flex items-center justify-center gap-3 p-6 rounded-lg border-2 border-primary bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:hover:bg-primary/30 text-primary font-semibold text-lg transition cursor-pointer"
+            >
+                <span id="downloadIcon" class="text-3xl">⬇️</span>
+                <div class="text-left">
+                    <span id="downloadLabel">Определение системы...</span>
+                    <span class="block text-sm font-normal text-gray-500 dark:text-gray-400" id="downloadSub">Загрузка и установка в один клик</span>
+                </div>
+            </button>
+            <p class="text-center">
+                <button type="button" id="manualBtn" class="text-sm text-primary hover:underline">Выбрать систему вручную</button>
+            </p>
+            <div id="manualChoice" class="hidden space-y-2">
+                <button type="button" data-os="windows" class="manual-dl w-full block p-3 rounded border text-center hover:bg-gray-100 dark:hover:bg-gray-800">🪟 Windows</button>
+                <button type="button" data-os="macos" class="manual-dl w-full block p-3 rounded border text-center hover:bg-gray-100 dark:hover:bg-gray-800">🍎 macOS</button>
+                <button type="button" data-os="linux" class="manual-dl w-full block p-3 rounded border text-center hover:bg-gray-100 dark:hover:bg-gray-800">🐧 Linux</button>
+            </div>
+        </div>
+        <p class="mt-6 text-sm text-gray-500 dark:text-gray-400">
+            Файл скачается автоматически. Для macOS и Linux сначала распакуйте ZIP, затем запустите <code>CRL-Helper</code> из архива.
+        </p>
+        <script>
+(function(){
+var FALLBACKS = {
+    windows: ['/files/CRL-Helper-windows.exe', '/downloads/CRL-Helper-windows.exe', 'https://raw.githubusercontent.com/literarum/Copilot-1CO-2.0/main/site/files/CRL-Helper-windows.exe'],
+    macos: ['/files/CRL-Helper-macos.zip', '/downloads/CRL-Helper-macos', 'https://raw.githubusercontent.com/literarum/Copilot-1CO-2.0/main/site/files/CRL-Helper-macos.zip'],
+    linux: ['/files/CRL-Helper-linux.zip', '/downloads/CRL-Helper-linux', 'https://raw.githubusercontent.com/literarum/Copilot-1CO-2.0/main/site/files/CRL-Helper-linux.zip']
+};
+var LABELS={windows:'Загрузить для Windows',macos:'Загрузить для macOS',linux:'Загрузить для Linux'};
+var ICONS={windows:'🪟',macos:'🍎',linux:'🐧'};
+function detectOS(){
+    var ua=navigator.userAgent;var plat=navigator.platform||'';
+    if(/Win/i.test(ua)||/Windows/i.test(ua)||plat.indexOf('Win')>=0)return'windows';
+    if(/Mac/i.test(ua)||/iPhone|iPad/i.test(ua)||plat.indexOf('Mac')>=0)return'macos';
+    return'linux';
+}
+var os=detectOS();
+var btn=document.getElementById('downloadBtn');
+var icon=document.getElementById('downloadIcon');
+var label=document.getElementById('downloadLabel');
+var sub=document.getElementById('downloadSub');
+var manualBtn=document.getElementById('manualBtn');
+var manualChoice=document.getElementById('manualChoice');
+function setFor(osId){
+    os=osId;
+    icon.textContent=ICONS[os];
+    label.textContent=LABELS[os];
+    sub.textContent=FALLBACKS[os][0].split('/').pop();
+}
+async function isHtmlLikeBlob(blob){
+    if(!blob||blob.size===0)return true;
+    var text=await blob.slice(0,1024).text();
+    var t=text.trim().toLowerCase();
+    return t.indexOf('<!doctype html')===0||t.indexOf('<html')===0||t.indexOf('<head')>=0||t.indexOf('<body')>=0;
+}
+async function fetchDownloadBlob(url){
+    var r=await fetch(url,{method:'GET',cache:'no-store'});
+    if(!r.ok)return{ok:false,reason:'missing'};
+    var ct=(r.headers.get('Content-Type')||'').toLowerCase();
+    var blob=await r.blob();
+    if(ct.indexOf('text/html')>=0||ct.indexOf('text/plain')>=0)return{ok:false,reason:'html'};
+    if(await isHtmlLikeBlob(blob))return{ok:false,reason:'html'};
+    return{ok:true,blob:blob};
+}
+function triggerBlobDownload(blob,url){
+    var objectUrl=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=objectUrl;
+    a.download=url.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+}
+async function doDownloadFor(osId){
+    var urls=FALLBACKS[osId];
+    var result=null;
+    var finalUrl=null;
+    for(var i=0;i<urls.length;i++){
+        try{
+            var r=await fetchDownloadBlob(urls[i]);
+            if(r.ok){result=r;finalUrl=urls[i];break;}
+        }catch(e){}
+    }
+    if(!result||!result.ok){
+        alert('Сборка для '+(osId==='windows'?'Windows':osId==='macos'?'macOS':'Linux')+' пока недоступна');
+        label.textContent='Сборка для '+(osId==='windows'?'Windows':osId==='macos'?'macOS':'Linux')+' пока недоступна';
+        return;
+    }
+    triggerBlobDownload(result.blob,finalUrl);
+}
+setFor(os);
+btn.onclick=function(){doDownloadFor(os);};
+manualBtn.onclick=function(){
+    manualChoice.classList.toggle('hidden');
+};
+manualChoice.querySelectorAll('.manual-dl').forEach(function(b){
+    b.onclick=function(){
+        var o=b.getAttribute('data-os');
+        doDownloadFor(o);
+    };
+});
+})();
+        </script>
+    </div>
+</body>
+</html>

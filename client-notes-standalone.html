@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Заметки по обращению — Copilot 1СО 2.0</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='4' width='24' height='24' rx='4' fill='none' stroke='%23DC2626' stroke-width='2'/><text x='16' y='16' font-size='12' font-weight='bold' fill='%23DC2626' text-anchor='middle' dominant-baseline='central'>SOS</text></svg>" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="css/tailwind.generated.css" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/inline-styles.css" />
+    <link rel="stylesheet" href="css/inline-styles.css" />
+    <link rel="stylesheet" href="css/inline-styles.css" />
+    <link rel="stylesheet" href="css/inline-styles.css" />
+    <style>
+        body { min-height: 100vh; margin: 0; }
+        #clientNotesStandalone { font-family: inherit; }
+    </style>
+    <script>
+        (function() {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.classList.add('dark');
+            }
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                document.documentElement.classList.toggle('dark', e.matches);
+            });
+        })();
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="flex flex-col h-screen p-3">
+        <div class="flex items-center justify-between gap-2 mb-2 flex-shrink-0">
+            <h1 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Информация по обращению</h1>
+        </div>
+        <div id="pinHint" class="app-hint mb-2">
+            <strong>Закрепить поверх всех окон:</strong>
+            <span id="pinHintText">Windows: PowerToys (Win+Ctrl+T) · macOS: Floaty или Rectangle · Linux: зависит от WM (KWin, Compiz)</span>
+            <button type="button" id="dismissPinHint" class="app-hint-action ml-2" title="Скрыть подсказку">Скрыть</button>
+        </div>
+        <textarea
+            id="clientNotesStandalone"
+            class="flex-1 w-full min-h-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base resize-none focus:ring-2 focus:ring-primary focus:border-primary custom-scrollbar"
+            placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
+        ></textarea>
+    </div>
+    <script>
+(function() {
+    'use strict';
+    var MSG_PREFIX = 'copilot1co:clientNotes:';
+    var textarea = document.getElementById('clientNotesStandalone');
+    var pinHint = document.getElementById('pinHint');
+    var dismissBtn = document.getElementById('dismissPinHint');
+
+    function getTargetOrigin() {
+        try {
+            return window.opener && !window.opener.closed ? window.opener.location.origin : window.location.origin;
+        } catch (e) {
+            return window.location.origin;
+        }
+    }
+
+    function sendToOpener(data) {
+        if (window.opener && !window.opener.closed) {
+            try {
+                window.opener.postMessage(MSG_PREFIX + JSON.stringify(data), getTargetOrigin());
+            } catch (err) {
+                console.warn('[clientNotesStandalone] postMessage to opener failed:', err);
+            }
+        }
+    }
+
+    function applyValue(val) {
+        if (typeof val !== 'string') return;
+        if (textarea.value !== val) {
+            textarea.value = val;
+        }
+    }
+
+    window.addEventListener('message', function(event) {
+        if (event.origin !== window.location.origin) return;
+        var raw = event.data;
+        if (typeof raw !== 'string' || raw.indexOf(MSG_PREFIX) !== 0) return;
+        try {
+            var data = JSON.parse(raw.slice(MSG_PREFIX.length));
+            if (data.type === 'clientNotesInit' || data.type === 'clientNotesSync') {
+                applyValue(data.value || '');
+            }
+            if (data.type === 'clientNotesInit' && (data.theme === 'dark' || data.theme === 'light')) {
+                document.documentElement.classList.toggle('dark', data.theme === 'dark');
+            }
+        } catch (e) {
+            console.warn('[clientNotesStandalone] Invalid message:', e);
+        }
+    });
+
+    textarea.addEventListener('input', function() {
+        sendToOpener({ type: 'clientNotesSync', value: textarea.value });
+    });
+
+    if (dismissBtn) {
+        dismissBtn.addEventListener('click', function() {
+            pinHint.style.display = 'none';
+            try {
+                localStorage.setItem('clientNotesPinHintDismissed', '1');
+            } catch (e) {}
+        });
+    }
+
+    try {
+        if (localStorage.getItem('clientNotesPinHintDismissed') === '1') {
+            pinHint.style.display = 'none';
+        }
+    } catch (e) {}
+
+    if (window.opener && !window.opener.closed) {
+        sendToOpener({ type: 'clientNotesRequest' });
+    }
+})();
+    </script>
+</body>
+</html>

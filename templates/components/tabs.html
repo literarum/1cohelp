@@ -1,0 +1,83 @@
+<!-- Навигация по вкладкам -->
+            <div class="mb-3 border-b border-gray-200 dark:border-gray-700">
+                <nav class="flex flex-wrap -mb-px text-sm font-medium text-center">
+                    <button
+                        id="mainTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-home mr-1"></i>Главная
+                    </button>
+                    <button
+                        id="programTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-desktop mr-1"></i>Программа 1С/УП
+                    </button>
+                    <button
+                        id="linksTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-link mr-1"></i>Ссылки 1С
+                    </button>
+                    <button
+                        id="extLinksTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-globe mr-1"></i>Внешние ресурсы
+                    </button>
+                    <button
+                        id="skziTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-key mr-1"></i>СКЗИ
+                    </button>
+                    <button
+                        id="lk1cTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-user-circle mr-1"></i>1СО ЛК
+                    </button>
+                    <button
+                        id="webRegTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-plug mr-1"></i>Веб-Регистратор
+                    </button>
+                    <button
+                        id="reglamentsTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-clipboard-list mr-1"></i>Регламенты
+                    </button>
+                    <button
+                        id="bookmarksTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-bookmark mr-1"></i>Закладки
+                    </button>
+                    <button
+                        id="sedoTypesTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-comments mr-1"></i>Типы СЭДО
+                    </button>
+                    <button
+                        id="blacklistedClientsTab"
+                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                    >
+                        <i class="fas fa-user-secret mr-1"></i>
+                        <span class="hidden sm:inline">Черный список жаб</span>
+                    </button>
+                    <div class="relative group ml-auto md:ml-1 shrink-0">
+                        <button
+                            id="moreTabsBtn"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <div
+                            id="moreTabsDropdown"
+                            class="absolute hidden right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10 w-48"
+                        ></div>
+                    </div>
+                </nav>
