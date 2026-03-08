@@ -264,6 +264,7 @@ body.app-backup-warning-perimeter-pulse::before {
     :is(
         .modal-content-area-fullscreen-scroll,
         #algorithmSteps,
+        #healthReportModalBody,
         #hotkeysModal .p-6.overflow-y-auto.flex-1,
         #reglamentModal .modal-content-area,
         #extLinkModal .modal-content-area,

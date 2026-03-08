@@ -2410,6 +2410,30 @@ document.addEventListener('click', (event) => {
     }
 });
 
+// Обработчик клика по кнопкам «Добавить шаг» в модалках редактирования и создания алгоритма
+document.addEventListener('click', (event) => {
+    const addNewStepBtn = event.target.closest('#addNewStepBtn');
+    const addStepBtn = event.target.closest('#addStepBtn');
+    if (addNewStepBtn) {
+        const addModal = document.getElementById('addModal');
+        if (addModal && !addModal.classList.contains('hidden')) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof addNewStep === 'function') addNewStep(false);
+        }
+        return;
+    }
+    if (addStepBtn) {
+        const editModal = document.getElementById('editModal');
+        if (editModal && !editModal.classList.contains('hidden')) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof addEditStep === 'function') addEditStep();
+        }
+        return;
+    }
+});
+
 document.addEventListener('click', (event) => {
     const visibleModals = getVisibleModals();
     if (!visibleModals.length) {

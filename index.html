@@ -8,12 +8,14 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+        <script src="js/vendor-config.js?v=legacy-20260308-234037-e7ebe22"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260308-234037-e7ebe22"></script>
+        <script type="text/javascript">
+            if (window.VendorLoader) VendorLoader.writeVendors('main', '');
+        </script>
         <script type="text/javascript">
             window.__loadTailwindCDN = function() {
-                var s = document.createElement('script');
-                s.src = 'https://cdn.tailwindcss.com';
-                s.onload = function() {
+                var applyTailwindConfig = function() {
                     if (typeof tailwind !== 'undefined') {
                         var tailwindConfig = {
                             darkMode: 'class',
@@ -47,20 +49,21 @@
                         tailwind.config = tailwindConfig;
                     }
                 };
-                document.head.appendChild(s);
+                var s = window.VendorLoader ? VendorLoader.loadTailwindFallback('') : null;
+                if (s) {
+                    s.onload = applyTailwindConfig;
+                } else {
+                    var s2 = document.createElement('script');
+                    s2.src = 'https://cdn.tailwindcss.com';
+                    s2.onload = applyTailwindConfig;
+                    document.head.appendChild(s2);
+                }
             };
         </script>
-        <!-- Production: use built CSS (npm run build:css). CDN only as fallback when built file is missing. -->
-        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260308-225458-77a575f" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
-        <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js" crossorigin="anonymous"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" crossorigin="anonymous"></script>
-        <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        />
+        <!-- Production: use built CSS (npm run build:css). Fallback: vendor or CDN via __loadTailwindCDN. -->
+        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260308-234037-e7ebe22" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260308-225458-77a575f" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260308-234037-e7ebe22" />
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             #custom-loading-overlay {
@@ -2427,7 +2430,7 @@
             <!-- Модальное окно полного отчёта о состоянии здоровья приложения -->
             <style id="health-report-modal-inline">
                 #healthReportModal { overflow: hidden !important; }
-                #healthReportModalBody { max-height: calc(90vh - 8rem) !important; min-height: 0 !important; overflow-y: auto !important; }
+                #healthReportModalBody { max-height: calc(90vh - 8rem) !important; min-height: 0 !important; overflow: hidden !important; }
                 #healthReportModal .health-report-section-header { display: flex !important; align-items: center !important; min-height: 2.25rem; padding: 0.5rem 1rem; box-sizing: border-box; }
             </style>
             <div
@@ -2981,7 +2984,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260308-225458-77a575f"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260308-225458-77a575f"></script>
+        <script type="module" src="./script.js?v=legacy-20260308-234037-e7ebe22"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260308-234037-e7ebe22"></script>
     </body>
 </html>

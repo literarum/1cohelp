@@ -186,6 +186,7 @@ export function initUISettingsModalHandlers() {
         function showHealthReportModalFallback(report) {
             const modal = document.getElementById('healthReportModal');
             if (!modal) return;
+            initHealthReportCollapseToggles();
             const body = modal.querySelector('#healthReportModalBody');
             if (!body) return;
             const esc = escapeHtml;
@@ -219,43 +220,74 @@ export function initUISettingsModalHandlers() {
             const checksList = buildSectionList(report.checks, '<i class="fas fa-check text-primary" aria-hidden="true"></i>');
 
             body.innerHTML = `
-                    <div class="health-report-summary ${summaryClass}">
-                        <div class="health-report-summary-icon">${summaryIcon}</div>
-                        <div class="health-report-summary-text">
-                            <h3>${esc(statusText)}</h3>
-                            ${summaryMeta ? `<div class="health-report-summary-meta">${summaryMeta}</div>` : ''}
+                    <div class="health-report-body-scroll">
+                        <div class="health-report-summary ${summaryClass}">
+                            <div class="health-report-summary-icon">${summaryIcon}</div>
+                            <div class="health-report-summary-text">
+                                <h3>${esc(statusText)}</h3>
+                                ${summaryMeta ? `<div class="health-report-summary-meta">${summaryMeta}</div>` : ''}
+                            </div>
                         </div>
-                    </div>
-                    <div class="health-report-section health-report-section-errors">
-                        <div class="health-report-section-header health-report-section-errors">
-                            <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
-                            <span>Ошибки (${report.errors?.length ?? 0})</span>
+                        <div class="health-report-section health-report-section-errors">
+                            <div class="health-report-section-header health-report-section-errors">
+                                <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
+                                <span>Ошибки (${report.errors?.length ?? 0})</span>
+                            </div>
+                            ${report.errors?.length
+                                ? `<ul class="health-report-section-list">${errorsList}</ul>`
+                                : `<div class="health-report-empty">Ошибок не обнаружено.</div>`}
                         </div>
-                        ${report.errors?.length
-                            ? `<ul class="health-report-section-list">${errorsList}</ul>`
-                            : `<div class="health-report-empty">Ошибок не обнаружено.</div>`}
-                    </div>
-                    <div class="health-report-section health-report-section-warnings">
-                        <div class="health-report-section-header health-report-section-warnings">
-                            <span class="health-report-section-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></span>
-                            <span>Предупреждения (${report.warnings?.length ?? 0})</span>
+                        <div class="health-report-section health-report-section-warnings health-report-section-collapsible is-collapsed">
+                            <div class="health-report-section-header health-report-section-warnings">
+                                <span class="health-report-section-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></span>
+                                <span>Предупреждения (${report.warnings?.length ?? 0})</span>
+                                <button type="button" class="health-report-section-toggle" aria-expanded="false" aria-label="Развернуть раздел" title="Развернуть">&#9654;</button>
+                            </div>
+                            <div class="health-report-section-body">
+                                <div class="health-report-section-body-inner">
+                                    ${report.warnings?.length
+                                        ? `<ul class="health-report-section-list">${warningsList}</ul>`
+                                        : `<div class="health-report-empty">Предупреждений нет.</div>`}
+                                </div>
+                            </div>
                         </div>
-                        ${report.warnings?.length
-                            ? `<ul class="health-report-section-list">${warningsList}</ul>`
-                            : `<div class="health-report-empty">Предупреждений нет.</div>`}
-                    </div>
-                    <div class="health-report-section health-report-section-checks">
-                        <div class="health-report-section-header health-report-section-checks">
-                            <span class="health-report-section-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></span>
-                            <span>Проверки (${report.checks?.length ?? 0}) — слои, хранилища, надёжность данных</span>
+                        <div class="health-report-section health-report-section-checks health-report-section-collapsible is-collapsed">
+                            <div class="health-report-section-header health-report-section-checks">
+                                <span class="health-report-section-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></span>
+                                <span>Проверки (${report.checks?.length ?? 0}) — слои, хранилища, надёжность данных</span>
+                                <button type="button" class="health-report-section-toggle" aria-expanded="false" aria-label="Развернуть раздел" title="Развернуть">&#9654;</button>
+                            </div>
+                            <div class="health-report-section-body">
+                                <div class="health-report-section-body-inner">
+                                    ${report.checks?.length
+                                        ? `<ul class="health-report-section-list">${checksList}</ul>`
+                                        : `<div class="health-report-empty">Список проверок пуст.</div>`}
+                                </div>
+                            </div>
                         </div>
-                        ${report.checks?.length
-                            ? `<ul class="health-report-section-list">${checksList}</ul>`
-                            : `<div class="health-report-empty">Список проверок пуст.</div>`}
                     </div>
             `;
             modal.classList.remove('hidden');
             modal.style.display = 'flex';
+        }
+
+        function initHealthReportCollapseToggles() {
+            const modal = document.getElementById('healthReportModal');
+            if (!modal || modal.dataset.healthReportCollapseInit) return;
+            modal.dataset.healthReportCollapseInit = '1';
+            modal.addEventListener('click', (e) => {
+                const btn = e.target.closest('.health-report-section-toggle');
+                if (!btn) return;
+                e.preventDefault();
+                const section = btn.closest('.health-report-section-collapsible');
+                if (!section) return;
+                section.classList.toggle('is-collapsed');
+                const expanded = !section.classList.contains('is-collapsed');
+                btn.setAttribute('aria-expanded', String(expanded));
+                btn.title = expanded ? 'Свернуть' : 'Развернуть';
+                btn.setAttribute('aria-label', expanded ? 'Свернуть раздел' : 'Развернуть раздел');
+                btn.textContent = expanded ? '\u9660' : '\u9654';
+            });
         }
 
         const healthReportModalClose = document.getElementById('healthReportModalClose');

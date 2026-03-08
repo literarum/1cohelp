@@ -7,15 +7,49 @@
 #healthReportModal {
     overflow-y: hidden !important;
 }
+
+/* Тело модалки — flex-контейнер с одной дочерней скролл-обёрткой; сам не скроллится */
 #healthReportModalBody {
-    max-height: calc(90vh - 8rem) !important;
+    flex: 1 1 0% !important;
     min-height: 0 !important;
-    overflow-y: auto !important;
+    max-height: calc(90vh - 8rem) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 #healthReportModal .health-report-body {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    min-height: 0 !important;
+}
+
+/* Внутренняя обёртка — единственный скролл-контейнер (блочный layout, не flex, чтобы overflow давал полосу прокрутки); отступы между блоками через margin */
+#healthReportModal .health-report-body-scroll {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    padding-right: 1rem;
+    box-sizing: border-box;
+}
+#healthReportModal .health-report-body-scroll > .health-report-summary,
+#healthReportModal .health-report-body-scroll > .health-report-section {
+    margin-bottom: 1.25rem;
+}
+#healthReportModal .health-report-body-scroll > *:last-child {
+    margin-bottom: 0;
+}
+
+/* Полноэкранный режим: тело заполняет остаток высоты */
+#healthReportModal.is-fullscreen #healthReportModalBody {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+}
+#healthReportModal.is-fullscreen .health-report-body-scroll {
+    flex: 1 1 0 !important;
     min-height: 0 !important;
     overflow-y: auto !important;
 }
@@ -109,6 +143,43 @@ html.dark #healthReportModal .health-report-section-header {
     width: 1.25rem;
     text-align: center;
     flex-shrink: 0;
+}
+
+/* Кнопка сворачивания: минималистичная, ASCII-символ */
+#healthReportModal .health-report-section-toggle {
+    margin-left: auto;
+    padding: 0.2rem 0.35rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.65rem;
+    line-height: 1;
+    opacity: 0.6;
+    color: inherit;
+    border-radius: 0.2rem;
+    transition: opacity 0.15s ease;
+}
+#healthReportModal .health-report-section-toggle:hover {
+    opacity: 1;
+}
+#healthReportModal .health-report-section-toggle:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+}
+
+/* Сворачиваемое тело секции: плавная анимация (grid 1fr ↔ 0fr) */
+#healthReportModal .health-report-section-collapsible .health-report-section-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s ease-out;
+    overflow: hidden;
+}
+#healthReportModal .health-report-section-collapsible.is-collapsed .health-report-section-body {
+    grid-template-rows: 0fr;
+}
+#healthReportModal .health-report-section-collapsible .health-report-section-body-inner {
+    min-height: 0;
+    overflow: hidden;
 }
 
 #healthReportModal .health-report-section-errors .health-report-section-icon {
