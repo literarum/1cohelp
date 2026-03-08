@@ -99,6 +99,7 @@ export function setDependencies(deps) {
         applyCurrentView: deps.applyCurrentView,
         loadMainAlgoCollapseState: MainAlgorithm.loadMainAlgoCollapseState,
         saveMainAlgoCollapseState: MainAlgorithm.saveMainAlgoCollapseState,
+        Sortable: deps.Sortable,
     });
 
     // Зависимости для главного алгоритма

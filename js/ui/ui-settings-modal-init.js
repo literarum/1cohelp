@@ -53,6 +53,44 @@ export function initUISettingsModalHandlers() {
                 if (typeof deps.openAnimatedModal === 'function') {
                     deps.openAnimatedModal(customizeUIModal);
                 }
+                const panelSortContainer = document.getElementById('panelSortContainer');
+                if (panelSortContainer) {
+                    if (panelSortContainer.sortableInstance) {
+                        try {
+                            panelSortContainer.sortableInstance.destroy();
+                        } catch (e) {
+                            console.warn('[UISettingsModal] Ошибка при уничтожении Sortable:', e);
+                        }
+                        panelSortContainer.sortableInstance = null;
+                    }
+                    const initPanelSortable = (SortableLib) => {
+                        if (!SortableLib) return;
+                        panelSortContainer.sortableInstance = new SortableLib(panelSortContainer, {
+                            animation: 150,
+                            handle: '.fa-grip-lines',
+                            ghostClass: 'sortable-ghost',
+                            chosenClass: 'sortable-chosen',
+                            dragClass: 'sortable-drag',
+                            onEnd: () => {
+                                if (deps.State) deps.State.isUISettingsDirty = true;
+                                if (typeof deps.updatePreviewSettingsFromModal === 'function') {
+                                    deps.updatePreviewSettingsFromModal();
+                                    if (
+                                        deps.State &&
+                                        typeof deps.applyPreviewSettings === 'function'
+                                    ) {
+                                        deps.applyPreviewSettings(deps.State.currentPreviewSettings);
+                                    }
+                                }
+                            },
+                        });
+                    };
+                    if (typeof window.Sortable !== 'undefined') {
+                        initPanelSortable(window.Sortable);
+                    } else if (window.VendorLoader && typeof window.VendorLoader.waitForSortable === 'function') {
+                        window.VendorLoader.waitForSortable(initPanelSortable, 5000);
+                    }
+                }
             }
         });
         customizeUIBtn.dataset.settingsListenerAttached = 'true';
@@ -61,6 +99,15 @@ export function initUISettingsModalHandlers() {
 
     if (customizeUIModal && !customizeUIModal.dataset.settingsInnerListenersAttached) {
         const closeModal = () => {
+            const panelSortContainer = document.getElementById('panelSortContainer');
+            if (panelSortContainer?.sortableInstance) {
+                try {
+                    panelSortContainer.sortableInstance.destroy();
+                } catch (e) {
+                    console.warn('[UISettingsModal] Ошибка при уничтожении Sortable при закрытии:', e);
+                }
+                panelSortContainer.sortableInstance = null;
+            }
             if (typeof deps.closeAnimatedModal === 'function') {
                 deps.closeAnimatedModal(customizeUIModal);
             }

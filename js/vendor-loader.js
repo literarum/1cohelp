@@ -93,6 +93,120 @@
     }
 
     /**
+     * Returns true if a script vendor is missing (e.g. 404 on local).
+     * @param {Object} entry - Registry entry with optional globalName
+     * @returns {boolean}
+     */
+    function isScriptMissing(entry) {
+        if (!entry || entry.type !== 'script' || !entry.globalName) return false;
+        return typeof global[entry.globalName] === 'undefined';
+    }
+
+    /**
+     * Returns true if Font Awesome (or other stylesheet vendor) failed to load.
+     * @param {string} id - Vendor id (e.g. 'fontawesome')
+     * @returns {boolean}
+     */
+    function isStylesheetMissing(id) {
+        if (id !== 'fontawesome') return false;
+        var link = document.querySelector('link[href*="fontawesome"]');
+        if (!link) return true;
+        try {
+            return !link.sheet || (link.sheet.cssRules && link.sheet.cssRules.length === 0);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Loads one script from URL, then calls next when done (onload or onerror).
+     * @param {string} url - Script URL (CDN)
+     * @param {Object} [attrs] - Optional attributes (e.g. crossorigin)
+     * @param {function()} next - Callback after load or error
+     */
+    function loadScriptOnce(url, attrs, next) {
+        var script = document.createElement('script');
+        script.src = url;
+        script.async = false;
+        script.defer = false;
+        if (attrs) {
+            for (var k in attrs) {
+                if (attrs.hasOwnProperty(k)) script.setAttribute(k, attrs[k]);
+            }
+        }
+        script.onload = next;
+        script.onerror = next;
+        document.head.appendChild(script);
+    }
+
+    /**
+     * If USE_LOCAL_VENDORS is true, detects vendors that failed to load (404 on local)
+     * and loads them from CDN. Call after writeVendors (e.g. setTimeout(..., 100)).
+     * @param {string} profile - 'main' | 'standalone' | 'downloads'
+     * @param {string} [basePath=''] - Base path (unused for CDN fallback)
+     */
+    function runVendorFallback(profile, basePath) {
+        basePath = basePath || '';
+        if (!USE_LOCAL || !REGISTRY) return;
+
+        var order = PROFILES[profile];
+        if (!order || !order.length) return;
+
+        var head = document.head;
+        var scriptsToLoad = [];
+        var fontawesomeEntry = null;
+
+        for (var i = 0; i < order.length; i++) {
+            var entry = REGISTRY[order[i]];
+            if (!entry || !entry.cdnUrl) continue;
+            if (entry.type === 'script') {
+                if (isScriptMissing(entry)) scriptsToLoad.push(entry);
+            } else if (entry.type === 'link' && entry.rel === 'stylesheet') {
+                if (order[i] === 'fontawesome' && isStylesheetMissing('fontawesome')) {
+                    fontawesomeEntry = entry;
+                }
+            }
+        }
+
+        if (fontawesomeEntry) {
+            var link = document.createElement('link');
+            link.rel = fontawesomeEntry.rel;
+            link.href = fontawesomeEntry.cdnUrl;
+            head.appendChild(link);
+        }
+
+        function loadNext(index) {
+            if (index >= scriptsToLoad.length) return;
+            var entry = scriptsToLoad[index];
+            loadScriptOnce(entry.cdnUrl, entry.attrs, function () {
+                loadNext(index + 1);
+            });
+        }
+        loadNext(0);
+    }
+
+    /**
+     * Waits for Sortable to appear on global (e.g. after fallback load), then calls callback.
+     * @param {function(*)} callback - called with global.Sortable or null if timeout
+     * @param {number} [maxWaitMs=5000] - max time to wait in ms
+     */
+    function waitForSortable(callback, maxWaitMs) {
+        var limit = maxWaitMs || 5000;
+        var start = Date.now();
+        var t = setInterval(function () {
+            if (typeof global.Sortable !== 'undefined') {
+                clearInterval(t);
+                callback(global.Sortable);
+                return;
+            }
+            if (Date.now() - start >= limit) {
+                clearInterval(t);
+                callback(null);
+            }
+        }, 50);
+    }
+
+    /**
      * Writes vendor script/link tags into the document stream (synchronous load order).
      * Use this in static HTML so vendors load before subsequent inline scripts.
      * @param {string} profile - 'main' | 'standalone' | 'downloads'
@@ -120,6 +234,8 @@
         getVendorUrl: getVendorUrl,
         loadVendors: loadVendors,
         loadTailwindFallback: loadTailwindFallback,
-        writeVendors: writeVendors
+        writeVendors: writeVendors,
+        runVendorFallback: runVendorFallback,
+        waitForSortable: waitForSortable
     };
 })(typeof window !== 'undefined' ? window : this);

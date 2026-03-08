@@ -15,6 +15,7 @@ import { setDependencies } from './app.js';
         showAlgorithmDetail: window.showAlgorithmDetail,
         copyToClipboard: window.copyToClipboard,
         applyCurrentView: window.applyCurrentView,
+        Sortable: typeof window.Sortable !== 'undefined' ? window.Sortable : undefined,
         showNotification: window.showNotification,
         debounce: window.debounce,
         setupClearButton: window.setupClearButton,

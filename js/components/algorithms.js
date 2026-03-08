@@ -506,24 +506,12 @@ export function normalizeAlgorithmSteps(stepsArray) {
 // ============================================================================
 
 /**
- * Инициализирует сортировку шагов через Sortable.js
- * @param {HTMLElement} containerElement - контейнер с шагами
- * @param {boolean} [isMainAlgoWithGroups] - главный алгоритм с визуальными группами (перетаскивание групп и шагов)
+ * Внутренняя инициализация Sortable по контейнеру (вызывается при наличии библиотеки).
+ * @param {HTMLElement} containerElement
+ * @param {boolean} isMainAlgoWithGroups
+ * @param {*} SortableLib - конструктор Sortable
  */
-export function initStepSorting(containerElement, isMainAlgoWithGroups = false) {
-    if (!containerElement) {
-        console.error('initStepSorting: Контейнер для сортировки не предоставлен.');
-        return;
-    }
-    if (!Sortable && typeof window.Sortable === 'undefined') {
-        console.error('SortableJS не найден. Функционал перетаскивания не будет работать.');
-        if (showNotification)
-            showNotification('Ошибка: Библиотека для сортировки не загружена.', 'error');
-        return;
-    }
-
-    const SortableLib = Sortable || window.Sortable;
-
+function doInitStepSorting(containerElement, isMainAlgoWithGroups, SortableLib) {
     if (containerElement.sortableInstance) {
         try {
             containerElement.sortableInstance.destroy();
@@ -592,6 +580,41 @@ export function initStepSorting(containerElement, isMainAlgoWithGroups = false) 
     }
 
     console.log(`SortableJS инициализирован для контейнера #${containerElement.id}`);
+}
+
+/**
+ * Инициализирует сортировку шагов через Sortable.js
+ * @param {HTMLElement} containerElement - контейнер с шагами
+ * @param {boolean} [isMainAlgoWithGroups] - главный алгоритм с визуальными группами (перетаскивание групп и шагов)
+ */
+export function initStepSorting(containerElement, isMainAlgoWithGroups = false) {
+    if (!containerElement) {
+        console.error('initStepSorting: Контейнер для сортировки не предоставлен.');
+        return;
+    }
+    const SortableLib =
+        (typeof window !== 'undefined' && typeof window.Sortable !== 'undefined')
+            ? window.Sortable
+            : Sortable;
+
+    if (!SortableLib) {
+        if (
+            typeof window !== 'undefined' &&
+            window.VendorLoader &&
+            typeof window.VendorLoader.waitForSortable === 'function'
+        ) {
+            window.VendorLoader.waitForSortable((Lib) => {
+                if (Lib) doInitStepSorting(containerElement, isMainAlgoWithGroups, Lib);
+            }, 5000);
+        } else {
+            console.error('SortableJS не найден. Функционал перетаскивания не будет работать.');
+            if (showNotification)
+                showNotification('Ошибка: Библиотека для сортировки не загружена.', 'error');
+        }
+        return;
+    }
+
+    doInitStepSorting(containerElement, isMainAlgoWithGroups, SortableLib);
 }
 
 /**

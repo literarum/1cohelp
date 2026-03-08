@@ -7,32 +7,37 @@
 
     var USE_LOCAL_VENDORS = true;
 
+    /** Optional globalName: used by runVendorFallback to detect 404 (script not executed). */
     var VENDOR_REGISTRY = {
         sortablejs: {
             id: 'sortablejs',
             type: 'script',
             cdnUrl: 'https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js',
-            localPath: 'vendor/sortablejs/1.14.0/Sortable.min.js'
+            localPath: 'vendor/sortablejs/1.14.0/Sortable.min.js',
+            globalName: 'Sortable'
         },
         'pdf-lib': {
             id: 'pdf-lib',
             type: 'script',
             cdnUrl: 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
             localPath: 'vendor/pdf-lib/1.17.1/pdf-lib.min.js',
-            attrs: { crossorigin: 'anonymous' }
+            attrs: { crossorigin: 'anonymous' },
+            globalName: 'PDFLib'
         },
         fontkit: {
             id: 'fontkit',
             type: 'script',
             cdnUrl: 'https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js',
             localPath: 'vendor/fontkit/1.1.1/fontkit.umd.min.js',
-            attrs: { crossorigin: 'anonymous' }
+            attrs: { crossorigin: 'anonymous' },
+            globalName: 'fontkit'
         },
         xlsx: {
             id: 'xlsx',
             type: 'script',
             cdnUrl: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
-            localPath: 'vendor/xlsx/0.20.3/xlsx.full.min.js'
+            localPath: 'vendor/xlsx/0.20.3/xlsx.full.min.js',
+            globalName: 'XLSX'
         },
         fontawesome: {
             id: 'fontawesome',
