@@ -29,25 +29,32 @@ const CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * MARGIN_PT;
 const BODY_FONT_SIZE = 11;
 const LINE_HEIGHT_RATIO = 1.5;
 const HEADING_SIZES = { 1: 18, 2: 16, 3: 14, 4: 12 };
-const BLOCK_SPACING_PT = 6;
-const HEADING_BOTTOM_SPACING_PT = 10;
+/** Размер и отступ заголовка-названия при экспорте одного алгоритма в PDF. */
+const SINGLE_ALGORITHM_TITLE_FONT_SIZE = 20;
+const SINGLE_ALGORITHM_TITLE_BOTTOM_SPACING_PT = 14;
+const BLOCK_SPACING_PT = 8;
+const HEADING_BOTTOM_SPACING_PT = 12;
 const STEP_INDENT_PT = 12;
 const SEPARATOR_LINE_THICKNESS_PT = 0.35;
 const SEPARATOR_GAP_PT = 6;
-const ALGORITHM_CARD_GAP_PT = 18;
+const ALGORITHM_CARD_GAP_PT = 20;
 const DESC_FONT_SIZE = 10;
 const CAPTION_FONT_SIZE = 9;
 
-// Режим «все алгоритмы»: компактные отступы, явное разделение алгоритмов и шагов, минимум пустого места.
+// Режим «все алгоритмы»: явное разделение алгоритмов (увеличенные отступы между ними), читаемые шаги.
 const ALGORITHM_SECTION_MARGIN_MM = 18;
-const ALGORITHM_SECTION_BLOCK_SPACING_PT = 4;
-const ALGORITHM_SECTION_STEP_GAP_PT = 3;
-const ALGORITHM_BREAK_GAP_PT = 22;
+const ALGORITHM_SECTION_BLOCK_SPACING_PT = 6;
+const ALGORITHM_SECTION_STEP_GAP_PT = 4;
+/** Отступ между алгоритмами при пачечной выгрузке — чтобы не сливались в одно полотно. */
+const ALGORITHM_BREAK_GAP_PT = 38;
 const ALGORITHM_SEPARATOR_THICKNESS_PT = 1.4;
-const ALGORITHM_BAND_HEIGHT_PT = 14;
+/** Высота полосы-разделителя между алгоритмами. */
+const ALGORITHM_BAND_HEIGHT_PT = 18;
+/** Отступ после полосы перед заголовком следующего алгоритма. */
+const ALGORITHM_BAND_AFTER_GAP_PT = 10;
 const ALGORITHM_BAND_GRAY = 0.94;
 const STEP_SEPARATOR_THICKNESS_PT = 0.4;
-const STEP_SEPARATOR_GAP_PT = 4;
+const STEP_SEPARATOR_GAP_PT = 5;
 const MAX_IMAGE_HEIGHT_RATIO = 0.52;
 
 const HIDDEN_SELECTORS =
@@ -338,17 +345,20 @@ async function buildPdfFromContent(contentBlocks, opts) {
                         thickness: ALGORITHM_SEPARATOR_THICKNESS_PT,
                         color: rgb(0.25, 0.25, 0.3),
                     });
-                    y -= SEPARATOR_GAP_PT;
+                    y -= SEPARATOR_GAP_PT + ALGORITHM_BAND_AFTER_GAP_PT;
                 }
             }
             const text = sanitizeTextForPdf(block.text);
-            const fontSize = HEADING_SIZES[block.level] || 16;
+            const fontSize =
+                block.level === 1 ? SINGLE_ALGORITHM_TITLE_FONT_SIZE : (HEADING_SIZES[block.level] || 16);
             const lineHeight = fontSize * LINE_HEIGHT_RATIO;
             const lines = wrapText(text, font, fontSize, contentWidthPt);
+            const bottomSpacing =
+                block.level === 1 ? SINGLE_ALGORITHM_TITLE_BOTTOM_SPACING_PT : HEADING_BOTTOM_SPACING_PT;
             const sepThickness = block.level === 4 && isAlgorithmSection ? STEP_SEPARATOR_THICKNESS_PT : SEPARATOR_LINE_THICKNESS_PT;
             const headingBlockHeight =
                 lines.length * lineHeight +
-                HEADING_BOTTOM_SPACING_PT +
+                bottomSpacing +
                 sepThickness +
                 SEPARATOR_GAP_PT;
             ensureSpace(headingBlockHeight);
@@ -362,7 +372,7 @@ async function buildPdfFromContent(contentBlocks, opts) {
                 });
                 y -= fontSize * LINE_HEIGHT_RATIO;
             }
-            y -= HEADING_BOTTOM_SPACING_PT;
+            y -= bottomSpacing;
             const lineY = y;
             page.drawLine({
                 start: { x: marginPt, y: lineY },
@@ -584,6 +594,8 @@ export const ExportService = {
 
         const clone = element.cloneNode(true);
         clone.querySelectorAll?.('button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, .view-screenshot-btn, .copyable-step-active').forEach((el) => el.remove());
+        // Не включать в PDF блок «PDF-файлы» (ни «Нет PDF-файлов», ни список загруженных PDF).
+        clone.querySelectorAll?.('.pdf-attachments-section, .pdf-host-area').forEach((el) => el.remove());
 
         try {
             if (loadingOverlayManager) loadingOverlayManager.updateProgress(20, 'Обработка контента...');
@@ -752,7 +764,12 @@ export const ExportService = {
                 }
             }
 
-            const contentBlocks = extractPdfContent(clone);
+            let contentBlocks = extractPdfContent(clone);
+            // Для экспорта одного алгоритма: добавить в начало PDF заголовок с названием алгоритма.
+            if (context.type === 'algorithm') {
+                const titleText = (context.data?.title || cleanFilename || 'Алгоритм').trim();
+                contentBlocks = [{ type: 'heading', level: 1, text: titleText }, ...contentBlocks];
+            }
             if (sectionStepDataUrls && sectionStepDataUrls.length > 0) {
                 if (PDF_EXPORT_DEBUG) {
                     const blockCount = contentBlocks.filter((b) => b.type === 'block').length;
