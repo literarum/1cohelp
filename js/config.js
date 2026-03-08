@@ -219,6 +219,34 @@ export const hotkeysModalConfig = {
     contentAreaSelector: '.p-6.overflow-y-auto.flex-1',
 };
 
+export const healthReportModalConfig = {
+    modalId: 'healthReportModal',
+    buttonId: 'toggleFullscreenHealthReportBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-4'],
+            innerContainer: [
+                'max-w-4xl',
+                'w-full',
+                'max-h-[90vh]',
+                'flex',
+                'flex-col',
+                'my-8',
+                'rounded-lg',
+                'shadow-xl',
+            ],
+            contentArea: ['p-4', 'overflow-y-auto', 'flex-1', 'text-sm'],
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+            contentArea: [...UNIFIED_FULLSCREEN_MODAL_CLASSES.contentArea, 'overflow-y-auto'],
+        },
+    },
+    innerContainerSelector: '.bg-white.dark\\:bg-gray-800',
+    contentAreaSelector: '#healthReportModalBody',
+};
+
 /** Массив конфигов модалок для initFullscreenToggles (избегаем предупреждения "No modal configs provided") */
 export const FULLSCREEN_MODAL_CONFIGS = [
     algorithmDetailModalConfig,
@@ -229,6 +257,7 @@ export const FULLSCREEN_MODAL_CONFIGS = [
     reglamentModalConfigGlobal,
     bookmarkDetailModalConfigGlobal,
     hotkeysModalConfig,
+    healthReportModalConfig,
 ];
 
 export const SAVE_BUTTON_SELECTORS =

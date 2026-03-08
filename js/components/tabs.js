@@ -4,8 +4,8 @@ import { MAX_UPDATE_VISIBLE_TABS_RETRIES } from '../constants.js';
 import { State } from '../app/state.js';
 import { tabsConfig } from '../config.js';
 
-/** Минимальная ширина вкладки (px), 6rem — чтобы подпись не обрезалась */
-const MIN_TAB_WIDTH_PX = 96;
+/** Допуск (px) при сравнении границ вкладок (субпиксельный рендер) */
+const LAYOUT_TOLERANCE_PX = 2;
 
 // Зависимости модуля
 let deps = {
@@ -203,22 +203,24 @@ export function updateVisibleTabs() {
 
     const availableWidth = navWidth - moreTabsWidth - LAYOUT_ERROR_MARGIN;
 
-    // Более агрессивный и точный подсчет: используем фактическую ширину вкладок,
-    // чтобы ни одна из них не выходила за пределы контейнера таб-бара.
+    // Определяем максимум вкладок по реальной раскладке: граница — до кнопки «...»,
+    // первая вкладка на второй строке или выходящая за границу уходит в overflow.
+    const navRect = tabsNav.getBoundingClientRect();
+    const boundaryX = navRect.left + availableWidth + LAYOUT_TOLERANCE_PX;
+    const firstTabRect = visibleTabs[0].getBoundingClientRect();
+    const firstRowBottom = firstTabRect.bottom + LAYOUT_TOLERANCE_PX;
+
     let firstOverflowIndex = -1;
-    let usedWidth = 0;
-    const PER_TAB_EXTRA_GAP = 8; // небольшой запас на зазоры/округление
-
     for (let i = 0; i < visibleTabs.length; i++) {
-        const tab = visibleTabs[i];
-        const rawWidth = tab.offsetWidth || MIN_TAB_WIDTH_PX;
-        const tabWidth = rawWidth + PER_TAB_EXTRA_GAP;
-
-        if (usedWidth + tabWidth > availableWidth) {
+        const rect = visibleTabs[i].getBoundingClientRect();
+        if (rect.top >= firstRowBottom) {
             firstOverflowIndex = i;
             break;
         }
-        usedWidth += tabWidth;
+        if (rect.right > boundaryX) {
+            firstOverflowIndex = i;
+            break;
+        }
     }
 
     if (firstOverflowIndex !== -1) {

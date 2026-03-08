@@ -29,6 +29,7 @@ export function initBackgroundStatusHUD() {
         animatingToComplete: false,
         autoHideTimeoutId: null,
         dismissing: false,
+        userDismissed: false,
         pendingDismissAfterActivity: null,
         activityListenersRemoved: false,
         _onActivity: null,
@@ -367,6 +368,7 @@ export function initBackgroundStatusHUD() {
 
     function show() {
         ensureContainer();
+        if (STATE.userDismissed) return;
         computeTopOffset();
         STATE.container.style.display = '';
         if (!STATE.rafId) STATE.rafId = requestAnimationFrame(tick);
@@ -414,6 +416,7 @@ export function initBackgroundStatusHUD() {
             if (onDone) onDone();
             return;
         }
+        STATE.userDismissed = true;
         STATE.dismissing = true;
         const card = STATE.cardEl || STATE.container.querySelector('.hud-card');
         const cardsToAnimate = [card, STATE.completionCardEl].filter(Boolean);

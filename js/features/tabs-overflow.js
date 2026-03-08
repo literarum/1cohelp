@@ -30,9 +30,8 @@ export function setTabsOverflowDependencies(dependencies) {
 
 const MAX_UPDATE_VISIBLE_TABS_RETRIES = 5;
 const LAYOUT_ERROR_MARGIN = 5;
-const MIN_TAB_WIDTH_PX = 96;
-/** Допуск (px): оставляем вкладку видимой, если она «почти влезает» — убираем лишний перенос в «три точки» */
-const ALLOW_EXTRA_VISIBLE_PX = 28;
+/** Допуск (px) при сравнении границ вкладок (субпиксельный рендер) */
+const LAYOUT_TOLERANCE_PX = 2;
 
 // ============================================================================
 // ОСНОВНЫЕ ФУНКЦИИ
@@ -125,22 +124,24 @@ export function updateVisibleTabs() {
 
     const availableWidth = navWidth - moreTabsWidth - LAYOUT_ERROR_MARGIN;
 
-    // Более агрессивный и точный подсчет: используем реальную ширину вкладок,
-    // добавляя небольшой запас, чтобы ни одна вкладка не вылезала за пределы серой линии.
+    // Определяем максимум вкладок по реальной раскладке: граница — до кнопки «...»,
+    // первая вкладка на второй строке или выходящая за границу уходит в overflow.
+    const navRect = tabsNav.getBoundingClientRect();
+    const boundaryX = navRect.left + availableWidth + LAYOUT_TOLERANCE_PX;
+    const firstTabRect = visibleTabs[0].getBoundingClientRect();
+    const firstRowBottom = firstTabRect.bottom + LAYOUT_TOLERANCE_PX;
+
     let firstOverflowIndex = -1;
-    let usedWidth = 0;
-    const PER_TAB_EXTRA_GAP = 8; // небольшой запас на зазоры/округление
-
     for (let i = 0; i < visibleTabs.length; i++) {
-        const tab = visibleTabs[i];
-        const rawWidth = tab.offsetWidth || MIN_TAB_WIDTH_PX;
-        const tabWidth = rawWidth + PER_TAB_EXTRA_GAP;
-
-        if (usedWidth + tabWidth > availableWidth + ALLOW_EXTRA_VISIBLE_PX) {
+        const rect = visibleTabs[i].getBoundingClientRect();
+        if (rect.top >= firstRowBottom) {
             firstOverflowIndex = i;
             break;
         }
-        usedWidth += tabWidth;
+        if (rect.right > boundaryX) {
+            firstOverflowIndex = i;
+            break;
+        }
     }
 
     if (firstOverflowIndex !== -1) {

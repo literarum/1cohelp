@@ -229,7 +229,7 @@ export function initUISettingsModalHandlers() {
                     <div class="health-report-section health-report-section-errors">
                         <div class="health-report-section-header health-report-section-errors">
                             <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
-                            <span>Ошибки</span>
+                            <span>Ошибки (${report.errors?.length ?? 0})</span>
                         </div>
                         ${report.errors?.length
                             ? `<ul class="health-report-section-list">${errorsList}</ul>`
@@ -238,7 +238,7 @@ export function initUISettingsModalHandlers() {
                     <div class="health-report-section health-report-section-warnings">
                         <div class="health-report-section-header health-report-section-warnings">
                             <span class="health-report-section-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></span>
-                            <span>Предупреждения</span>
+                            <span>Предупреждения (${report.warnings?.length ?? 0})</span>
                         </div>
                         ${report.warnings?.length
                             ? `<ul class="health-report-section-list">${warningsList}</ul>`
@@ -247,7 +247,7 @@ export function initUISettingsModalHandlers() {
                     <div class="health-report-section health-report-section-checks">
                         <div class="health-report-section-header health-report-section-checks">
                             <span class="health-report-section-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></span>
-                            <span>Проверки (слои, хранилища, надёжность данных)</span>
+                            <span>Проверки (${report.checks?.length ?? 0}) — слои, хранилища, надёжность данных</span>
                         </div>
                         ${report.checks?.length
                             ? `<ul class="health-report-section-list">${checksList}</ul>`

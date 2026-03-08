@@ -2884,10 +2884,20 @@ div.mt-2.p-2:has(> strong) {
 /* =================================================================== */
 /*    Модальное окно «Состояние здоровья приложения»                  */
 /* =================================================================== */
+#healthReportModal {
+    overflow-y: hidden !important;
+}
+#healthReportModalBody {
+    max-height: calc(90vh - 8rem) !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+}
 #healthReportModal .health-report-body {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    min-height: 0 !important;
+    overflow-y: auto !important;
 }
 
 #healthReportModal .health-report-summary {
@@ -2960,13 +2970,15 @@ html.dark #healthReportModal .health-report-section {
 }
 
 #healthReportModal .health-report-section-header {
-    display: flex;
-    align-items: center;
+    display: flex !important;
+    align-items: center !important;
     gap: 0.5rem;
-    padding: 0.75rem 1rem;
+    min-height: 2.25rem;
+    padding: 0.5rem 1rem;
     font-size: 0.875rem;
     font-weight: 600;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    box-sizing: border-box;
 }
 
 html.dark #healthReportModal .health-report-section-header {

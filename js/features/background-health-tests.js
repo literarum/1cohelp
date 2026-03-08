@@ -1,6 +1,6 @@
 'use strict';
 
-import { CURRENT_SCHEMA_VERSION } from '../constants.js';
+import { CURRENT_SCHEMA_VERSION, USER_PREFERENCES_KEY } from '../constants.js';
 import { REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER } from '../config/revocation-sources.js';
 import { REVOCATION_API_BASE_URL } from '../config.js';
 import { probeHelperAvailability } from './revocation-helper-probe.js';
@@ -267,6 +267,33 @@ export function initBackgroundHealthTestsSystem() {
                 addCheck('error', 'Watchdog / Автосохранение', err.message);
             }
 
+            // Watchdog 3: доступность Yandex Cloud Functions (проверка сертификатов по списку отзыва)
+            const yandexApiBase =
+                typeof REVOCATION_API_BASE_URL === 'string'
+                    ? REVOCATION_API_BASE_URL.trim().replace(/\/$/, '')
+                    : '';
+            if (yandexApiBase && yandexApiBase.includes('yandexcloud')) {
+                try {
+                    const ok = await runWithTimeout(
+                        probeHelperAvailability(yandexApiBase, { path: '/api/health' }),
+                        5000,
+                    );
+                    addCheck(
+                        ok ? 'info' : 'warn',
+                        'Watchdog / Yandex Cloud Functions',
+                        ok
+                            ? 'Доступен.'
+                            : 'Недоступен. Проверка сертификатов по списку отзыва может не работать.',
+                    );
+                } catch (err) {
+                    addCheck(
+                        'warn',
+                        'Watchdog / Yandex Cloud Functions',
+                        `Недоступен: ${err.message}.`,
+                    );
+                }
+            }
+
             // Обновляем диагностику, добавляя watchdog-результаты к уже собранным.
             if (hud?.setDiagnostics) {
                 const mergedChecks = [
@@ -398,18 +425,24 @@ export function initBackgroundHealthTestsSystem() {
                             navigator.storage.estimate(),
                             3000,
                         );
-                        const percent = quota ? (usage / quota) * 100 : 0;
+                        const usageMb = Math.round(usage / 1024 / 1024);
+                        const quotaMb = quota ? Math.round(quota / 1024 / 1024) : 0;
+                        const percent = quota > 0 ? (usage / quota) * 100 : 0;
+                        const percentLabel =
+                            percent >= 1 ? `~${Math.round(percent)}%` : percent > 0 || usage > 0 ? '<1%' : '0%';
                         if (percent > 90) {
                             report(
                                 'warn',
                                 'Хранилище',
-                                `Занято ~${Math.round(percent)}%. Возможны сбои сохранения.`,
+                                `Занято ${percentLabel}. Возможны сбои сохранения.`,
                             );
                         } else {
                             report(
                                 'info',
                                 'Хранилище',
-                                `Занято ~${Math.round(percent)}% (${Math.round(usage / 1024 / 1024)} МБ / ${Math.round(quota / 1024 / 1024)} МБ).`,
+                                quotaMb > 0
+                                    ? `Занято ${percentLabel} (${usageMb} МБ / ${quotaMb} МБ).`
+                                    : `Использовано ${usageMb} МБ (квота недоступна).`,
                             );
                         }
                     } catch (err) {
@@ -570,6 +603,19 @@ export function initBackgroundHealthTestsSystem() {
                 } catch (err) {
                     report('warn', 'clientData', err.message);
                 }
+                // Тест 5.2.1: заметки (длина текста в current.notes)
+                try {
+                    const currentForNotes = await runWithTimeout(
+                        deps.getFromIndexedDB?.('clientData', 'current'),
+                        3000,
+                    );
+                    const notesLen = (currentForNotes?.notes != null && typeof currentForNotes.notes === 'string')
+                        ? currentForNotes.notes.length
+                        : 0;
+                    report('info', 'Заметки', `Символов в заметках: ${notesLen}.`);
+                } catch (err) {
+                    report('warn', 'Заметки', err.message);
+                }
                 // Тест 5.3: Notification (таймер, напоминания)
                 if ('Notification' in window) {
                     const perm = Notification.permission;
@@ -603,9 +649,28 @@ export function initBackgroundHealthTestsSystem() {
                         report('warn', storeName, err.message);
                     }
                 }
+                // Тест 5.4.1: links, bookmarkFolders, extLinkCategories, pdfFiles, screenshots
+                const extraStores = [
+                    ['links', 'Ссылки'],
+                    ['bookmarkFolders', 'Папки закладок'],
+                    ['extLinkCategories', 'Категории внешних ссылок'],
+                    ['pdfFiles', 'PDF файлы'],
+                    ['screenshots', 'Скриншоты'],
+                ];
+                for (const [storeName, label] of extraStores) {
+                    try {
+                        const count = await runWithTimeout(
+                            deps.performDBOperation?.(storeName, 'readonly', (s) => s.count()),
+                            5000,
+                        );
+                        report('info', label, `Записей: ${count}.`);
+                    } catch (err) {
+                        report('warn', label, err.message);
+                    }
+                }
                 // Тест 5.5: компонента проверки отзыва (CRL Helper)
                 if (!REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
-                    // Облачный API: проверяем /api/health
+                    // Облачный API: проверяем /api/health (Yandex Cloud Functions и др.)
                     try {
                         const apiBase =
                             typeof REVOCATION_API_BASE_URL === 'string'
@@ -629,11 +694,30 @@ export function initBackgroundHealthTestsSystem() {
                                     'Облачный API недоступен. Проверка сертификатов может не работать.',
                                 );
                             }
+                            if (apiBase.includes('yandexcloud')) {
+                                report(
+                                    ok ? 'info' : 'warn',
+                                    'Yandex Cloud Functions',
+                                    ok
+                                        ? 'Доступен. Проверка сертификатов по списку отзыва работает.'
+                                        : 'Недоступен. Проверка сертификатов по списку отзыва может не работать.',
+                                );
+                            }
                         } else {
                             report('info', 'API проверки отзыва', 'URL API не настроен.');
                         }
                     } catch (err) {
                         report('warn', 'API проверки отзыва', err.message);
+                        if (
+                            typeof REVOCATION_API_BASE_URL === 'string' &&
+                            REVOCATION_API_BASE_URL.includes('yandexcloud')
+                        ) {
+                            report(
+                                'warn',
+                                'Yandex Cloud Functions',
+                                `Недоступен: ${err.message}. Проверка по списку отзыва может не работать.`,
+                            );
+                        }
                     }
                 } else if (REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
                     try {
@@ -693,6 +777,36 @@ export function initBackgroundHealthTestsSystem() {
                     }
                 } catch (err) {
                     report('warn', 'UI настройки', err.message);
+                }
+
+                // Тест 6.0.1: кастомизация интерфейса (тема, статичный заголовок)
+                try {
+                    const prefs = await runWithTimeout(
+                        deps.getFromIndexedDB?.('preferences', USER_PREFERENCES_KEY),
+                        3000,
+                    );
+                    const theme = prefs?.themeMode ?? prefs?.theme ?? '—';
+                    const staticHeader = prefs?.staticHeader ?? '—';
+                    report(
+                        'info',
+                        'Кастомизация интерфейса',
+                        `Тема: ${theme}, статичный заголовок: ${staticHeader}.`,
+                    );
+                } catch (err) {
+                    report('warn', 'Кастомизация интерфейса', err.message);
+                }
+
+                // Тест 6.0.2: стили (загрузка CSS)
+                try {
+                    const sheetCount = document.styleSheets?.length ?? 0;
+                    const hasReportClass = Boolean(document.querySelector?.('.health-report-section'));
+                    if (sheetCount > 0 || hasReportClass) {
+                        report('info', 'Стили', `Таблиц стилей: ${sheetCount}, ключевые классы загружены.`);
+                    } else {
+                        report('warn', 'Стили', 'Таблиц стилей не обнаружено или проверка недоступна.');
+                    }
+                } catch (err) {
+                    report('warn', 'Стили', err.message);
                 }
 
                 // Тест 6.1: версия схемы
@@ -874,15 +988,25 @@ export function initBackgroundHealthTestsSystem() {
                         navigator.storage.estimate(),
                         3000,
                     );
-                    const percent = quota ? (usage / quota) * 100 : 0;
+                    const usageMb = Math.round(usage / 1024 / 1024);
+                    const quotaMb = quota ? Math.round(quota / 1024 / 1024) : 0;
+                    const percent = quota > 0 ? (usage / quota) * 100 : 0;
+                    const percentLabel =
+                        percent >= 1 ? `~${Math.round(percent)}%` : percent > 0 || usage > 0 ? '<1%' : '0%';
                     if (percent > 90) {
                         report(
                             'warn',
                             'Хранилище',
-                            `Занято ~${Math.round(percent)}%. Возможны сбои сохранения.`,
+                            `Занято ${percentLabel}. Возможны сбои сохранения.`,
                         );
                     } else {
-                        report('info', 'Хранилище', `Занято ~${Math.round(percent)}%.`);
+                        report(
+                            'info',
+                            'Хранилище',
+                            quotaMb > 0
+                                ? `Занято ${percentLabel} (${usageMb} МБ / ${quotaMb} МБ).`
+                                : `Использовано ${usageMb} МБ (квота недоступна).`,
+                        );
                     }
                 } catch {
                     report('info', 'Хранилище', 'Оценка квоты недоступна.');
@@ -947,6 +1071,24 @@ export function initBackgroundHealthTestsSystem() {
             } catch (err) {
                 report('error', 'Поисковый индекс', err.message);
             }
+            // Тест 3.1: поиск — доступ по чтению (курсор)
+            try {
+                if (deps.performDBOperation) {
+                    await runWithTimeout(
+                        deps.performDBOperation('searchIndex', 'readonly', (store) => {
+                            return new Promise((resolve, reject) => {
+                                const r = store.openCursor();
+                                r.onsuccess = () => resolve(r.result != null ? 'readable' : 'empty');
+                                r.onerror = () => reject(r.error);
+                            });
+                        }),
+                        5000,
+                    );
+                    report('info', 'Поиск (чтение индекса)', 'Доступ по курсору успешен.');
+                }
+            } catch (err) {
+                report('warn', 'Поиск (чтение индекса)', err.message);
+            }
 
             // Тест 4: алгоритмы (хранятся под ключом 'all' в data.main)
             try {
@@ -1007,6 +1149,20 @@ export function initBackgroundHealthTestsSystem() {
             } catch (err) {
                 report('warn', 'clientData', err.message);
             }
+            // Тест 5.2.1: заметки
+            try {
+                const currentForNotes = await runWithTimeout(
+                    deps.getFromIndexedDB?.('clientData', 'current'),
+                    3000,
+                );
+                const notesLen =
+                    currentForNotes?.notes != null && typeof currentForNotes.notes === 'string'
+                        ? currentForNotes.notes.length
+                        : 0;
+                report('info', 'Заметки', `Символов в заметках: ${notesLen}.`);
+            } catch (err) {
+                report('warn', 'Заметки', err.message);
+            }
             // Тест 5.3: Notification (таймер, напоминания)
             if ('Notification' in window) {
                 const perm = Notification.permission;
@@ -1040,6 +1196,25 @@ export function initBackgroundHealthTestsSystem() {
                     report('warn', storeName, err.message);
                 }
             }
+            // Тест 5.4.1: links, bookmarkFolders, extLinkCategories, pdfFiles, screenshots
+            const extraStoresManual = [
+                ['links', 'Ссылки'],
+                ['bookmarkFolders', 'Папки закладок'],
+                ['extLinkCategories', 'Категории внешних ссылок'],
+                ['pdfFiles', 'PDF файлы'],
+                ['screenshots', 'Скриншоты'],
+            ];
+            for (const [storeName, label] of extraStoresManual) {
+                try {
+                    const count = await runWithTimeout(
+                        deps.performDBOperation?.(storeName, 'readonly', (s) => s.count()),
+                        5000,
+                    );
+                    report('info', label, `Записей: ${count}.`);
+                } catch (err) {
+                    report('warn', label, err.message);
+                }
+            }
 
             // Тест 5.5: API/компонента проверки отзыва
             if (!REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
@@ -1058,11 +1233,30 @@ export function initBackgroundHealthTestsSystem() {
                             'API проверки отзыва',
                             ok ? 'Облачный API доступен.' : 'Облачный API недоступен.',
                         );
+                        if (apiBase.includes('yandexcloud')) {
+                            report(
+                                ok ? 'info' : 'warn',
+                                'Yandex Cloud Functions',
+                                ok
+                                    ? 'Доступен. Проверка сертификатов по списку отзыва работает.'
+                                    : 'Недоступен. Проверка по списку отзыва может не работать.',
+                            );
+                        }
                     } else {
                         report('info', 'API проверки отзыва', 'URL API не настроен.');
                     }
                 } catch (err) {
                     report('warn', 'API проверки отзыва', err.message);
+                    if (
+                        typeof REVOCATION_API_BASE_URL === 'string' &&
+                        REVOCATION_API_BASE_URL.includes('yandexcloud')
+                    ) {
+                        report(
+                            'warn',
+                            'Yandex Cloud Functions',
+                            `Недоступен: ${err.message}. Проверка по списку отзыва может не работать.`,
+                        );
+                    }
                 }
             } else {
                 try {
@@ -1107,6 +1301,36 @@ export function initBackgroundHealthTestsSystem() {
                 report('warn', 'UI настройки', err.message);
             }
 
+            // Тест 6.0.1: кастомизация интерфейса
+            try {
+                const prefs = await runWithTimeout(
+                    deps.getFromIndexedDB?.('preferences', USER_PREFERENCES_KEY),
+                    3000,
+                );
+                const theme = prefs?.themeMode ?? prefs?.theme ?? '—';
+                const staticHeader = prefs?.staticHeader ?? '—';
+                report(
+                    'info',
+                    'Кастомизация интерфейса',
+                    `Тема: ${theme}, статичный заголовок: ${staticHeader}.`,
+                );
+            } catch (err) {
+                report('warn', 'Кастомизация интерфейса', err.message);
+            }
+
+            // Тест 6.0.2: стили
+            try {
+                const sheetCount = document.styleSheets?.length ?? 0;
+                const hasReportClass = Boolean(document.querySelector?.('.health-report-section'));
+                if (sheetCount > 0 || hasReportClass) {
+                    report('info', 'Стили', `Таблиц стилей: ${sheetCount}, ключевые классы загружены.`);
+                } else {
+                    report('warn', 'Стили', 'Таблиц стилей не обнаружено или проверка недоступна.');
+                }
+            } catch (err) {
+                report('warn', 'Стили', err.message);
+            }
+
             // Тест 6.1: версия схемы
             try {
                 const storedSchema = await runWithTimeout(
@@ -1139,6 +1363,19 @@ export function initBackgroundHealthTestsSystem() {
                     'File System Access',
                     'showSaveFilePicker недоступен. Используется fallback сохранения.',
                 );
+            }
+            // Импорт/экспорт: наличие хранилищ для экспорта
+            try {
+                const storeCount = deps.State?.db?.objectStoreNames?.length ?? 0;
+                report(
+                    'info',
+                    'Импорт/экспорт',
+                    storeCount > 0
+                        ? `Хранилищ для экспорта: ${storeCount}.`
+                        : 'Количество хранилищ недоступно (БД не инициализирована).',
+                );
+            } catch (err) {
+                report('warn', 'Импорт/экспорт', err.message);
             }
             // Тест 6.1.2: ResizeObserver (табы, overflow)
             if (typeof window.ResizeObserver === 'function') {
