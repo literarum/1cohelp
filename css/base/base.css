@@ -1,17 +1,266 @@
 /* =================================================================== */
-/*    БАЗОВЫЕ СТИЛИ (Base Styles)                                      */
+/*    БАЗОВЫЕ СТИЛИ (Base & Layout)                                   */
+/*    html, body, layout, FNS cert, focus                             */
 /* =================================================================== */
 
+/* ----------------------------------- */
+/*         1.2. Базовые стили          */
+/* ----------------------------------- */
 html {
-    height: 100%;
+    min-height: 100%;
+    overflow-y: auto;
+    transition:
+        background-color 0.45s ease-out,
+        color 0.45s ease-out;
 }
 
 body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    overflow-y: auto;
+    transition:
+        background-color 0.45s ease-out,
+        color 0.45s ease-out;
+}
+
+/* Во время переключения темы отключаем все transition */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+    transition: none !important;
+    animation: none !important;
+}
+
+#appContent,
+#appContent .bg-white,
+#appContent [class*='dark:bg-'],
+header,
+.tab-btn,
+.algorithm-step,
+.edit-step,
+.modal-overlay,
+[class*='bg-gray-100'],
+[class*='bg-gray-50'],
+[class*='dark:bg-gray-700'],
+[class*='dark:bg-gray-800'] {
+    transition:
+        background-color 0.45s ease-out,
+        color 0.45s ease-out,
+        border-color 0.45s ease-out;
 }
 
 #appContent {
     flex-grow: 1;
+}
+
+#appContent.has-static-header {
+    padding-top: var(--static-header-height, 140px);
+}
+
+#staticHeaderWrapper.header-sticky {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 80rem;
+    padding: 1.5rem 1rem 0 1rem;
+    box-sizing: border-box;
+    z-index: 30;
+    background-color: var(--color-background);
+    box-shadow: none;
+}
+
+/* Специализированные состояния зоны проверки сертификата ФНС */
+.fns-cert-shell {
+    position: relative;
+}
+
+.fns-cert-shell-danger {
+    --fns-cert-danger-bg: rgba(254, 242, 242, 0.95);
+    --fns-cert-danger-border: rgba(248, 113, 113, 1);
+    --fns-cert-danger-shadow: 0 0 0 1px rgba(248, 113, 113, 0.7), 0 0 24px rgba(248, 113, 113, 0.6);
+    background-color: var(--fns-cert-danger-bg);
+    box-shadow: var(--fns-cert-danger-shadow);
+}
+
+.fns-cert-header-danger {
+    background-color: rgba(127, 29, 29, 0.35) !important;
+    box-shadow:
+        0 0 0 1px rgba(248, 113, 113, 0.7),
+        0 0 24px rgba(248, 113, 113, 0.75) !important;
+    border-bottom-color: rgba(248, 113, 113, 0.9) !important;
+}
+
+html.dark .fns-cert-header-danger {
+    background-color: rgba(127, 29, 29, 0.75) !important;
+    box-shadow:
+        0 0 0 1px rgba(252, 165, 165, 0.85),
+        0 0 28px rgba(248, 113, 113, 0.95) !important;
+    border-bottom-color: rgba(252, 165, 165, 1) !important;
+}
+
+.fns-cert-status-panel {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #fff;
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+html.dark .fns-cert-status-panel {
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.fns-cert-status-panel--pending {
+    background: rgba(107, 114, 128, 0.5);
+    box-shadow: 0 0 12px rgba(107, 114, 128, 0.35);
+}
+
+html.dark .fns-cert-status-panel--pending {
+    background: rgba(75, 85, 99, 0.7);
+    box-shadow: 0 0 16px rgba(75, 85, 99, 0.5);
+}
+
+.fns-cert-status-panel--danger {
+    background: rgba(185, 28, 28, 0.85);
+    box-shadow:
+        0 0 0 1px rgba(248, 113, 113, 0.6),
+        0 0 20px rgba(239, 68, 68, 0.7),
+        0 0 40px rgba(185, 28, 28, 0.4);
+}
+
+html.dark .fns-cert-status-panel--danger {
+    background: rgba(127, 29, 29, 0.9);
+    box-shadow:
+        0 0 0 1px rgba(252, 165, 165, 0.5),
+        0 0 24px rgba(248, 113, 113, 0.8),
+        0 0 48px rgba(185, 28, 28, 0.5);
+}
+
+.fns-cert-status-panel--success {
+    background: rgba(22, 101, 52, 0.85);
+    box-shadow:
+        0 0 0 1px rgba(74, 222, 128, 0.5),
+        0 0 20px rgba(34, 197, 94, 0.6),
+        0 0 40px rgba(22, 101, 52, 0.35);
+}
+
+html.dark .fns-cert-status-panel--success {
+    background: rgba(20, 83, 45, 0.9);
+    box-shadow:
+        0 0 0 1px rgba(74, 222, 128, 0.4),
+        0 0 24px rgba(34, 197, 94, 0.7),
+        0 0 48px rgba(22, 101, 52, 0.45);
+}
+
+.fns-cert-table {
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.fns-cert-table thead th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(107, 114, 128, 1);
+    border-bottom: 1px solid rgba(229, 231, 235, 1);
+    background: rgba(249, 250, 251, 0.8);
+}
+
+html.dark .fns-cert-table thead th {
+    color: rgba(156, 163, 175, 1);
+    border-bottom-color: rgba(55, 65, 81, 1);
+    background: rgba(31, 41, 55, 0.6);
+}
+
+.fns-cert-table tbody tr {
+    border-bottom: 1px solid rgba(229, 231, 235, 0.85);
+}
+
+html.dark .fns-cert-table tbody tr {
+    border-bottom-color: rgba(55, 65, 81, 0.7);
+}
+
+.fns-cert-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.fns-cert-table__label {
+    padding: 0.625rem 0.75rem;
+    width: 1%;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: rgba(107, 114, 128, 1);
+    vertical-align: top;
+}
+
+html.dark .fns-cert-table__label {
+    color: rgba(156, 163, 175, 1);
+}
+
+.fns-cert-table__value {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    color: rgba(17, 24, 39, 1);
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+html.dark .fns-cert-table__value {
+    color: rgba(243, 244, 246, 1);
+}
+
+.fns-cert-table__value--mono {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+html.dark .fns-cert-shell-danger {
+    --fns-cert-danger-bg: rgba(127, 29, 29, 0.5);
+    --fns-cert-danger-border: rgba(252, 165, 165, 1);
+    --fns-cert-danger-shadow:
+        0 0 0 1px rgba(252, 165, 165, 0.8), 0 0 28px rgba(248, 113, 113, 0.85);
+    background-color: var(--fns-cert-danger-bg);
+    box-shadow: var(--fns-cert-danger-shadow);
+}
+
+.fns-cert-shell-danger > .bg-white,
+.fns-cert-shell-danger > .dark\\:bg-gray-700 {
+    background: transparent;
+}
+
+header button {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--color-primary, #9933ff);
+    outline-offset: 2px;
+}
+
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
 }

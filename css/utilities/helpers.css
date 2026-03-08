@@ -1,0 +1,17 @@
+/* =================================================================== */
+/*    ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ (Helpers)                                */
+/* =================================================================== */
+
+/*        4.2. Вспомогательные классы  */
+/* ----------------------------------- */
+#appContent.content-hidden-initial {
+    opacity: 0;
+    visibility: hidden;
+}
+
+#appContent.content-fading-in {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.6s ease-in;
+}
+

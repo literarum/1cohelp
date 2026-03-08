@@ -1,0 +1,37 @@
+/* =================================================================== */
+/*    COLOR PICKER                                                    */
+/* =================================================================== */
+
+/* ----------------------------------- */
+/*         2.6. Color Picker           */
+/* ----------------------------------- */
+.color-swatch.ring-primary {
+    --tw-ring-color: var(--color-primary, var(--color-primary-default));
+}
+
+:is(#hue-handle, #saturation-handle, #brightness-handle) {
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+#color-preview-swatch {
+    background-color: var(--color-primary, #9333ea);
+}
+
+#hue-slider-gradient {
+    background: linear-gradient(
+        to right,
+        red 0%,
+        #ff0 17%,
+        lime 33%,
+        cyan 50%,
+        blue 67%,
+        #f0f 83%,
+        red 100%
+    );
+}
+
+:is(#saturation-slider-gradient, #brightness-slider-gradient) {
+    transition: background 0.1s ease-out;
+}
+

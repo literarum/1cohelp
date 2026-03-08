@@ -1,0 +1,104 @@
+/* =================================================================== */
+/*    КОПИРАЙТ И ХЕДЕР (Copyright & Header)                            */
+/* =================================================================== */
+
+/*             4.3. Копирайт           */
+/* ----------------------------------- */
+#app-copyright {
+    font-family:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    color: #9ca3af;
+    background-color: transparent;
+    z-index: 10;
+    transition: color 0.2s ease-in-out;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+}
+
+.dark #app-copyright {
+    color: #4b5563;
+}
+
+#app-copyright a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#app-copyright a:hover {
+    text-decoration: underline;
+    color: var(--color-primary, #5d5cde);
+}
+
+/* Обеспечиваем одинаковый цвет для заголовка Copilot и подзаголовка */
+header h1.text-primary,
+header #appSlogan.text-primary,
+html.dark header h1.text-primary,
+html.dark header #appSlogan.text-primary,
+body.custom-background-active header h1.text-primary,
+body.custom-background-active header #appSlogan.text-primary,
+html.dark body.custom-background-active header h1.text-primary,
+html.dark body.custom-background-active header #appSlogan.text-primary {
+    color: var(--color-primary) !important;
+}
+
+/* Избранное — всегда ярко-жёлтое независимо от темы и настроек цветов */
+#showFavoritesHeaderBtn,
+#showFavoritesHeaderBtn i {
+    color: #eab308 !important;
+}
+#showFavoritesHeaderBtn:hover,
+#showFavoritesHeaderBtn:hover i {
+    color: #facc15 !important;
+}
+
+#timerToggleButton,
+#timerResetButton,
+#timerDecreaseButton,
+#timerIncreaseButton,
+#themeToggle,
+#exportDataBtn,
+#importDataBtn,
+#forceReloadBtn,
+#showHotkeysBtn {
+    color: var(--color-primary) !important;
+}
+#timerToggleButton i,
+#timerResetButton i,
+#timerDecreaseButton i,
+#timerIncreaseButton i,
+#themeToggle i,
+#exportDataBtn i,
+#importDataBtn i,
+#forceReloadBtn i,
+#showHotkeysBtn i {
+    color: var(--color-primary) !important;
+}
+
+#editMainBtn,
+#editMainBtn > * {
+    background-color: var(--color-primary) !important;
+    color: var(--color-text-primary) !important;
+}
+
+:root:not(.dark) {
+    --color-primary-hover: var(--color-secondary);
+}
+html.dark,
+:root.dark {
+    --color-primary-hover: var(--color-secondary);
+}
+
+@supports (color: color-mix(in srgb, white, black)) {
+    :root:not(.dark) {
+        --color-primary-hover: color-mix(in srgb, var(--color-primary) 80%, black);
+    }
+    html.dark,
+    :root.dark {
+        --color-primary-hover: color-mix(in srgb, var(--color-primary) 80%, white);
+    }
+}
+
+html:not(.dark) [class~='bg-primary']:hover,
+html.dark [class~='bg-primary']:hover {
+    background-color: var(--color-primary-hover) !important;
+}

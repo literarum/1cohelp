@@ -1,0 +1,118 @@
+/* =================================================================== */
+/*    КАРТОЧКИ И ТАЙМЕР (Cards & Timer)                               */
+/* =================================================================== */
+
+/* ----------------------------------- */
+/*      2.8. Прочие компоненты         */
+/* ----------------------------------- */
+.reglament-item,
+.cib-link-item {
+    cursor: pointer !important;
+}
+
+/* Верхняя зона для кнопок в карточках: заголовок и описание сдвинуты вниз (1.5rem — контент ближе к иконкам) */
+.bookmark-item .flex-grow.pt-10,
+.ext-link-item .flex-grow.pt-10,
+.cib-link-item .p-4.pt-10,
+.favorite-item .flex-grow.pt-10,
+.algorithm-card .pt-10,
+.reglament-item .pt-10 {
+    padding-top: 1.5rem !important;
+}
+
+/* Единый ховер для всех карточек: закладки, ссылки, алгоритмы, регламенты, избранное, скриншоты — через переменные темы */
+#appContent .view-item,
+.modal-overlay .view-item {
+    transition:
+        box-shadow 0.2s ease,
+        background-color 0.2s ease,
+        transform 0.2s ease;
+}
+#appContent .view-item:hover,
+.modal-overlay .view-item:hover {
+    background-color: var(--color-hover-subtle);
+    box-shadow: var(--card-hover-shadow);
+}
+
+/* Таймер */
+.timer-segment {
+    display: inline-block;
+    min-width: 2ch;
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    vertical-align: baseline;
+}
+
+.timer-colon {
+    display: inline-block;
+    padding: 0 0.1ch;
+    vertical-align: baseline;
+    user-select: none;
+}
+
+.timer-segment:hover,
+.timer-segment:focus {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark .timer-segment:hover,
+.dark .timer-segment:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+input.timer-input-active {
+    text-align: center;
+    border: 1px solid var(--color-primary, #5d5cde);
+    border-radius: 3px;
+    padding: 0;
+    min-width: 2ch;
+    width: 2.1ch;
+    box-sizing: border-box;
+    background-color: var(--input-bg-color, #fff);
+    color: var(--input-text-color, #000);
+    vertical-align: baseline;
+}
+
+.dark input.timer-input-active {
+    background-color: var(--input-bg-color-dark, #374151);
+    color: var(--input-text-color-dark, #e5e7eb);
+}
+
+/* Осталось ≤10 сек: сильная пульсация, ярче, неоновое свечение */
+#timerDisplay.timer-urgent,
+#timerDisplay.timer-urgent .timer-segment,
+#timerDisplay.timer-urgent .timer-colon {
+    color: #f87171 !important;
+    background-color: rgba(220, 38, 38, 0.25) !important;
+    box-shadow:
+        0 0 12px rgba(248, 113, 113, 0.6),
+        0 0 24px rgba(220, 38, 38, 0.35);
+    animation: timer-urgent-pulse 0.8s ease-in-out infinite;
+}
+@keyframes timer-urgent-pulse {
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow:
+            0 0 12px rgba(248, 113, 113, 0.6),
+            0 0 24px rgba(220, 38, 38, 0.35);
+    }
+    50% {
+        opacity: 1;
+        box-shadow:
+            0 0 20px rgba(248, 113, 113, 0.9),
+            0 0 40px rgba(220, 38, 38, 0.5);
+    }
+}
+/* Таймер на нуле: красное свечение и красные цифры остаются */
+#timerDisplay.timer-zero,
+#timerDisplay.timer-zero .timer-segment,
+#timerDisplay.timer-zero .timer-colon {
+    color: #dc2626 !important;
+    background-color: rgba(220, 38, 38, 0.2) !important;
+    box-shadow: 0 0 16px rgba(220, 38, 38, 0.7);
+}
+

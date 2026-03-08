@@ -1,0 +1,764 @@
+/* =================================================================== */
+/*    КАСТОМНАЯ ТЕМА (Custom Theme)                                   */
+/* =================================================================== */
+
+/* ----------------------------------------------------------- */
+/*      3.2. Глобальные переопределения для кастомной темы     */
+/* ----------------------------------------------------------- */
+/* Этот блок активируется JS через класс .custom-background-active на body. */
+
+/* --- ОСНОВНОЙ ФОН И ТЕКСТ --- */
+body.custom-background-active .tab-btn.tab-active,
+.tab-btn.tab-active {
+    color: #9955ff !important;
+    border-bottom-color: #9955ff !important;
+}
+body.custom-background-active .tab-btn.tab-active > *,
+.tab-btn.tab-active > * {
+    color: #9955ff !important;
+}
+.tab-btn.tab-active i,
+.tab-btn.tab-active svg {
+    color: #9955ff !important;
+}
+
+#appContent #moreTabsDropdown a,
+#appContent #moreTabsDropdown .overflow-dropdown-item {
+    text-decoration: none !important;
+}
+#appContent #moreTabsDropdown a:hover {
+    text-decoration: none !important;
+}
+
+#showFavoritesHeaderBtn,
+#showFavoritesHeaderBtn i {
+    color: #eab308 !important;
+}
+#showFavoritesHeaderBtn:hover,
+#showFavoritesHeaderBtn:hover i {
+    color: #facc15 !important;
+}
+#timerToggleButton,
+#timerResetButton,
+#timerDecreaseButton,
+#timerIncreaseButton,
+#themeToggle,
+#clearSearchInputBtn,
+#customizeUIBtn,
+#exportDataBtn,
+#importDataBtn,
+#forceReloadBtn,
+#showHotkeysBtn {
+    color: var(--color-primary) !important;
+}
+#timerToggleButton i,
+#timerResetButton i,
+#timerDecreaseButton i,
+#timerIncreaseButton i,
+#themeToggle i,
+#clearSearchInputBtn i,
+#customizeUIBtn i,
+#exportDataBtn i,
+#importDataBtn i,
+#forceReloadBtn i,
+#showHotkeysBtn i {
+    color: var(--color-primary) !important;
+}
+
+#appSlogan {
+    color: var(--color-primary) !important;
+}
+
+body.custom-background-active #clearClientDataBtn {
+    background-color: var(--color-surface-2) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-primary) !important;
+}
+
+#editMainBtn,
+#editMainBtn > * {
+    background-color: var(--color-primary) !important;
+    color: var(--color-text-primary) !important;
+}
+
+body.custom-background-active {
+    color: var(--color-text-primary) !important;
+    background-color: var(--color-background) !important;
+}
+
+body.custom-background-active
+    :is(
+        h1:not(.text-primary),
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        p:not(.text-primary),
+        span:not(.text-primary),
+        a,
+        button,
+        li,
+        dt,
+        dd,
+        strong,
+        em,
+        small,
+        mark,
+        blockquote,
+        code,
+        kbd,
+        pre,
+        .text-gray-900,
+        .text-gray-800,
+        .text-gray-700,
+        .text-gray-600,
+        .dark\:text-gray-100,
+        .dark\:text-gray-200,
+        .dark\:text-gray-300
+    ) {
+    color: var(--color-text-primary) !important;
+}
+
+body.custom-background-active
+    :is(.text-gray-600, .text-gray-500, .dark\:text-gray-300, .dark\:text-gray-400) {
+    color: var(--color-text-secondary) !important;
+}
+
+/* --- ФОНЫ И ПОВЕРХНОСТИ (КОРРЕКТНАЯ ДВУХСЛОЙНАЯ СИСТЕМА) --- */
+/* --- СЛОЙ 1: Подложки, заголовки и менее важные фоны --- */
+body.custom-background-active
+    :is(
+        .bg-gray-100,
+        .bg-gray-50,
+        .bg-gray-200,
+        .dark\:bg-slate-600,
+        .dark\:bg-gray-700,
+        .dark\:bg-gray-700\/50,
+        .dark\:bg-gray-700\/60,
+        .dark\:bg-gray-800,
+        #timerDisplay,
+        .cib-link-item code,
+        .edit-step .step-header,
+        .bg-gray-50.dark\:bg-gray-700,
+        #addModal .bg-gray-100.dark\:bg-gray-700,
+        #editModal .bg-gray-50.dark\:bg-gray-800,
+        #sedoFullscreenContent .bg-gray-50
+    ) {
+    background-color: var(--color-surface-1) !important;
+}
+
+/* --- СЛОЙ 2: Карточки, модальные окна, выпадающие меню (основной контент) --- */
+/* Для светлых и темных тем: используется семантическая переменная для основного контента. */
+body.custom-background-active
+    :is(
+        .bg-white,
+        .dark\:bg-slate-800,
+        #blacklistTableContainer,
+        .google-doc-table > thead,
+        #moreTabsDropdown,
+        .tab-content > .p-4,
+        button.bg-gray-200,
+        button.bg-gray-300,
+        .modal-inner-container,
+        #algorithmModal .bg-white.dark\:bg-gray-800,
+        #addModal .bg-white.dark\:bg-gray-800,
+        #editModal .bg-white.dark\:bg-gray-800,
+        #customizeUIModal .bg-white.dark\:bg-gray-800,
+        #confirmClearDataModal .bg-white.dark\:bg-gray-800,
+        #cibLinkModal .bg-white.dark\:bg-gray-800,
+        #hotkeysModal .bg-white.dark\:bg-gray-800,
+        #noInnModal .bg-white.dark\:bg-gray-800,
+        #reglamentDetailModal .bg-white.dark\:bg-gray-800,
+        #bookmarkDetailModal .bg-white.dark\:bg-gray-800,
+        #extLinkModal .bg-white.dark\:bg-gray-800
+    ) {
+    background-color: var(--color-surface-2) !important;
+}
+
+.reglament-category {
+    background-color: var(--color-surface-2) !important;
+}
+
+/* --- ГРАНИЦЫ И РАЗДЕЛИТЕЛИ --- */
+body.custom-background-active
+    :is(
+        .border,
+        .border-t,
+        .border-r,
+        .border-b,
+        .border-l,
+        .border-gray-200,
+        .border-gray-300,
+        .dark\:border-gray-600,
+        .dark\:border-gray-700,
+        .dark\:border-slate-500,
+        .dark\:border-slate-600,
+        .divide-y > :not([hidden]) ~ :not([hidden]),
+        .divide-x > :not([hidden]) ~ :not([hidden]),
+        .google-doc-table th,
+        .google-doc-table td
+    ) {
+    border-color: var(--color-border) !important;
+}
+
+body.custom-background-active :is(.h-px.bg-gray-200, .h-px.dark\:bg-gray-700) {
+    background-color: var(--color-border) !important;
+}
+body.custom-background-active :is(.bg-gray-200, .dark\:bg-slate-600) {
+    background-color: var(--color-surface-1) !important;
+}
+
+/* --- ФОРМЫ (INPUT, TEXTAREA, SELECT) --- */
+body.custom-background-active :is(input, textarea, select) {
+    background-color: var(--color-input-bg) !important;
+    color: var(--color-text-primary) !important;
+    border-color: var(--color-border-interactive) !important;
+}
+
+body.custom-background-active ::-webkit-input-placeholder {
+    color: var(--color-text-secondary) !important;
+    opacity: 1 !important;
+}
+
+body.custom-background-active ::-moz-placeholder {
+    color: var(--color-text-secondary) !important;
+    opacity: 1 !important;
+}
+
+body.custom-background-active :-ms-input-placeholder {
+    color: var(--color-text-secondary) !important;
+    opacity: 1 !important;
+}
+
+body.custom-background-active ::placeholder {
+    color: var(--color-text-secondary) !important;
+    opacity: 1 !important;
+}
+
+/* --- КНОПКИ --- */
+/* 1. Основные кнопки */
+body.custom-background-active
+    :is(
+        #editSedoTypesBtn,
+        #addBlacklistEntryBtn,
+        #force-refresh-shablony-btn,
+        #saveAlgorithmBtn,
+        #saveNewAlgorithmBtn,
+        #saveCibLinkBtn,
+        #addProgramAlgorithmBtn,
+        #addSkziAlgorithmBtn,
+        #addLk1cAlgorithmBtn,
+        #addWebRegAlgorithmBtn,
+        #addLinkBtn,
+        #addReglamentBtn,
+        #addBookmarkBtn,
+        #organizeBookmarksBtn,
+        #addExtLinkBtn,
+        #saveUISettingsBtn,
+        #sedoMainEditButton,
+        #editMainBtn,
+        button.bg-primary,
+        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
+                .tab-btn
+            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+    ) {
+    background-color: var(--color-primary);
+    color: var(--color-text-primary) !important;
+    box-shadow: none !important;
+    transition:
+        background-color 0.2s ease-in-out,
+        color 0.2s ease-in-out;
+}
+
+/* Правило-гарант для иконок и вложенных элементов. */
+body.custom-background-active
+    :is(
+        #editSedoTypesBtn,
+        #addBlacklistEntryBtn,
+        #force-refresh-shablony-btn,
+        #saveAlgorithmBtn,
+        #saveNewAlgorithmBtn,
+        #saveCibLinkBtn,
+        #addProgramAlgorithmBtn,
+        #addSkziAlgorithmBtn,
+        #addLk1cAlgorithmBtn,
+        #addWebRegAlgorithmBtn,
+        #addLinkBtn,
+        #addReglamentBtn,
+        #addBookmarkBtn,
+        #organizeBookmarksBtn,
+        #addExtLinkBtn,
+        #saveUISettingsBtn,
+        #sedoMainEditButton,
+        #editMainBtn,
+        button.bg-primary,
+        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
+                .tab-btn
+            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+    )
+    > * {
+    color: var(--color-text-primary) !important;
+    transition: color 0.2s ease-in-out;
+}
+
+body.custom-background-active
+    :is(
+        #editSedoTypesBtn,
+        #addBlacklistEntryBtn,
+        #force-refresh-shablony-btn,
+        #saveAlgorithmBtn,
+        #saveNewAlgorithmBtn,
+        #saveCibLinkBtn,
+        #addProgramAlgorithmBtn,
+        #addSkziAlgorithmBtn,
+        #addLk1cAlgorithmBtn,
+        #addWebRegAlgorithmBtn,
+        #addLinkBtn,
+        #addReglamentBtn,
+        #addBookmarkBtn,
+        #organizeBookmarksBtn,
+        #addExtLinkBtn,
+        #saveUISettingsBtn,
+        #sedoMainEditButton,
+        #editMainBtn,
+        button.bg-primary,
+        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
+                .tab-btn
+            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+    ):hover {
+    background-color: var(--color-primary) !important;
+    color: white !important;
+}
+
+#clearClientDataBtn {
+    background-color: var(--color-surface-2) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-primary) !important;
+    box-shadow: none !important;
+}
+#clearClientDataBtn > * {
+    color: var(--color-text-primary) !important;
+}
+#clearClientDataBtn:hover {
+    background-color: var(--color-hover-subtle) !important;
+    transition: background-color ease 0.3s;
+}
+
+/* Primary: Сохранить .txt */
+#exportTextBtn {
+    background-color: var(--color-primary) !important;
+    color: var(--color-text-primary) !important;
+    border: none !important; /* гасим border-b из классов */
+    box-shadow: none !important;
+    transition: background-color ease 0.3s;
+}
+#exportTextBtn > * {
+    color: var(--color-text-primary) !important;
+}
+#exportTextBtn:hover {
+    background-color: var(--color-primary-hover) !important;
+}
+
+#resetUiBtn {
+    background-color: var(--color-red-hover-bg);
+    transition: background-color ease 0.3s;
+}
+
+#resetUiBtn:hover {
+    background-color: rgba(220, 38, 38, 0.15);
+    transition: background-color ease 0.3s;
+}
+
+#clearAllDataBtn {
+    background-color: rgba(220, 38, 38, 0.25);
+    padding: 0 1rem;
+    border: 1px solid var(--color-red-text);
+    transition:
+        background-color ease 0.3s,
+        border-color ease 0.3s;
+}
+
+#clearAllDataBtn:hover {
+    background-color: #ef4444;
+    border-color: var(--color-red-text);
+    transition:
+        background-color ease 0.3s,
+        border-color ease 0.3s;
+}
+
+#confirmAndClearDataBtn {
+    background-color: red;
+}
+
+body.custom-background-active
+    :is(
+        #editSedoTypesBtn,
+        #addBlacklistEntryBtn,
+        #force-refresh-shablony-btn,
+        #saveAlgorithmBtn,
+        #saveNewAlgorithmBtn,
+        #saveCibLinkBtn,
+        #addProgramAlgorithmBtn,
+        #addSkziAlgorithmBtn,
+        #addLk1cAlgorithmBtn,
+        #addWebRegAlgorithmBtn,
+        #addLinkBtn,
+        #addReglamentBtn,
+        #addBookmarkBtn,
+        #organizeBookmarksBtn,
+        #addExtLinkBtn,
+        #saveUISettingsBtn,
+        #sedoMainEditButton,
+        #editMainBtn,
+        button.bg-primary,
+        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
+                .tab-btn
+            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+    ):hover
+    > * {
+    color: white !important;
+}
+
+/* 2. Второстепенные кнопки (Secondary Actions) - логика не меняется. */
+body.custom-background-active button:is(.bg-gray-200, .bg-gray-300, .bg-gray-100) {
+    background-color: var(--color-surface-1) !important;
+    color: var(--color-text-primary) !important;
+    box-shadow: none !important;
+}
+
+body.custom-background-active button:is(.bg-gray-200, .bg-gray-300, .bg-gray-100):hover {
+    background-color: var(--color-hover-subtle) !important;
+}
+
+/* 3. Опасные/Разрушительные кнопки (Destructive Actions) - ИСКЛЮЧЕНИЕ ИЗ ПРАВИЛ. */
+body.custom-background-active .btn-destructive,
+body.custom-background-active .btn-destructive > * {
+    color: var(--color-red-text) !important;
+}
+
+body.custom-background-active .btn-destructive {
+    background-color: transparent !important;
+    border: 1px solid var(--color-red-border) !important;
+    box-shadow: none !important;
+    padding: 0.5rem 1rem;
+}
+
+body.custom-background-active .btn-destructive:hover {
+    background-color: var(--color-red-hover-bg) !important;
+    border-color: var(--color-red-text) !important;
+}
+
+.btn-destructive-all,
+.btn-destructive-all > * {
+    color: white !important;
+    border: none !important;
+}
+
+/* Специфичные стили для кнопок очистки данных и сброса настроек */
+body.custom-background-active #resetUiBtn {
+    background-color: var(--color-red-hover-bg) !important;
+    border: 1px solid var(--color-red-border) !important;
+    color: var(--color-red-text) !important;
+}
+
+body.custom-background-active #resetUiBtn:hover {
+    background-color: rgba(220, 38, 38, 0.15) !important;
+    border-color: var(--color-red-text) !important;
+}
+
+body.custom-background-active #clearAllDataBtn {
+    background-color: rgba(220, 38, 38, 0.25) !important;
+    border: 1px solid var(--color-red-text) !important;
+}
+
+body.custom-background-active #clearAllDataBtn:hover {
+    background-color: #ef4444 !important;
+    border-color: var(--color-red-text) !important;
+}
+
+/* ===== Спец-исключения для модалки очистки данных ===== */
+body.custom-background-active #confirmClearDataModal #clearDataWarningBox {
+    background-color: #fffbeb !important;
+    border-color: #fde68a !important;
+    color: #92400e !important;
+}
+html.dark body.custom-background-active #confirmClearDataModal #clearDataWarningBox {
+    background-color: rgba(120, 53, 15, 0.5) !important;
+    border-color: #92400e !important;
+    color: #fde68a !important;
+}
+
+body.custom-background-active #confirmClearDataModal #clearDataWarningBox #exportBeforeClearBtn,
+html.dark
+    body.custom-background-active
+    #confirmClearDataModal
+    #clearDataWarningBox
+    #exportBeforeClearBtn {
+    background: transparent !important;
+    color: inherit !important;
+    border: none !important;
+    text-decoration: underline !important;
+}
+body.custom-background-active
+    #confirmClearDataModal
+    #clearDataWarningBox
+    #exportBeforeClearBtn:hover {
+    color: #7c2d12 !important;
+}
+html.dark
+    body.custom-background-active
+    #confirmClearDataModal
+    #clearDataWarningBox
+    #exportBeforeClearBtn:hover {
+    color: #fde68a !important;
+}
+body.custom-background-active
+    #confirmClearDataModal
+    :is(h2 .fa-exclamation-triangle, .text-red-600, .dark\:text-red-500) {
+    color: var(--color-red-text, #dc2626) !important;
+}
+body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn {
+    background-color: var(--color-red-text, #dc2626) !important;
+    color: #fff !important;
+    border-color: var(--color-red-text, #dc2626) !important;
+}
+body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn:hover {
+    background-color: var(--color-red-hover-bg, #ef4444) !important;
+    border-color: var(--color-red-text, #dc2626) !important;
+}
+body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
+    background-color: #e5e7eb !important;
+    color: #374151 !important;
+    border-color: #d1d5db !important;
+}
+html.dark body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
+    background-color: #374151 !important;
+    color: #e5e7eb !important;
+    border-color: #4b5563 !important;
+}
+body.custom-background-active #confirmClearDataModal .bg-gray-50 {
+    background-color: #f9fafb !important;
+}
+html.dark body.custom-background-active #confirmClearDataModal .dark\:bg-gray-700 {
+    background-color: #374151 !important;
+}
+
+/* --- ССЫЛКИ --- */
+/* Правило для заголовков и элементов, которые не являются ссылками, но используют акцентный цвет */
+body.custom-background-active .text-primary {
+    color: var(--color-primary) !important;
+}
+
+/* Правило для настоящих ссылок <a> */
+body.custom-background-active #appContent a {
+    color: var(--color-text-primary) !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--color-primary) !important;
+    transition:
+        color 0.2s ease-in-out,
+        text-decoration-color 0.2s ease-in-out;
+}
+
+body.custom-background-active #appContent a:hover {
+    color: var(--color-primary) !important;
+    text-decoration-color: var(--color-secondary) !important;
+}
+
+/* --- ТЕГИ И УВЕДОМЛЕНИЯ (ALERTS) --- */
+/* Адаптивные теги/метки (исключаем .folder-badge — шильдики папок в Закладках) */
+body.custom-background-active
+    :is(
+        .bg-green-100,
+        .bg-yellow-100,
+        .bg-red-100,
+        .bg-blue-100,
+        .bg-purple-100,
+        .bg-indigo-100,
+        .bg-pink-100,
+        .bg-orange-100,
+        .bg-teal-100,
+        .bg-cyan-100,
+        .bg-amber-100,
+        .bg-lime-100,
+        .bg-emerald-100,
+        .bg-sky-100,
+        .dark\:bg-green-900,
+        .dark\:bg-yellow-900,
+        .dark\:bg-red-900,
+        .dark\:bg-blue-900,
+        .dark\:bg-purple-900,
+        .dark\:bg-indigo-900,
+        .dark\:bg-pink-900,
+        .dark\:bg-orange-900,
+        .dark\:bg-teal-900,
+        .dark\:bg-cyan-900,
+        .dark\:bg-amber-900,
+        .dark\:bg-lime-900,
+        .dark\:bg-emerald-900,
+        .dark\:bg-sky-900
+    ):not(.folder-badge) {
+    background-color: var(--color-surface-1) !important;
+    border: 1px solid var(--color-border) !important;
+}
+
+body.custom-background-active
+    :is(
+        .text-green-800,
+        .text-yellow-800,
+        .text-red-800,
+        .text-blue-800,
+        .text-purple-800,
+        .text-indigo-800,
+        .text-pink-800,
+        .text-orange-800,
+        .text-teal-800,
+        .text-cyan-800,
+        .text-amber-800,
+        .text-lime-800,
+        .text-emerald-800,
+        .text-sky-800,
+        .dark\:text-green-200,
+        .dark\:text-yellow-200,
+        .dark\:text-red-200,
+        .dark\:text-blue-200,
+        .dark\:text-purple-200,
+        .dark\:text-indigo-200,
+        .dark\:text-pink-200,
+        .dark\:text-orange-200,
+        .dark\:text-teal-200,
+        .dark\:text-cyan-200,
+        .dark\:text-amber-200,
+        .dark\:text-lime-200,
+        .dark\:text-emerald-200,
+        .dark\:text-sky-200
+    ):not(.folder-badge) {
+    color: var(--color-text-secondary) !important;
+}
+
+/* Адаптивные информационные панели (Alerts) */
+body.custom-background-active
+    :is(
+        .bg-blue-50,
+        .dark\:bg-blue-900\/50,
+        .bg-yellow-50,
+        .dark\:bg-yellow-900\/50,
+        .bg-green-50,
+        .bg-red-50
+    ) {
+    background-color: var(--color-surface-2) !important;
+    border-left-width: 4px;
+}
+
+body.custom-background-active
+    :is(
+        .text-blue-800,
+        .dark\:text-blue-200,
+        .text-yellow-800,
+        .dark\:text-yellow-200,
+        .text-green-800,
+        .text-red-800
+    ) {
+    color: var(--color-text-primary) !important;
+}
+
+/* --- СПЕЦИФИЧЕСКИЕ КОМПОНЕНТЫ --- */
+/* Hover для блоков в "Шаблонах" */
+body.custom-background-active .shablony-block.copyable-block:hover {
+    background-color: var(--color-hover-subtle) !important;
+}
+
+body.custom-background-active :is(nav, div):has(> .tab-btn) {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+body.custom-background-active .tab-btn {
+    color: #b0b0b0 !important;
+}
+
+body.custom-background-active .tab-btn i,
+body.custom-background-active .tab-btn svg {
+    color: #b0b0b0 !important;
+}
+
+body.custom-background-active .tab-btn:hover:not(.tab-active) {
+    color: #b0b0b0 !important;
+}
+
+body.custom-background-active .tab-btn:hover:not(.tab-active) i,
+body.custom-background-active .tab-btn:hover:not(.tab-active) svg {
+    color: #b0b0b0 !important;
+}
+
+body.custom-background-active .tab-btn.tab-active:hover {
+    color: #9955ff !important;
+}
+
+body.custom-background-active .tab-btn.tab-active:hover i,
+body.custom-background-active .tab-btn.tab-active:hover svg {
+    color: #9955ff !important;
+}
+
+body.custom-background-active .force-transparent {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+body.custom-background-active #customizeUIModal .p-content > div[class*='space-y'] > div {
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* ---------------------------------------------------- */
+/*      3.3. Кастомное фоновое изображение              */
+/* ---------------------------------------------------- */
+body.custom-bg-image-active::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    background-image: var(--custom-background-image);
+    background-size: contain;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-color: var(--color-background);
+}
+
+body.custom-bg-image-active.theme-light-text::before {
+    filter: brightness(0.6);
+}
+
+body.custom-bg-image-active.theme-dark-text::before {
+    filter: brightness(1.5) contrast(0.9);
+}
+
+body.custom-bg-image-active {
+    background-color: transparent !important;
+}
+
+#backgroundImagePreview {
+    width: 128px;
+    height: 72px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+body.custom-background-active
+    #customizeUIModal
+    .p-content
+    button:not(#saveUISettingsBtn):not(.btn-destructive) {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+

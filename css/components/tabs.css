@@ -1,0 +1,151 @@
+/* =================================================================== */
+/*    ТАБЫ (Tabs)                                                     */
+/* =================================================================== */
+
+/* ----------------------------------- */
+/*             2.3. Табы               */
+/* ----------------------------------- */
+/* Контейнер навигационной панели - только разделительная линия внизу */
+#staticHeaderWrapper > div.mb-3.border-b {
+    background-color: transparent !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* Навигационная панель — на всю ширину, переполнение только при нехватке места */
+#staticHeaderWrapper > div.mb-3.border-b {
+    width: 100%;
+}
+#staticHeaderWrapper > div.mb-3.border-b > nav {
+    background-color: transparent !important;
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+/* Видимые вкладки растягиваются и заполняют место; минимальная ширина 6rem — подписи не обрезаются */
+#staticHeaderWrapper > div.mb-3.border-b > nav .tab-btn:not(#moreTabsBtn):not(.overflow-tab) {
+    /* Вкладки занимают ширину по содержимому, а не равномерно растягиваются по всей полосе */
+    flex: 0 0 auto;
+    min-width: 6rem;
+}
+#staticHeaderWrapper > div.mb-3.border-b > nav .relative.group:has(#moreTabsBtn) {
+    flex-shrink: 0;
+}
+
+.tab-btn {
+    transition:
+        color 0.2s ease-in-out,
+        border-color 0.2s ease-in-out;
+    position: relative;
+    color: #b0b0b0 !important;
+}
+
+.tab-btn i,
+.tab-btn svg {
+    color: #b0b0b0 !important;
+}
+
+#clientNotes.custom-scrollbar::-webkit-scrollbar {
+    width: 8px !important;
+}
+#clientNotes.custom-scrollbar::-webkit-scrollbar-thumb {
+    border-width: 1px;
+}
+
+.tab-btn.tab-active {
+    color: #9955ff !important;
+    border-bottom-color: #9955ff !important;
+}
+
+.tab-btn.tab-active > * {
+    color: #9955ff !important;
+}
+
+.tab-btn.tab-active i,
+.tab-btn.tab-active svg {
+    color: #9955ff !important;
+}
+
+#moreTabsDropdown a,
+#moreTabsDropdown .overflow-dropdown-item {
+    text-decoration: none !important;
+}
+
+#moreTabsDropdown a:hover {
+    text-decoration: none !important;
+}
+
+#appContent #moreTabsDropdown a,
+#appContent #moreTabsDropdown .overflow-dropdown-item {
+    text-decoration: none !important;
+}
+#appContent #moreTabsDropdown a:hover {
+    text-decoration: none !important;
+}
+
+.tab-btn:hover:not(.tab-active) {
+    color: #b0b0b0 !important;
+}
+
+.tab-btn:hover:not(.tab-active) i,
+.tab-btn:hover:not(.tab-active) svg {
+    color: #b0b0b0 !important;
+}
+
+.tab-btn.tab-active:hover {
+    color: #9955ff !important;
+}
+
+.tab-btn.tab-active:hover i,
+.tab-btn.tab-active:hover svg {
+    color: #9955ff !important;
+}
+
+@media (min-width: 640px) {
+    .tab-btn i {
+        margin-right: 0.35rem;
+    }
+}
+
+.tab-content {
+    transition: opacity 200ms ease-in-out;
+}
+
+.tab-content.is-hiding {
+    opacity: 0;
+}
+
+/* Анализатор XML: состояния после анализа */
+.xml-analyzer-shell:not(.analysis-done) #xmlAnalyzerOutputContainer {
+    display: none !important;
+}
+.xml-analyzer-shell:not(.analysis-done) #xmlAnalyzerCertManagerWrapper {
+    display: none !important;
+}
+.xml-analyzer-shell.analysis-done #xmlAnalyzerOutputContainer {
+    display: flex !important;
+}
+.xml-analyzer-shell.analysis-done #xmlAnalyzerOutput {
+    display: block !important;
+}
+.xml-analyzer-shell.analysis-done.show-cert-manager #xmlAnalyzerCertManagerWrapper {
+    display: flex !important;
+}
+.xml-analyzer-shell.analysis-done #xmlAnalyzerInitialView {
+    display: none !important;
+}
+#xmlAnalyzerDropZone.drag-over {
+    border-color: var(--color-primary, #3b82f6);
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Централизованный padding для всех вкладок контента (кроме кнопки «Ещё») */
+.tab-btn:not(#moreTabsBtn) {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+}
+

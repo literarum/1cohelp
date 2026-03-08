@@ -1,0 +1,81 @@
+/* =================================================================== */
+/*    ПОИСК (Search)                                                   */
+/* =================================================================== */
+
+/* ----------------------------------- */
+/*      2.4. Результаты поиска         */
+/* ----------------------------------- */
+#searchResults {
+    transition:
+        opacity 150ms ease-out,
+        transform 150ms ease-out;
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+}
+
+#searchResults:not(.hidden) {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+/* Подсветка точного совпадения */
+.exact-match-highlight {
+    border-left: 4px solid var(--exact-match-border-color-light) !important;
+    padding-left: calc(0.75rem - 4px);
+    background-color: transparent !important;
+}
+
+.dark .exact-match-highlight,
+.dark .exact-match-highlight-dark {
+    border-left-color: var(--exact-match-border-color-dark) !important;
+}
+
+.exact-match-highlight:hover {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+.dark .exact-match-highlight:hover {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Активная подсветка элемента */
+.search-highlight-active {
+    background-color: var(--element-highlight-bg-light) !important;
+    outline: 2px solid var(--element-highlight-outline-light) !important;
+    outline-offset: -2px;
+    transition:
+        background-color 0.3s ease-out,
+        outline-color 0.3s ease-out;
+    position: relative;
+    z-index: 1;
+}
+
+.dark .search-highlight-active {
+    background-color: var(--element-highlight-bg-dark) !important;
+    outline-color: var(--element-highlight-outline-dark) !important;
+}
+
+/* Подсветка искомого текста */
+.search-term-highlight,
+mark {
+    background-color: var(--search-highlight-text-bg-light);
+    color: var(--search-highlight-text-color-light);
+    padding: 0.08em 0.4em;
+    border-radius: 0.15em;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.dark .search-term-highlight,
+.dark mark {
+    background-color: var(--search-highlight-text-bg-dark);
+    color: var(--search-highlight-text-color-dark);
+}
+
+.highlight-search-result-textarea {
+    transition: box-shadow 0.3s ease-in-out;
+    box-shadow: 0 0 8px 2px var(--color-primary, var(--color-primary-default));
+}
+

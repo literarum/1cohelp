@@ -51,7 +51,7 @@
             };
         </script>
         <!-- Production: use built CSS (npm run build:css). CDN only as fallback when built file is missing. -->
-        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260308-192804-7c1a621" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
+        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260308-225458-77a575f" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
         <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" crossorigin="anonymous"></script>
         <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -59,9 +59,8 @@
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         />
-        <!-- Сначала основные стили (переменные темы и база), затем скроллбар и кнопки -->
-        <link rel="stylesheet" href="css/styles.css?v=legacy-20260308-192804-7c1a621" />
-        <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260308-192804-7c1a621" />
+        <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260308-225458-77a575f" />
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             #custom-loading-overlay {
@@ -2435,7 +2434,7 @@
                 id="healthReportModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center"
             >
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col my-8">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden my-8">
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                         <h2 class="text-xl font-bold">
                             <i class="fas fa-heartbeat mr-2 text-primary"></i>Состояние здоровья приложения
@@ -2982,7 +2981,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260308-192804-7c1a621"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260308-192804-7c1a621"></script>
+        <script type="module" src="./script.js?v=legacy-20260308-225458-77a575f"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260308-225458-77a575f"></script>
     </body>
 </html>

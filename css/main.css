@@ -1,14 +1,37 @@
 /* =================================================================== */
 /*    ГЛАВНЫЙ CSS ФАЙЛ (Main CSS File)                                */
-/*    Импортирует все CSS модули                                      */
+/*    Импортирует все CSS модули в порядке каскада                     */
 /* =================================================================== */
 
-/* Основные стили приложения (переменные темы и компоненты) */
-@import url('./styles.css');
+/* 1. Переменные и семантическая палитра темы */
+@import url('./theme/variables.css');
 
-/* Стили скроллбара и кнопок (используют переменные из styles.css) */
+/* 2. Базовые стили: html, body, layout, FNS cert, focus */
+@import url('./base/base.css');
+
+/* 3. Компоненты */
+@import url('./components/modals.css');
+@import url('./components/scrollbar.css');
+@import url('./components/tabs.css');
+@import url('./components/search.css');
+@import url('./components/sortable.css');
+@import url('./components/color-picker.css');
+@import url('./components/lightbox.css');
+@import url('./components/cards-timer.css');
+@import url('./components/buttons.css');
+
+/* 4. Темизация */
+@import url('./theme/dark-overrides.css');
+@import url('./theme/custom-theme.css');
+
+/* 5. Утилиты и layout */
+@import url('./utilities/animations.css');
+@import url('./utilities/helpers.css');
+@import url('./layout/copyright.css');
+@import url('./utilities/elevation.css');
+@import url('./components/pdf-dropzone.css');
+@import url('./components/folders-examples.css');
+@import url('./components/health-modal.css');
+
+/* 6. Скроллбар и кнопки (используют переменные из theme/variables.css) */
 @import url('./inline-styles.css');
-
-/* Базовые стили (опционально, можно использовать вместо styles.css) */
-/* @import url('./base/variables.css'); */
-/* @import url('./base/base.css'); */
