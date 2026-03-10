@@ -23,10 +23,13 @@ export function registerOnloadHandler() {
         console.log('window.onload: Страница полностью загружена.');
         const appContent = document.getElementById('appContent');
 
-        const tempHideStyle = document.getElementById('temp-hide-appcontent-style');
-        if (tempHideStyle) {
-            tempHideStyle.remove();
-            console.log('[window.onload] Removed temporary appContent hiding style.');
+        // Показываем appContent за оверлеем сразу, чтобы во время appInit интерфейс реально загружался и отрисовывался; при снятии оверлея пользователь видит уже готовый UI.
+        if (appContent) {
+            appContent.classList.remove('hidden');
+            appContent.style.display = '';
+            appContent.style.visibility = 'visible';
+            appContent.style.opacity = '1';
+            console.log('[window.onload] appContent показан за оверлеем для фоновой загрузки интерфейса.');
         }
 
         if (deps.NotificationService?.init) {
@@ -88,11 +91,8 @@ export function registerOnloadHandler() {
 
                 document.body.style.backgroundColor = '';
 
+                // appContent уже видим за оверлеем с начала onload; при снятии оверлея только добавляем плавное появление и обновляем вложенные элементы.
                 if (appContent) {
-                    appContent.classList.remove('hidden');
-                    appContent.style.display = '';
-                    appContent.style.visibility = 'visible';
-                    appContent.style.opacity = '1';
                     appContent.classList.add('content-fading-in');
                     const tabBarWrapper = appContent.querySelector('div.border-b');
                     if (tabBarWrapper) {
@@ -105,7 +105,7 @@ export function registerOnloadHandler() {
                         tabsNav.style.display = 'flex';
                     }
                     console.log(
-                        '[window.onload Promise.all.then] appContent показан с fade-in эффектом.',
+                        '[window.onload Promise.all.then] Оверлей снят; интерфейс уже загружен, применён content-fading-in.',
                     );
 
                     await new Promise((resolve) => requestAnimationFrame(resolve));

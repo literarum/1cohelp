@@ -374,8 +374,9 @@ export async function initClientDataSystem() {
         if (!existingExportBtn) {
             const exportTextBtn = document.createElement('button');
             exportTextBtn.id = 'exportTextBtn';
-            exportTextBtn.innerHTML = `<span>Сохранить</span>`;
-            exportTextBtn.className = `p-2 lg:px-3 lg:py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition text-sm flex items-center justify-center shrink-0 min-w-[5.5rem]`;
+            exportTextBtn.innerHTML = `<i class="fas fa-save"></i>`;
+            exportTextBtn.className =
+                'w-8 h-8 flex items-center justify-center rounded-md bg-primary hover:bg-secondary text-white transition text-sm shrink-0';
             exportTextBtn.title = 'Сохранить заметки как .txt файл';
             exportTextBtn.addEventListener('click', exportClientDataToTxt);
             buttonContainer.appendChild(exportTextBtn);

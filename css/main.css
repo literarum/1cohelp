@@ -19,6 +19,7 @@
 @import url('./components/lightbox.css');
 @import url('./components/cards-timer.css');
 @import url('./components/buttons.css');
+@import url('./components/app-toggle.css');
 
 /* 4. Темизация */
 @import url('./theme/dark-overrides.css');

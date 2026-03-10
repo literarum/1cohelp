@@ -280,9 +280,9 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
                     '<p class="p-4 text-center text-gray-500">Шаблоны не найдены.</p>';
                 return;
             }
-            // Данные уже должны быть массивом строк параграфов
-            originalShablonyData = rawData;
-            renderStyledParagraphs(container, rawData);
+            const flatData = normalizeShablonyData(rawData);
+            originalShablonyData = flatData;
+            renderStyledParagraphs(container, flatData);
             return;
         }
 
@@ -304,6 +304,72 @@ function renderParagraphs(container, data) {
         return;
     }
     container.innerHTML = data.map((p) => `<div>${escapeHtml(p)}</div>`).join('');
+}
+
+/**
+ * Нормализует данные Шаблонов к плоскому массиву строк параграфов.
+ * Если API возвращает блоки вида { heading/title, paragraphs/content }, преобразует в строки
+ * с маркерами ⏩/➧/▸, чтобы renderStyledParagraphs выводил и заголовки, и содержимое.
+ * @param {Array<string|Object>} rawData - result.data из API
+ * @returns {Array<string>}
+ */
+function normalizeShablonyData(rawData) {
+    if (!Array.isArray(rawData) || rawData.length === 0) return rawData;
+    const first = rawData[0];
+    if (typeof first === 'string') return rawData;
+
+    const markers = ['', '⏩ ', '➧ ', '▸ '];
+
+    if (first && typeof first === 'object' && !Array.isArray(first)) {
+        const out = [];
+
+        for (const block of rawData) {
+            const title = block.heading ?? block.title ?? '';
+            const level = Math.min(Math.max(block.level ?? 1, 1), 3);
+            const marker = markers[level] || '⏩ ';
+            if (title) out.push(marker + String(title).trim());
+            const paras = block.paragraphs ?? block.content ?? block.body;
+            if (Array.isArray(paras)) {
+                paras.forEach((p) => {
+                    const s = String(p).trim();
+                    if (s) out.push(s);
+                });
+            } else if (typeof paras === 'string' && paras.trim()) {
+                out.push(paras.trim());
+            }
+        }
+        return out;
+    }
+
+    if (first && typeof first === 'object' && 'text' in first) {
+        const out = [];
+        for (const item of rawData) {
+            const t = item.text != null ? String(item.text).trim() : '';
+            if (!t) continue;
+            const type = (item.type || '').toLowerCase();
+            if (type === 'heading' || type === 'title') {
+                const level = Math.min(Math.max(item.level ?? 1, 1), 3);
+                out.push((markers[level] || '⏩ ') + t);
+            } else {
+                out.push(t);
+            }
+        }
+        return out;
+    }
+
+    const fallback = [];
+    for (const item of rawData) {
+        if (typeof item === 'string') {
+            fallback.push(item);
+        } else if (item && typeof item === 'object') {
+            const t = item.text ?? item.title ?? item.heading ?? item.content ?? item.body;
+            if (t != null) {
+                const s = typeof t === 'string' ? t : Array.isArray(t) ? t.map(String).join('\n') : String(t);
+                if (s.trim()) fallback.push(s.trim());
+            }
+        }
+    }
+    return fallback.length ? fallback : rawData;
 }
 
 /**

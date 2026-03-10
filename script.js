@@ -240,6 +240,10 @@ import {
     showUnsavedConfirmModal as showUnsavedConfirmModalModule,
 } from './js/ui/unsaved-confirm-modal.js';
 import {
+    registerModalDirtyCheck,
+    shouldConfirmBeforeClose,
+} from './js/ui/unsaved-changes-registry.js';
+import {
     setAppConfirmModalDependencies,
     showAppConfirm as showAppConfirmModule,
     showAppAlert as showAppAlertModule,
@@ -1077,16 +1081,8 @@ function showOverlayForFixedDuration(duration = 2000) {
 
 (function earlyAppSetup() {
     const isReloadingAfterClear = localStorage.getItem('copilotIsReloadingAfterClear') === 'true';
-    const appContentEarly = document.getElementById('appContent');
-
-    if (appContentEarly) {
-        appContentEarly.classList.add('hidden');
-    } else {
-        const tempStyle = document.createElement('style');
-        tempStyle.id = 'temp-hide-appcontent-style';
-        tempStyle.textContent = '#appContent { display: none !important; }';
-        document.head.appendChild(tempStyle);
-    }
+    // Не скрываем #appContent: приложение должно рендериться за оверлеем, чтобы при снятии оверлея интерфейс уже был загружен.
+    // Оверлей (z-index 99999) остаётся поверх до hideAndDestroy.
 
     if (isReloadingAfterClear) {
         console.log('[EarlySetup] Reloading after data clear. Showing overlay and removing flag.');
@@ -3099,13 +3095,12 @@ function closeAnimatedModal(modalElement) {
 
 /**
  * Запрос на закрытие модалки (Escape / клик по оверлею).
- * Для editModal/addModal проверяет несохранённые изменения; при наличии показывает окно «Выйти без сохранения?».
+ * Централизованная проверка: предупреждение «Выйти без сохранения» показывается только при наличии несохранённых изменений (реестр unsaved-changes-registry).
  * @param {HTMLElement} modal - модальное окно
- * @returns {boolean} false — закрытие отменено (показан диалог или не закрываем); true — модалка уже закрыта вызывающей стороной не должна закрывать (реальное закрытие делаем мы внутри)
+ * @returns {boolean} false — закрытие отменено (показан диалог); true — можно закрыть (закрытие выполняет вызывающий код или closeModalNow)
  */
 function requestCloseModal(modal) {
     if (!modal) return true;
-    const modalId = modal.id;
     const closeModalNow = () => {
         modal.classList.add('hidden');
         if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
@@ -3124,57 +3119,58 @@ function requestCloseModal(modal) {
         return true;
     };
 
-    if (modalId === 'editModal') {
-        if (typeof hasChanges === 'function' && hasChanges('edit')) {
-            return confirmAndClose();
-        }
-    } else if (modalId === 'addModal') {
-        if (typeof hasChanges === 'function' && hasChanges('add')) {
-            return confirmAndClose();
-        }
-    } else if (modalId === 'customizeUIModal') {
-        if (State && State.isUISettingsDirty) {
-            return confirmAndClose();
-        }
-    } else if (modalId === 'bookmarkModal') {
-        try {
-            const form = modal.querySelector('#bookmarkForm');
-            if (
-                form &&
-                State.initialBookmarkFormState &&
-                typeof getCurrentBookmarkFormState === 'function' &&
-                typeof deepEqual === 'function'
-            ) {
-                const currentState = getCurrentBookmarkFormState(form);
-                if (!deepEqual(State.initialBookmarkFormState, currentState)) {
-                    return confirmAndClose();
-                }
-            }
-        } catch (e) {
-            console.warn('[requestCloseModal] bookmarkModal dirty-check failed:', e);
-        }
-    } else if (modalId === 'extLinkModal') {
-        try {
-            const form = modal.querySelector('#extLinkForm');
-            const initialRaw = modal.dataset.initialFormState || '';
-            if (form && initialRaw && typeof deepEqual === 'function') {
-                const initialState = JSON.parse(initialRaw);
-                const currentState = {
-                    title: form.elements?.extLinkTitle?.value || '',
-                    url: form.elements?.extLinkUrl?.value || '',
-                    description: form.elements?.extLinkDescription?.value || '',
-                    category: form.elements?.extLinkCategory?.value || '',
-                };
-                if (!deepEqual(initialState, currentState)) {
-                    return confirmAndClose();
-                }
-            }
-        } catch (e) {
-            console.warn('[requestCloseModal] extLinkModal dirty-check failed:', e);
-        }
+    if (shouldConfirmBeforeClose(modal)) {
+        return confirmAndClose();
     }
     return true;
 }
+
+// Регистрация проверок несохранённых изменений для модалок (централизованная система)
+function initUnsavedChangesRegistry() {
+    registerModalDirtyCheck('editModal', () =>
+        typeof hasChanges === 'function' ? hasChanges('edit') : false,
+    );
+    registerModalDirtyCheck('addModal', () =>
+        typeof hasChanges === 'function' ? hasChanges('add') : false,
+    );
+    registerModalDirtyCheck('customizeUIModal', () => Boolean(State && State.isUISettingsDirty));
+    registerModalDirtyCheck('bookmarkModal', (modal) => {
+        try {
+            const form = modal.querySelector('#bookmarkForm');
+            if (
+                !form ||
+                !State.initialBookmarkFormState ||
+                typeof getCurrentBookmarkFormState !== 'function' ||
+                typeof deepEqual !== 'function'
+            )
+                return false;
+            const currentState = getCurrentBookmarkFormState(form);
+            return !deepEqual(State.initialBookmarkFormState, currentState);
+        } catch (e) {
+            console.warn('[unsaved-changes-registry] bookmarkModal check failed:', e);
+            return false;
+        }
+    });
+    registerModalDirtyCheck('extLinkModal', (modal) => {
+        try {
+            const form = modal.querySelector('#extLinkForm');
+            const initialRaw = modal.dataset.initialFormState || '';
+            if (!form || !initialRaw || typeof deepEqual !== 'function') return false;
+            const initialState = JSON.parse(initialRaw);
+            const currentState = {
+                title: form.elements?.extLinkTitle?.value || '',
+                url: form.elements?.extLinkUrl?.value || '',
+                description: form.elements?.extLinkDescription?.value || '',
+                category: form.elements?.extLinkCategory?.value || '',
+            };
+            return !deepEqual(initialState, currentState);
+        } catch (e) {
+            console.warn('[unsaved-changes-registry] extLinkModal check failed:', e);
+            return false;
+        }
+    });
+}
+initUnsavedChangesRegistry();
 
 // Отмена и крестик в модалках редактирования/добавления алгоритма — через requestCloseModal (проверка несохранённых)
 document.addEventListener('click', (e) => {
@@ -3647,6 +3643,7 @@ setBookmarksModalDependencies({
     getFromIndexedDB,
     renderExistingThumbnail,
     showUnsavedConfirmModal: showUnsavedConfirmModalModule,
+    shouldConfirmBeforeClose,
 });
 console.log('[script.js] Зависимости модуля Bookmarks Modal установлены');
 
@@ -3716,6 +3713,7 @@ setExtLinksModalDependencies({
     handleExtLinkFormSubmit: handleExtLinkFormSubmitModule,
     showUnsavedConfirmModal: showUnsavedConfirmModalModule,
     deepEqual,
+    shouldConfirmBeforeClose,
 });
 console.log('[script.js] Зависимости модуля Ext Links Modal установлены');
 
@@ -4053,6 +4051,7 @@ setUISettingsModalInitDependencies({
     applyPreviewSettings: typeof applyPreviewSettings !== 'undefined' ? applyPreviewSettings : null,
     initColorPicker: initColorPickerModule,
     showUnsavedConfirmModal: showUnsavedConfirmModalModule,
+    shouldConfirmBeforeClose,
     setupExtensionFieldListeners:
         typeof setupExtensionFieldListeners === 'function' ? setupExtensionFieldListeners : null,
     loadEmployeeExtension:

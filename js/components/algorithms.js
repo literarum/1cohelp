@@ -568,7 +568,15 @@ function doInitStepSorting(containerElement, isMainAlgoWithGroups, SortableLib) 
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
                 group: 'steps',
-                onEnd: function () {
+                onEnd: function (evt) {
+                    const stepDiv = evt && evt.item;
+                    if (stepDiv) {
+                        const block = stepDiv.closest('.edit-main-algo-group-block');
+                        if (block && block.dataset.groupId) {
+                            const sel = stepDiv.querySelector('.step-group-id');
+                            if (sel) sel.value = block.dataset.groupId;
+                        }
+                    }
                     if (updateStepNumbers) {
                         updateStepNumbers(containerElement);
                     } else if (typeof window.updateStepNumbers === 'function') {
@@ -776,9 +784,42 @@ export function extractStepsDataFromEditForm(containerElement, isMainAlgorithm =
         return stepsData;
     }
 
-    const stepDivs = containerElement.querySelectorAll('.edit-step');
+    // Для главного алгоритма с группами — порядок шагов и принадлежность группе берём строго из DOM:
+    // сначала шаги без группы (прямые потомки), затем для каждого блока — шаги внутри него;
+    // groupId для шага в блоке берём из data-group-id блока (чтобы перетаскивание между группами сохранялось).
+    let stepItems;
+    if (isMainAlgorithm && containerElement.querySelector('.edit-main-algo-group-block')) {
+        stepItems = [];
+        const direct = containerElement.children;
+        for (let i = 0; i < direct.length; i++) {
+            const child = direct[i];
+            if (child.classList && child.classList.contains('edit-step')) {
+                stepItems.push({ div: child, groupId: null });
+            } else if (
+                child.classList &&
+                child.classList.contains('edit-main-algo-group-block') &&
+                child.querySelector
+            ) {
+                const blockGroupId = child.dataset.groupId || null;
+                const stepsBody = child.querySelector('.edit-main-algo-group-steps');
+                if (stepsBody && stepsBody.children) {
+                    for (let j = 0; j < stepsBody.children.length; j++) {
+                        const stepEl = stepsBody.children[j];
+                        if (stepEl.classList && stepEl.classList.contains('edit-step')) {
+                            stepItems.push({ div: stepEl, groupId: blockGroupId });
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        const list = containerElement.querySelectorAll('.edit-step');
+        stepItems = Array.from(list).map((div) => ({ div, groupId: undefined }));
+    }
 
-    stepDivs.forEach((stepDiv, formIndex) => {
+    stepItems.forEach((item, formIndex) => {
+        const stepDiv = item.div;
+        const groupIdFromDom = item.groupId;
         const titleInput = stepDiv.querySelector('.step-title');
         const descInput = stepDiv.querySelector('.step-desc');
         const exampleInput = stepDiv.querySelector('.step-example');
@@ -850,8 +891,12 @@ export function extractStepsDataFromEditForm(containerElement, isMainAlgorithm =
             if (isCopyable !== undefined) step.isCopyable = isCopyable;
             if (isCollapsible !== undefined) step.isCollapsible = isCollapsible;
             if (showNoInnHelp !== undefined) step.showNoInnHelp = showNoInnHelp;
-            if (groupIdSelect && groupIdSelect.value && groupIdSelect.value.trim())
+            // При сборе по DOM (groupIdFromDom !== undefined) используем группу из блока; иначе — из селекта.
+            if (groupIdFromDom !== undefined) {
+                if (groupIdFromDom) step.groupId = groupIdFromDom;
+            } else if (groupIdSelect && groupIdSelect.value && groupIdSelect.value.trim()) {
                 step.groupId = groupIdSelect.value.trim();
+            }
         }
 
         if (isMainAlgorithm && exampleInput) {
@@ -1089,7 +1134,12 @@ export function getCurrentEditState() {
                 currentStepData.showNoInnHelp = false;
             }
             const groupIdSelect = stepDiv.querySelector('.step-group-id');
-            currentStepData.groupId = groupIdSelect?.value?.trim() || '';
+            const rawGroupId = groupIdSelect?.value?.trim() || '';
+            if (rawGroupId) {
+                currentStepData.groupId = rawGroupId;
+            } else {
+                delete currentStepData.groupId;
+            }
         }
 
         if (stepDiv.dataset.stepType) {
@@ -1243,14 +1293,14 @@ export function hasChanges(modalType) {
     };
 
     if (initialState === null) {
-        console.error(
-            `hasChanges (${modalType}): НАЧАЛЬНОЕ состояние (initialState) равно null! Невозможно сравнить. Возможно, произошла ошибка при открытии окна. Предполагаем наличие изменений для безопасности.`,
-        );
-        console.log(
-            `hasChanges (${modalType}): Текущее состояние (currentState):`,
-            currentState ? JSON.parse(JSON.stringify(currentState)) : currentState,
-        );
-        return !isEffectivelyEmptyState(currentState);
+        // Нет начального состояния — предупреждение показываем только если в форме есть введённые данные
+        const hasContent = !isEffectivelyEmptyState(currentState);
+        if (hasContent) {
+            console.warn(
+                `hasChanges (${modalType}): initialState равно null, в форме есть данные — считаем наличие изменений.`,
+            );
+        }
+        return hasContent;
     }
     if (currentState === null) {
         console.error(
@@ -1321,7 +1371,12 @@ export function captureInitialEditState(algorithm, section) {
                         initialStep.isCopyable = step.isCopyable || false;
                         initialStep.isCollapsible = step.isCollapsible || false;
                         initialStep.showNoInnHelp = step.showNoInnHelp || false;
-                        if (step.groupId) initialStep.groupId = step.groupId;
+                        if (step.groupId !== undefined && step.groupId !== null) {
+                            const rawGroupId = String(step.groupId).trim();
+                            if (rawGroupId) {
+                                initialStep.groupId = rawGroupId;
+                            }
+                        }
                     }
 
                     if (!isMainAlgorithm) {

@@ -1,0 +1,90 @@
+/* =================================================================== */
+/*    APP TOGGLE (iOS-стиль переключатель)                             */
+/*    Использует переменные темы: --color-primary, --color-border,     */
+/*    --color-surface-*, --color-input-bg                              */
+/* =================================================================== */
+
+.app-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    --app-toggle-track-left: 0.1875rem;
+    --app-toggle-track-width: 2.75rem;
+    --app-toggle-thumb-size: 1.125rem;
+}
+
+.app-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+
+.app-toggle__track {
+    display: inline-block;
+    position: relative;
+    width: 2.75rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background: var(--color-border, #d1d5db);
+    border: 1px solid var(--color-border, #d1d5db);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-toggle__track::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0.1875rem;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-top: -0.5625rem;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+}
+
+.app-toggle input:checked + .app-toggle__track {
+    background: var(--color-primary, #9933ff);
+    border-color: var(--color-primary, #9933ff);
+}
+
+.app-toggle input:checked + .app-toggle__track::after {
+    transform: translateX(1.25rem);
+}
+
+.app-toggle input:focus-visible + .app-toggle__track {
+    outline: 2px solid var(--color-primary, #9933ff);
+    outline-offset: 2px;
+}
+
+.app-toggle:hover .app-toggle__track {
+    border-color: var(--color-primary, #9933ff);
+}
+
+.app-toggle input:checked:hover + .app-toggle__track {
+    filter: brightness(1.05);
+}
+
+/* Компактный вариант для тулбара (главный алгоритм) */
+.app-toggle--compact .app-toggle__track {
+    width: 2rem;
+    height: 1.1rem;
+}
+
+.app-toggle--compact .app-toggle__track::after {
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-top: -0.4375rem;
+    left: 0.125rem;
+}
+
+.app-toggle--compact input:checked + .app-toggle__track::after {
+    transform: translateX(0.875rem);
+}

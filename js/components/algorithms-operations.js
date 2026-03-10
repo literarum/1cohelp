@@ -203,50 +203,62 @@ function reorganizeMainAlgoStepsIntoGroups(
     updateStepNumbersFn,
 ) {
     const groups = Array.isArray(algorithm.groups) ? algorithm.groups : [];
-    const steps = algorithm.steps || [];
-
-    const ungrouped = [];
-    const byGroup = {};
-    stepDivs.forEach((div, idx) => {
-        const step = steps[idx];
-        const gid = step?.groupId;
-        if (!gid || !groups.some((g) => g.id === gid)) {
-            ungrouped.push(div);
-        } else {
-            if (!byGroup[gid]) byGroup[gid] = [];
-            byGroup[gid].push(div);
-        }
-    });
+    const steps = Array.isArray(algorithm.steps) ? algorithm.steps : [];
+    const groupMetaById = new Map(groups.map((g) => [g.id, g]));
 
     editStepsContainer.innerHTML = '';
 
-    ungrouped.forEach((div) => editStepsContainer.appendChild(div));
+    let currentGroupId = null;
+    let currentGroupBody = null;
 
-    groups.forEach((group) => {
-        const groupSteps = byGroup[group.id] || [];
-        if (groupSteps.length === 0) return;
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const stepDiv = stepDivs[i];
+        if (!stepDiv) continue;
 
-        const block = document.createElement('div');
-        block.className =
-            'edit-main-algo-group-block mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800/50';
-        block.dataset.groupId = group.id;
+        const gid = step && step.groupId ? step.groupId : null;
+        const hasValidGroup = gid && groupMetaById.has(gid);
 
-        const header = document.createElement('div');
-        header.className =
-            'edit-main-algo-group-header flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 cursor-grab border-b border-gray-200 dark:border-gray-600';
-        header.innerHTML = `
+        if (!hasValidGroup) {
+            currentGroupId = null;
+            currentGroupBody = null;
+            editStepsContainer.appendChild(stepDiv);
+            continue;
+        }
+
+        if (gid !== currentGroupId) {
+            currentGroupId = gid;
+            const group = groupMetaById.get(gid);
+
+            const block = document.createElement('div');
+            block.className =
+                'edit-main-algo-group-block mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800/50';
+            block.dataset.groupId = group.id;
+
+            const header = document.createElement('div');
+            header.className =
+                'edit-main-algo-group-header flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 cursor-grab border-b border-gray-200 dark:border-gray-600';
+            header.innerHTML = `
             <i class="fas fa-grip-vertical main-algo-group-drag-handle text-gray-400 dark:text-gray-500 shrink-0" title="Перетащить группу"></i>
             <span class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(group.title || group.id)}</span>
         `;
 
-        const body = document.createElement('div');
-        body.className = 'edit-main-algo-group-steps p-2 space-y-2';
+            const body = document.createElement('div');
+            body.className = 'edit-main-algo-group-steps p-2 space-y-2';
 
-        groupSteps.forEach((div) => body.appendChild(div));
-        block.appendChild(header);
-        block.appendChild(body);
-        editStepsContainer.appendChild(block);
-    });
+            block.appendChild(header);
+            block.appendChild(body);
+            editStepsContainer.appendChild(block);
+
+            currentGroupBody = body;
+        }
+
+        if (currentGroupBody) {
+            currentGroupBody.appendChild(stepDiv);
+        } else {
+            editStepsContainer.appendChild(stepDiv);
+        }
+    }
 
     const moveStepToGroup = (stepDiv, groupId) => {
         const sel = stepDiv.querySelector('.step-group-id');

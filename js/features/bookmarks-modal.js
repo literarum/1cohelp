@@ -27,6 +27,7 @@ let populateBookmarkFolders = null;
 let getFromIndexedDB = null;
 let renderExistingThumbnail = null;
 let showUnsavedConfirmModal = null;
+let shouldConfirmBeforeClose = null;
 
 export function setBookmarksModalDependencies(deps) {
     bookmarkModalConfigGlobal = deps.bookmarkModalConfigGlobal;
@@ -47,6 +48,8 @@ export function setBookmarksModalDependencies(deps) {
     renderExistingThumbnail = deps.renderExistingThumbnail;
     if (deps.showUnsavedConfirmModal !== undefined)
         showUnsavedConfirmModal = deps.showUnsavedConfirmModal;
+    if (deps.shouldConfirmBeforeClose !== undefined)
+        shouldConfirmBeforeClose = deps.shouldConfirmBeforeClose;
 }
 
 export async function ensureBookmarkModal() {
@@ -235,21 +238,12 @@ export async function ensureBookmarkModal() {
     const handleCloseActions = async (targetModal) => {
         const form = targetModal.querySelector('#bookmarkForm');
         let doClose = true;
-        if (
-            form &&
-            typeof getCurrentBookmarkFormState === 'function' &&
-            typeof deepEqual === 'function'
-        ) {
-            if (State.initialBookmarkFormState) {
-                const currentState = getCurrentBookmarkFormState(form);
-                if (!deepEqual(State.initialBookmarkFormState, currentState)) {
-                    const confirmLeave =
-                        typeof showUnsavedConfirmModal === 'function'
-                            ? await showUnsavedConfirmModal()
-                            : confirm('Изменения не сохранены. Закрыть без сохранения?');
-                    if (!confirmLeave) doClose = false;
-                }
-            }
+        if (typeof shouldConfirmBeforeClose === 'function' && shouldConfirmBeforeClose(targetModal)) {
+            const confirmLeave =
+                typeof showUnsavedConfirmModal === 'function'
+                    ? await showUnsavedConfirmModal()
+                    : confirm('Изменения не сохранены. Закрыть без сохранения?');
+            if (!confirmLeave) doClose = false;
         }
 
         if (doClose) {

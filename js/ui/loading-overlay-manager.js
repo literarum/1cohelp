@@ -4,8 +4,12 @@
  * Менеджер оверлея загрузки приложения.
  * Вынесен из script.js для уменьшения мегафайла и повторного использования.
  */
-const EXIT_EXPAND_DURATION_MS = 700;
-const EXIT_MAX_SCALE = 4;
+const EXIT_WIND_UP_MS = 750;
+const EXIT_EXPLODE_MS = 3300;
+const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
+const EXIT_SHRINK_SCALE = 0.35;
+const EXIT_MAX_SCALE = 12;
+const EXIT_GLOW_MULTIPLIER_MAX = 8;
 
 export const loadingOverlayManager = {
     overlayElement: null,
@@ -36,9 +40,11 @@ export const loadingOverlayManager = {
 
             const canvas = this.overlayElement.querySelector('#loadingCanvas');
             if (canvas) {
-                // Используем раннюю анимацию без переключения — сфера вращается без остановки до скрытия оверлея
-                if (window._earlySphereAnimation && window._earlySphereAnimation.isRunning) {
-                    console.log('Using existing early sphere animation (no handoff, no stop).');
+                // Всегда используем раннюю анимацию, если она есть — один источник отрисовки, без дублирования с менеджером
+                if (window._earlySphereAnimation) {
+                    if (!window._earlySphereAnimation.isRunning) {
+                        window._earlySphereAnimation.start();
+                    }
                     this.isSpawning = false;
                     this.spawnStartTime = performance.now();
                     this.spawnProgress = 1;
@@ -48,12 +54,12 @@ export const loadingOverlayManager = {
                         resize: window._earlySphereAnimation.resize || function () {},
                         isRunning: true,
                     };
-                    console.log('Early sphere animation kept running until overlay hide.');
+                    console.log('Using early sphere animation (single loop, exit effect on same canvas).');
                 } else {
-                    // Если ранней анимации нет, запускаем обычным способом, но сразу показываем сферу
-                    this.isSpawning = false; // Не используем spawn анимацию, показываем сразу
+                    // Ранней анимации нет (оверлей создан динамически) — запускаем анимацию менеджера
+                    this.isSpawning = false;
                     this.spawnStartTime = performance.now();
-                    this.spawnProgress = 1; // Сфера видна сразу
+                    this.spawnProgress = 1;
 
                     if (this.animationRunner) {
                         if (this.animationRunner.isRunning) {
@@ -432,6 +438,7 @@ export const loadingOverlayManager = {
      * Возвращает Promise, который резолвится по окончании анимации расширения.
      */
     async runExitEffect() {
+        this.exitScaleStartTime = performance.now();
         const early = window._earlySphereAnimation;
         if (
             early &&
@@ -442,8 +449,7 @@ export const loadingOverlayManager = {
             await early.getExitPromise();
             return;
         }
-        this.exitScaleStartTime = performance.now();
-        await new Promise((r) => setTimeout(r, EXIT_EXPAND_DURATION_MS + 100));
+        await new Promise((r) => setTimeout(r, EXIT_TOTAL_MS + 100));
     },
 
     _encapsulateAnimationScript(canvasElement, manager, initialState = null) {
@@ -455,16 +461,34 @@ export const loadingOverlayManager = {
         let globalTime_anim = initialState?.globalTime || 0;
         let rotationX_anim = initialState?.rotationX || 0;
         let rotationY_anim = initialState?.rotationY || 0;
+        let rotationStartTime_anim = 0;
         let lastFrameTime_anim = null;
         const ROTATION_DELTA_NORM = 1 / 16;
 
         const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+        const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
+        const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 
         function getExitScale_anim() {
             if (!manager.exitScaleStartTime) return 1;
             const elapsed = performance.now() - manager.exitScaleStartTime;
-            const t = Math.min(elapsed / EXIT_EXPAND_DURATION_MS, 1);
-            return 1 + (EXIT_MAX_SCALE - 1) * easeOutCubic(t);
+            if (elapsed >= EXIT_TOTAL_MS) return EXIT_MAX_SCALE;
+            if (elapsed < EXIT_WIND_UP_MS) {
+                const t = elapsed / EXIT_WIND_UP_MS;
+                return 1 + (EXIT_SHRINK_SCALE - 1) * easeOutQuint(t);
+            }
+            const t = (elapsed - EXIT_WIND_UP_MS) / EXIT_EXPLODE_MS;
+            return EXIT_SHRINK_SCALE + (EXIT_MAX_SCALE - EXIT_SHRINK_SCALE) * easeOutQuart(t);
+        }
+
+        function getExitGlowMultiplier_anim() {
+            if (!manager.exitScaleStartTime) return 1;
+            const elapsed = performance.now() - manager.exitScaleStartTime;
+            if (elapsed < EXIT_WIND_UP_MS) {
+                const t = elapsed / EXIT_WIND_UP_MS;
+                return 1 + (EXIT_GLOW_MULTIPLIER_MAX - 1) * easeOutQuint(t);
+            }
+            return EXIT_GLOW_MULTIPLIER_MAX;
         }
 
         const config_anim = {
@@ -579,21 +603,21 @@ export const loadingOverlayManager = {
                 this.currentDisplaySize = this.projectedSize * easedSpawnProgress;
             }
 
-            draw(spawnProgress) {
+            draw(spawnProgress, glowMultiplier = 1) {
                 const easedSpawnProgress = easeOutCubic(spawnProgress);
                 if (this.currentDisplaySize <= 0.15) return;
-                const mainAlpha = this.alphaFactor * easedSpawnProgress;
+                const mainAlpha = Math.min(1, this.alphaFactor * easedSpawnProgress * glowMultiplier);
                 if (mainAlpha <= 0.02) return;
                 const mainSize = this.currentDisplaySize;
 
                 const haloLayers = [
-                    { sizeFactor: 5, alphaFactor: 0.12, innerStop: 0.05, outerStop: 0.8 },
-                    { sizeFactor: 3.5, alphaFactor: 0.18, innerStop: 0.1, outerStop: 0.75 },
-                    { sizeFactor: 2.2, alphaFactor: 0.28, innerStop: 0.15, outerStop: 0.85 },
+                    { sizeFactor: 5, alphaFactor: 0.2, innerStop: 0.05, outerStop: 0.8 },
+                    { sizeFactor: 3.5, alphaFactor: 0.28, innerStop: 0.1, outerStop: 0.75 },
+                    { sizeFactor: 2.2, alphaFactor: 0.4, innerStop: 0.15, outerStop: 0.85 },
                 ];
                 for (const layer of haloLayers) {
                     const haloSize = mainSize * layer.sizeFactor;
-                    const haloAlpha = mainAlpha * layer.alphaFactor;
+                    const haloAlpha = Math.min(1, mainAlpha * layer.alphaFactor);
                     if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
                     const gradient = ctx.createRadialGradient(
                         this.screenX,
@@ -670,13 +694,12 @@ export const loadingOverlayManager = {
 
         function animate_anim(timestamp) {
             timestamp = timestamp || performance.now();
-            const delta =
-                lastFrameTime_anim != null ? Math.min(timestamp - lastFrameTime_anim, 50) : 16;
+            if (!rotationStartTime_anim) rotationStartTime_anim = timestamp;
+            const elapsedMs = timestamp - rotationStartTime_anim;
+            rotationX_anim = elapsedMs * (config_anim.rotationSpeedX / 16);
+            rotationY_anim = elapsedMs * (config_anim.rotationSpeedY / 16);
             lastFrameTime_anim = timestamp;
             globalTime_anim++;
-            const d = delta * ROTATION_DELTA_NORM;
-            rotationX_anim += config_anim.rotationSpeedX * d;
-            rotationY_anim += config_anim.rotationSpeedY * d;
 
             ctx.fillStyle = config_anim.backgroundColor;
             ctx.clearRect(0, 0, width_anim, height_anim);
@@ -690,6 +713,7 @@ export const loadingOverlayManager = {
             const currentEffectiveSpawnProgress = manager.isSpawning ? manager.spawnProgress : 1.0;
 
             const breathPulse = Math.sin(globalTime_anim * config_anim.breathSpeed);
+            const exitGlowMultiplier = getExitGlowMultiplier_anim();
             particles_anim.forEach((particle) => {
                 particle.projectAndTransform(
                     config_anim.sphereBaseRadius,
@@ -699,7 +723,7 @@ export const loadingOverlayManager = {
             });
 
             particles_anim.forEach((particle) => {
-                particle.draw(currentEffectiveSpawnProgress);
+                particle.draw(currentEffectiveSpawnProgress, exitGlowMultiplier);
             });
             localAnimationFrameId = requestAnimationFrame(animate_anim);
         }

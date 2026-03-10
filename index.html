@@ -8,8 +8,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260309-002502-de92814"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260309-002502-de92814"></script>
+        <script src="js/vendor-config.js?v=legacy-20260311-000805-3b7594f"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260311-000805-3b7594f"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -66,9 +66,9 @@
             };
         </script>
         <!-- Production: use built CSS (npm run build:css). Fallback: vendor or CDN via __loadTailwindCDN. -->
-        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260309-002502-de92814" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
+        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260311-000805-3b7594f" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260309-002502-de92814" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260311-000805-3b7594f" />
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             #custom-loading-overlay {
@@ -219,20 +219,49 @@
             let globalTime = 0;
             let rotationX = 0;
             let rotationY = 0;
+            let rotationStartTime = 0;
             let lastFrameTime = null;
-            /* Скорость вращения: при 60fps (16ms/кадр) даёт те же значения, что и раньше — плавно при любой частоте кадров */
             const ROTATION_DELTA_NORM = 1 / 16;
             let exitScaleStartTime = 0;
-            const EXIT_DURATION_MS = 700;
-            const EXIT_MAX_SCALE = 4;
+            const EXIT_WIND_UP_MS = 750;
+            const EXIT_EXPLODE_MS = 3300;
+            const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
+            const EXIT_SHRINK_SCALE = 0.35;
+            const EXIT_MAX_SCALE = 12;
+            const EXIT_GLOW_MULTIPLIER_MAX = 8;
+            const SPHERE_FADE_IN_MS = 1000;
             
-            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+            const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
+            const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+            let sphereFadeInStartTime = 0;
             
             function getCurrentExitScale() {
                 if (!exitScaleStartTime) return 1;
                 const elapsed = performance.now() - exitScaleStartTime;
-                const t = Math.min(elapsed / EXIT_DURATION_MS, 1);
-                return 1 + (EXIT_MAX_SCALE - 1) * easeOutCubic(t);
+                if (elapsed >= EXIT_TOTAL_MS) return EXIT_MAX_SCALE;
+                if (elapsed < EXIT_WIND_UP_MS) {
+                    const t = elapsed / EXIT_WIND_UP_MS;
+                    return 1 + (EXIT_SHRINK_SCALE - 1) * easeOutQuint(t);
+                }
+                const t = (elapsed - EXIT_WIND_UP_MS) / EXIT_EXPLODE_MS;
+                return EXIT_SHRINK_SCALE + (EXIT_MAX_SCALE - EXIT_SHRINK_SCALE) * easeOutQuart(t);
+            }
+            
+            function getCurrentExitGlowMultiplier() {
+                if (!exitScaleStartTime) return 1;
+                const elapsed = performance.now() - exitScaleStartTime;
+                if (elapsed < EXIT_WIND_UP_MS) {
+                    const t = elapsed / EXIT_WIND_UP_MS;
+                    return 1 + (EXIT_GLOW_MULTIPLIER_MAX - 1) * easeOutQuint(t);
+                }
+                return EXIT_GLOW_MULTIPLIER_MAX;
+            }
+            
+            function getSphereFadeInFactor(now) {
+                if (!sphereFadeInStartTime) return 1;
+                const elapsed = now - sphereFadeInStartTime;
+                if (elapsed >= SPHERE_FADE_IN_MS) return 1;
+                return easeOutQuart(elapsed / SPHERE_FADE_IN_MS);
             }
             
             // Палитра цветов по умолчанию с весами (долями)
@@ -352,21 +381,23 @@
                     this.currentDisplaySize = this.projectedSize;
                 }
                 
-                draw() {
+                draw(glowMultiplier, fadeInFactor) {
+                    if (glowMultiplier === undefined) glowMultiplier = 1;
+                    if (fadeInFactor === undefined) fadeInFactor = 1;
                     if (this.currentDisplaySize <= 0.15) return;
-                    const mainAlpha = this.alphaFactor;
+                    const mainAlpha = Math.min(1, this.alphaFactor * glowMultiplier * fadeInFactor);
                     if (mainAlpha <= 0.02) return;
                     const mainSize = this.currentDisplaySize;
                     
                     const haloLayers = [
-                        { sizeFactor: 5, alphaFactor: 0.12 },
-                        { sizeFactor: 3.5, alphaFactor: 0.18 },
-                        { sizeFactor: 2.2, alphaFactor: 0.28 },
+                        { sizeFactor: 5, alphaFactor: 0.2 },
+                        { sizeFactor: 3.5, alphaFactor: 0.28 },
+                        { sizeFactor: 2.2, alphaFactor: 0.4 },
                     ];
                     
                     for (const layer of haloLayers) {
                         const haloSize = mainSize * layer.sizeFactor;
-                        const haloAlpha = mainAlpha * layer.alphaFactor;
+                        const haloAlpha = Math.min(1, mainAlpha * layer.alphaFactor);
                         if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
                         const gradient = ctx.createRadialGradient(
                             this.screenX, this.screenY, haloSize * 0.1,
@@ -418,24 +449,24 @@
             
             function animate(now) {
                 now = now || performance.now();
-                const delta = lastFrameTime != null ? Math.min(now - lastFrameTime, 50) : 16;
+                if (!rotationStartTime) rotationStartTime = now;
+                const elapsedMs = now - rotationStartTime;
+                rotationX = elapsedMs * (config.rotationSpeedX / 16);
+                rotationY = elapsedMs * (config.rotationSpeedY / 16);
                 lastFrameTime = now;
                 globalTime++;
-                const d = delta * ROTATION_DELTA_NORM;
-                rotationX += config.rotationSpeedX * d;
-                rotationY += config.rotationSpeedY * d;
                 
                 ctx.fillStyle = config.backgroundColor;
                 ctx.clearRect(0, 0, width, height);
                 
                 const breathPulse = Math.sin(globalTime * config.breathSpeed);
+                const exitGlowMultiplier = getCurrentExitGlowMultiplier();
+                const fadeInFactor = getSphereFadeInFactor(now);
                 
-                // Оптимизированный цикл: вычисляем и рисуем в одном проходе
-                // Используем обычный for вместо forEach для лучшей производительности
                 for (let i = 0; i < particles.length; i++) {
                     const particle = particles[i];
                     particle.projectAndTransform(config.sphereBaseRadius, breathPulse);
-                    particle.draw();
+                    particle.draw(exitGlowMultiplier, fadeInFactor);
                 }
                 
                 animationFrameId = requestAnimationFrame(animate);
@@ -447,7 +478,7 @@
             
             function getExitPromise() {
                 return new Promise(function(resolve) {
-                    setTimeout(resolve, EXIT_DURATION_MS + 100);
+                    setTimeout(resolve, EXIT_TOTAL_MS + 100);
                 });
             }
             
@@ -463,6 +494,7 @@
             }
             
             function start() {
+                sphereFadeInStartTime = performance.now();
                 init();
                 if (!animationFrameId) {
                     animationFrameId = requestAnimationFrame(animate);
@@ -486,16 +518,8 @@
                 };
             }
             
-            // Запускаем анимацию сразу
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', start);
-            } else {
-                start();
-            }
-            
             window.addEventListener('resize', resizeHandler);
             
-            // Сохраняем ссылку для плавного перехода к основной анимации
             window._earlySphereAnimation = {
                 isRunning: false,
                 start: start,
@@ -505,6 +529,12 @@
                 setExitStartTime: setExitStartTime,
                 getExitPromise: getExitPromise
             };
+            
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', start);
+            } else {
+                start();
+            }
         })();
         </script>
         <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
@@ -810,9 +840,10 @@
                         <div id="mainAlgoCard" class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                             <div class="flex flex-nowrap justify-between items-center gap-2 mb-2 min-w-0">
                                 <div id="mainAlgoToolbar" class="flex flex-nowrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 min-w-0 shrink">
-                                    <label class="flex items-center gap-1 cursor-pointer shrink-0">
-                                        <input type="checkbox" id="mainAlgoHeadersOnly" class="form-checkbox h-3.5 w-3.5 text-primary rounded border-gray-300 dark:border-gray-600">
-                                        <span class="whitespace-nowrap">Только заголовки</span>
+                                    <label class="app-toggle app-toggle--compact flex items-center gap-1 cursor-pointer shrink-0" for="mainAlgoHeadersOnly">
+                                        <input type="checkbox" id="mainAlgoHeadersOnly" class="app-toggle-input">
+                                        <span class="app-toggle__track"></span>
+                                        <span class="whitespace-nowrap ml-1.5">Только заголовки</span>
                                     </label>
                                     <span class="text-gray-400 dark:text-gray-500 shrink-0">|</span>
                                     <span class="flex items-center gap-1 shrink-0">
@@ -905,16 +936,16 @@
                             </div>
                         </div>
 
-                        <div class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md">
+                        <div class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md min-w-0">
                             <div
                                 class="flex flex-row flex-nowrap justify-between items-center gap-3 mb-content-sm"
                             >
                                 <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0">Информация по обращению</h2>
-                                <div class="flex flex-row flex-nowrap items-center justify-end gap-2 flex-shrink-0">
+                                <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5 flex-shrink-0">
                                     <button
                                         type="button"
                                         id="openClientNotesWindowBtn"
-                                        class="p-2 lg:px-3 lg:py-1.5 min-w-[5.5rem] bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition text-sm flex items-center justify-center shrink-0"
+                                        class="w-8 h-8 flex items-center justify-center rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 transition text-sm shrink-0"
                                         title="Открыть в отдельном окне (в этой вкладке)"
                                     >
                                         <i class="fas fa-window-restore"></i>
@@ -922,17 +953,17 @@
                                     <button
                                         type="button"
                                         id="openClientNotesPopupBtn"
-                                        class="p-2 lg:px-3 lg:py-1.5 min-w-[5.5rem] bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition text-sm flex items-center justify-center shrink-0"
+                                        class="w-8 h-8 flex items-center justify-center rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 transition text-sm shrink-0"
                                         title="Открыть в отдельном окне (можно закрепить поверх всех через PowerToys или Floaty)"
                                     >
                                         <i class="fas fa-thumbtack"></i>
                                     </button>
                                     <button
                                         id="clearClientDataBtn"
-                                        class="p-2 lg:px-3 lg:py-1.5 min-w-[5.5rem] bg-primary hover:bg-secondary text-white rounded-md transition text-sm flex items-center justify-center shrink-0"
+                                        class="w-8 h-8 flex items-center justify-center rounded-md bg-primary hover:bg-secondary text-white transition text-sm shrink-0"
                                         title="Удалить"
                                     >
-                                        <span>Удалить</span>
+                                        <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
                             </div>
@@ -2277,14 +2308,15 @@
                                         <div>
                                             <label
                                                 for="toggleBlacklistWarning"
-                                                class="flex items-center cursor-pointer"
+                                                class="app-toggle flex items-center cursor-pointer"
                                             >
                                                 <input
                                                     type="checkbox"
                                                     id="toggleBlacklistWarning"
                                                     name="showBlacklistUsageWarning"
-                                                    class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                                                    class="app-toggle-input"
                                                 />
+                                                <span class="app-toggle__track"></span>
                                                 <span
                                                     class="ml-3 text-sm text-gray-700 dark:text-gray-300"
                                                     >Всегда показывать предупреждение при входе в
@@ -2306,14 +2338,15 @@
                                         >
                                             <label
                                                 for="toggleDisableForcedBackup"
-                                                class="flex items-center cursor-pointer"
+                                                class="app-toggle flex items-center cursor-pointer"
                                             >
                                                 <input
                                                     type="checkbox"
                                                     id="toggleDisableForcedBackup"
                                                     name="disableForcedBackupOnImport"
-                                                    class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                                                    class="app-toggle-input"
                                                 />
+                                                <span class="app-toggle__track"></span>
                                                 <span
                                                     class="ml-3 text-sm text-gray-700 dark:text-gray-300"
                                                     >Отключить принудительный бэкап при импорте
@@ -2335,14 +2368,15 @@
                                         >
                                             <label
                                                 for="toggleStaticHeader"
-                                                class="flex items-center cursor-pointer"
+                                                class="app-toggle flex items-center cursor-pointer"
                                             >
                                                 <input
                                                     type="checkbox"
                                                     id="toggleStaticHeader"
                                                     name="staticHeader"
-                                                    class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                                                    class="app-toggle-input"
                                                 />
+                                                <span class="app-toggle__track"></span>
                                                 <span
                                                     class="ml-3 text-sm text-gray-700 dark:text-gray-300"
                                                     >Статичная панель</span
@@ -2361,31 +2395,16 @@
                                             id="manualHealthRunSection"
                                         >
                                             <div class="flex flex-wrap items-center gap-3">
-                                                <label
-                                                    for="toggleManualHealthRun"
-                                                    class="flex items-center cursor-pointer"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        id="toggleManualHealthRun"
-                                                        name="manualHealthRun"
-                                                        class="form-checkbox h-5 w-5 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
-                                                    />
-                                                    <span
-                                                        class="ml-3 text-sm text-gray-700 dark:text-gray-300"
-                                                        >Ручной прогон систем</span
-                                                    >
-                                                </label>
                                                 <button
                                                     type="button"
                                                     id="runManualHealthCheckBtn"
                                                     class="px-4 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    <i class="fas fa-stethoscope mr-2"></i>Запустить полную проверку
+                                                    <i class="fas fa-stethoscope mr-2"></i>Запустить проверку систем
                                                 </button>
                                             </div>
                                             <p
-                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                                             >
                                                 Запускает полную диагностику: localStorage, IndexedDB, поисковый индекс,
                                                 алгоритмы, хранилища, автосохранение. Отчёт отображается в модальном окне.
@@ -2989,7 +3008,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260309-002502-de92814"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260309-002502-de92814"></script>
+        <script type="module" src="./script.js?v=legacy-20260311-000805-3b7594f"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260311-000805-3b7594f"></script>
     </body>
 </html>

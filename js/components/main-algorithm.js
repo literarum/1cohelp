@@ -240,6 +240,7 @@ export async function renderMainAlgorithm() {
     );
     const groups = Array.isArray(algorithms.main.groups) ? algorithms.main.groups : [];
     const openGroupIdsSet = new Set(viewPref.openGroupIds || []);
+    const groupMetaById = new Map(groups.map((g) => [g.id, g]));
 
     function buildStepElement(step, index) {
         if (!step || typeof step !== 'object') {
@@ -488,22 +489,44 @@ export async function renderMainAlgorithm() {
             fragment.appendChild(buildStepElement(step, index));
         });
     } else {
-        const stepsNoGroup = mainSteps
-            .map((s, i) => ({ step: s, index: i }))
-            .filter(({ step }) => !step.groupId || !groups.some((g) => g.id === step.groupId));
-        stepsNoGroup.forEach(({ step, index }) => {
-            fragment.appendChild(buildStepElement(step, index));
-        });
-        groups.forEach((group) => {
-            const stepIndices = mainSteps
-                .map((s, i) => i)
-                .filter((i) => mainSteps[i].groupId === group.id);
-            if (stepIndices.length === 0) return;
+        // Рендерим шаги и группы строго в порядке массива steps:
+        // одиночные шаги идут как есть, а подряд идущие шаги с одинаковым groupId
+        // объединяем в один блок группы.
+        let i = 0;
+        const total = mainSteps.length;
+
+        while (i < total) {
+            const step = mainSteps[i];
+            const groupId = step && step.groupId ? step.groupId : null;
+
+            // Нет валидной группы — рендерим шаг как обычный.
+            if (!groupId || !groupMetaById.has(groupId)) {
+                fragment.appendChild(buildStepElement(step, i));
+                i += 1;
+                continue;
+            }
+
+            // Есть валидная группа — собираем подряд идущие шаги с этим groupId.
+            const group = groupMetaById.get(groupId);
+            const groupIndices = [];
+            let j = i;
+            while (j < total && mainSteps[j] && mainSteps[j].groupId === groupId) {
+                groupIndices.push(j);
+                j += 1;
+            }
+
+            if (groupIndices.length === 0) {
+                fragment.appendChild(buildStepElement(step, i));
+                i += 1;
+                continue;
+            }
+
             const groupDiv = document.createElement('div');
             groupDiv.className =
                 'main-algo-group view-item rounded-lg' +
                 (openGroupIdsSet.has(group.id) ? '' : ' is-closed');
             groupDiv.dataset.groupId = group.id;
+
             const header = document.createElement('div');
             header.className = 'main-algo-group-header';
             header.innerHTML = `${escapeHtml(group.title || group.id)} <i class="fas fa-chevron-down"></i>`;
@@ -517,12 +540,18 @@ export async function renderMainAlgorithm() {
                 await saveMainAlgoGroupsOpen(openIds);
             });
             groupDiv.appendChild(header);
+
             const body = document.createElement('div');
             body.className = 'main-algo-group-body';
-            stepIndices.forEach((i) => body.appendChild(buildStepElement(mainSteps[i], i)));
+            groupIndices.forEach((idx) => {
+                body.appendChild(buildStepElement(mainSteps[idx], idx));
+            });
             groupDiv.appendChild(body);
             fragment.appendChild(groupDiv);
-        });
+
+            // Переходим к следующему шагу за пределами текущей группы.
+            i = j;
+        }
     }
 
     mainAlgorithmContainer.appendChild(fragment);

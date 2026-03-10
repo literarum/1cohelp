@@ -34,7 +34,6 @@ export function initBackgroundStatusHUD() {
         activityListenersRemoved: false,
         _onActivity: null,
         watchdogInfoEl: null,
-        watchdogRunBtnEl: null,
         watchdogRunNowHandler: null,
     };
 
@@ -229,13 +228,8 @@ export function initBackgroundStatusHUD() {
       <div class="hud-progress"><div class="hud-bar" id="bg-hud-bar"></div></div>
       <div class="hud-watchdog">
         <div id="bg-hud-watchdog-info" class="hud-watchdog-info">Watchdog: ожидание данных...</div>
-        <div class="hud-watchdog-row">
-          <button type="button" id="bg-hud-watchdog-run-btn" class="hud-watchdog-run">Проверить сейчас</button>
-        </div>
       </div>
-      <div class="hud-footer">
-        <button type="button" id="bg-hud-details-btn" class="hud-details hidden">Подробнее</button>
-      </div>
+      <div class="hud-footer"></div>
     </div>`;
         document.body.appendChild(root);
         STATE.container = root;
@@ -243,21 +237,10 @@ export function initBackgroundStatusHUD() {
         STATE.barEl = root.querySelector('#bg-hud-bar');
         STATE.titleEl = root.querySelector('#bg-hud-title');
         STATE.percentEl = root.querySelector('#bg-hud-percent');
-        STATE.detailsBtnEl = root.querySelector('#bg-hud-details-btn');
         STATE.watchdogInfoEl = root.querySelector('#bg-hud-watchdog-info');
-        STATE.watchdogRunBtnEl = root.querySelector('#bg-hud-watchdog-run-btn');
         root.querySelector('#bg-hud-close').addEventListener('click', () => dismissAnimated());
-        if (STATE.detailsBtnEl) {
-            STATE.detailsBtnEl.addEventListener('click', () => openDiagnosticsModal());
-        }
-        if (STATE.watchdogRunBtnEl) {
-            STATE.watchdogRunBtnEl.addEventListener('click', () => {
-                if (typeof STATE.watchdogRunNowHandler === 'function') {
-                    STATE.watchdogRunNowHandler();
-                }
-            });
-        }
         renderWatchdogInfo();
+        updateDetailsButton();
     }
 
     function watchdogStatusLabel(severity) {
@@ -294,11 +277,6 @@ export function initBackgroundStatusHUD() {
         STATE.watchdogInfoEl.innerHTML = `<span class="hud-watchdog-status"><span class="hud-watchdog-dot ${dotClass}"></span>${watchdogStatusLabel(
             severity,
         )}</span> ${status} | Автосохранение: ${lastAutosave}`;
-        if (STATE.watchdogRunBtnEl) {
-            STATE.watchdogRunBtnEl.disabled = STATE.watchdog.running === true;
-            STATE.watchdogRunBtnEl.textContent =
-                STATE.watchdog.running === true ? 'Проверка...' : 'Проверить сейчас';
-        }
     }
 
     function computeTopOffset() {
@@ -473,13 +451,27 @@ export function initBackgroundStatusHUD() {
     }
 
     function updateDetailsButton() {
-        if (!STATE.detailsBtnEl) return;
         const hasIssues =
             (STATE.diagnostics.errors?.length || 0) > 0 ||
             (STATE.diagnostics.warnings?.length || 0) > 0;
-        STATE.detailsBtnEl.classList.toggle('hidden', !hasIssues);
+        const footer = STATE.container?.querySelector('.hud-footer');
+        if (!footer) return;
         if (hasIssues) {
+            if (!STATE.detailsBtnEl) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.id = 'bg-hud-details-btn';
+                btn.className = 'hud-details';
+                btn.addEventListener('click', () => openDiagnosticsModal());
+                footer.appendChild(btn);
+                STATE.detailsBtnEl = btn;
+            }
             STATE.detailsBtnEl.textContent = `Подробнее (${STATE.diagnostics.errors.length} / ${STATE.diagnostics.warnings.length})`;
+        } else {
+            if (STATE.detailsBtnEl?.parentNode) {
+                STATE.detailsBtnEl.remove();
+                STATE.detailsBtnEl = null;
+            }
         }
     }
 
@@ -645,10 +637,6 @@ export function initBackgroundStatusHUD() {
         },
         setWatchdogRunNowHandler(handler) {
             STATE.watchdogRunNowHandler = typeof handler === 'function' ? handler : null;
-            if (STATE.watchdogRunBtnEl) {
-                STATE.watchdogRunBtnEl.disabled =
-                    STATE.watchdog.running === true || !STATE.watchdogRunNowHandler;
-            }
         },
     };
 

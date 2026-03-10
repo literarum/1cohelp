@@ -20,6 +20,7 @@ let getVisibleModals = null;
 let handleExtLinkFormSubmit = null;
 let showUnsavedConfirmModal = null;
 let deepEqual = null;
+let shouldConfirmBeforeClose = null;
 
 /** Состояние формы при открытии модалки (для проверки несохранённых изменений). */
 let extLinkInitialFormState = null;
@@ -54,6 +55,8 @@ export function setExtLinksModalDependencies(deps) {
     if (deps.showUnsavedConfirmModal !== undefined)
         showUnsavedConfirmModal = deps.showUnsavedConfirmModal;
     if (deps.deepEqual !== undefined) deepEqual = deps.deepEqual;
+    if (deps.shouldConfirmBeforeClose !== undefined)
+        shouldConfirmBeforeClose = deps.shouldConfirmBeforeClose;
 }
 
 export function ensureExtLinkModal() {
@@ -185,13 +188,11 @@ export function ensureExtLinkModal() {
             e.preventDefault();
             e.stopPropagation();
         }
-        const form = elements.form;
-        const isDirty =
-            extLinkInitialFormState &&
-            form &&
-            typeof deepEqual === 'function' &&
-            !deepEqual(extLinkInitialFormState, getExtLinkFormState(form));
-        if (isDirty && typeof showUnsavedConfirmModal === 'function') {
+        if (
+            typeof shouldConfirmBeforeClose === 'function' &&
+            shouldConfirmBeforeClose(elements.modal) &&
+            typeof showUnsavedConfirmModal === 'function'
+        ) {
             const leave = await showUnsavedConfirmModal();
             if (!leave) return;
         }

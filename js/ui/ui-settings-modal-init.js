@@ -15,6 +15,7 @@ let deps = {
     applyPreviewSettings: null,
     initColorPicker: null,
     showUnsavedConfirmModal: null,
+    shouldConfirmBeforeClose: null,
     setupExtensionFieldListeners: null,
     loadEmployeeExtension: null,
 };
@@ -116,7 +117,8 @@ export function initUISettingsModalHandlers() {
 
         const requestClose = async () => {
             if (
-                deps.State?.isUISettingsDirty &&
+                typeof deps.shouldConfirmBeforeClose === 'function' &&
+                deps.shouldConfirmBeforeClose(customizeUIModal) &&
                 typeof deps.showUnsavedConfirmModal === 'function'
             ) {
                 const leave = await deps.showUnsavedConfirmModal();
@@ -368,17 +370,8 @@ export function initUISettingsModalHandlers() {
         if (typeof deps.setupExtensionFieldListeners === 'function')
             deps.setupExtensionFieldListeners();
 
-        const toggleManualHealthRun = customizeUIModal.querySelector('#toggleManualHealthRun');
         const runManualHealthCheckBtn = document.getElementById('runManualHealthCheckBtn');
         if (runManualHealthCheckBtn) {
-            const updateManualRunButtonState = () => {
-                const enabled = !toggleManualHealthRun || toggleManualHealthRun.checked;
-                runManualHealthCheckBtn.disabled = !enabled;
-            };
-            if (toggleManualHealthRun) {
-                toggleManualHealthRun.addEventListener('change', updateManualRunButtonState);
-                updateManualRunButtonState();
-            }
             runManualHealthCheckBtn.addEventListener('click', async () => {
                 if (runManualHealthCheckBtn.disabled) return;
                 const runManualFullDiagnostic = window.runManualFullDiagnostic;
@@ -404,9 +397,9 @@ export function initUISettingsModalHandlers() {
                         error: err.message,
                     });
                 } finally {
-                    runManualHealthCheckBtn.disabled = !toggleManualHealthRun?.checked;
+                    runManualHealthCheckBtn.disabled = false;
                     runManualHealthCheckBtn.innerHTML =
-                        '<i class="fas fa-stethoscope mr-2"></i>Запустить полную проверку';
+                        '<i class="fas fa-stethoscope mr-2"></i>Запустить проверку систем';
                 }
             });
         }
