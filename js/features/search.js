@@ -2077,6 +2077,41 @@ export function debouncedSearch(query, delay = 300) {
     }, delay);
 }
 
+/**
+ * Возвращает результаты глобального поиска по индексу без рендера в DOM.
+ * Используется палитрой команд для объединения с результатами по алгоритмам/вкладкам/действиям.
+ * @param {string} query - поисковый запрос
+ * @returns {Promise<Array<object>>} массив результатов в формате { type, title, description, id, section, score, highlightTerm, ... }
+ */
+export async function getGlobalSearchResults(query) {
+    const MIN_SEARCH_LENGTH = 1;
+    const MAX_RESULTS = 50;
+
+    if (!State.db) return [];
+    if (typeof query !== 'string') return [];
+    const q = query.trim();
+    if (q.length < MIN_SEARCH_LENGTH) return [];
+
+    const searchContext = determineSearchContext(q);
+    const queryTokens = tokenize(q).filter((word) => word.length >= 2);
+    const sectionMatches = findSectionMatches(q);
+
+    if (queryTokens.length === 0) return sectionMatches;
+
+    let candidateDocs;
+    try {
+        candidateDocs = await searchCandidates(queryTokens, searchContext);
+    } catch (err) {
+        console.warn('[getGlobalSearchResults] searchCandidates failed:', err);
+        return sectionMatches;
+    }
+
+    const finalResults = await processSearchResults(candidateDocs, q, q);
+    const combined = [...sectionMatches, ...finalResults];
+    const sorted = sortSearchResults(combined);
+    return sorted.slice(0, MAX_RESULTS);
+}
+
 // ============================================================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ПОИСКА
 // ============================================================================

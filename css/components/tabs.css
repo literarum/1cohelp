@@ -139,7 +139,7 @@
     display: none !important;
 }
 #xmlAnalyzerDropZone.drag-over {
-    border-color: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary);
     background-color: rgba(59, 130, 246, 0.05);
 }
 

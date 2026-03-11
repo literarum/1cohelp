@@ -153,6 +153,13 @@ export async function loadFromIndexedDB() {
                                     : false,
                             ...step,
                         };
+                        newStep.phoneNumbers = Array.isArray(newStep.phoneNumbers)
+                            ? newStep.phoneNumbers.filter((s) => typeof s === 'string')
+                            : [];
+                        newStep.phoneNumbersEnabled =
+                            typeof newStep.phoneNumbersEnabled === 'boolean'
+                                ? newStep.phoneNumbersEnabled
+                                : false;
                         if (step.type === 'inn_step') {
                             newStep.showNoInnHelp = true;
                             delete newStep.type;

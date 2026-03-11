@@ -319,7 +319,7 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
 
     const exampleInputHTML = isMainAlgorithm
         ? `
-    <div class="mt-2">
+    <div class="mt-2 step-numbers-mode-hide">
         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (опционально)</label>
         <textarea class="step-example ${commonTextareaClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2"></textarea>
         <p class="text-xs text-gray-500 mt-1">Для списка используйте дефис (-) или звездочку (*) в начале каждой строки. Первая строка без дефиса/звездочки будет вступлением.</p>
@@ -331,7 +331,7 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
         <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Дополнительная информация (опционально)</label>
             <textarea class="step-additional-info ${commonTextareaClasses}" rows="3" placeholder="Введите дополнительную информацию..."></textarea>
-            <div class="mt-2 flex items-center space-x-4">
+            <div class="mt-2 flex items-center gap-4 flex-wrap">
                 <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                     <input type="checkbox" class="step-additional-info-pos-top form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
                     <span class="ml-2">Разместить вверху</span>
@@ -363,10 +363,11 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
 
     const isCopyableCheckboxHTML = isMainAlgorithm
         ? `
-        <div class="mt-2">
-            <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                <input type="checkbox" class="step-is-copyable form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
-                <span class="ml-2">Копировать содержимое шага по клику</span>
+        <div class="mt-2 step-numbers-mode-hide">
+            <label class="app-toggle app-toggle--compact flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" class="step-is-copyable app-toggle-input">
+                <span class="app-toggle__track"></span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">Копировать содержимое шага по клику</span>
             </label>
         </div>
     `
@@ -375,9 +376,10 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
     const isCollapsibleCheckboxHTML = isMainAlgorithm
         ? `
         <div class="mt-2">
-            <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                <input type="checkbox" class="step-is-collapsible form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
-                <span class="ml-2">Сворачиваемый</span>
+            <label class="app-toggle app-toggle--compact flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" class="step-is-collapsible app-toggle-input">
+                <span class="app-toggle__track"></span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">Сворачиваемый</span>
             </label>
         </div>
     `
@@ -385,10 +387,11 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
 
     const noInnHelpCheckboxHTML = isMainAlgorithm
         ? `
-        <div class="mt-2">
-            <label class="flex items-center text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                <input type="checkbox" class="step-no-inn-help-checkbox form-checkbox h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
-                <span class="ml-2">Отображать "Что делать, если клиент не может назвать ИНН?"</span>
+        <div class="mt-2 step-numbers-mode-hide">
+            <label class="app-toggle app-toggle--compact flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" class="step-no-inn-help-checkbox app-toggle-input">
+                <span class="app-toggle__track"></span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">Отображать "Что делать, если клиент не может назвать ИНН?"</span>
             </label>
         </div>
     `
@@ -401,6 +404,25 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
             <select class="step-group-id w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
                 <option value="">Без группы</option>
             </select>
+        </div>
+    `
+        : '';
+
+    const phoneNumbersBlockHTML = isMainAlgorithm
+        ? `
+        <div class="mt-2">
+            <label class="app-toggle app-toggle--compact flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" class="step-numbers-mode-input app-toggle-input">
+                <span class="app-toggle__track"></span>
+                <span class="ml-1.5 text-sm text-gray-700 dark:text-gray-300">Режим номеров</span>
+            </label>
+        </div>
+        <div class="step-phone-numbers-block hidden mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
+            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Телефонные номера</label>
+            <div class="step-phone-numbers-list space-y-2 mb-2"></div>
+            <button type="button" class="step-add-phone-btn px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition">
+                <i class="fas fa-plus mr-2"></i>Добавить номер
+            </button>
         </div>
     `
         : '';
@@ -420,11 +442,12 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
             </div>
         </div>
         <div class="step-body pt-2">
-            <div class="mb-2">
+            ${phoneNumbersBlockHTML}
+            <div class="mb-2 step-numbers-mode-hide">
                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Заголовок шага</label>
                 <input type="text" class="step-title ${commonInputClasses}" placeholder="Введите заголовок...">
             </div>
-            <div>
+            <div class="step-numbers-mode-hide">
                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
                 <textarea class="step-desc ${commonTextareaClasses}" rows="3" placeholder="Введите описание шага..."></textarea>
             </div>
@@ -432,8 +455,8 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
             ${isCopyableCheckboxHTML}
             ${isCollapsibleCheckboxHTML}
             ${noInnHelpCheckboxHTML}
-            ${groupSelectHTML}
             ${additionalInfoHTML}
+            ${groupSelectHTML}
             ${screenshotHTML}
         </div>
     `;
@@ -465,6 +488,8 @@ export function normalizeAlgorithmSteps(stepsArray) {
                 additionalInfoShowTop: false,
                 additionalInfoShowBottom: false,
                 showNoInnHelp: false,
+                phoneNumbers: [],
+                phoneNumbersEnabled: false,
             };
         }
 
@@ -483,6 +508,11 @@ export function normalizeAlgorithmSteps(stepsArray) {
                     ? step.additionalInfoShowBottom
                     : false,
             showNoInnHelp: typeof step.showNoInnHelp === 'boolean' ? step.showNoInnHelp : false,
+            phoneNumbers: Array.isArray(step.phoneNumbers)
+                ? step.phoneNumbers.filter((s) => typeof s === 'string')
+                : [],
+            phoneNumbersEnabled:
+                typeof step.phoneNumbersEnabled === 'boolean' ? step.phoneNumbersEnabled : false,
         };
 
         if (step.type === 'inn_step') {
@@ -888,6 +918,17 @@ export function extractStepsDataFromEditForm(containerElement, isMainAlgorithm =
         };
 
         if (isMainAlgorithm) {
+            const phoneList = stepDiv.querySelector('.step-phone-numbers-list');
+            if (phoneList) {
+                const inputs = phoneList.querySelectorAll('.step-phone-number-input');
+                step.phoneNumbers = Array.from(inputs)
+                    .map((el) => (el.value || '').trim())
+                    .filter(Boolean);
+            } else {
+                step.phoneNumbers = [];
+            }
+            const numbersModeInput = stepDiv.querySelector('.step-numbers-mode-input');
+            step.phoneNumbersEnabled = numbersModeInput ? numbersModeInput.checked : false;
             if (isCopyable !== undefined) step.isCopyable = isCopyable;
             if (isCollapsible !== undefined) step.isCollapsible = isCollapsible;
             if (showNoInnHelp !== undefined) step.showNoInnHelp = showNoInnHelp;
@@ -1140,6 +1181,14 @@ export function getCurrentEditState() {
             } else {
                 delete currentStepData.groupId;
             }
+            const phoneList = stepDiv.querySelector('.step-phone-numbers-list');
+            currentStepData.phoneNumbers = phoneList
+                ? Array.from(phoneList.querySelectorAll('.step-phone-number-input'))
+                      .map((el) => (el.value || '').trim())
+                      .filter(Boolean)
+                : [];
+            const numbersModeInput = stepDiv.querySelector('.step-numbers-mode-input');
+            currentStepData.phoneNumbersEnabled = numbersModeInput ? numbersModeInput.checked : false;
         }
 
         if (stepDiv.dataset.stepType) {
@@ -1371,6 +1420,13 @@ export function captureInitialEditState(algorithm, section) {
                         initialStep.isCopyable = step.isCopyable || false;
                         initialStep.isCollapsible = step.isCollapsible || false;
                         initialStep.showNoInnHelp = step.showNoInnHelp || false;
+                        initialStep.phoneNumbers = Array.isArray(step.phoneNumbers)
+                            ? step.phoneNumbers.filter((s) => typeof s === 'string')
+                            : [];
+                        initialStep.phoneNumbersEnabled =
+                            typeof step.phoneNumbersEnabled === 'boolean'
+                                ? step.phoneNumbersEnabled
+                                : false;
                         if (step.groupId !== undefined && step.groupId !== null) {
                             const rawGroupId = String(step.groupId).trim();
                             if (rawGroupId) {

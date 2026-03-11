@@ -130,8 +130,6 @@ class ReportAnalyzerApp {
     init() {
         if (this.themeToggle) {
             this.initTheme();
-        } else {
-            console.warn('Элемент #theme-toggle не найден. Переключение темы не будет работать.');
         }
 
         if (this.analyzeBtn) {

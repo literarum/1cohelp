@@ -18,7 +18,7 @@
 .sortable-ghost {
     opacity: 0.4;
     background-color: #e0e7ff;
-    border: 2px dashed var(--color-primary, #9333ea);
+    border: 2px dashed var(--color-primary);
 }
 
 .sortable-drag {
@@ -140,7 +140,7 @@
     border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius, 0.5rem);
     overflow: hidden;
-    background: var(--color-surface-2, #f9fafb);
+    background: var(--color-surface-2);
     transition:
         box-shadow 0.2s ease,
         background-color 0.2s ease;
@@ -150,7 +150,7 @@
     box-shadow: var(--card-hover-shadow, 0 4px 12px rgba(0, 0, 0, 0.08));
 }
 html.dark .main-algo-group {
-    background: var(--color-surface-2, #374151);
+    background: var(--color-surface-2);
 }
 html.dark .main-algo-group:hover {
     background-color: var(--color-hover-subtle, rgba(255, 255, 255, 0.05));
@@ -162,8 +162,8 @@ html.dark .main-algo-group:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--color-surface-2, #f3f4f6);
-    color: var(--color-text-primary, #111827);
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
     border-radius: inherit;
     border-top-left-radius: inherit;
     border-top-right-radius: inherit;
@@ -174,14 +174,14 @@ html.dark .main-algo-group:hover {
     border-bottom-right-radius: inherit;
 }
 .main-algo-group-header:hover {
-    background: var(--color-surface-3, #e5e7eb);
+    background: var(--color-surface-3);
 }
 html.dark .main-algo-group-header {
-    background: var(--color-surface-2, #4b5563);
-    color: var(--color-text-primary, #f9fafb);
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
 }
 html.dark .main-algo-group-header:hover {
-    background: var(--color-surface-3, #6b7280);
+    background: var(--color-surface-3);
 }
 .main-algo-group-header .fa-chevron-down {
     transition: transform 0.2s ease;
@@ -204,5 +204,19 @@ html.dark .main-algo-group-header:hover {
     margin-left: 0.5rem;
     margin-right: 0.5rem;
     margin-bottom: 0.5rem;
+}
+
+/* Модалка редактирования главного алгоритма: сворачивание групп */
+.edit-main-algo-group-block .edit-main-algo-group-steps {
+    overflow: hidden;
+    max-height: 5000px;
+    transition: max-height 0.25s ease;
+}
+.edit-main-algo-group-block.edit-main-algo-group-block-closed .edit-main-algo-group-steps {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    border: none;
 }
 

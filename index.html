@@ -8,8 +8,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260311-000805-3b7594f"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260311-000805-3b7594f"></script>
+        <script src="js/vendor-config.js?v=legacy-20260311-235720-3aba93f"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260311-235720-3aba93f"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -66,9 +66,9 @@
             };
         </script>
         <!-- Production: use built CSS (npm run build:css). Fallback: vendor or CDN via __loadTailwindCDN. -->
-        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260311-000805-3b7594f" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
+        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260311-235720-3aba93f" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260311-000805-3b7594f" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260311-235720-3aba93f" />
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             #custom-loading-overlay {
@@ -636,6 +636,14 @@
                         </div>
                         <div class="flex gap-2 flex-shrink-0">
                             <button
+                                id="openCommandPaletteBtn"
+                                type="button"
+                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                title="Палитра команд (Ctrl+K)"
+                            >
+                                <i class="fas fa-terminal" aria-hidden="true"></i>
+                            </button>
+                            <button
                                 id="customizeUIBtn"
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                                 title="Настройки"
@@ -854,11 +862,11 @@
                                 </div>
                                 <button
                                     id="editMainBtn"
-                                    class="p-1 lg:px-2 lg:py-1 bg-primary hover:bg-secondary text-white rounded-md transition flex-shrink-0 text-xs lg:text-sm"
+                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition flex-shrink-0 text-sm font-medium"
                                     title="Редактировать"
                                 >
-                                    <i class="fas fa-edit fa-xs lg:mr-1"></i>
-                                    <span class="hidden lg:inline">Редактировать</span>
+                                    <i class="fas fa-edit mr-1"></i>
+                                    <span class="inline">Редактировать</span>
                                 </button>
                             </div>
                             <h2 class="text-xl font-bold flex-shrink min-w-0 mb-content-sm">
@@ -2832,6 +2840,7 @@
                                         <li><code class="hotkey-code">Alt + H</code> — Главная.</li>
                                         <li><code class="hotkey-code">Alt + L</code> — Избранное.</li>
                                         <li><code class="hotkey-code">Alt + F</code> — Фокус в поиск.</li>
+                                        <li><code class="hotkey-code">Ctrl/Cmd + K</code> — Палитра команд (поиск по алгоритмам, вкладкам, XML‑отчётам, ошибкам и действиям); также кнопка <i class="fas fa-terminal"></i> в шапке.</li>
                                         <li><code class="hotkey-code">Backspace</code> (вне полей) — Назад.</li>
                                     </ul>
                                 </section>
@@ -3008,7 +3017,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260311-000805-3b7594f"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260311-000805-3b7594f"></script>
+        <script type="module" src="./script.js?v=legacy-20260311-235720-3aba93f"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260311-235720-3aba93f"></script>
     </body>
 </html>

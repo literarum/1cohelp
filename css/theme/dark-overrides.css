@@ -2,29 +2,29 @@
 /*    ТЁМНАЯ ТЕМА (Dark Overrides)                                    */
 /* =================================================================== */
 
-/* --- Оригинал: тёмная тема под скрин --- */
+/* --- Оригинал: тёмная тема под скрин (все цвета из theme/variables.css) --- */
 html.dark body {
-    background-color: #1c1c30 !important;
-    color: #ffffff !important;
+    background-color: var(--color-background) !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #appContent .dark\:bg-gray-800 {
-    background-color: #27273f !important;
+    background-color: var(--color-surface-1) !important;
 }
 html.dark #appContent .dark\:bg-gray-700 {
-    background-color: #363653 !important;
+    background-color: var(--color-surface-2) !important;
 }
 html.dark header {
-    background-color: #1c1c30 !important;
+    background-color: var(--color-background) !important;
 }
 html.dark header h1:not(.text-primary) {
-    color: #ffffff !important;
+    color: var(--color-text-primary) !important;
 }
 /* Переопределяем цвет для заголовка Copilot с классом text-primary */
 html.dark header h1.text-primary {
     color: var(--color-primary) !important;
 }
 html.dark #appSlogan:not(.text-primary) {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 html.dark #appSlogan.text-primary {
     color: var(--color-primary) !important;
@@ -33,7 +33,7 @@ html.dark header button i,
 html.dark header .text-gray-500,
 html.dark header .dark\:text-gray-400,
 html.dark #timerDisplay {
-    color: #ffffff !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #staticHeaderWrapper > div.mb-3.border-b {
     background-color: transparent !important;
@@ -43,74 +43,74 @@ html.dark #staticHeaderWrapper > div.mb-3.border-b > nav {
     background-color: transparent !important;
 }
 html.dark .tab-btn {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 html.dark .tab-btn i,
 html.dark .tab-btn svg {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 html.dark .tab-btn.tab-active {
     background-color: transparent !important;
-    color: #9955ff !important;
-    border-bottom-color: #9955ff !important;
+    color: var(--color-primary) !important;
+    border-bottom-color: var(--color-primary) !important;
 }
 html.dark .tab-btn.tab-active i,
 html.dark .tab-btn.tab-active svg {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 html.dark .tab-btn:hover:not(.tab-active) {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 html.dark .tab-btn:hover:not(.tab-active) i,
 html.dark .tab-btn:hover:not(.tab-active) svg {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 html.dark .tab-btn.tab-active:hover {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 html.dark .tab-btn.tab-active:hover i,
 html.dark .tab-btn.tab-active:hover svg {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 html.dark #appContent a {
-    color: #00bfff !important;
+    color: var(--color-link) !important;
 }
 html.dark #appContent a:hover {
-    color: #40d4ff !important;
+    color: var(--color-link-hover) !important;
 }
 html.dark #clearClientDataBtn {
-    background-color: #363653 !important;
-    border: 1px solid #3a3a52 !important;
-    color: #ffffff !important;
+    background-color: var(--color-surface-2) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #clearClientDataBtn:hover {
-    background-color: #3c3c56 !important;
+    background-color: var(--color-surface-2-hover) !important;
 }
 html.dark #clearClientDataBtn > * {
-    color: #ffffff !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #appContent input,
 html.dark #appContent textarea,
 html.dark #appContent select {
-    background-color: #2f2f4a !important;
-    border-color: #3a3a52 !important;
-    color: #ffffff !important;
+    background-color: var(--color-input-bg) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #searchInput {
-    background-color: #2f2f4a !important;
-    border-color: #3a3a52 !important;
-    color: #ffffff !important;
+    background-color: var(--color-input-bg) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #searchInput::placeholder {
-    color: #b0b0b0 !important;
+    color: var(--color-text-placeholder) !important;
 }
 html.dark #searchResults {
-    background-color: #363653 !important;
-    border-color: #3a3a52 !important;
+    background-color: var(--color-surface-2) !important;
+    border-color: var(--color-border) !important;
 }
 /* Dropdown вкладок — стили приложения, отступы */
 #moreTabsDropdown {
@@ -164,13 +164,13 @@ html.dark #appContent h2,
 html.dark #appContent h3,
 html.dark #appContent h4,
 html.dark #appContent .font-bold:not(.text-primary) {
-    color: #ffffff !important;
+    color: var(--color-text-primary) !important;
 }
 html.dark #appContent .text-gray-600,
 html.dark #appContent .text-gray-500,
 html.dark #appContent .dark\:text-gray-400,
 html.dark #appContent .dark\:text-gray-300 {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 /* --- ГЛОБАЛЬНАЯ НОРМАЛИЗАЦИЯ НЕЙТРАЛЬНЫХ HOVER (всегда) --- */

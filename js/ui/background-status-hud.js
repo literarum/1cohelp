@@ -171,39 +171,7 @@ export function initBackgroundStatusHUD() {
     #bg-hud-details-modal {
       position: fixed; inset: 0; z-index: 9999; display: none;
       align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.55);
-    }
-    #bg-hud-details-modal .hud-modal-card {
-      background: var(--color-surface-2, #fff);
-      color: var(--color-text-primary, #111);
-      border-radius: 14px;
-      width: min(720px, 92vw);
-      max-height: 80vh;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-      border: 1px solid var(--color-border, rgba(0,0,0,.12));
-    }
-    #bg-hud-details-modal .hud-modal-header {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--color-border, rgba(0,0,0,.12));
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    #bg-hud-details-modal .hud-modal-body {
-      padding: 16px;
-      overflow-y: auto;
-      font-size: 13px;
-    }
-    #bg-hud-details-modal .hud-modal-section {
-      margin-bottom: 16px;
-    }
-    #bg-hud-details-modal .hud-modal-section h4 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 8px;
+      background: rgba(0,0,0,0.5);
     }
   `;
         const style = document.createElement('style');
@@ -466,7 +434,7 @@ export function initBackgroundStatusHUD() {
                 footer.appendChild(btn);
                 STATE.detailsBtnEl = btn;
             }
-            STATE.detailsBtnEl.textContent = `Подробнее (${STATE.diagnostics.errors.length} / ${STATE.diagnostics.warnings.length})`;
+            STATE.detailsBtnEl.textContent = 'Подробнее';
         } else {
             if (STATE.detailsBtnEl?.parentNode) {
                 STATE.detailsBtnEl.remove();
@@ -502,53 +470,130 @@ export function initBackgroundStatusHUD() {
         });
     }
 
+    function escapeHtml(str) {
+        if (str == null || typeof str !== 'string') return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
     function openDiagnosticsModal() {
         ensureDiagnosticsModal();
         const modal = document.getElementById('bg-hud-details-modal');
         const body = modal.querySelector('#bg-hud-details-body');
         const updated = modal.querySelector('#bg-hud-details-updated');
         const { errors, warnings, checks, updatedAt } = STATE.diagnostics;
+        const esc = escapeHtml;
         updated.textContent = updatedAt ? `Обновлено: ${updatedAt}` : '';
 
-        const buildList = (items, emptyText) => {
-            if (!items.length) {
-                return `<p class="text-xs opacity-70">${emptyText}</p>`;
-            }
-            return `<ul class="space-y-2">${items
+        const buildSectionList = (items, itemIcon) => {
+            if (!items?.length) return '';
+            return items
                 .map(
-                    (item) =>
-                        `<li><strong>${item.title}</strong><div class="text-xs opacity-80">${item.message}</div></li>`,
+                    (i) =>
+                        `<li class="health-report-item">
+                            <span class="health-report-item-icon">${itemIcon}</span>
+                            <div>
+                                <div class="health-report-item-title">${esc(i.title)}</div>
+                                <div class="health-report-item-message">${esc(i.message)}</div>
+                            </div>
+                        </li>`,
                 )
-                .join('')}</ul>`;
+                .join('');
         };
 
+        const errorsList = buildSectionList(errors, '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>');
+        const warningsList = buildSectionList(warnings, '<i class="fas fa-exclamation-triangle text-amber-500 dark:text-amber-400" aria-hidden="true"></i>');
+        const checksList = buildSectionList(checks, '<i class="fas fa-check text-primary" aria-hidden="true"></i>');
+
+        const watchdogLabel = watchdogStatusLabel(STATE.watchdog.severity || 'running');
+        const lastAutosave = STATE.watchdog.lastAutosaveAt
+            ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleString('ru-RU')
+            : '—';
+
         body.innerHTML = `
-            <div class="hud-modal-section">
-                <h4>Watchdog</h4>
-                <p class="text-xs opacity-80">Уровень: ${watchdogStatusLabel(
-                    STATE.watchdog.severity || 'running',
-                )}</p>
-                <p class="text-xs opacity-80">Статус: ${STATE.watchdog.statusText || '—'}</p>
-                <p class="text-xs opacity-80">Последнее автосохранение: ${
-                    STATE.watchdog.lastAutosaveAt
-                        ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleString('ru-RU')
-                        : '—'
-                }</p>
-            </div>
-            <div class="hud-modal-section">
-                <h4>Ошибки</h4>
-                ${buildList(errors, 'Ошибок не обнаружено.')}
-            </div>
-            <div class="hud-modal-section">
-                <h4>Предупреждения</h4>
-                ${buildList(warnings, 'Предупреждений нет.')}
-            </div>
-            <div class="hud-modal-section">
-                <h4>Проверки</h4>
-                ${buildList(checks, 'Список проверок пуст.')}
+            <div class="health-report-body-scroll">
+                <div class="health-report-summary health-report-summary-ok">
+                    <div class="health-report-summary-icon"><i class="fas fa-stethoscope" aria-hidden="true"></i></div>
+                    <div class="health-report-summary-text">
+                        <h3>Диагностика фоновых тестов</h3>
+                        <div class="health-report-summary-meta">${esc(updatedAt || '')}</div>
+                    </div>
+                </div>
+                <div class="health-report-section">
+                    <div class="health-report-section-header">
+                        <span class="health-report-section-icon"><i class="fas fa-heartbeat" aria-hidden="true"></i></span>
+                        <span>Watchdog</span>
+                    </div>
+                    <ul class="health-report-section-list">
+                        <li class="health-report-item">
+                            <span class="health-report-item-icon"></span>
+                            <div>
+                                <div class="health-report-item-title">Уровень: ${esc(watchdogLabel)}</div>
+                                <div class="health-report-item-message">Статус: ${esc(STATE.watchdog.statusText || '—')}</div>
+                                <div class="health-report-item-message">Последнее автосохранение: ${esc(lastAutosave)}</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="health-report-section health-report-section-errors">
+                    <div class="health-report-section-header health-report-section-errors">
+                        <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
+                        <span>Ошибки (${errors?.length ?? 0})</span>
+                    </div>
+                    ${errors?.length ? `<ul class="health-report-section-list">${errorsList}</ul>` : '<div class="health-report-empty">Ошибок не обнаружено.</div>'}
+                </div>
+                <div class="health-report-section health-report-section-warnings health-report-section-collapsible is-collapsed">
+                    <div class="health-report-section-header health-report-section-warnings">
+                        <span class="health-report-section-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></span>
+                        <span>Предупреждения (${warnings?.length ?? 0})</span>
+                        <button type="button" class="health-report-section-toggle" aria-expanded="false" aria-label="Развернуть раздел" title="Развернуть">&#9654;</button>
+                    </div>
+                    <div class="health-report-section-body">
+                        <div class="health-report-section-body-inner">
+                            ${warnings?.length ? `<ul class="health-report-section-list">${warningsList}</ul>` : '<div class="health-report-empty">Предупреждений нет.</div>'}
+                        </div>
+                    </div>
+                </div>
+                <div class="health-report-section health-report-section-checks health-report-section-collapsible is-collapsed">
+                    <div class="health-report-section-header health-report-section-checks">
+                        <span class="health-report-section-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></span>
+                        <span>Проверки (${checks?.length ?? 0}) — слои, хранилища, надёжность данных</span>
+                        <button type="button" class="health-report-section-toggle" aria-expanded="false" aria-label="Развернуть раздел" title="Развернуть">&#9654;</button>
+                    </div>
+                    <div class="health-report-section-body">
+                        <div class="health-report-section-body-inner">
+                            ${checks?.length ? `<ul class="health-report-section-list">${checksList}</ul>` : '<div class="health-report-empty">Список проверок пуст.</div>'}
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
+        initHudDetailsModalCollapse(modal);
         modal.style.display = 'flex';
+    }
+
+    function initHudDetailsModalCollapse(modal) {
+        if (!modal || modal.dataset.hudDetailsCollapseInit) return;
+        modal.dataset.hudDetailsCollapseInit = '1';
+        modal.addEventListener('click', (e) => {
+            const header = e.target.closest('.health-report-section-collapsible .health-report-section-header');
+            if (!header) return;
+            e.preventDefault();
+            const section = header.closest('.health-report-section-collapsible');
+            if (!section) return;
+            section.classList.toggle('is-collapsed');
+            const expanded = !section.classList.contains('is-collapsed');
+            const btn = section.querySelector('.health-report-section-toggle');
+            if (btn) {
+                btn.setAttribute('aria-expanded', String(expanded));
+                btn.title = expanded ? 'Свернуть' : 'Развернуть';
+                btn.setAttribute('aria-label', expanded ? 'Свернуть раздел' : 'Развернуть раздел');
+                btn.textContent = expanded ? '\u9660' : '\u9654';
+            }
+        });
     }
 
     function scheduleDismissAfterActivity() {

@@ -174,6 +174,16 @@ export function getStepContentAsText(step) {
         }
     }
 
+    if (step.phoneNumbers && Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0) {
+        const phonesText = step.phoneNumbers
+            .filter((s) => typeof s === 'string' && s.trim())
+            .map((s) => s.trim())
+            .join('\n');
+        if (phonesText) {
+            textParts.push('Телефоны:\n' + phonesText);
+        }
+    }
+
     if (textParts.length > 1) {
         return textParts.join('\n\n').trim();
     } else if (textParts.length === 1) {

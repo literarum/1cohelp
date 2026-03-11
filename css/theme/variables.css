@@ -14,6 +14,7 @@
     --default-background-light: #f9fafb;
     --default-surface-1-light: #f3f4f6;
     --default-surface-2-light: #ffffff;
+    --default-surface-3-light: #e5e7eb;
     --default-border-light: #d1d5db;
     --default-border-interactive-light: #d1d5db;
     --default-input-bg-light: #f9fafb;
@@ -32,6 +33,7 @@
     --color-background: var(--override-background-light, var(--default-background-light));
     --color-surface-1: var(--override-surface-1-light, var(--default-surface-1-light));
     --color-surface-2: var(--override-surface-2-light, var(--default-surface-2-light));
+    --color-surface-3: var(--override-surface-3-light, var(--default-surface-3-light));
     --color-border: var(--override-border-light, var(--default-border-light));
     --color-border-interactive: var(
         --override-border-interactive-light,
@@ -39,9 +41,12 @@
     );
     --color-input-bg: var(--override-input-bg-light, var(--default-input-bg-light));
     --color-hover-subtle: var(--override-hover-light, var(--default-hover-subtle-light));
+
+    /* Текст на primary-фоне: всегда контрастный (белый) в обеих темах */
+    --color-text-on-primary: #ffffff;
 }
 
-.dark {
+html.dark {
     /* --- DEFAULT DARK --- */
     --default-text-primary-dark: #ffffff;
     --default-text-secondary-dark: #b0b0b0;
@@ -49,6 +54,7 @@
     --default-background-dark: #1c1c30;
     --default-surface-1-dark: #27273f;
     --default-surface-2-dark: #363653;
+    --default-surface-3-dark: #6b7280;
     --default-border-dark: #3a3a52;
     --default-border-interactive-dark: #3a3a52;
     --default-input-bg-dark: #2f2f4a;
@@ -64,6 +70,7 @@
     --color-background: var(--override-background-dark, var(--default-background-dark));
     --color-surface-1: var(--override-surface-1-dark, var(--default-surface-1-dark));
     --color-surface-2: var(--override-surface-2-dark, var(--default-surface-2-dark));
+    --color-surface-3: var(--override-surface-3-dark, var(--default-surface-3-dark));
     --color-border: var(--override-border-dark, var(--default-border-dark));
     --color-border-interactive: var(
         --override-border-interactive-dark,
@@ -71,7 +78,11 @@
     );
     --color-input-bg: var(--override-input-bg-dark, var(--default-input-bg-dark));
     --color-hover-subtle: var(--override-hover-dark, var(--default-hover-subtle-dark));
+    --color-text-on-primary: #ffffff;
     --card-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    --color-surface-2-hover: #3c3c56;
+    --color-link: #00bfff;
+    --color-link-hover: #40d4ff;
 }
 
 /* ----------------------------------- */
@@ -151,4 +162,11 @@ html.dark {
     --hint-border: rgba(180, 83, 9, 0.6);
     --hint-text: #fde68a;
     --hint-action: #fcd34d;
+}
+
+/* Light theme: default text on main content surfaces so unstyled text is readable on white */
+html:not(.dark) #appContent .bg-white,
+html:not(.dark) #appContent .bg-gray-50,
+html:not(.dark) .modal-inner-container {
+    color: var(--color-text-primary);
 }

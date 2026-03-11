@@ -40,6 +40,7 @@ let hasBlockingModalsOpen = null;
 let searchEscClearHandler = null;
 let altRReloadHandler = null;
 let ctrlRReloadHandler = null;
+let openCommandPalette = null;
 
 export function setHotkeysDependencies(deps) {
     if (deps.showNoInnModal !== undefined) showNoInnModal = deps.showNoInnModal;
@@ -82,6 +83,7 @@ export function setHotkeysDependencies(deps) {
     if (deps.showAppConfirm !== undefined) showAppConfirm = deps.showAppConfirm;
     if (deps.hasBlockingModalsOpen !== undefined)
         hasBlockingModalsOpen = deps.hasBlockingModalsOpen;
+    if (deps.openCommandPalette !== undefined) openCommandPalette = deps.openCommandPalette;
 }
 
 /**
@@ -251,6 +253,16 @@ export async function handleGlobalHotkey(event) {
     const ctrlOrMeta = event.ctrlKey || event.metaKey;
     const shift = event.shiftKey;
     const alt = event.altKey;
+
+    // Ctrl+K / Cmd+K — палитра команд
+    if (ctrlOrMeta && !alt && !shift && (event.key === 'k' || event.key === 'K' || code === 'KeyK')) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof openCommandPalette === 'function') {
+            openCommandPalette();
+        }
+        return;
+    }
 
     const activeElement = document.activeElement;
     const isInputFocused =

@@ -250,10 +250,38 @@ export async function renderMainAlgorithm() {
             errorDiv.textContent = `Ошибка: шаг ${index + 1}.`;
             return errorDiv;
         }
+        if (step.phoneNumbersEnabled) {
+            return buildStepElementNumbersOnly(step, index);
+        }
         if (viewPref.headersOnly) {
             return buildStepElementHeadersOnly(step, index);
         }
         return buildStepElementFull(step, index);
+    }
+
+    function buildStepElementNumbersOnly(step, index) {
+        const stepDiv = document.createElement('div');
+        stepDiv.className =
+            'algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm mb-3';
+        const titleH3 = document.createElement('h3');
+        titleH3.className = 'font-semibold text-gray-900 dark:text-gray-100 mb-2';
+        titleH3.textContent = 'Телефоны';
+        stepDiv.appendChild(titleH3);
+        const phonesDiv = document.createElement('div');
+        phonesDiv.className = 'text-gray-700 dark:text-gray-300';
+        if (Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0) {
+            phonesDiv.innerHTML =
+                '<ul class="list-disc list-inside space-y-1">' +
+                step.phoneNumbers
+                    .filter((s) => typeof s === 'string' && s.trim())
+                    .map((s) => `<li>${escapeHtml(s.trim())}</li>`)
+                    .join('') +
+                '</ul>';
+        } else {
+            phonesDiv.textContent = 'Нет номеров';
+        }
+        stepDiv.appendChild(phonesDiv);
+        return stepDiv;
     }
 
     function buildStepElementHeadersOnly(step, index) {
@@ -320,6 +348,18 @@ export async function renderMainAlgorithm() {
                 exampleDiv.innerHTML = ex;
             }
             collapsibleBody.appendChild(exampleDiv);
+        }
+        if (Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0) {
+            const phonesDiv = document.createElement('div');
+            phonesDiv.className = 'mt-2 p-2';
+            phonesDiv.innerHTML =
+                '<strong>Телефоны:</strong><ul class="list-disc list-inside space-y-1 mt-1">' +
+                step.phoneNumbers
+                    .filter((s) => typeof s === 'string' && s.trim())
+                    .map((s) => `<li>${escapeHtml(s.trim())}</li>`)
+                    .join('') +
+                '</ul>';
+            collapsibleBody.appendChild(phonesDiv);
         }
         if (step.additionalInfoText && step.additionalInfoShowBottom) {
             const bottomDiv = document.createElement('div');
@@ -455,6 +495,18 @@ export async function renderMainAlgorithm() {
                 exampleDiv.innerHTML = exampleHTML;
             }
             collapsibleBody.appendChild(exampleDiv);
+        }
+        if (Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0) {
+            const phonesDiv = document.createElement('div');
+            phonesDiv.className = 'mt-2 p-2';
+            phonesDiv.innerHTML =
+                '<strong>Телефоны:</strong><ul class="list-disc list-inside space-y-1 mt-1">' +
+                step.phoneNumbers
+                    .filter((s) => typeof s === 'string' && s.trim())
+                    .map((s) => `<li>${escapeHtml(s.trim())}</li>`)
+                    .join('') +
+                '</ul>';
+            collapsibleBody.appendChild(phonesDiv);
         }
         if (step.additionalInfoText && step.additionalInfoShowBottom) {
             const additionalInfoBottomDiv = document.createElement('div');

@@ -9,11 +9,15 @@ let ingestUnavailable = false;
 function sendAgentDebugLog(payload) {
     if (ingestUnavailable) return;
     if (
-        typeof window !== 'undefined' &&
-        window.location &&
+        typeof window === 'undefined' ||
+        !window.location ||
         !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
     )
         return;
+    const ingestEnabled =
+        window.__enableIngest === true ||
+        (window.location.search && /[?&]enableIngest=1/i.test(window.location.search));
+    if (!ingestEnabled) return;
     // #region agent log
     fetch('http://127.0.0.1:7520/ingest/374fe693-b6e8-47c0-81cf-9d56349887e0', {
         method: 'POST',

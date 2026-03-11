@@ -9,6 +9,19 @@ let deps = {
     showAppConfirm: null,
 };
 
+function hardReloadWithCacheBypass() {
+    try {
+        const { location } = window;
+        const url = new URL(location.href);
+        const cacheBusterParam = '_hardReloadTs';
+        url.searchParams.set(cacheBusterParam, Date.now().toString());
+        location.replace(url.toString());
+    } catch (error) {
+        console.warn('[app-reload.js] Не удалось выполнить hard reload через URL, fallback к location.reload().', error);
+        window.location.reload();
+    }
+}
+
 /**
  * Устанавливает зависимости модуля
  */
@@ -23,10 +36,10 @@ export function setAppReloadDependencies(dependencies) {
  */
 export async function forceReloadApp() {
     const message =
-        'Вы уверены, что хотите перезагрузить приложение?\n\n' +
-        'Это действие аналогично обновлению страницы в браузере (F5).\n' +
-        'Если вы хотите гарантированно загрузить последнюю версию после обновления, ' +
-        "используйте 'жесткую перезагрузку' вашего браузера (обычно Ctrl+F5 или Cmd+Shift+R).";
+        'Вы уверены, что хотите перезагрузить приложение с обходом кэша?\n\n' +
+        'Это действие максимально приближено к "жесткой перезагрузке" (Ctrl/Cmd+Shift+R):\n' +
+        '- в адрес добавляется технический параметр, заставляющий браузер заново загрузить ресурсы.\n' +
+        'Точное поведение может зависеть от настроек и расширений вашего браузера.';
     const confirmation = deps.showAppConfirm
         ? await deps.showAppConfirm({
               title: 'Перезагрузка приложения',
@@ -42,7 +55,7 @@ export async function forceReloadApp() {
             deps.showNotification('Перезагрузка приложения...', 'info');
         }
         setTimeout(() => {
-            window.location.reload();
+            hardReloadWithCacheBypass();
         }, 500);
     } else {
         console.log('Перезагрузка отменена пользователем.');

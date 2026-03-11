@@ -10,16 +10,16 @@
 /* --- ОСНОВНОЙ ФОН И ТЕКСТ --- */
 body.custom-background-active .tab-btn.tab-active,
 .tab-btn.tab-active {
-    color: #9955ff !important;
-    border-bottom-color: #9955ff !important;
+    color: var(--color-primary) !important;
+    border-bottom-color: var(--color-primary) !important;
 }
 body.custom-background-active .tab-btn.tab-active > *,
 .tab-btn.tab-active > * {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 .tab-btn.tab-active i,
 .tab-btn.tab-active svg {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 #appContent #moreTabsDropdown a,
@@ -32,11 +32,11 @@ body.custom-background-active .tab-btn.tab-active > *,
 
 #showFavoritesHeaderBtn,
 #showFavoritesHeaderBtn i {
-    color: #eab308 !important;
+    color: var(--color-favorites-icon, #eab308) !important;
 }
 #showFavoritesHeaderBtn:hover,
 #showFavoritesHeaderBtn:hover i {
-    color: #facc15 !important;
+    color: var(--color-favorites-icon-hover, #facc15) !important;
 }
 #timerToggleButton,
 #timerResetButton,
@@ -78,7 +78,7 @@ body.custom-background-active #clearClientDataBtn {
 #editMainBtn,
 #editMainBtn > * {
     background-color: var(--color-primary) !important;
-    color: var(--color-text-primary) !important;
+    color: var(--color-text-on-primary) !important;
 }
 
 body.custom-background-active {
@@ -264,7 +264,7 @@ body.custom-background-active
             ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
     ) {
     background-color: var(--color-primary);
-    color: var(--color-text-primary) !important;
+    color: var(--color-text-on-primary) !important;
     box-shadow: none !important;
     transition:
         background-color 0.2s ease-in-out,
@@ -298,7 +298,7 @@ body.custom-background-active
             ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
     )
     > * {
-    color: var(--color-text-primary) !important;
+    color: var(--color-text-on-primary) !important;
     transition: color 0.2s ease-in-out;
 }
 
@@ -328,7 +328,7 @@ body.custom-background-active
             ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
     ):hover {
     background-color: var(--color-primary) !important;
-    color: white !important;
+    color: var(--color-text-on-primary) !important;
 }
 
 #clearClientDataBtn {
@@ -348,13 +348,13 @@ body.custom-background-active
 /* Primary: Сохранить .txt */
 #exportTextBtn {
     background-color: var(--color-primary) !important;
-    color: var(--color-text-primary) !important;
+    color: var(--color-text-on-primary) !important;
     border: none !important; /* гасим border-b из классов */
     box-shadow: none !important;
     transition: background-color ease 0.3s;
 }
 #exportTextBtn > * {
-    color: var(--color-text-primary) !important;
+    color: var(--color-text-on-primary) !important;
 }
 #exportTextBtn:hover {
     background-color: var(--color-primary-hover) !important;
@@ -417,7 +417,7 @@ body.custom-background-active
             ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
     ):hover
     > * {
-    color: white !important;
+    color: var(--color-text-on-primary) !important;
 }
 
 /* 2. Второстепенные кнопки (Secondary Actions) - логика не меняется. */
@@ -451,7 +451,7 @@ body.custom-background-active .btn-destructive:hover {
 
 .btn-destructive-all,
 .btn-destructive-all > * {
-    color: white !important;
+    color: var(--color-text-on-primary) !important;
     border: none !important;
 }
 
@@ -520,7 +520,7 @@ body.custom-background-active
 }
 body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn {
     background-color: var(--color-red-text, #dc2626) !important;
-    color: #fff !important;
+    color: var(--color-text-on-primary) !important;
     border-color: var(--color-red-text, #dc2626) !important;
 }
 body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn:hover {
@@ -528,20 +528,20 @@ body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn:hov
     border-color: var(--color-red-text, #dc2626) !important;
 }
 body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
-    background-color: #e5e7eb !important;
-    color: #374151 !important;
-    border-color: #d1d5db !important;
+    background-color: var(--color-surface-1) !important;
+    color: var(--color-text-primary) !important;
+    border-color: var(--color-border) !important;
 }
 html.dark body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
-    background-color: #374151 !important;
-    color: #e5e7eb !important;
-    border-color: #4b5563 !important;
+    background-color: var(--color-surface-1) !important;
+    color: var(--color-text-primary) !important;
+    border-color: var(--color-border) !important;
 }
 body.custom-background-active #confirmClearDataModal .bg-gray-50 {
-    background-color: #f9fafb !important;
+    background-color: var(--color-surface-1) !important;
 }
 html.dark body.custom-background-active #confirmClearDataModal .dark\:bg-gray-700 {
-    background-color: #374151 !important;
+    background-color: var(--color-surface-1) !important;
 }
 
 /* --- ССЫЛКИ --- */
@@ -676,30 +676,30 @@ body.custom-background-active :is(nav, div):has(> .tab-btn) {
 }
 
 body.custom-background-active .tab-btn {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 body.custom-background-active .tab-btn i,
 body.custom-background-active .tab-btn svg {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 body.custom-background-active .tab-btn:hover:not(.tab-active) {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 body.custom-background-active .tab-btn:hover:not(.tab-active) i,
 body.custom-background-active .tab-btn:hover:not(.tab-active) svg {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 body.custom-background-active .tab-btn.tab-active:hover {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 body.custom-background-active .tab-btn.tab-active:hover i,
 body.custom-background-active .tab-btn.tab-active:hover svg {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 body.custom-background-active .force-transparent {

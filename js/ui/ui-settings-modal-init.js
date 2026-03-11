@@ -319,23 +319,29 @@ export function initUISettingsModalHandlers() {
             modal.classList.remove('hidden');
             modal.style.display = 'flex';
         }
+        if (typeof window !== 'undefined') {
+            window.showHealthReportModal = showHealthReportModalFallback;
+        }
 
         function initHealthReportCollapseToggles() {
             const modal = document.getElementById('healthReportModal');
             if (!modal || modal.dataset.healthReportCollapseInit) return;
             modal.dataset.healthReportCollapseInit = '1';
             modal.addEventListener('click', (e) => {
-                const btn = e.target.closest('.health-report-section-toggle');
-                if (!btn) return;
+                const header = e.target.closest('.health-report-section-collapsible .health-report-section-header');
+                if (!header) return;
                 e.preventDefault();
-                const section = btn.closest('.health-report-section-collapsible');
+                const section = header.closest('.health-report-section-collapsible');
                 if (!section) return;
                 section.classList.toggle('is-collapsed');
                 const expanded = !section.classList.contains('is-collapsed');
-                btn.setAttribute('aria-expanded', String(expanded));
-                btn.title = expanded ? 'Свернуть' : 'Развернуть';
-                btn.setAttribute('aria-label', expanded ? 'Свернуть раздел' : 'Развернуть раздел');
-                btn.textContent = expanded ? '\u9660' : '\u9654';
+                const btn = section.querySelector('.health-report-section-toggle');
+                if (btn) {
+                    btn.setAttribute('aria-expanded', String(expanded));
+                    btn.title = expanded ? 'Свернуть' : 'Развернуть';
+                    btn.setAttribute('aria-label', expanded ? 'Свернуть раздел' : 'Развернуть раздел');
+                    btn.textContent = expanded ? '\u9660' : '\u9654';
+                }
             });
         }
 
@@ -352,6 +358,26 @@ export function initUISettingsModalHandlers() {
                     healthReportModal.style.display = 'none';
                 }
             });
+            if (!healthReportModal.dataset.escapeAttached) {
+                healthReportModal.dataset.escapeAttached = '1';
+                document.addEventListener(
+                    'keydown',
+                    (e) => {
+                        if (e.key !== 'Escape') return;
+                        if (
+                            healthReportModal &&
+                            !healthReportModal.classList.contains('hidden') &&
+                            healthReportModal.style.display !== 'none'
+                        ) {
+                            healthReportModal.classList.add('hidden');
+                            healthReportModal.style.display = 'none';
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                    },
+                    true,
+                );
+            }
         }
 
         customizeUIModal.addEventListener('change', (e) => {

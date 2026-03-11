@@ -135,6 +135,11 @@ html.dark #healthReportModal .health-report-section {
     box-sizing: border-box;
 }
 
+#healthReportModal .health-report-section-collapsible .health-report-section-header,
+#bg-hud-details-modal .health-report-section-collapsible .health-report-section-header {
+    cursor: pointer;
+}
+
 html.dark #healthReportModal .health-report-section-header {
     border-bottom-color: rgba(255, 255, 255, 0.08);
 }
@@ -246,3 +251,173 @@ html.dark #healthReportModal .health-report-item {
     font-size: 0.8125rem;
     opacity: 0.8;
 }
+
+/* =================================================================== */
+/* HUD «Подробнее» — те же стили контента, что у модалки здоровья      */
+/* =================================================================== */
+#bg-hud-details-modal .hud-modal-card {
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+    border-radius: 0.5rem;
+    width: min(56rem, 92vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+html.dark #bg-hud-details-modal .hud-modal-card {
+    background: var(--color-surface-2);
+    border-color: var(--color-border);
+}
+#bg-hud-details-modal .hud-modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+html.dark #bg-hud-details-modal .hud-modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+#bg-hud-details-modal .hud-modal-header .hud-close {
+    padding: 0.5rem;
+    color: rgba(107, 114, 128, 1);
+    background: transparent;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+#bg-hud-details-modal .hud-modal-header .hud-close:hover {
+    color: rgba(55, 65, 81, 1);
+    background: rgba(243, 244, 246, 1);
+}
+html.dark #bg-hud-details-modal .hud-modal-header .hud-close {
+    color: rgba(156, 163, 175, 1);
+}
+html.dark #bg-hud-details-modal .hud-modal-header .hud-close:hover {
+    color: rgba(209, 213, 219, 1);
+    background: rgba(55, 65, 81, 1);
+}
+#bg-hud-details-modal .hud-modal-body {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+#bg-hud-details-modal .health-report-body-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 1rem 1.25rem;
+    padding-right: 2rem;
+    box-sizing: border-box;
+}
+#bg-hud-details-modal .health-report-body-scroll > .health-report-summary,
+#bg-hud-details-modal .health-report-body-scroll > .health-report-section {
+    margin-bottom: 1.25rem;
+}
+#bg-hud-details-modal .health-report-body-scroll > *:last-child {
+    margin-bottom: 0;
+}
+#bg-hud-details-modal .health-report-summary {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+    background: linear-gradient(135deg, rgba(153, 51, 255, 0.06) 0%, rgba(153, 51, 255, 0.02) 100%);
+}
+html.dark #bg-hud-details-modal .health-report-summary {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, rgba(153, 51, 255, 0.12) 0%, rgba(153, 51, 255, 0.04) 100%);
+}
+#bg-hud-details-modal .health-report-summary-icon { width: 2.75rem; height: 2.75rem; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
+#bg-hud-details-modal .health-report-summary-text h3 { font-size: 1rem; font-weight: 700; margin: 0 0 0.25rem 0; }
+#bg-hud-details-modal .health-report-summary-meta { font-size: 0.8125rem; opacity: 0.85; }
+#bg-hud-details-modal .health-report-section {
+    border-radius: 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: #f9fafb;
+    overflow: hidden;
+}
+html.dark #bg-hud-details-modal .health-report-section {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(31, 41, 55, 0.5);
+}
+#bg-hud-details-modal .health-report-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    box-sizing: border-box;
+}
+html.dark #bg-hud-details-modal .health-report-section-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+#bg-hud-details-modal .health-report-section-header .health-report-section-icon {
+    width: 1.25rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+#bg-hud-details-modal .health-report-section-toggle {
+    margin-left: auto;
+    padding: 0.2rem 0.35rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.65rem;
+    line-height: 1;
+    opacity: 0.6;
+    color: inherit;
+    border-radius: 0.2rem;
+    transition: opacity 0.15s ease;
+}
+#bg-hud-details-modal .health-report-section-toggle:hover { opacity: 1; }
+#bg-hud-details-modal .health-report-section-collapsible .health-report-section-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s ease-out;
+    overflow: hidden;
+}
+#bg-hud-details-modal .health-report-section-collapsible.is-collapsed .health-report-section-body {
+    grid-template-rows: 0fr;
+}
+#bg-hud-details-modal .health-report-section-collapsible .health-report-section-body-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+#bg-hud-details-modal .health-report-section-errors .health-report-section-icon { color: #dc2626; }
+html.dark #bg-hud-details-modal .health-report-section-errors .health-report-section-icon { color: #f87171; }
+#bg-hud-details-modal .health-report-section-warnings .health-report-section-icon { color: #ca8a04; }
+html.dark #bg-hud-details-modal .health-report-section-warnings .health-report-section-icon { color: #facc15; }
+#bg-hud-details-modal .health-report-section-checks .health-report-section-icon { color: var(--color-primary); }
+#bg-hud-details-modal .health-report-section-list { padding: 0.5rem 0; list-style: none; margin: 0; }
+#bg-hud-details-modal .health-report-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+#bg-hud-details-modal .health-report-item:last-child { border-bottom: none; }
+html.dark #bg-hud-details-modal .health-report-item { border-bottom-color: rgba(255, 255, 255, 0.05); }
+#bg-hud-details-modal .health-report-item-icon { margin-top: 0.125rem; width: 1rem; text-align: center; flex-shrink: 0; }
+#bg-hud-details-modal .health-report-item-title { font-weight: 600; }
+#bg-hud-details-modal .health-report-item-message { margin-top: 0.125rem; opacity: 0.9; }
+#bg-hud-details-modal .health-report-empty { padding: 0.75rem 1rem; font-size: 0.8125rem; opacity: 0.8; }

@@ -278,6 +278,13 @@ import {
     highlightAndScrollSedoItem,
 } from './js/features/sedo.js';
 
+// Command Palette (Ctrl+K)
+import {
+    initCommandPalette,
+    setCommandPaletteDependencies,
+    openCommandPalette,
+} from './js/features/command-palette/index.js';
+
 // Search System
 import {
     initSearchSystem,
@@ -1405,6 +1412,8 @@ setAppInitDependencies({
     initUICustomization,
     initHotkeysModal,
     setupHotkeys,
+    initCommandPalette,
+    setCommandPaletteDependencies,
     initFullscreenToggles,
     fullscreenModalConfigs: FULLSCREEN_MODAL_CONFIGS,
     initHeaderButtons,
@@ -3958,6 +3967,7 @@ setHotkeysDependencies({
     showNoInnModal,
     showNotification,
     handleGlobalHotkey: handleGlobalHotkeyModule, // Теперь импортируется из модуля
+    openCommandPalette,
     forceReloadApp,
     hasBlockingModalsOpen: hasBlockingModalsOpenModule,
     // Dependencies for handleGlobalHotkey

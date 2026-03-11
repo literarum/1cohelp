@@ -289,10 +289,10 @@ body.app-backup-warning-perimeter-pulse::before {
     position: sticky;
     bottom: 0;
     z-index: 5;
-    background-color: var(--color-surface-2, #ffffff);
+    background-color: var(--color-surface-2);
 }
 .is-fullscreen .dark\:bg-gray-800 .p-content.border-t {
-    background-color: var(--color-surface-2, #1f2937);
+    background-color: var(--color-surface-2);
 }
 
 /* Единый комфортный отступ у зон загрузки PDF в модалках */

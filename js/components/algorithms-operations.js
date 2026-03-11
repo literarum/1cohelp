@@ -53,6 +53,69 @@ export function setAlgorithmsOperationsDependencies(deps) {
 }
 
 // ============================================================================
+// ТЕЛЕФОННЫЕ НОМЕРА (ГЛАВНЫЙ АЛГОРИТМ)
+// ============================================================================
+
+const stepPhoneInputClasses =
+    'step-phone-number-input w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+
+/**
+ * Создаёт DOM-элемент одной строки номера (поле + кнопка удаления)
+ * @returns {HTMLDivElement}
+ */
+function createPhoneNumberRow(value = '') {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    row.innerHTML = `
+        <input type="text" class="${stepPhoneInputClasses}" placeholder="+7 (999) 123-45-67" value="${escapeHtml(value)}">
+        <button type="button" class="step-phone-remove p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded shrink-0" aria-label="Удалить номер">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    const removeBtn = row.querySelector('.step-phone-remove');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => row.remove());
+    }
+    return row;
+}
+
+/**
+ * Вешает делегацию на контейнер шагов для кнопки «Добавить номер»
+ * @param {HTMLElement} editStepsContainer
+ */
+function attachPhoneNumbersDelegate(editStepsContainer) {
+    if (editStepsContainer._phoneNumbersDelegateAttached) return;
+    editStepsContainer._phoneNumbersDelegateAttached = true;
+    editStepsContainer.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.step-add-phone-btn');
+        if (addBtn) {
+            const stepDiv = addBtn.closest('.edit-step');
+            const list = stepDiv?.querySelector('.step-phone-numbers-list');
+            if (list) list.appendChild(createPhoneNumberRow());
+        }
+    });
+}
+
+/**
+ * Вешает делегацию для переключателя «Режим номеров»: скрывает/показывает блоки step-numbers-mode-hide и step-phone-numbers-block (в т.ч. для шагов, добавленных через «Добавить шаг»).
+ * @param {HTMLElement} editStepsContainer
+ */
+function attachNumbersModeVisibilityDelegate(editStepsContainer) {
+    if (editStepsContainer._numbersModeVisibilityDelegateAttached) return;
+    editStepsContainer._numbersModeVisibilityDelegateAttached = true;
+    editStepsContainer.addEventListener('change', (e) => {
+        const input = e.target.closest('.step-numbers-mode-input');
+        if (!input) return;
+        const stepDiv = input.closest('.edit-step');
+        if (!stepDiv) return;
+        const phoneBlock = stepDiv.querySelector('.step-phone-numbers-block');
+        const hideBlocks = stepDiv.querySelectorAll('.step-numbers-mode-hide');
+        if (phoneBlock) phoneBlock.classList.toggle('hidden', !input.checked);
+        hideBlocks.forEach((el) => el.classList.toggle('hidden', input.checked));
+    });
+}
+
+// ============================================================================
 // ГРУППЫ ГЛАВНОГО АЛГОРИТМА
 // ============================================================================
 
@@ -232,7 +295,7 @@ function reorganizeMainAlgoStepsIntoGroups(
 
             const block = document.createElement('div');
             block.className =
-                'edit-main-algo-group-block mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800/50';
+                'edit-main-algo-group-block edit-main-algo-group-block-closed mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800/50';
             block.dataset.groupId = group.id;
 
             const header = document.createElement('div');
@@ -240,11 +303,38 @@ function reorganizeMainAlgoStepsIntoGroups(
                 'edit-main-algo-group-header flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 cursor-grab border-b border-gray-200 dark:border-gray-600';
             header.innerHTML = `
             <i class="fas fa-grip-vertical main-algo-group-drag-handle text-gray-400 dark:text-gray-500 shrink-0" title="Перетащить группу"></i>
-            <span class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(group.title || group.id)}</span>
+            <button type="button" class="edit-main-algo-group-toggle p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 shrink-0" aria-label="Развернуть группу" title="Развернуть"><i class="fas fa-chevron-down edit-main-algo-group-chevron transition-transform"></i></button>
+            <span class="font-medium text-gray-800 dark:text-gray-200 flex-1">${escapeHtml(group.title || group.id)}</span>
         `;
 
             const body = document.createElement('div');
             body.className = 'edit-main-algo-group-steps p-2 space-y-2';
+
+            const toggleGroup = () => {
+                block.classList.toggle('edit-main-algo-group-block-closed');
+                const closed = block.classList.contains('edit-main-algo-group-block-closed');
+                const toggleBtn = block.querySelector('.edit-main-algo-group-toggle');
+                if (toggleBtn) {
+                    toggleBtn.setAttribute('aria-label', closed ? 'Развернуть группу' : 'Свернуть группу');
+                    toggleBtn.setAttribute('title', closed ? 'Развернуть' : 'Свернуть');
+                }
+                const chevron = block.querySelector('.edit-main-algo-group-chevron');
+                if (chevron) chevron.style.transform = closed ? 'rotate(-90deg)' : '';
+            };
+
+            const chevron = block.querySelector('.edit-main-algo-group-chevron');
+            if (chevron) chevron.style.transform = 'rotate(-90deg)';
+
+            header.querySelector('.edit-main-algo-group-toggle')?.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleGroup();
+            });
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('.main-algo-group-drag-handle')) return;
+                if (e.target.closest('.edit-main-algo-group-toggle')) return;
+                toggleGroup();
+            });
 
             block.appendChild(header);
             block.appendChild(body);
@@ -442,6 +532,36 @@ export async function editAlgorithm(algorithmId, section = 'main') {
                     return null;
                 }
 
+                if (isMainAlgorithm) {
+                    const phoneList = stepDiv.querySelector('.step-phone-numbers-list');
+                    if (phoneList) {
+                        const numbers = Array.isArray(step.phoneNumbers) ? step.phoneNumbers : [];
+                        numbers.forEach((val) => phoneList.appendChild(createPhoneNumberRow(val)));
+                    }
+                    const numbersModeInput = stepDiv.querySelector('.step-numbers-mode-input');
+                    const phoneBlock = stepDiv.querySelector('.step-phone-numbers-block');
+                    const stepNumbersEnabled =
+                        step.phoneNumbersEnabled ??
+                        (Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0);
+                    if (numbersModeInput) {
+                        numbersModeInput.checked = !!stepNumbersEnabled;
+                        numbersModeInput.addEventListener('change', () => {
+                            if (phoneBlock) {
+                                phoneBlock.classList.toggle('hidden', !numbersModeInput.checked);
+                            }
+                            stepDiv.querySelectorAll('.step-numbers-mode-hide').forEach((el) => {
+                                el.classList.toggle('hidden', numbersModeInput.checked);
+                            });
+                        });
+                    }
+                    if (phoneBlock) {
+                        phoneBlock.classList.toggle('hidden', !stepNumbersEnabled);
+                    }
+                    stepDiv.querySelectorAll('.step-numbers-mode-hide').forEach((el) => {
+                        el.classList.toggle('hidden', !!stepNumbersEnabled);
+                    });
+                }
+
                 const titleInput = stepDiv.querySelector('.step-title');
                 const titlePreview = stepDiv.querySelector('.step-title-preview');
                 const descInput = stepDiv.querySelector('.step-desc');
@@ -556,7 +676,7 @@ export async function editAlgorithm(algorithmId, section = 'main') {
                     );
                 }
 
-                if (index > 0 && typeof toggleStepCollapse === 'function') {
+                if (typeof toggleStepCollapse === 'function') {
                     toggleStepCollapse(stepDiv, true);
                 }
                 return stepDiv;
@@ -590,6 +710,8 @@ export async function editAlgorithm(algorithmId, section = 'main') {
                         editStepsContainerElement,
                     );
                 }
+                attachPhoneNumbersDelegate(editStepsContainerElement);
+                attachNumbersModeVisibilityDelegate(editStepsContainerElement);
             }
         }
 
@@ -691,13 +813,15 @@ export async function showAddModal(section) {
     newAlgorithmDesc.value = '';
     newStepsContainerElement.innerHTML = '';
 
+    // ВАЖНО: сначала задаём секцию модальному окну, затем вызываем addNewStep,
+    // чтобы внутри addNewStep всегда был доступен корректный addModal.dataset.section.
+    addModal.dataset.section = section;
+
     if (typeof addNewStep === 'function') {
         addNewStep(true);
     } else {
         console.error('showAddModal: Функция addNewStep не найдена');
     }
-
-    addModal.dataset.section = section;
     saveButton.disabled = false;
     saveButton.innerHTML = 'Сохранить';
 

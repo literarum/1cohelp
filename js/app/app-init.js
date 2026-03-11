@@ -52,6 +52,8 @@ export async function appInit(context = 'normal') {
         debounce,
         categoryDisplayInfo,
         initSearchSystem,
+        initCommandPalette,
+        setCommandPaletteDependencies,
         initBookmarkSystem,
         initCibLinkSystem,
         initViewToggles,
@@ -404,6 +406,15 @@ export async function appInit(context = 'normal') {
                 console.log('[appInit] Search dependencies установлены');
             }
 
+            if (typeof setCommandPaletteDependencies === 'function') {
+                setCommandPaletteDependencies({
+                    algorithms,
+                    setActiveTab,
+                    showAlgorithmDetail,
+                });
+                console.log('[appInit] Command palette dependencies установлены');
+            }
+
             console.log('[appInit V3] Начало инициализации подсистем UI...');
             const initSystems = [
                 {
@@ -413,6 +424,14 @@ export async function appInit(context = 'normal') {
                             ? initSearchSystem
                             : () => console.warn('initSearchSystem not defined'),
                     critical: true,
+                },
+                {
+                    name: 'initCommandPalette',
+                    func:
+                        typeof initCommandPalette === 'function'
+                            ? initCommandPalette
+                            : () => console.warn('initCommandPalette not defined'),
+                    critical: false,
                 },
                 {
                     name: 'initBookmarkSystem',

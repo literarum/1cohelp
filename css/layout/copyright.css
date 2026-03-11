@@ -77,7 +77,7 @@ html.dark body.custom-background-active header #appSlogan.text-primary {
 #editMainBtn,
 #editMainBtn > * {
     background-color: var(--color-primary) !important;
-    color: var(--color-text-primary) !important;
+    color: var(--color-text-on-primary) !important;
 }
 
 :root:not(.dark) {
