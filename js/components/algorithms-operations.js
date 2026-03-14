@@ -315,7 +315,10 @@ function reorganizeMainAlgoStepsIntoGroups(
                 const closed = block.classList.contains('edit-main-algo-group-block-closed');
                 const toggleBtn = block.querySelector('.edit-main-algo-group-toggle');
                 if (toggleBtn) {
-                    toggleBtn.setAttribute('aria-label', closed ? 'Развернуть группу' : 'Свернуть группу');
+                    toggleBtn.setAttribute(
+                        'aria-label',
+                        closed ? 'Развернуть группу' : 'Свернуть группу',
+                    );
                     toggleBtn.setAttribute('title', closed ? 'Развернуть' : 'Свернуть');
                 }
                 const chevron = block.querySelector('.edit-main-algo-group-chevron');

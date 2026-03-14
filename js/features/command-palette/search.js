@@ -10,6 +10,7 @@ import {
     TABS,
     FILTER_PREFIX,
     TYPE_FILTER_MAP,
+    TYPE_ORDER,
 } from './constants.js';
 import { getActionResults } from './actions.js';
 import { getErrorDictionaryResults } from './errors.js';
@@ -17,11 +18,7 @@ import { getGlobalSearchResults } from '../search.js';
 
 function normalizeText(s) {
     if (typeof s !== 'string') return '';
-    return s
-        .toLowerCase()
-        .replace(/ё/g, 'е')
-        .replace(/\s+/g, ' ')
-        .trim();
+    return s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -63,7 +60,8 @@ function getAlgorithmResults(query, algoMap) {
 
     const sections = ['main', 'program', 'skzi', 'webReg', 'lk1c'];
     for (const section of sections) {
-        const list = section === 'main' ? (algoMap.main ? [algoMap.main] : []) : (algoMap[section] || []);
+        const list =
+            section === 'main' ? (algoMap.main ? [algoMap.main] : []) : algoMap[section] || [];
         if (!Array.isArray(list)) continue;
         for (const algo of list) {
             if (!algo || !algo.id) continue;
@@ -103,7 +101,7 @@ function getXmlReportResults(query) {
     const results = [];
     const xmlRelatedWords = ['xml', 'анализ', 'отчёт', 'отчет', 'анализатор'];
     const hasXmlIntent = raw.some((w) =>
-        xmlRelatedWords.some((x) => w === x || x.includes(w) || (w.length >= 2 && w.includes(x)))
+        xmlRelatedWords.some((x) => w === x || x.includes(w) || (w.length >= 2 && w.includes(x))),
     );
 
     for (const auth of CONTROLLING_AUTHORITIES) {
@@ -147,7 +145,8 @@ function getTabResults(query) {
         const synonymsNorm = tab.synonyms.map((s) => normalizeText(s));
         let sc = 0;
         for (const w of words) {
-            if (labelNorm.includes(w) || synonymsNorm.some((s) => s.includes(w) || w.includes(s))) sc += 1;
+            if (labelNorm.includes(w) || synonymsNorm.some((s) => s.includes(w) || w.includes(s)))
+                sc += 1;
         }
         if (sc > 0) {
             results.push({
@@ -171,7 +170,8 @@ function getErrorResults(query) {
     const results = [];
     for (const [key, variants] of Object.entries(DOMAIN_SYNONYMS)) {
         if (variants.some((v) => raw.includes(v) || raw.some((r) => v.includes(r)))) {
-            const label = key === 'fns' ? 'ФНС / ИФНС / Налоговая' : key === 'sfr' ? 'СФР / ПФР / ФСС' : key;
+            const label =
+                key === 'fns' ? 'ФНС / ИФНС / Налоговая' : key === 'sfr' ? 'СФР / ПФР / ФСС' : key;
             results.push({
                 id: `error:synonym:${key}`,
                 type: 'error',
@@ -195,7 +195,10 @@ export function runSearch(query, algorithms) {
     const { queryTrimmed, typeFilter } = parseTypeFilter(query);
     const trimmed = queryTrimmed.trim();
 
-    const algoResults = typeFilter === null || typeFilter === 'algorithm' ? getAlgorithmResults(trimmed, algorithms) : [];
+    const algoResults =
+        typeFilter === null || typeFilter === 'algorithm'
+            ? getAlgorithmResults(trimmed, algorithms)
+            : [];
     let tabResults = typeFilter === null || typeFilter === 'tab' ? getTabResults(trimmed) : [];
     if (typeFilter === 'tab' && tabResults.length === 0 && !trimmed) {
         tabResults = TABS.map((tab) => ({
@@ -207,13 +210,30 @@ export function runSearch(query, algorithms) {
             payload: { tabId: tab.tabId },
         }));
     }
-    const xmlResults = typeFilter === null || typeFilter === 'xml_report' ? getXmlReportResults(trimmed) : [];
-    const errorResults = typeFilter === null || typeFilter === 'error' ? getErrorResults(trimmed) : [];
-    const errorDictResults = typeFilter === null || typeFilter === 'error' ? getErrorDictionaryResults(trimmed) : [];
-    const actionResults = typeFilter === null || typeFilter === 'action' ? getActionResults(trimmed) : [];
+    const xmlResults =
+        typeFilter === null || typeFilter === 'xml_report' ? getXmlReportResults(trimmed) : [];
+    const errorResults =
+        typeFilter === null || typeFilter === 'error' ? getErrorResults(trimmed) : [];
+    const errorDictResults =
+        typeFilter === null || typeFilter === 'error' ? getErrorDictionaryResults(trimmed) : [];
+    const actionResults =
+        typeFilter === null || typeFilter === 'action' ? getActionResults(trimmed) : [];
 
-    const combined = [...algoResults, ...tabResults, ...xmlResults, ...errorResults, ...errorDictResults, ...actionResults];
-    combined.sort((a, b) => b.score - a.score);
+    const combined = [
+        ...algoResults,
+        ...tabResults,
+        ...xmlResults,
+        ...errorResults,
+        ...errorDictResults,
+        ...actionResults,
+    ];
+    combined.sort((a, b) => {
+        const scoreDiff = b.score - a.score;
+        if (scoreDiff !== 0) return scoreDiff;
+        const orderA = TYPE_ORDER[a.type] ?? 99;
+        const orderB = TYPE_ORDER[b.type] ?? 99;
+        return orderA - orderB;
+    });
     return combined.slice(0, MAX_RESULTS);
 }
 
@@ -224,17 +244,25 @@ export function runSearch(query, algorithms) {
  */
 function mapGlobalResultToPalette(r) {
     if (!r || typeof r !== 'object') return null;
-    const id =
-        r.type === 'algorithm' || r.type === 'main'
-            ? `algorithm:${r.section || 'main'}:${r.id}`
-            : `global:${r.type}:${r.section || ''}:${r.id}`;
+    let id;
+    let type = r.type || 'record';
+    let payload = { fullResult: r };
+    if (r.type === 'algorithm' || r.type === 'main') {
+        id = `algorithm:${r.section || 'main'}:${String(r.id)}`;
+    } else if (r.type === 'section_link') {
+        id = `tab:${r.section || ''}`;
+        type = 'tab';
+        payload = { tabId: r.section || '', fullResult: r };
+    } else {
+        id = `global:${r.type}:${r.section || ''}:${r.id}`;
+    }
     return {
         id,
-        type: r.type || 'record',
+        type,
         label: r.title || `(${r.type} ${r.id})`,
         subtitle: r.description || '',
         score: typeof r.score === 'number' ? r.score : 0,
-        payload: { fullResult: r },
+        payload,
     };
 }
 
@@ -245,9 +273,12 @@ function normalizedDedupKey(item) {
     if (item.type === 'algorithm' || item.type === 'main') {
         if (item.payload?.fullResult) {
             const r = item.payload.fullResult;
-            return `algorithm:${r.section || 'main'}:${r.id}`;
+            return `algorithm:${String(r.section || 'main')}:${String(r.id)}`;
         }
-        return item.id;
+        return typeof item.id === 'string' ? item.id : String(item.id);
+    }
+    if (item.type === 'tab') {
+        return typeof item.id === 'string' ? item.id : String(item.id);
     }
     return item.id;
 }
@@ -300,7 +331,11 @@ export async function runSearchWithGlobal(query, algorithms) {
         const bPalette = isFromPalette(b);
         if (aPalette && !bPalette) return -1;
         if (!aPalette && bPalette) return 1;
-        return (b.score ?? 0) - (a.score ?? 0);
+        const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        const orderA = TYPE_ORDER[a.type] ?? 99;
+        const orderB = TYPE_ORDER[b.type] ?? 99;
+        return orderA - orderB;
     });
     return merged.slice(0, MAX_RESULTS);
 }

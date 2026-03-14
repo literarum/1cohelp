@@ -14,6 +14,7 @@ let deps = {
     bookmarkDetailModalConfig: null,
     wireBookmarkDetailModalCloseHandler: null,
     renderPdfAttachmentsSection: null,
+    exportSingleBookmarkToPdf: null,
 };
 
 export function setBookmarkDetailDependencies(dependencies) {
@@ -60,6 +61,9 @@ export async function showBookmarkDetailModal(bookmarkId) {
                         <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
                             <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
                                 <i class="fas fa-edit mr-1"></i> Редактировать
+                            </button>
+                            <button type="button" id="exportBookmarkToPdfBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition">
+                                <i class="far fa-file-pdf mr-1"></i> Экспорт в PDF
                             </button>
                             <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
                                 Закрыть
@@ -170,6 +174,7 @@ export async function showBookmarkDetailModal(bookmarkId) {
     const screenshotsContainer = modal.querySelector('#bookmarkDetailScreenshotsContainer');
     const screenshotsGridEl = modal.querySelector('#bookmarkDetailScreenshotsGrid');
     const editButton = modal.querySelector('#editBookmarkFromDetailBtn');
+    const exportButton = modal.querySelector('#exportBookmarkToPdfBtn');
     const favoriteButtonContainer = modal.querySelector('.fav-btn-placeholder-modal-bookmark');
 
     if (
@@ -178,6 +183,7 @@ export async function showBookmarkDetailModal(bookmarkId) {
         !screenshotsContainer ||
         !screenshotsGridEl ||
         !editButton ||
+        !exportButton ||
         !favoriteButtonContainer
     ) {
         console.error('Не найдены необходимые элементы в модальном окне деталей закладки.');
@@ -199,6 +205,7 @@ export async function showBookmarkDetailModal(bookmarkId) {
     screenshotsGridEl.innerHTML = '';
     screenshotsContainer.classList.add('hidden');
     editButton.classList.add('hidden');
+    exportButton.classList.add('hidden');
     favoriteButtonContainer.innerHTML = '';
 
     modal.classList.remove('hidden');
@@ -218,6 +225,7 @@ export async function showBookmarkDetailModal(bookmarkId) {
             textContentEl.appendChild(preElement);
 
             editButton.classList.remove('hidden');
+            exportButton.classList.remove('hidden');
 
             const itemType = bookmark.url ? 'bookmark' : 'bookmark_note';
             const isFav = deps.isFavorite?.(itemType, String(bookmark.id));
@@ -277,6 +285,7 @@ export async function showBookmarkDetailModal(bookmarkId) {
             textContentEl.innerHTML = `<p class="text-red-500">Не удалось загрузить данные закладки (ID: ${bookmarkId}). Возможно, она была удалена.</p>`;
             deps.showNotification?.('Закладка не найдена', 'error');
             editButton.classList.add('hidden');
+            exportButton.classList.add('hidden');
             screenshotsContainer.classList.add('hidden');
         }
     } catch (error) {
@@ -286,6 +295,26 @@ export async function showBookmarkDetailModal(bookmarkId) {
             '<p class="text-red-500">Произошла ошибка при загрузке данных.</p>';
         deps.showNotification?.('Ошибка загрузки деталей закладки', 'error');
         editButton.classList.add('hidden');
+        exportButton.classList.add('hidden');
         screenshotsContainer.classList.add('hidden');
+    }
+
+    if (exportButton && !exportButton.dataset.wired) {
+        exportButton.dataset.wired = '1';
+        exportButton.addEventListener('click', async () => {
+            const currentId = parseInt(modal.dataset.currentBookmarkId, 10);
+            if (Number.isNaN(currentId)) {
+                deps.showNotification?.('Не удалось определить ID закладки для экспорта.', 'error');
+                return;
+            }
+            if (typeof deps.exportSingleBookmarkToPdf === 'function') {
+                await deps.exportSingleBookmarkToPdf(currentId);
+            } else {
+                deps.showNotification?.(
+                    'Ошибка: экспорт закладки в PDF недоступен (функция не настроена).',
+                    'error',
+                );
+            }
+        });
     }
 }

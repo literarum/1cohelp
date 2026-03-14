@@ -1,6 +1,11 @@
 'use strict';
 
-import { DB_NAME, DB_VERSION } from '../constants.js';
+import {
+    DB_NAME,
+    DB_VERSION,
+    RECENTLY_DELETED_STORE_NAME,
+    RECENTLY_DELETED_TRACKED_STORES,
+} from '../constants.js';
 import { storeConfigs } from './stores.js';
 import { State } from '../app/state.js';
 
@@ -98,6 +103,9 @@ export function initDB() {
             resolve(dbInstance);
         };
 
+        // Обратная совместимость: при открытии БД с любой старой версией (0..DB_VERSION-1)
+        // создаются отсутствующие store'ы и индексы; миграции: screenshots (oldVersion < 4),
+        // searchIndex (oldVersion < 5). Старые данные не теряются.
         request.onupgradeneeded = (e) => {
             const currentDb = e.target.result;
             const transaction = e.target.transaction;
@@ -465,7 +473,7 @@ export function getFromIndexedDB(storeName, key) {
 /**
  * Удаляет запись из хранилища по ключу
  */
-export function deleteFromIndexedDB(storeName, key) {
+export async function deleteFromIndexedDB(storeName, key) {
     const storeConfig = storeConfigs.find((sc) => sc.name === storeName);
     let keyToUse = key;
     if (storeConfig && storeConfig.options && storeConfig.options.autoIncrement) {
@@ -474,6 +482,28 @@ export function deleteFromIndexedDB(storeName, key) {
             if (!isNaN(parsedKey) && String(parsedKey) === key) {
                 keyToUse = parsedKey;
             }
+        }
+    }
+    if (
+        State.db &&
+        storeName !== RECENTLY_DELETED_STORE_NAME &&
+        RECENTLY_DELETED_TRACKED_STORES.includes(storeName)
+    ) {
+        try {
+            const existing = await getFromIndexedDB(storeName, keyToUse);
+            if (existing && typeof existing === 'object') {
+                const recentRecord = {
+                    storeName,
+                    entityId: String(keyToUse),
+                    payload: JSON.parse(JSON.stringify(existing)),
+                    deletedAt: new Date().toISOString(),
+                    reason: 'delete',
+                    context: null,
+                };
+                await saveToIndexedDB(RECENTLY_DELETED_STORE_NAME, recentRecord);
+            }
+        } catch (recentErr) {
+            console.warn('[deleteFromIndexedDB] Не удалось сохранить запись в recentlyDeleted:', recentErr);
         }
     }
     return performDBOperation(storeName, 'readwrite', (store) => store.delete(keyToUse));

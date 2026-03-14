@@ -18,6 +18,8 @@ let deps = {
     shouldConfirmBeforeClose: null,
     setupExtensionFieldListeners: null,
     loadEmployeeExtension: null,
+    showAppConfirm: null,
+    openRecentlyDeletedModal: null,
 };
 
 export function setUISettingsModalInitDependencies(dependencies) {
@@ -80,7 +82,9 @@ export function initUISettingsModalHandlers() {
                                         deps.State &&
                                         typeof deps.applyPreviewSettings === 'function'
                                     ) {
-                                        deps.applyPreviewSettings(deps.State.currentPreviewSettings);
+                                        deps.applyPreviewSettings(
+                                            deps.State.currentPreviewSettings,
+                                        );
                                     }
                                 }
                             },
@@ -88,7 +92,10 @@ export function initUISettingsModalHandlers() {
                     };
                     if (typeof window.Sortable !== 'undefined') {
                         initPanelSortable(window.Sortable);
-                    } else if (window.VendorLoader && typeof window.VendorLoader.waitForSortable === 'function') {
+                    } else if (
+                        window.VendorLoader &&
+                        typeof window.VendorLoader.waitForSortable === 'function'
+                    ) {
                         window.VendorLoader.waitForSortable(initPanelSortable, 5000);
                     }
                 }
@@ -105,7 +112,10 @@ export function initUISettingsModalHandlers() {
                 try {
                     panelSortContainer.sortableInstance.destroy();
                 } catch (e) {
-                    console.warn('[UISettingsModal] Ошибка при уничтожении Sortable при закрытии:', e);
+                    console.warn(
+                        '[UISettingsModal] Ошибка при уничтожении Sortable при закрытии:',
+                        e,
+                    );
                 }
                 panelSortContainer.sortableInstance = null;
             }
@@ -134,6 +144,7 @@ export function initUISettingsModalHandlers() {
         const cancelUISettingsBtn = document.getElementById('cancelUISettingsBtn');
         const resetUiBtn = document.getElementById('resetUiBtn');
         const closeCustomizeUIModalBtn = document.getElementById('closeCustomizeUIModalBtn');
+        const openRecentlyDeletedBtn = document.getElementById('openRecentlyDeletedBtn');
         const decreaseFontBtn = document.getElementById('decreaseFontBtn');
         const increaseFontBtn = document.getElementById('increaseFontBtn');
         const resetFontBtn = document.getElementById('resetFontBtn');
@@ -155,8 +166,32 @@ export function initUISettingsModalHandlers() {
             closeCustomizeUIModalBtn.addEventListener('click', () => void requestClose());
         if (resetUiBtn) {
             resetUiBtn.addEventListener('click', async () => {
-                if (typeof deps.resetUISettingsInModal === 'function') {
-                    await deps.resetUISettingsInModal();
+                const doReset = () => {
+                    if (typeof deps.resetUISettingsInModal === 'function') {
+                        return deps.resetUISettingsInModal();
+                    }
+                };
+                if (typeof deps.showAppConfirm === 'function') {
+                    const confirmed = await deps.showAppConfirm({
+                        title: 'Сброс настроек интерфейса',
+                        message:
+                            'Вы уверены, что хотите сбросить настройки интерфейса (тема, цвет, шрифт, панели) к значениям по умолчанию? Изменения вступят в силу после нажатия «Сохранить».',
+                        confirmText: 'Да, сбросить',
+                        cancelText: 'Отмена',
+                        confirmClass: 'bg-primary hover:bg-secondary text-white',
+                    });
+                    if (confirmed) await doReset();
+                } else {
+                    await doReset();
+                }
+            });
+        }
+        if (openRecentlyDeletedBtn) {
+            openRecentlyDeletedBtn.addEventListener('click', async () => {
+                if (typeof deps.openRecentlyDeletedModal === 'function') {
+                    await deps.openRecentlyDeletedModal();
+                } else if (typeof window.openRecentlyDeletedModal === 'function') {
+                    await window.openRecentlyDeletedModal();
                 }
             });
         }
@@ -254,7 +289,9 @@ export function initUISettingsModalHandlers() {
                     )
                     .join('');
             };
-            const summaryClass = report.success ? 'health-report-summary-ok' : 'health-report-summary-fail';
+            const summaryClass = report.success
+                ? 'health-report-summary-ok'
+                : 'health-report-summary-fail';
             const summaryIcon = report.success
                 ? '<i class="fas fa-check-circle" aria-hidden="true"></i>'
                 : '<i class="fas fa-exclamation-circle" aria-hidden="true"></i>';
@@ -264,9 +301,18 @@ export function initUISettingsModalHandlers() {
             if (report.finishedAt) metaParts.push(`Окончание: ${esc(report.finishedAt)}`);
             const summaryMeta = metaParts.length ? metaParts.join(' · ') : '';
 
-            const errorsList = buildSectionList(report.errors, '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>');
-            const warningsList = buildSectionList(report.warnings, '<i class="fas fa-exclamation-triangle text-amber-500 dark:text-amber-400" aria-hidden="true"></i>');
-            const checksList = buildSectionList(report.checks, '<i class="fas fa-check text-primary" aria-hidden="true"></i>');
+            const errorsList = buildSectionList(
+                report.errors,
+                '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>',
+            );
+            const warningsList = buildSectionList(
+                report.warnings,
+                '<i class="fas fa-exclamation-triangle text-amber-500 dark:text-amber-400" aria-hidden="true"></i>',
+            );
+            const checksList = buildSectionList(
+                report.checks,
+                '<i class="fas fa-check text-primary" aria-hidden="true"></i>',
+            );
 
             body.innerHTML = `
                     <div class="health-report-body-scroll">
@@ -282,9 +328,11 @@ export function initUISettingsModalHandlers() {
                                 <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
                                 <span>Ошибки (${report.errors?.length ?? 0})</span>
                             </div>
-                            ${report.errors?.length
-                                ? `<ul class="health-report-section-list">${errorsList}</ul>`
-                                : `<div class="health-report-empty">Ошибок не обнаружено.</div>`}
+                            ${
+                                report.errors?.length
+                                    ? `<ul class="health-report-section-list">${errorsList}</ul>`
+                                    : `<div class="health-report-empty">Ошибок не обнаружено.</div>`
+                            }
                         </div>
                         <div class="health-report-section health-report-section-warnings health-report-section-collapsible is-collapsed">
                             <div class="health-report-section-header health-report-section-warnings">
@@ -294,9 +342,11 @@ export function initUISettingsModalHandlers() {
                             </div>
                             <div class="health-report-section-body">
                                 <div class="health-report-section-body-inner">
-                                    ${report.warnings?.length
-                                        ? `<ul class="health-report-section-list">${warningsList}</ul>`
-                                        : `<div class="health-report-empty">Предупреждений нет.</div>`}
+                                    ${
+                                        report.warnings?.length
+                                            ? `<ul class="health-report-section-list">${warningsList}</ul>`
+                                            : `<div class="health-report-empty">Предупреждений нет.</div>`
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -308,9 +358,11 @@ export function initUISettingsModalHandlers() {
                             </div>
                             <div class="health-report-section-body">
                                 <div class="health-report-section-body-inner">
-                                    ${report.checks?.length
-                                        ? `<ul class="health-report-section-list">${checksList}</ul>`
-                                        : `<div class="health-report-empty">Список проверок пуст.</div>`}
+                                    ${
+                                        report.checks?.length
+                                            ? `<ul class="health-report-section-list">${checksList}</ul>`
+                                            : `<div class="health-report-empty">Список проверок пуст.</div>`
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -328,7 +380,9 @@ export function initUISettingsModalHandlers() {
             if (!modal || modal.dataset.healthReportCollapseInit) return;
             modal.dataset.healthReportCollapseInit = '1';
             modal.addEventListener('click', (e) => {
-                const header = e.target.closest('.health-report-section-collapsible .health-report-section-header');
+                const header = e.target.closest(
+                    '.health-report-section-collapsible .health-report-section-header',
+                );
                 if (!header) return;
                 e.preventDefault();
                 const section = header.closest('.health-report-section-collapsible');
@@ -339,7 +393,10 @@ export function initUISettingsModalHandlers() {
                 if (btn) {
                     btn.setAttribute('aria-expanded', String(expanded));
                     btn.title = expanded ? 'Свернуть' : 'Развернуть';
-                    btn.setAttribute('aria-label', expanded ? 'Свернуть раздел' : 'Развернуть раздел');
+                    btn.setAttribute(
+                        'aria-label',
+                        expanded ? 'Свернуть раздел' : 'Развернуть раздел',
+                    );
                     btn.textContent = expanded ? '\u9660' : '\u9654';
                 }
             });

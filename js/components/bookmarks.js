@@ -5,6 +5,7 @@ import { getAllFromIndexedDB, getFromIndexedDB, saveToIndexedDB } from '../db/in
 import { CARD_CONTAINER_CLASSES, LIST_CONTAINER_CLASSES, SECTION_GRID_COLS } from '../config.js';
 import { ARCHIVE_FOLDER_ID, ARCHIVE_FOLDER_NAME } from '../constants.js';
 import { updateSearchIndex } from '../features/search.js';
+import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
 import { State as GlobalState } from '../app/state.js';
 
 // Полные классы для бейджей папок (Tailwind не поддерживает динамические имена классов — только явные строки)
@@ -342,6 +343,7 @@ export function initBookmarkSystem() {
     console.log('Вызвана функция initBookmarkSystem.');
     const addBookmarkBtn = document.getElementById('addBookmarkBtn');
     const organizeBookmarksBtn = document.getElementById('organizeBookmarksBtn');
+    const exportAllBookmarksBtn = document.getElementById('exportAllBookmarksToPdfBtn');
     const bookmarkSearchInput = document.getElementById('bookmarkSearchInput');
     const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
     const bookmarksContainer = document.getElementById('bookmarksContainer');
@@ -379,6 +381,18 @@ export function initBookmarkSystem() {
         console.log('Обработчик для organizeBookmarksBtn добавлен в initBookmarkSystem.');
     }
 
+    if (exportAllBookmarksBtn && !exportAllBookmarksBtn.dataset.listenerAttached) {
+        exportAllBookmarksBtn.addEventListener('click', () => {
+            if (typeof window.exportAllBookmarksToPdf === 'function') {
+                window.exportAllBookmarksToPdf();
+            } else if (typeof showNotification === 'function') {
+                showNotification('Экспорт всех закладок в PDF недоступен.', 'error');
+            }
+        });
+        exportAllBookmarksBtn.dataset.listenerAttached = 'true';
+        console.log('Обработчик для exportAllBookmarksToPdfBtn добавлен в initBookmarkSystem.');
+    }
+
     if (bookmarkSearchInput && !bookmarkSearchInput.dataset.listenerAttached) {
         const debouncedFilter =
             debounce && typeof debounce === 'function'
@@ -402,12 +416,14 @@ export function initBookmarkSystem() {
     if (sortControls && !sortControls.dataset.sortHandlersAttached) {
         const baseClass =
             'h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border';
-        const inactiveClass =
-            `${baseClass} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`;
+        const inactiveClass = `${baseClass} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`;
         const activeClass = `${baseClass} border-transparent bg-primary text-white hover:bg-secondary`;
 
         const updateBookmarksSortButtonsUI = () => {
-            const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' };
+            const sortState = GlobalState.currentBookmarksSort || {
+                criteria: 'date',
+                direction: 'asc',
+            };
             const criteriaToBtnId = {
                 date: 'sortBookmarksByDate',
                 title: 'sortBookmarksByTitle',
@@ -688,8 +704,14 @@ function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
         if (criteria === 'folder') {
             const folderA = a.folder != null ? folderMap[a.folder] : null;
             const folderB = b.folder != null ? folderMap[b.folder] : null;
-            const colorA = folderA && folderA.color ? getFolderColorSortIndex(folderA.color) : FOLDER_COLOR_SORT_ORDER.length;
-            const colorB = folderB && folderB.color ? getFolderColorSortIndex(folderB.color) : FOLDER_COLOR_SORT_ORDER.length;
+            const colorA =
+                folderA && folderA.color
+                    ? getFolderColorSortIndex(folderA.color)
+                    : FOLDER_COLOR_SORT_ORDER.length;
+            const colorB =
+                folderB && folderB.color
+                    ? getFolderColorSortIndex(folderB.color)
+                    : FOLDER_COLOR_SORT_ORDER.length;
             if (colorA !== colorB) return (colorA - colorB) * mult;
             const nameA = (folderA && folderA.name) || '';
             const nameB = (folderB && folderB.name) || '';
@@ -996,7 +1018,10 @@ export async function filterBookmarks() {
             });
         }
 
-        const sortState = GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' };
+        const sortState = GlobalState.currentBookmarksSort || {
+            criteria: 'date',
+            direction: 'asc',
+        };
         const sortedToDisplay = sortBookmarksList(bookmarksToDisplay, folderMap, sortState);
         renderBookmarks(sortedToDisplay, folderMap);
 
@@ -1472,6 +1497,28 @@ export async function handleDeleteBookmarkFolderClick(folderId, folderItem) {
         }
         await Promise.allSettled(indexUpdatePromises);
         console.log('Обновление поискового индекса (удаление) завершено.');
+
+        if (folderToDelete) {
+            await addRecentlyDeletedRecord({
+                storeName: 'bookmarkFolders',
+                entityId: folderId,
+                payload: folderToDelete,
+                reason: shouldDeleteBookmarks ? 'delete_folder_with_content' : 'delete_folder',
+            });
+        }
+        if (shouldDeleteBookmarks && Array.isArray(bookmarksInFolder) && bookmarksInFolder.length > 0) {
+            await Promise.all(
+                bookmarksInFolder.map((bookmark) =>
+                    addRecentlyDeletedRecord({
+                        storeName: 'bookmarks',
+                        entityId: bookmark.id,
+                        payload: bookmark,
+                        reason: 'delete_by_folder_remove',
+                        context: { folderId },
+                    }),
+                ),
+            );
+        }
 
         let transaction;
         try {

@@ -50,7 +50,15 @@ export async function saveClientData() {
         try {
             oldData = await getFromIndexedDB('clientData', clientDataToSave.id);
             await saveToIndexedDB('clientData', clientDataToSave);
-            console.log('Client data saved to IndexedDB');
+            const savedSnapshot = await getFromIndexedDB('clientData', clientDataToSave.id);
+            const savedNotes =
+                savedSnapshot && typeof savedSnapshot.notes === 'string' ? savedSnapshot.notes : '';
+            if (savedNotes !== clientDataToSave.notes) {
+                throw new Error(
+                    'Integrity check failed: saved notes do not match source notes after write.',
+                );
+            }
+            console.log('Client data saved to IndexedDB (integrity check passed)');
             savedToDB = true;
 
             if (deps.updateSearchIndex && typeof deps.updateSearchIndex === 'function') {

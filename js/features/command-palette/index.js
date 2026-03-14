@@ -8,16 +8,20 @@
 import { runSearch, runSearchWithGlobal } from './search.js';
 import { handleSearchResultClick } from '../search.js';
 import * as ui from './ui.js';
-import { getRecentIds, addRecentId, reorderByRecent } from './recent.js';
+import { getRecentIds, addRecentId, clearRecentIds, reorderByRecent } from './recent.js';
 
 let setActiveTab = null;
 let showAlgorithmDetail = null;
 let algorithms = null;
+let showNotification = null;
+let getVisibleModals = null;
 
 export function setCommandPaletteDependencies(deps) {
     if (deps.setActiveTab !== undefined) setActiveTab = deps.setActiveTab;
     if (deps.showAlgorithmDetail !== undefined) showAlgorithmDetail = deps.showAlgorithmDetail;
     if (deps.algorithms !== undefined) algorithms = deps.algorithms;
+    if (deps.showNotification !== undefined) showNotification = deps.showNotification;
+    if (deps.getVisibleModals !== undefined) getVisibleModals = deps.getVisibleModals;
 }
 
 function selectResult(result) {
@@ -47,8 +51,12 @@ function selectResult(result) {
         } else if (action === 'openHotkeys') {
             document.getElementById('showHotkeysBtn')?.click();
         } else if (action === 'runHealthDiagnostic') {
-            if (typeof window.runManualFullDiagnostic === 'function' && typeof window.showHealthReportModal === 'function') {
-                window.runManualFullDiagnostic()
+            if (
+                typeof window.runManualFullDiagnostic === 'function' &&
+                typeof window.showHealthReportModal === 'function'
+            ) {
+                window
+                    .runManualFullDiagnostic()
                     .then((report) => window.showHealthReportModal(report))
                     .catch((err) => {
                         window.showHealthReportModal({
@@ -102,6 +110,19 @@ function selectResult(result) {
             } else {
                 document.getElementById('noInnLink')?.click();
             }
+        } else if (action === 'clearRecent') {
+            clearRecentIds();
+            if (typeof showNotification === 'function') showNotification('Недавние очищены');
+        } else if (action === 'organizeBookmarks') {
+            document.getElementById('organizeBookmarksBtn')?.click();
+        } else if (action === 'clearFavorites') {
+            document.getElementById('clearFavoritesBtn')?.click();
+        } else if (action === 'openRecentlyDeleted') {
+            if (typeof window.openRecentlyDeletedModal === 'function') {
+                window.openRecentlyDeletedModal();
+            } else {
+                document.getElementById('openRecentlyDeletedBtn')?.click();
+            }
         }
         return;
     }
@@ -113,6 +134,8 @@ function selectResult(result) {
 
 let keydownHandler = null;
 let inputHandler = null;
+const GLOBAL_SEARCH_DEBOUNCE_MS = 200;
+let globalSearchDebounceTimer = null;
 
 export function openCommandPalette() {
     ui.setUiCallbacks({ selectResult, onClose: closeCommandPalette });
@@ -127,11 +150,15 @@ export function openCommandPalette() {
             const syncResults = runSearch(q, algorithms);
             ui.renderResults(reorderByRecent(syncResults, getRecentIds()));
             if (!q.trim()) return;
-            runSearchWithGlobal(q, algorithms).then((merged) => {
-                if (inputEl.value.trim() === q.trim()) {
-                    ui.renderResults(reorderByRecent(merged, getRecentIds()));
-                }
-            });
+            if (globalSearchDebounceTimer) clearTimeout(globalSearchDebounceTimer);
+            globalSearchDebounceTimer = setTimeout(() => {
+                globalSearchDebounceTimer = null;
+                runSearchWithGlobal(q, algorithms).then((merged) => {
+                    if (inputEl.value.trim() === q.trim()) {
+                        ui.renderResults(reorderByRecent(merged, getRecentIds()));
+                    }
+                });
+            }, GLOBAL_SEARCH_DEBOUNCE_MS);
         };
         inputEl.addEventListener('input', inputHandler);
     }
@@ -143,7 +170,14 @@ export function openCommandPalette() {
 }
 
 export function closeCommandPalette() {
+    if (globalSearchDebounceTimer) {
+        clearTimeout(globalSearchDebounceTimer);
+        globalSearchDebounceTimer = null;
+    }
     ui.hide();
+    if (typeof getVisibleModals === 'function' && getVisibleModals().length === 0) {
+        document.body.classList.remove('modal-open', 'overflow-hidden');
+    }
     if (keydownHandler) {
         document.removeEventListener('keydown', keydownHandler, true);
         keydownHandler = null;

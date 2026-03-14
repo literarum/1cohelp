@@ -28,8 +28,8 @@
         background-color 0.2s ease,
         transform 0.2s ease;
 }
-#appContent .view-item:hover,
-.modal-overlay .view-item:hover {
+#appContent .view-item:hover:not(.main-algo-group),
+.modal-overlay .view-item:hover:not(.main-algo-group) {
     background-color: var(--color-hover-subtle);
     box-shadow: var(--card-hover-shadow);
 }
@@ -115,4 +115,3 @@ input.timer-input-active {
     background-color: rgba(220, 38, 38, 0.2) !important;
     box-shadow: 0 0 16px rgba(220, 38, 38, 0.7);
 }
-

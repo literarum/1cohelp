@@ -27,6 +27,16 @@ export const TYPE_FILTER_MAP = {
     xml_report: 'xml_report',
 };
 
+/** Порядок типов при равном score (меньше индекс — выше в списке): алгоритмы → xml_report → error → tab → action */
+export const TYPE_ORDER = {
+    algorithm: 0,
+    main: 0,
+    xml_report: 1,
+    error: 2,
+    tab: 3,
+    action: 4,
+};
+
 /** Подписи типов результатов для бейджей (палитра + глобальный поиск) */
 export const TYPE_LABELS = {
     algorithm: 'Алгоритм',
@@ -67,15 +77,27 @@ export const TABS = [
     { tabId: 'main', label: 'Главная', synonyms: ['главная', 'главн', 'main', 'дом'] },
     { tabId: 'program', label: 'Программа 1С/УП', synonyms: ['программа', '1с', 'уп', 'program'] },
     { tabId: 'links', label: 'Ссылки 1С', synonyms: ['ссылки', 'ссылок', 'links', 'циб'] },
-    { tabId: 'extLinks', label: 'Внешние ресурсы', synonyms: ['внешние', 'ресурсы', 'внешн', 'ext'] },
+    {
+        tabId: 'extLinks',
+        label: 'Внешние ресурсы',
+        synonyms: ['внешние', 'ресурсы', 'внешн', 'ext'],
+    },
     { tabId: 'skzi', label: 'СКЗИ', synonyms: ['скзи', 'skzi', 'крипто'] },
     { tabId: 'lk1c', label: '1СО ЛК', synonyms: ['лк', 'личный кабинет', 'lk1c', '1со'] },
     { tabId: 'webReg', label: 'Веб-Регистратор', synonyms: ['веб', 'регистратор', 'webreg'] },
     { tabId: 'reglaments', label: 'Регламенты', synonyms: ['регламент', 'регламенты'] },
     { tabId: 'bookmarks', label: 'Закладки', synonyms: ['закладки', 'закладк', 'bookmarks'] },
     { tabId: 'sedoTypes', label: 'Типы СЭДО', synonyms: ['седо', 'сэдо', 'типы', 'sedo'] },
-    { tabId: 'blacklistedClients', label: 'Чёрный список', synonyms: ['черный', 'чёрный', 'список', 'blacklist', 'жаб'] },
-    { tabId: 'fnsCert', label: 'Проверка сертификата на отзыв', synonyms: ['сертификат', 'отзыв', 'фнс', 'revocation'] },
+    {
+        tabId: 'blacklistedClients',
+        label: 'Чёрный список',
+        synonyms: ['черный', 'чёрный', 'список', 'blacklist', 'жаб'],
+    },
+    {
+        tabId: 'fnsCert',
+        label: 'Проверка сертификата на отзыв',
+        synonyms: ['сертификат', 'отзыв', 'фнс', 'revocation'],
+    },
     { tabId: 'xmlAnalyzer', label: 'Анализатор XML', synonyms: ['xml', 'анализатор', 'анализ'] },
     { tabId: 'favorites', label: 'Избранное', synonyms: ['избранное', 'избранн', 'favorites'] },
 ];

@@ -1,5 +1,7 @@
 'use strict';
 
+import { getCoreService, notify } from '../core/kernel.js';
+
 /**
  * Модуль инициализации систем приложения
  * Вынесено из script.js
@@ -27,6 +29,18 @@ let showNotification = null;
 let initBackgroundHealthTestsSystem = null;
 let _setBackgroundHealthTestsDependencies = null;
 let BackgroundStatusHUDFactory = null;
+
+function getNotificationGateway() {
+    const notificationService = NotificationService || getCoreService('NotificationService');
+    const showNotificationFn =
+        showNotification ||
+        getCoreService('showNotification') ||
+        ((message, type = 'info', duration = 5000) => notify(message, type, duration));
+    return {
+        notificationService,
+        showNotificationFn,
+    };
+}
 
 export function setSystemsInitDependencies(deps) {
     if (deps.State !== undefined) _State = deps.State;
@@ -123,11 +137,17 @@ export function initClearDataFunctionality() {
             console.log("Flag 'copilotIsReloadingAfterClear' set in localStorage.");
         } catch (e) {
             console.error("Failed to set 'copilotIsReloadingAfterClear' flag in localStorage:", e);
-            if (NotificationService && NotificationService.add) {
-                NotificationService.add(
+            const { notificationService, showNotificationFn } = getNotificationGateway();
+            if (notificationService && notificationService.add) {
+                notificationService.add(
                     'Ошибка установки флага перезагрузки. Очистка может пройти некорректно.',
                     'error',
                     { important: true },
+                );
+            } else {
+                showNotificationFn(
+                    'Ошибка установки флага перезагрузки. Очистка может пройти некорректно.',
+                    'error',
                 );
             }
         }
@@ -158,14 +178,15 @@ export function initClearDataFunctionality() {
                 );
             }
 
-            if (NotificationService && NotificationService.add) {
-                NotificationService.add(
+            const { notificationService, showNotificationFn } = getNotificationGateway();
+            if (notificationService && notificationService.add) {
+                notificationService.add(
                     `Ошибка при очистке данных: ${errorMsg}. Пожалуйста, проверьте консоль и попробуйте снова.`,
                     'error',
                     { important: true, duration: 15000 },
                 );
-            } else if (typeof showNotification === 'function') {
-                showNotification(
+            } else {
+                showNotificationFn(
                     `Ошибка при очистке данных: ${errorMsg}. Пожалуйста, проверьте консоль и попробуйте снова.`,
                     'error',
                     15000,
@@ -178,9 +199,8 @@ export function initClearDataFunctionality() {
         if (typeof exportAllData === 'function') {
             exportAllData();
         } else {
-            if (typeof showNotification === 'function') {
-                showNotification('Функция экспорта не найдена!', 'error');
-            }
+            const { showNotificationFn } = getNotificationGateway();
+            showNotificationFn('Функция экспорта не найдена!', 'error');
         }
     });
     console.log(

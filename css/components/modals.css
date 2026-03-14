@@ -33,6 +33,28 @@ body.modal-open {
 #editModal .edit-step {
     padding: 1rem 1.25rem !important;
 }
+#algorithmModal .step-execution-dimmed-step {
+    opacity: 0.25;
+    filter: grayscale(0.35);
+    transform: scale(0.995);
+    transition:
+        opacity 180ms ease,
+        filter 180ms ease,
+        transform 180ms ease;
+}
+#algorithmModal .step-execution-active-step {
+    opacity: 1 !important;
+    filter: none !important;
+    transform: scale(1);
+    box-shadow:
+        0 0 0 2px rgba(59, 130, 246, 0.25),
+        0 12px 28px rgba(15, 23, 42, 0.12);
+    border-left-color: #3b82f6 !important;
+}
+#algorithmModal #algorithmStepExecutionControls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 #algorithmModal .algorithm-step .additional-info-top,
 #algorithmModal .algorithm-step .additional-info-bottom {
     padding: 0.5rem 0.75rem !important;
@@ -93,12 +115,16 @@ div:has(> #clearClientDataBtn) {
 @keyframes timer-return-to-client-neon-pulse {
     0%,
     100% {
-        box-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 0 0 40px rgba(239, 68, 68, 0.4),
+        box-shadow:
+            0 0 20px rgba(239, 68, 68, 0.8),
+            0 0 40px rgba(239, 68, 68, 0.4),
             inset 0 0 20px rgba(239, 68, 68, 0.15);
         border-color: #ef4444;
     }
     50% {
-        box-shadow: 0 0 40px rgba(239, 68, 68, 1), 0 0 80px rgba(239, 68, 68, 0.6),
+        box-shadow:
+            0 0 40px rgba(239, 68, 68, 1),
+            0 0 80px rgba(239, 68, 68, 0.6),
             inset 0 0 30px rgba(239, 68, 68, 0.25);
         border-color: #f87171;
     }
@@ -111,13 +137,23 @@ div:has(> #clearClientDataBtn) {
 @keyframes app-backup-perimeter-pulse {
     0%,
     100% {
-        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.9), 0 0 20px rgba(239, 68, 68, 0.5);
-        border-color: #ef4444;
+        box-shadow:
+            0 0 0 8px rgba(255, 31, 31, 1),
+            0 0 180px rgba(255, 31, 31, 1),
+            0 0 420px rgba(255, 31, 31, 0.95),
+            0 0 560px rgba(255, 0, 0, 0.8),
+            inset 0 0 120px rgba(255, 31, 31, 0.95);
+        border-color: #ff1f1f;
         opacity: 1;
     }
     50% {
-        box-shadow: 0 0 0 6px rgba(239, 68, 68, 1), 0 0 40px rgba(239, 68, 68, 0.8);
-        border-color: #f87171;
+        box-shadow:
+            0 0 0 12px rgba(255, 0, 0, 1),
+            0 0 360px rgba(255, 0, 0, 1),
+            0 0 780px rgba(255, 0, 0, 1),
+            0 0 980px rgba(255, 30, 30, 0.9),
+            inset 0 0 240px rgba(255, 0, 0, 1);
+        border-color: #ff4545;
         opacity: 1;
     }
 }
@@ -131,15 +167,41 @@ body.app-backup-warning-perimeter-pulse::before {
     position: fixed;
     inset: 0;
     pointer-events: none;
-    border: 4px solid #ef4444;
+    border: 8px solid #ff1f1f;
     border-radius: 0;
     animation: app-backup-perimeter-pulse 1s ease-in-out infinite;
-    z-index: 69;
+    filter: saturate(2.8) brightness(2.4);
+    z-index: 100000;
 }
 
 /* Текст предупреждения в модалке подтверждения (красный, подчёркнутый, капс) */
 #appConfirmModal .app-confirm-warning-caps {
     display: inline-block;
+    color: #ff2a2a !important;
+    text-decoration-color: #ff3b3b;
+    text-shadow:
+        0 0 6px rgba(255, 59, 59, 0.95),
+        0 0 14px rgba(255, 59, 59, 0.85),
+        0 0 28px rgba(255, 0, 0, 0.75);
+    animation: app-backup-warning-text-neon 0.8s ease-in-out infinite;
+}
+
+@keyframes app-backup-warning-text-neon {
+    0%,
+    100% {
+        filter: brightness(1);
+        text-shadow:
+            0 0 6px rgba(255, 59, 59, 0.95),
+            0 0 14px rgba(255, 59, 59, 0.85),
+            0 0 28px rgba(255, 0, 0, 0.75);
+    }
+    50% {
+        filter: brightness(1.2);
+        text-shadow:
+            0 0 10px rgba(255, 84, 84, 1),
+            0 0 24px rgba(255, 42, 42, 0.95),
+            0 0 42px rgba(255, 0, 0, 0.85);
+    }
 }
 
 :is(
@@ -161,7 +223,8 @@ body.app-backup-warning-perimeter-pulse::before {
     #bookmarkDetailModal,
     #extLinkModal,
     #sedoFullscreenOverlay,
-    #timerReturnToClientModal
+    #timerReturnToClientModal,
+    #dbMergeModal
 ) {
     pointer-events: none;
 }
@@ -186,8 +249,8 @@ body.app-backup-warning-perimeter-pulse::before {
     #extLinkModal,
     #sedoFullscreenOverlay,
     #extLinkCategoriesModal,
-    #timerReturnToClientModal
-
+    #timerReturnToClientModal,
+    #dbMergeModal
 ):not(.hidden) {
     pointer-events: auto;
 }
@@ -212,8 +275,8 @@ body.app-backup-warning-perimeter-pulse::before {
     #extLinkModal,
     #sedoFullscreenOverlay,
     #extLinkCategoriesModal,
-    #timerReturnToClientModal
-
+    #timerReturnToClientModal,
+    #dbMergeModal
 ):not(.hidden) {
     -webkit-backdrop-filter: blur(var(--modal-backdrop-blur)) !important;
     backdrop-filter: blur(var(--modal-backdrop-blur)) !important;
@@ -303,4 +366,3 @@ body.app-backup-warning-perimeter-pulse::before {
     margin-top: 0.5rem;
     margin-bottom: 0.5rem;
 }
-

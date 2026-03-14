@@ -26,7 +26,11 @@ export function setTextareaHeightsDependencies(deps) {
  * Вызывать после загрузки настроек и когда элементы уже в DOM.
  */
 export function applySavedTextareaHeights() {
-    if (!State || !State.userPreferences || typeof State.userPreferences.textareaHeights !== 'object')
+    if (
+        !State ||
+        !State.userPreferences ||
+        typeof State.userPreferences.textareaHeights !== 'object'
+    )
         return;
     const heights = State.userPreferences.textareaHeights;
     for (const id of PERSISTED_TEXTAREA_IDS) {

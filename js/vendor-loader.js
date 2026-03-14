@@ -55,7 +55,8 @@
                 script.defer = false;
                 if (entry.attrs) {
                     for (var k in entry.attrs) {
-                        if (entry.attrs.hasOwnProperty(k)) script.setAttribute(k, entry.attrs[k]);
+                        if (Object.prototype.hasOwnProperty.call(entry.attrs, k))
+                            script.setAttribute(k, entry.attrs[k]);
                     }
                 }
                 head.appendChild(script);
@@ -64,8 +65,9 @@
                 link.rel = entry.rel;
                 link.href = url;
                 if (entry.attrs) {
-                    for (var k in entry.attrs) {
-                        if (entry.attrs.hasOwnProperty(k)) link.setAttribute(k, entry.attrs[k]);
+                    for (var attrKey in entry.attrs) {
+                        if (Object.prototype.hasOwnProperty.call(entry.attrs, attrKey))
+                            link.setAttribute(attrKey, entry.attrs[attrKey]);
                     }
                 }
                 head.appendChild(link);
@@ -113,7 +115,7 @@
         if (!link) return true;
         try {
             return !link.sheet || (link.sheet.cssRules && link.sheet.cssRules.length === 0);
-        } catch (e) {
+        } catch {
             return false;
         }
     }
@@ -131,7 +133,8 @@
         script.defer = false;
         if (attrs) {
             for (var k in attrs) {
-                if (attrs.hasOwnProperty(k)) script.setAttribute(k, attrs[k]);
+                if (Object.prototype.hasOwnProperty.call(attrs, k))
+                    script.setAttribute(k, attrs[k]);
             }
         }
         script.onload = next;
@@ -145,8 +148,7 @@
      * @param {string} profile - 'main' | 'standalone' | 'downloads'
      * @param {string} [basePath=''] - Base path (unused for CDN fallback)
      */
-    function runVendorFallback(profile, basePath) {
-        basePath = basePath || '';
+    function runVendorFallback(profile, _basePath) {
         if (!USE_LOCAL || !REGISTRY) return;
 
         var order = PROFILES[profile];
@@ -222,8 +224,11 @@
             var url = USE_LOCAL && entry.localPath ? basePath + entry.localPath : entry.cdnUrl;
             if (!url) continue;
             if (entry.type === 'script') {
-                var attrs = (entry.attrs && entry.attrs.crossorigin) ? ' crossorigin="' + entry.attrs.crossorigin + '"' : '';
-                document.write('<script src="' + url + '"' + attrs + '><\/script>');
+                var attrs =
+                    entry.attrs && entry.attrs.crossorigin
+                        ? ' crossorigin="' + entry.attrs.crossorigin + '"'
+                        : '';
+                document.write('<script src="' + url + '"' + attrs + '><' + '/script>');
             } else if (entry.type === 'link' && entry.rel) {
                 document.write('<link rel="' + entry.rel + '" href="' + url + '">');
             }
@@ -236,6 +241,6 @@
         loadTailwindFallback: loadTailwindFallback,
         writeVendors: writeVendors,
         runVendorFallback: runVendorFallback,
-        waitForSortable: waitForSortable
+        waitForSortable: waitForSortable,
     };
 })(typeof window !== 'undefined' ? window : this);

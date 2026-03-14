@@ -364,7 +364,12 @@ function normalizeShablonyData(rawData) {
         } else if (item && typeof item === 'object') {
             const t = item.text ?? item.title ?? item.heading ?? item.content ?? item.body;
             if (t != null) {
-                const s = typeof t === 'string' ? t : Array.isArray(t) ? t.map(String).join('\n') : String(t);
+                const s =
+                    typeof t === 'string'
+                        ? t
+                        : Array.isArray(t)
+                          ? t.map(String).join('\n')
+                          : String(t);
                 if (s.trim()) fallback.push(s.trim());
             }
         }

@@ -259,7 +259,7 @@ export async function renderMainAlgorithm() {
         return buildStepElementFull(step, index);
     }
 
-    function buildStepElementNumbersOnly(step, index) {
+    function buildStepElementNumbersOnly(step, _index) {
         const stepDiv = document.createElement('div');
         stepDiv.className =
             'algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm mb-3';

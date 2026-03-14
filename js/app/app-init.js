@@ -11,6 +11,7 @@ import {
     REVOCATION_LOCAL_HELPER_BASE_URL,
     REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER,
 } from '../config/revocation-sources.js';
+import { getCoreService, notify } from '../core/kernel.js';
 
 let dependencies = {};
 
@@ -53,7 +54,9 @@ export async function appInit(context = 'normal') {
         categoryDisplayInfo,
         initSearchSystem,
         initCommandPalette,
+        initRecentlyDeletedSystem,
         setCommandPaletteDependencies,
+        getVisibleModals,
         initBookmarkSystem,
         initCibLinkSystem,
         initViewToggles,
@@ -77,6 +80,7 @@ export async function appInit(context = 'normal') {
         initThemeToggle,
         initModalOverlayHandler,
         initAlgorithmModalControls,
+        initAlgorithmStepExecution,
         applyInitialUISettings,
         initUI,
         initScrollNavButtons,
@@ -84,6 +88,12 @@ export async function appInit(context = 'normal') {
         highlightClientNotesWindow,
         isClientNotesWindowOpen,
     } = dependencies;
+    const resolvedNotificationService =
+        NotificationService || getCoreService('NotificationService');
+    const resolvedShowNotification =
+        showNotification ||
+        getCoreService('showNotification') ||
+        ((message, type = 'info', duration = 5000) => notify(message, type, duration));
 
     let currentAppInitProgress = 0;
 
@@ -161,9 +171,9 @@ export async function appInit(context = 'normal') {
         });
     }
 
-    if (NotificationService && typeof NotificationService.init === 'function') {
+    if (resolvedNotificationService && typeof resolvedNotificationService.init === 'function') {
         try {
-            NotificationService.init();
+            resolvedNotificationService.init();
         } catch (e) {
             console.error('Failed to initialize NotificationService:', e);
         }
@@ -391,7 +401,7 @@ export async function appInit(context = 'normal') {
             if (typeof setSearchDependencies === 'function') {
                 setSearchDependencies({
                     algorithms: algorithms,
-                    showNotification: showNotification,
+                    showNotification: resolvedShowNotification,
                     setActiveTab: setActiveTab,
                     showAlgorithmDetail: showAlgorithmDetail,
                     showBookmarkDetailModal: showBookmarkDetailModal,
@@ -411,6 +421,8 @@ export async function appInit(context = 'normal') {
                     algorithms,
                     setActiveTab,
                     showAlgorithmDetail,
+                    showNotification: resolvedShowNotification,
+                    getVisibleModals,
                 });
                 console.log('[appInit] Command palette dependencies установлены');
             }
@@ -431,6 +443,14 @@ export async function appInit(context = 'normal') {
                         typeof initCommandPalette === 'function'
                             ? initCommandPalette
                             : () => console.warn('initCommandPalette not defined'),
+                    critical: false,
+                },
+                {
+                    name: 'initRecentlyDeletedSystem',
+                    func:
+                        typeof initRecentlyDeletedSystem === 'function'
+                            ? initRecentlyDeletedSystem
+                            : () => console.warn('initRecentlyDeletedSystem not defined'),
                     critical: false,
                 },
                 {
@@ -615,6 +635,14 @@ export async function appInit(context = 'normal') {
                     critical: false,
                 },
                 {
+                    name: 'initAlgorithmStepExecution',
+                    func:
+                        typeof initAlgorithmStepExecution === 'function'
+                            ? initAlgorithmStepExecution
+                            : () => console.warn('initAlgorithmStepExecution not defined'),
+                    critical: false,
+                },
+                {
                     name: 'initScrollNavButtons',
                     func:
                         typeof initScrollNavButtons === 'function'
@@ -773,8 +801,11 @@ export async function appInit(context = 'normal') {
             ) {
                 window.BackgroundStatusHUD.finishTask('app-init', false);
             }
-            if (NotificationService && typeof NotificationService.add === 'function') {
-                NotificationService.add(
+            if (
+                resolvedNotificationService &&
+                typeof resolvedNotificationService.add === 'function'
+            ) {
+                resolvedNotificationService.add(
                     `Критическая ошибка инициализации: ${criticalError.message}. Приложение может работать некорректно.`,
                     'error',
                     { important: true, duration: 0 },

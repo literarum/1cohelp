@@ -4,14 +4,27 @@
 // БАЗА ДАННЫХ
 // ============================================================================
 export const DB_NAME = 'CopilotDB';
-export const DB_VERSION = 12;
+export const DB_VERSION = 14;
 export const CURRENT_SCHEMA_VERSION = '1.5';
 export const FAVORITES_STORE_NAME = 'favorites';
+export const RECENTLY_DELETED_STORE_NAME = 'recentlyDeleted';
+export const RECENTLY_DELETED_TRACKED_STORES = [
+    'algorithms',
+    'bookmarks',
+    'bookmarkFolders',
+    'links',
+    'extLinks',
+    'extLinkCategories',
+    'reglaments',
+    'blacklistedClients',
+    'pdfFiles',
+];
 
 // ============================================================================
 // КЛЮЧИ ЛОКАЛЬНОГО ХРАНИЛИЩА
 // ============================================================================
 export const CATEGORY_INFO_KEY = 'reglamentCategoryInfo';
+export const IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY = 'compatUnknownStoresSnapshot_v1';
 export const SEDO_CONFIG_KEY = 'sedoTypesConfigGlobal';
 export const BLACKLIST_WARNING_ACCEPTED_KEY = 'blacklistWarningAccepted';
 export const USER_PREFERENCES_KEY = 'userGlobalPreferences';
@@ -35,6 +48,30 @@ export const ARCHIVE_FOLDER_NAME = 'Архив';
 export const MAX_REFS_PER_WORD = 500;
 export const MIN_TOKEN_LEN_FOR_INDEX = 2;
 export const CACHE_TTL = 300000; // 5 минут
+/** Максимальный IDF (ограничение для редких терминов) */
+export const SEARCH_MAX_IDF = 4;
+/** BM25 k1 — насыщение частоты термина в документе */
+export const SEARCH_BM25_K1 = 1.2;
+
+/** Лимиты по типам для диверсификации выдачи (макс. в топ-N) */
+export const SEARCH_DIVERSITY_LIMITS = {
+    algorithm: 12,
+    main: 3,
+    bookmark: 8,
+    bookmark_note: 6,
+    link: 8,
+    reglament: 6,
+    extLink: 6,
+    extLinkCategory: 4,
+    clientNote: 4,
+    bookmarkFolder: 4,
+    blacklistedClient: 4,
+    sedoInfoItem: 8,
+    sedoInfo: 4,
+    shablony_block: 6,
+    section_link: 10,
+    default: 6,
+};
 
 // ============================================================================
 // UI И ОТОБРАЖЕНИЕ

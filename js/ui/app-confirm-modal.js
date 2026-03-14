@@ -28,7 +28,9 @@ export function setAppConfirmModalDependencies(deps) {
  * @param {string} [options.cancelText='Отмена']
  * @param {string} [options.confirmClass='bg-primary hover:bg-secondary text-white']
  * @param {boolean} [options.messageIsHtml=false] — если true, message вставляется как HTML (innerHTML).
- * @returns {Promise<boolean>} true — подтверждение, false — отмена.
+ * @param {boolean} [options.returnAction=false] — если true, возвращает действие:
+ *   'confirm' | 'cancel' | 'dismiss' (крестик/Esc/клик по фону).
+ * @returns {Promise<boolean|string>}
  */
 export function showAppConfirm(options = {}) {
     const {
@@ -38,6 +40,7 @@ export function showAppConfirm(options = {}) {
         cancelText = 'Отмена',
         confirmClass = 'bg-primary hover:bg-secondary text-white',
         messageIsHtml = false,
+        returnAction = false,
     } = options;
 
     const modal = document.getElementById('appConfirmModal');
@@ -52,6 +55,7 @@ export function showAppConfirm(options = {}) {
     const titleEl = modal.querySelector('#appConfirmModalTitle');
     const messageEl = modal.querySelector('#appConfirmModalMessage');
     const buttonsWrap = modal.querySelector('#appConfirmModalButtons');
+    const closeBtn = modal.querySelector('#appConfirmModalCloseBtn');
     if (!buttonsWrap || !messageEl) {
         return Promise.resolve(window.confirm ? window.confirm(message || title) : false);
     }
@@ -81,7 +85,8 @@ export function showAppConfirm(options = {}) {
     return new Promise((resolve) => {
         let settled = false;
         let onOverlayClick = null;
-        const finish = (result) => {
+        let onCloseClick = null;
+        const finish = (result, action) => {
             if (settled) return;
             settled = true;
             modal.classList.add('hidden');
@@ -89,21 +94,24 @@ export function showAppConfirm(options = {}) {
             if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
             document.removeEventListener('keydown', onEscape);
             if (onOverlayClick) modal.removeEventListener('click', onOverlayClick);
+            if (closeBtn && onCloseClick) closeBtn.removeEventListener('click', onCloseClick);
             deactivateModalFocus(modal);
-            resolve(result);
+            resolve(returnAction ? action : result);
         };
         const onEscape = (e) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
-                finish(false);
+                finish(false, 'dismiss');
             }
         };
-        cancelBtn.addEventListener('click', () => finish(false));
-        confirmBtn.addEventListener('click', () => finish(true));
+        cancelBtn.addEventListener('click', () => finish(false, 'cancel'));
+        confirmBtn.addEventListener('click', () => finish(true, 'confirm'));
         onOverlayClick = (e) => {
-            if (e.target === modal) finish(false);
+            if (e.target === modal) finish(false, 'dismiss');
         };
         modal.addEventListener('click', onOverlayClick);
+        onCloseClick = () => finish(false, 'dismiss');
+        if (closeBtn) closeBtn.addEventListener('click', onCloseClick);
 
         buttonsWrap.appendChild(cancelBtn);
         buttonsWrap.appendChild(confirmBtn);
@@ -134,6 +142,7 @@ export function showAppAlert(options = {}) {
     const titleEl = modal.querySelector('#appConfirmModalTitle');
     const messageEl = modal.querySelector('#appConfirmModalMessage');
     const buttonsWrap = modal.querySelector('#appConfirmModalButtons');
+    const closeBtn = modal.querySelector('#appConfirmModalCloseBtn');
     if (!buttonsWrap || !messageEl) {
         if (window.alert) window.alert(message || title);
         return Promise.resolve();
@@ -156,6 +165,7 @@ export function showAppAlert(options = {}) {
     return new Promise((resolve) => {
         let settled = false;
         let onOverlayClick = null;
+        let onCloseClick = null;
         const finish = () => {
             if (settled) return;
             settled = true;
@@ -164,6 +174,7 @@ export function showAppAlert(options = {}) {
             if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
             document.removeEventListener('keydown', onEscape);
             if (onOverlayClick) modal.removeEventListener('click', onOverlayClick);
+            if (closeBtn && onCloseClick) closeBtn.removeEventListener('click', onCloseClick);
             deactivateModalFocus(modal);
             resolve();
         };
@@ -178,6 +189,8 @@ export function showAppAlert(options = {}) {
             if (e.target === modal) finish();
         };
         modal.addEventListener('click', onOverlayClick);
+        onCloseClick = () => finish();
+        if (closeBtn) closeBtn.addEventListener('click', onCloseClick);
 
         buttonsWrap.appendChild(okBtn);
         document.addEventListener('keydown', onEscape);

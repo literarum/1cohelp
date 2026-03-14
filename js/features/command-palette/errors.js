@@ -42,15 +42,39 @@ const ERROR_ENTRIES = [
         keywords: ['подпись', 'эцп', 'сертификат', 'крипто', 'подпис'],
         payload: { tabId: 'xmlAnalyzer' },
     },
+    {
+        id: 'error:1c:conflict',
+        label: 'Конфликт изменений 1С',
+        subtitle: 'Одновременное изменение объектов, разрешение конфликтов',
+        keywords: ['конфликт', 'изменен', 'одновремен', 'conflict', 'конкурент'],
+        payload: { tabId: 'xmlAnalyzer' },
+    },
+    {
+        id: 'error:1c:update',
+        label: 'Ошибки обновления 1С',
+        subtitle: 'Обновление конфигурации, откат, прерванное обновление',
+        keywords: ['обновлен', 'update', 'конфигурац', 'откат', 'прерван'],
+        payload: { tabId: 'xmlAnalyzer' },
+    },
+    {
+        id: 'error:fns:cancel',
+        label: 'Отмена представления отчётности в ФНС',
+        subtitle: 'Отмена сдачи, отзыв отчёта, аннулирование',
+        keywords: ['отмена', 'отзыв', 'аннулирован', 'cancel', 'отчет отмен'],
+        payload: { tabId: 'xmlAnalyzer' },
+    },
+    {
+        id: 'error:connection',
+        label: 'Ошибки соединения с сервисами',
+        subtitle: 'Таймаут, недоступность ФНС/СФР, сетевые ошибки',
+        keywords: ['соединен', 'таймаут', 'недоступ', 'connection', 'timeout', 'сеть'],
+        payload: { tabId: 'xmlAnalyzer' },
+    },
 ];
 
 function normalizeText(s) {
     if (typeof s !== 'string') return '';
-    return s
-        .toLowerCase()
-        .replace(/ё/g, 'е')
-        .replace(/\s+/g, ' ')
-        .trim();
+    return s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -70,7 +94,8 @@ export function getErrorDictionaryResults(query) {
         let sc = 0;
         for (const w of words) {
             if (labelNorm.includes(w) || subtitleNorm.includes(w)) sc += 1;
-            if (keywordsNorm.some((k) => k.includes(w) || w.length >= 2 && k.includes(w))) sc += 1;
+            if (keywordsNorm.some((k) => k.includes(w) || (w.length >= 2 && k.includes(w))))
+                sc += 1;
         }
         if (sc > 0) {
             results.push({

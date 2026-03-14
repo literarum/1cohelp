@@ -1449,7 +1449,7 @@ function _renderSedoContentInner(container, data, isEditing, searchQuery) {
                 const fields =
                     tableData.fields ||
                     ['code', 'name', 'in1C', 'desc'].slice(0, Math.max(3, colLen));
-                tableData.items.forEach((item, rowIndex) => {
+                tableData.items.forEach((item, _rowIndex) => {
                     const row = document.createElement('tr');
                     row.className =
                         'text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/70';

@@ -124,12 +124,20 @@ import {
 } from './js/db/favorites.js';
 
 import { NotificationService, showNotification } from './js/services/notification.js';
+import { registerCoreServices } from './js/core/kernel.js';
 
 import { ExportService, setLoadingOverlayManager } from './js/services/export.js';
 
 import { loadingOverlayManager } from './js/ui/loading-overlay-manager.js';
 
 import { State } from './js/app/state.js';
+
+registerCoreServices({
+    NotificationService,
+    showNotification,
+    loadingOverlayManager,
+    State,
+});
 
 import { setAppInitDependencies, appInit as appInitModule } from './js/app/app-init.js';
 
@@ -208,6 +216,13 @@ import {
     initAlgorithmsPdfExportSystem,
 } from './js/features/algorithms-pdf-export.js';
 
+// Bookmarks PDF Export
+import {
+    setBookmarksPdfExportDependencies,
+    exportSingleBookmarkToPdf,
+    exportAllBookmarksToPdf,
+} from './js/features/bookmarks-pdf-export.js';
+
 // FNS Certificate Revocation (PR11)
 import { initFNSCertificateRevocationSystem } from './js/features/fns-cert-revocation.js';
 
@@ -252,6 +267,14 @@ import {
     setHeaderButtonsDependencies,
     initHeaderButtons as initHeaderButtonsModule,
 } from './js/ui/header-buttons.js';
+
+import {
+    setDbMergeDependencies,
+    openDbMergeModal,
+    analyzeMergeData,
+    buildMergePlan,
+    applyMergePlan,
+} from './js/features/db-merge.js';
 import {
     setThemeToggleDependencies,
     initThemeToggle as initThemeToggleModule,
@@ -264,6 +287,11 @@ import {
     setAlgorithmModalControlDependencies,
     initAlgorithmModalControls as initAlgorithmModalControlsModule,
 } from './js/ui/algorithm-modal-controls.js';
+import {
+    initAlgorithmStepExecution as initAlgorithmStepExecutionModule,
+    resetAlgorithmStepExecutionMode as resetAlgorithmStepExecutionModeModule,
+    refreshAlgorithmStepExecutionAvailability as refreshAlgorithmStepExecutionAvailabilityModule,
+} from './js/features/algorithm-step-execution.js';
 
 // SEDO System
 import {
@@ -284,6 +312,11 @@ import {
     setCommandPaletteDependencies,
     openCommandPalette,
 } from './js/features/command-palette/index.js';
+import {
+    setRecentlyDeletedDependencies,
+    initRecentlyDeletedSystem,
+    openRecentlyDeletedModal,
+} from './js/features/recently-deleted.js';
 
 // Search System
 import {
@@ -311,6 +344,7 @@ import {
     searchWithRegex,
     debug_checkIndex,
     ensureSearchIndexIsBuilt,
+    getGlobalSearchResults,
 } from './js/features/search.js';
 
 // Algorithm Components
@@ -658,6 +692,7 @@ import {
     hasBlockingModalsOpen as hasBlockingModalsOpenModule,
     toggleModalFullscreen as toggleModalFullscreenModule,
     initFullscreenToggles as initFullscreenTogglesModule,
+    initDraggableVerticalSplitters as initDraggableVerticalSplittersModule,
     initBeforeUnloadHandler as initBeforeUnloadHandlerModule,
     showNoInnModal as showNoInnModalModule,
     UNIFIED_FULLSCREEN_MODAL_CLASSES,
@@ -1143,6 +1178,7 @@ const initHeaderButtons = initHeaderButtonsModule;
 const initThemeToggle = initThemeToggleModule;
 const initModalOverlayHandler = initModalOverlayHandlerModule;
 const initAlgorithmModalControls = initAlgorithmModalControlsModule;
+const initAlgorithmStepExecution = initAlgorithmStepExecutionModule;
 const setupHotkeys = setupHotkeysModule;
 const initUI = initUIModule;
 const initHotkeysModal = initHotkeysModalModule;
@@ -1413,6 +1449,7 @@ setAppInitDependencies({
     initHotkeysModal,
     setupHotkeys,
     initCommandPalette,
+    initRecentlyDeletedSystem,
     setCommandPaletteDependencies,
     initFullscreenToggles,
     fullscreenModalConfigs: FULLSCREEN_MODAL_CONFIGS,
@@ -1420,6 +1457,7 @@ setAppInitDependencies({
     initThemeToggle,
     initModalOverlayHandler,
     initAlgorithmModalControls,
+    initAlgorithmStepExecution,
     applyInitialUISettings,
     initUI,
     initScrollNavButtons,
@@ -1523,9 +1561,28 @@ setOnloadHandlerDependencies({
     backgroundStatusHUD: window.BackgroundStatusHUD || null,
     afterInitCallbacks: [
         () => {
-            setAlgorithmsPdfExportDependencies({ algorithms, ExportService, showNotification, getFromIndexedDB });
+            setAlgorithmsPdfExportDependencies({
+                algorithms,
+                ExportService,
+                showNotification,
+                getFromIndexedDB,
+            });
             if (typeof initAlgorithmsPdfExportSystem === 'function')
                 initAlgorithmsPdfExportSystem();
+        },
+        () => {
+            try {
+                setBookmarksPdfExportDependencies({
+                    ExportService,
+                    getFromIndexedDB,
+                    getAllFromIndex,
+                    getAllFromIndexedDB,
+                    getPdfsForParent,
+                    showNotification,
+                });
+            } catch (e) {
+                console.error('[script.js] Failed to init bookmarks PDF export deps:', e);
+            }
         },
         () => {
             if (typeof initFNSCertificateRevocationSystem === 'function')
@@ -1660,6 +1717,7 @@ function clearTemporaryThumbnailsFromContainer(container) {
 
 const importFileInput = document.getElementById('importFileInput');
 const importDataBtn = document.getElementById('importDataBtn');
+const mergeDataBtn = document.getElementById('mergeDataBtn');
 
 if (importDataBtn && importFileInput) {
     if (importDataBtn._clickHandlerInstance) {
@@ -1677,9 +1735,19 @@ if (importDataBtn && importFileInput) {
     importFileInput.addEventListener('change', handleImportFileChange);
     importFileInput._changeHandlerInstance = handleImportFileChange;
     console.log('[Import Init] Обработчик change для importFileInput установлен.');
+}
+
+if (mergeDataBtn) {
+    if (mergeDataBtn._clickHandlerInstance) {
+        mergeDataBtn.removeEventListener('click', mergeDataBtn._clickHandlerInstance);
+        console.log('[DbMerge Init] Предыдущий обработчик click для mergeDataBtn удален.');
+    }
+    mergeDataBtn._clickHandlerInstance = () => openDbMergeModal();
+    mergeDataBtn.addEventListener('click', mergeDataBtn._clickHandlerInstance);
+    console.log('[DbMerge Init] Обработчик click для mergeDataBtn установлен.');
 } else {
     console.error(
-        '[Import Init] Не найдены элементы importDataBtn или importFileInput. Флоу импорта не будет работать.',
+        '[DbMerge Init] Элемент mergeDataBtn не найден. Кнопка слияния БД не будет работать.',
     );
 }
 
@@ -2786,6 +2854,9 @@ async function showBookmarkDetailModal(bookmarkId) {
                             <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
                                 <i class="fas fa-edit mr-1"></i> Редактировать
                             </button>
+                            <button type="button" id="exportBookmarkToPdfBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition">
+                                <i class="far fa-file-pdf mr-1"></i> Экспорт в PDF
+                            </button>
                             <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
                                 Закрыть
                             </button>
@@ -2908,6 +2979,7 @@ async function showBookmarkDetailModal(bookmarkId) {
     const screenshotsContainer = modal.querySelector('#bookmarkDetailScreenshotsContainer');
     const screenshotsGridEl = modal.querySelector('#bookmarkDetailScreenshotsGrid');
     const editButton = modal.querySelector('#editBookmarkFromDetailBtn');
+    const exportButton = modal.querySelector('#exportBookmarkToPdfBtn');
     const favoriteButtonContainer = modal.querySelector('.fav-btn-placeholder-modal-bookmark');
 
     if (
@@ -2916,6 +2988,7 @@ async function showBookmarkDetailModal(bookmarkId) {
         !screenshotsContainer ||
         !screenshotsGridEl ||
         !editButton ||
+        !exportButton ||
         !favoriteButtonContainer
     ) {
         console.error('Не найдены необходимые элементы в модальном окне деталей закладки.');
@@ -2937,6 +3010,7 @@ async function showBookmarkDetailModal(bookmarkId) {
     screenshotsGridEl.innerHTML = '';
     screenshotsContainer.classList.add('hidden');
     editButton.classList.add('hidden');
+    exportButton.classList.add('hidden');
     favoriteButtonContainer.innerHTML = '';
 
     modal.classList.remove('hidden');
@@ -2956,6 +3030,7 @@ async function showBookmarkDetailModal(bookmarkId) {
             textContentEl.appendChild(preElement);
 
             editButton.classList.remove('hidden');
+            exportButton.classList.remove('hidden');
 
             const itemType = bookmark.url ? 'bookmark' : 'bookmark_note';
             const isFav = isFavorite(itemType, String(bookmark.id));
@@ -3028,6 +3103,7 @@ async function showBookmarkDetailModal(bookmarkId) {
             textContentEl.innerHTML = `<p class="text-red-500">Не удалось загрузить данные закладки (ID: ${bookmarkId}). Возможно, она была удалена.</p>`;
             showNotification('Закладка не найдена', 'error');
             editButton.classList.add('hidden');
+            exportButton.classList.add('hidden');
             screenshotsContainer.classList.add('hidden');
         }
     } catch (error) {
@@ -3037,7 +3113,27 @@ async function showBookmarkDetailModal(bookmarkId) {
             '<p class="text-red-500">Произошла ошибка при загрузке данных.</p>';
         showNotification('Ошибка загрузки деталей закладки', 'error');
         editButton.classList.add('hidden');
+        exportButton.classList.add('hidden');
         screenshotsContainer.classList.add('hidden');
+    }
+
+    if (exportButton && !exportButton.dataset.wired) {
+        exportButton.dataset.wired = '1';
+        exportButton.addEventListener('click', async () => {
+            const currentId = parseInt(modal.dataset.currentBookmarkId, 10);
+            if (Number.isNaN(currentId)) {
+                showNotification('Не удалось определить ID закладки для экспорта.', 'error');
+                return;
+            }
+            if (typeof exportSingleBookmarkToPdf === 'function') {
+                await exportSingleBookmarkToPdf(currentId);
+            } else {
+                showNotification(
+                    'Ошибка: экспорт закладки в PDF недоступен (функция не настроена).',
+                    'error',
+                );
+            }
+        });
     }
 }
 
@@ -3860,6 +3956,38 @@ setImportExportDependencies({
 });
 console.log('[script.js] Зависимости модуля Import/Export установлены');
 
+setRecentlyDeletedDependencies({
+    showNotification,
+    loadBookmarks,
+    loadExtLinks,
+    loadCibLinks: loadCibLinksModule,
+    renderAllAlgorithms,
+    renderReglamentCategories: renderReglamentCategoriesModule,
+    loadBlacklistedClients: loadBlacklistedClientsModule,
+    updateSearchIndex,
+});
+console.log('[script.js] Зависимости модуля Recently Deleted установлены');
+
+// DB Merge System Dependencies
+setDbMergeDependencies({
+    NotificationService,
+    loadingOverlayManager,
+    showNotification,
+    storeConfigs,
+    exportAllData: exportAllDataModule,
+    loadBookmarks,
+    loadExtLinks,
+    loadCibLinks: loadCibLinksModule,
+    renderReglamentCategories: renderReglamentCategoriesModule,
+    showReglamentsForCategory,
+    initSearchSystem,
+    buildInitialSearchIndex,
+    updateSearchIndex,
+    showAppConfirm: showAppConfirmModule,
+    initDraggableVerticalSplitters: initDraggableVerticalSplittersModule,
+});
+console.log('[script.js] Зависимости модуля DbMerge установлены');
+
 // Screenshots System Dependencies
 setScreenshotsDependencies({
     showNotification,
@@ -3959,6 +4087,7 @@ setBackgroundHealthTestsDependencies({
     getFromIndexedDB,
     deleteFromIndexedDB,
     performDBOperation,
+    getGlobalSearchResults,
 });
 console.log('[script.js] Зависимости фоновых health-тестов установлены');
 
@@ -4066,6 +4195,8 @@ setUISettingsModalInitDependencies({
         typeof setupExtensionFieldListeners === 'function' ? setupExtensionFieldListeners : null,
     loadEmployeeExtension:
         typeof loadEmployeeExtension === 'function' ? loadEmployeeExtension : null,
+    showAppConfirm: showAppConfirmModule,
+    openRecentlyDeletedModal,
 });
 
 // UI Settings Modal Dependencies (applyPreviewSettings определена ниже, но доступна благодаря hoisting)
@@ -4248,6 +4379,8 @@ setAlgorithmsRendererDependencies({
     handleViewScreenshotClick: handleViewScreenshotClickModule,
     openAnimatedModal: openAnimatedModalModule,
     copyToClipboard,
+    resetAlgorithmStepExecutionMode: resetAlgorithmStepExecutionModeModule,
+    refreshAlgorithmStepExecutionAvailability: refreshAlgorithmStepExecutionAvailabilityModule,
 });
 console.log('[script.js] Зависимости модуля Algorithms Renderer установлены');
 

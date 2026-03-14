@@ -13,7 +13,7 @@ import {
 let bookmarkModalConfigGlobal = null;
 let State = null;
 let getCurrentBookmarkFormState = null;
-let deepEqual = null;
+let _deepEqual = null;
 let showNotification = null;
 let getVisibleModals = null;
 let addEscapeHandler = null;
@@ -33,7 +33,7 @@ export function setBookmarksModalDependencies(deps) {
     bookmarkModalConfigGlobal = deps.bookmarkModalConfigGlobal;
     State = deps.State;
     getCurrentBookmarkFormState = deps.getCurrentBookmarkFormState;
-    deepEqual = deps.deepEqual;
+    _deepEqual = deps.deepEqual;
     showNotification = deps.showNotification;
     getVisibleModals = deps.getVisibleModals;
     addEscapeHandler = deps.addEscapeHandler;
@@ -238,7 +238,10 @@ export async function ensureBookmarkModal() {
     const handleCloseActions = async (targetModal) => {
         const form = targetModal.querySelector('#bookmarkForm');
         let doClose = true;
-        if (typeof shouldConfirmBeforeClose === 'function' && shouldConfirmBeforeClose(targetModal)) {
+        if (
+            typeof shouldConfirmBeforeClose === 'function' &&
+            shouldConfirmBeforeClose(targetModal)
+        ) {
             const confirmLeave =
                 typeof showUnsavedConfirmModal === 'function'
                     ? await showUnsavedConfirmModal()
@@ -256,15 +259,11 @@ export async function ensureBookmarkModal() {
                 const modalTitleEl = targetModal.querySelector('#bookmarkModalTitle');
                 if (modalTitleEl) modalTitleEl.textContent = 'Добавить закладку';
                 const saveButton = targetModal.querySelector('#saveBookmarkBtn');
-                if (saveButton)
-                    saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
+                if (saveButton) saveButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
                 const thumbsContainer = form.querySelector(
                     '#bookmarkScreenshotThumbnailsContainer',
                 );
-                if (
-                    thumbsContainer &&
-                    typeof clearTemporaryThumbnailsFromContainer === 'function'
-                )
+                if (thumbsContainer && typeof clearTemporaryThumbnailsFromContainer === 'function')
                     clearTemporaryThumbnailsFromContainer(thumbsContainer);
                 delete form._tempScreenshotBlobs;
                 delete form.dataset.screenshotsToDelete;
@@ -276,17 +275,14 @@ export async function ensureBookmarkModal() {
                 if (getVisibleModals().length === 0) {
                     document.body.classList.remove('overflow-hidden');
                     document.body.classList.remove('modal-open');
-                    console.log(
-                        'Body overflow и modal-open сняты после закрытия окна закладки.',
-                    );
+                    console.log('Body overflow и modal-open сняты после закрытия окна закладки.');
                 }
             });
         }
     };
 
     modal.querySelectorAll('.close-modal-btn-hook, .cancel-modal-btn-hook').forEach((btn) => {
-        if (btn._specificClickHandler)
-            btn.removeEventListener('click', btn._specificClickHandler);
+        if (btn._specificClickHandler) btn.removeEventListener('click', btn._specificClickHandler);
         btn._specificClickHandler = (e) => {
             e.stopPropagation();
             handleCloseActions(modal);

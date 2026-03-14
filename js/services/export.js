@@ -1,11 +1,7 @@
 'use strict';
 
 import { NotificationService } from './notification.js';
-import {
-    getFromIndexedDB,
-    getAllFromIndex,
-    getAllFromIndexedDB,
-} from '../db/indexeddb.js';
+import { getFromIndexedDB, getAllFromIndex, getAllFromIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
 // СЕРВИС ЭКСПОРТА В PDF (pdf-lib — текст копируемый, без контейнера)
@@ -25,7 +21,7 @@ const A4_WIDTH_PT = 595.28;
 const A4_HEIGHT_PT = 841.89;
 const MARGIN_MM = 25;
 const MARGIN_PT = MARGIN_MM * 2.83465;
-const CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * MARGIN_PT;
+const _CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * MARGIN_PT;
 const BODY_FONT_SIZE = 11;
 const LINE_HEIGHT_RATIO = 1.5;
 const HEADING_SIZES = { 1: 18, 2: 16, 3: 14, 4: 12 };
@@ -95,7 +91,8 @@ function extractPdfContent(root) {
         if (el.nodeType !== Node.ELEMENT_NODE) return;
 
         const tag = el.tagName.toLowerCase();
-        const isStep = el.classList?.contains('algorithm-step') || el.classList?.contains('reglament-item');
+        const isStep =
+            el.classList?.contains('algorithm-step') || el.classList?.contains('reglament-item');
 
         if (isStep) {
             const fullText = (el.innerText || '').trim();
@@ -111,10 +108,18 @@ function extractPdfContent(root) {
                 const headingLevel = stepHeading.tagName.toLowerCase() === 'h2' ? 2 : 4;
                 blocks.push({ type: 'heading', level: headingLevel, text: headingText });
                 if (restText || (imgs && imgs.length > 0)) {
-                    blocks.push({ type: 'block', text: restText || '', images: imgs.length ? imgs : undefined });
+                    blocks.push({
+                        type: 'block',
+                        text: restText || '',
+                        images: imgs.length ? imgs : undefined,
+                    });
                 }
             } else {
-                blocks.push({ type: 'block', text: fullText, images: imgs.length ? imgs : undefined });
+                blocks.push({
+                    type: 'block',
+                    text: fullText,
+                    images: imgs.length ? imgs : undefined,
+                });
             }
             return;
         }
@@ -125,7 +130,10 @@ function extractPdfContent(root) {
             return;
         }
 
-        if (['h1', 'h2', 'h3', 'h4'].includes(tag) && !el.closest('.algorithm-step, .reglament-item')) {
+        if (
+            ['h1', 'h2', 'h3', 'h4'].includes(tag) &&
+            !el.closest('.algorithm-step, .reglament-item')
+        ) {
             const level = parseInt(tag.charAt(1), 10);
             const text = (el.textContent || '').trim();
             if (text) blocks.push({ type: 'heading', level, text });
@@ -136,22 +144,33 @@ function extractPdfContent(root) {
             const text = (el.textContent || '').trim();
             if (!text) return;
             if (tag === 'pre' && (text.includes('\n\n') || /Шаг\s*\d+[\s:]/i.test(text))) {
-                const segments = text.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
+                const segments = text
+                    .split(/\n\n+/)
+                    .map((s) => s.trim())
+                    .filter(Boolean);
                 for (let segIndex = 0; segIndex < segments.length; segIndex++) {
                     const seg = segments[segIndex];
-                    const lines = seg.split('\n').map((s) => s.trim()).filter(Boolean);
+                    const lines = seg
+                        .split('\n')
+                        .map((s) => s.trim())
+                        .filter(Boolean);
                     const firstLine = lines[0] || '';
                     const restLines = lines.slice(1);
                     const rest = restLines.join('\n').trim();
                     const isSingleLine = restLines.length === 0;
-                    const looksLikeList = /^[\s•\-*]\s/.test(firstLine) || /^\d+[.)]\s/.test(firstLine);
+                    const looksLikeList =
+                        /^[\s•\-*]\s/.test(firstLine) || /^\d+[.)]\s/.test(firstLine);
                     const firstShort =
                         !looksLikeList && firstLine.length <= (segIndex === 0 ? 100 : 90);
                     if (/^Шаг\s*\d+[\s:]/i.test(firstLine)) {
                         blocks.push({ type: 'heading', level: 4, text: firstLine });
                         if (rest) blocks.push({ type: 'paragraph', text: rest });
                     } else if (isSingleLine && firstShort) {
-                        blocks.push({ type: 'heading', level: segIndex === 0 ? 2 : 3, text: firstLine });
+                        blocks.push({
+                            type: 'heading',
+                            level: segIndex === 0 ? 2 : 3,
+                            text: firstLine,
+                        });
                     } else if (
                         firstShort &&
                         restLines.length === 1 &&
@@ -159,10 +178,18 @@ function extractPdfContent(root) {
                         !/^[\s•\-*]\s/.test(restLines[0]) &&
                         !/^\d+[.)]\s/.test(restLines[0])
                     ) {
-                        blocks.push({ type: 'heading', level: segIndex === 0 ? 2 : 3, text: firstLine });
+                        blocks.push({
+                            type: 'heading',
+                            level: segIndex === 0 ? 2 : 3,
+                            text: firstLine,
+                        });
                         blocks.push({ type: 'heading', level: 3, text: restLines[0] });
                     } else if (firstShort && rest) {
-                        blocks.push({ type: 'heading', level: segIndex === 0 ? 2 : 3, text: firstLine });
+                        blocks.push({
+                            type: 'heading',
+                            level: segIndex === 0 ? 2 : 3,
+                            text: firstLine,
+                        });
                         blocks.push({ type: 'paragraph', text: rest });
                     } else {
                         blocks.push({ type: 'paragraph', text: seg });
@@ -287,25 +314,28 @@ async function buildPdfFromContent(contentBlocks, opts) {
     }
 
     const isAlgorithmSection = Boolean(opts.isAlgorithmSection);
-    const marginPt = isAlgorithmSection
-        ? ALGORITHM_SECTION_MARGIN_MM * 2.83465
-        : MARGIN_PT;
+    const marginPt = isAlgorithmSection ? ALGORITHM_SECTION_MARGIN_MM * 2.83465 : MARGIN_PT;
     const contentWidthPt = A4_WIDTH_PT - 2 * marginPt;
     const bottomLimit = marginPt;
-    const blockSpacingPt = isAlgorithmSection ? ALGORITHM_SECTION_BLOCK_SPACING_PT : BLOCK_SPACING_PT;
-    const maxImageHeightPt = isAlgorithmSection ? A4_HEIGHT_PT * MAX_IMAGE_HEIGHT_RATIO : A4_HEIGHT_PT;
+    const blockSpacingPt = isAlgorithmSection
+        ? ALGORITHM_SECTION_BLOCK_SPACING_PT
+        : BLOCK_SPACING_PT;
+    const maxImageHeightPt = isAlgorithmSection
+        ? A4_HEIGHT_PT * MAX_IMAGE_HEIGHT_RATIO
+        : A4_HEIGHT_PT;
 
     const pdfDoc = await PDFLib.PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
     let font;
     try {
         font = await pdfDoc.embedFont(opts.fontBytes);
-    } catch (embedErr) {
+    } catch {
         throw new Error(
             'Шрифт PT Serif не удалось встроить в PDF. Откройте приложение с веб-сервера (не через file://).',
         );
     }
-    const rgb = PDFLib.rgb || PDFLib.RGB || ((r, g, b) => ({ type: 'RGB', red: r, green: g, blue: b }));
+    const rgb =
+        PDFLib.rgb || PDFLib.RGB || ((r, g, b) => ({ type: 'RGB', red: r, green: g, blue: b }));
 
     let page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
     let y = A4_HEIGHT_PT - marginPt;
@@ -317,7 +347,9 @@ async function buildPdfFromContent(contentBlocks, opts) {
         }
     }
 
-    const blocks = contentBlocks.length ? contentBlocks : [{ type: 'paragraph', text: 'Нет контента для экспорта.' }];
+    const blocks = contentBlocks.length
+        ? contentBlocks
+        : [{ type: 'paragraph', text: 'Нет контента для экспорта.' }];
 
     let prevBlock = null;
 
@@ -328,8 +360,13 @@ async function buildPdfFromContent(contentBlocks, opts) {
                 const gapPt = isAlgorithmSection ? ALGORITHM_BREAK_GAP_PT : ALGORITHM_CARD_GAP_PT;
                 y -= gapPt;
                 if (isAlgorithmSection) {
-                    ensureSpace(ALGORITHM_BAND_HEIGHT_PT + ALGORITHM_SEPARATOR_THICKNESS_PT + SEPARATOR_GAP_PT + 30);
-                    const bandTop = y;
+                    ensureSpace(
+                        ALGORITHM_BAND_HEIGHT_PT +
+                            ALGORITHM_SEPARATOR_THICKNESS_PT +
+                            SEPARATOR_GAP_PT +
+                            30,
+                    );
+                    const _bandTop = y;
                     const bandBottom = y - ALGORITHM_BAND_HEIGHT_PT;
                     page.drawRectangle({
                         x: marginPt,
@@ -350,17 +387,21 @@ async function buildPdfFromContent(contentBlocks, opts) {
             }
             const text = sanitizeTextForPdf(block.text);
             const fontSize =
-                block.level === 1 ? SINGLE_ALGORITHM_TITLE_FONT_SIZE : (HEADING_SIZES[block.level] || 16);
+                block.level === 1
+                    ? SINGLE_ALGORITHM_TITLE_FONT_SIZE
+                    : HEADING_SIZES[block.level] || 16;
             const lineHeight = fontSize * LINE_HEIGHT_RATIO;
             const lines = wrapText(text, font, fontSize, contentWidthPt);
             const bottomSpacing =
-                block.level === 1 ? SINGLE_ALGORITHM_TITLE_BOTTOM_SPACING_PT : HEADING_BOTTOM_SPACING_PT;
-            const sepThickness = block.level === 4 && isAlgorithmSection ? STEP_SEPARATOR_THICKNESS_PT : SEPARATOR_LINE_THICKNESS_PT;
+                block.level === 1
+                    ? SINGLE_ALGORITHM_TITLE_BOTTOM_SPACING_PT
+                    : HEADING_BOTTOM_SPACING_PT;
+            const sepThickness =
+                block.level === 4 && isAlgorithmSection
+                    ? STEP_SEPARATOR_THICKNESS_PT
+                    : SEPARATOR_LINE_THICKNESS_PT;
             const headingBlockHeight =
-                lines.length * lineHeight +
-                bottomSpacing +
-                sepThickness +
-                SEPARATOR_GAP_PT;
+                lines.length * lineHeight + bottomSpacing + sepThickness + SEPARATOR_GAP_PT;
             ensureSpace(headingBlockHeight);
             for (const line of lines) {
                 page.drawText(line, {
@@ -378,9 +419,16 @@ async function buildPdfFromContent(contentBlocks, opts) {
                 start: { x: marginPt, y: lineY },
                 end: { x: marginPt + contentWidthPt, y: lineY },
                 thickness: sepThickness,
-                color: block.level === 4 && isAlgorithmSection ? rgb(0.35, 0.35, 0.4) : rgb(0.18, 0.18, 0.22),
+                color:
+                    block.level === 4 && isAlgorithmSection
+                        ? rgb(0.35, 0.35, 0.4)
+                        : rgb(0.18, 0.18, 0.22),
             });
-            y = lineY - (block.level === 4 && isAlgorithmSection ? STEP_SEPARATOR_GAP_PT : SEPARATOR_GAP_PT);
+            y =
+                lineY -
+                (block.level === 4 && isAlgorithmSection
+                    ? STEP_SEPARATOR_GAP_PT
+                    : SEPARATOR_GAP_PT);
             prevBlock = block;
             continue;
         }
@@ -394,7 +442,10 @@ async function buildPdfFromContent(contentBlocks, opts) {
             const textColor = isDescription ? rgb(0.35, 0.35, 0.4) : rgb(0.18, 0.18, 0.22);
             const indent = block.type === 'list' ? STEP_INDENT_PT : 0;
             const raw = sanitizeTextForPdf(block.text);
-            const segments = raw.split(/\n/).map((s) => s.trim()).filter(Boolean);
+            const segments = raw
+                .split(/\n/)
+                .map((s) => s.trim())
+                .filter(Boolean);
             const lines = [];
             for (const seg of segments) {
                 const text = block.type === 'list' ? '• ' + seg : seg;
@@ -440,9 +491,15 @@ async function buildPdfFromContent(contentBlocks, opts) {
         if (block.type === 'block') {
             const blockText = sanitizeTextForPdf(block.text);
             if (blockText) {
-                const segments = blockText.split(/\n/).map((s) => s.trim()).filter(Boolean);
+                const segments = blockText
+                    .split(/\n/)
+                    .map((s) => s.trim())
+                    .filter(Boolean);
                 const lines = [];
-                for (const seg of segments) lines.push(...wrapText(seg, font, BODY_FONT_SIZE, contentWidthPt - STEP_INDENT_PT));
+                for (const seg of segments)
+                    lines.push(
+                        ...wrapText(seg, font, BODY_FONT_SIZE, contentWidthPt - STEP_INDENT_PT),
+                    );
                 const lineHeight = BODY_FONT_SIZE * LINE_HEIGHT_RATIO;
                 ensureSpace(lines.length * lineHeight + blockSpacingPt);
                 for (const line of lines) {
@@ -459,8 +516,17 @@ async function buildPdfFromContent(contentBlocks, opts) {
             }
             if (block.images && block.images.length && opts.getImageBytes) {
                 if (PDF_EXPORT_DEBUG) {
-                    const prefixes = block.images.map((u, i) => `#${i}:${(u && String(u).slice(0, 52)) || ''}...`);
-                    console.log('[PDF Export] buildPdf: blockIndex=', blockIndex, 'imagesCount=', block.images.length, 'dataUrlPrefixes=', prefixes);
+                    const prefixes = block.images.map(
+                        (u, i) => `#${i}:${(u && String(u).slice(0, 52)) || ''}...`,
+                    );
+                    console.log(
+                        '[PDF Export] buildPdf: blockIndex=',
+                        blockIndex,
+                        'imagesCount=',
+                        block.images.length,
+                        'dataUrlPrefixes=',
+                        prefixes,
+                    );
                 }
                 for (const dataUrl of block.images) {
                     try {
@@ -478,18 +544,22 @@ async function buildPdfFromContent(contentBlocks, opts) {
                                 img = isJpg
                                     ? await pdfDoc.embedPng(bytes)
                                     : await pdfDoc.embedJpg(bytes);
-                            } catch (_) {
+                            } catch {
                                 throw embedErr;
                             }
                         }
                         if (!img) continue;
                         const dims = img.scale(1);
-                        const scaleW = dims.width > contentWidthPt ? contentWidthPt / dims.width : 1;
-                        const scaleH = dims.height > maxImageHeightPt ? maxImageHeightPt / dims.height : 1;
+                        const scaleW =
+                            dims.width > contentWidthPt ? contentWidthPt / dims.width : 1;
+                        const scaleH =
+                            dims.height > maxImageHeightPt ? maxImageHeightPt / dims.height : 1;
                         const scale = Math.min(scaleW, scaleH);
                         const drawWidth = dims.width * scale;
                         const drawHeight = dims.height * scale;
-                        const imgGap = isAlgorithmSection ? ALGORITHM_SECTION_STEP_GAP_PT : blockSpacingPt;
+                        const imgGap = isAlgorithmSection
+                            ? ALGORITHM_SECTION_STEP_GAP_PT
+                            : blockSpacingPt;
                         ensureSpace(drawHeight + imgGap);
                         page.drawImage(img, {
                             x: marginPt,
@@ -521,11 +591,15 @@ async function loadPdfFontBytes() {
         try {
             const base = document.baseURI || window.location.href;
             candidates.push(new URL('fonts/' + FONT_FILENAME, base).href);
-        } catch (_) {}
+        } catch {
+            /* ignore */
+        }
     }
     try {
         candidates.push(new URL('../../fonts/' + FONT_FILENAME, import.meta.url).href);
-    } catch (_) {}
+    } catch {
+        /* ignore */
+    }
     if (typeof window !== 'undefined' && window.location) {
         const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
         candidates.push(base + '/fonts/' + FONT_FILENAME);
@@ -540,7 +614,7 @@ async function loadPdfFontBytes() {
                 console.log('[PDF Export] Шрифт PT Serif загружен:', fontUrl);
                 return buf;
             }
-        } catch (e) {
+        } catch {
             continue;
         }
     }
@@ -575,11 +649,15 @@ export const ExportService = {
         const PDFLib = typeof window !== 'undefined' ? window.PDFLib : null;
         const fontkit = typeof window !== 'undefined' ? window.fontkit : null;
         if (!PDFLib) {
-            NotificationService.add('Библиотека PDF (pdf-lib) не загружена.', 'error', { important: true });
+            NotificationService.add('Библиотека PDF (pdf-lib) не загружена.', 'error', {
+                important: true,
+            });
             return;
         }
         if (!fontkit) {
-            NotificationService.add('Модуль fontkit для PDF не загружен.', 'error', { important: true });
+            NotificationService.add('Модуль fontkit для PDF не загружен.', 'error', {
+                important: true,
+            });
             return;
         }
 
@@ -593,12 +671,19 @@ export const ExportService = {
         const finalFilename = `${cleanFilename}.pdf`;
 
         const clone = element.cloneNode(true);
-        clone.querySelectorAll?.('button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, .view-screenshot-btn, .copyable-step-active').forEach((el) => el.remove());
+        clone
+            .querySelectorAll?.(
+                'button, script, .fav-btn-placeholder-modal-reglament, .toggle-favorite-btn, .view-screenshot-btn, .copyable-step-active',
+            )
+            .forEach((el) => el.remove());
         // Не включать в PDF блок «PDF-файлы» (ни «Нет PDF-файлов», ни список загруженных PDF).
-        clone.querySelectorAll?.('.pdf-attachments-section, .pdf-host-area').forEach((el) => el.remove());
+        clone
+            .querySelectorAll?.('.pdf-attachments-section, .pdf-host-area')
+            .forEach((el) => el.remove());
 
         try {
-            if (loadingOverlayManager) loadingOverlayManager.updateProgress(20, 'Обработка контента...');
+            if (loadingOverlayManager)
+                loadingOverlayManager.updateProgress(20, 'Обработка контента...');
 
             let sectionStepDataUrls = null;
             let allScreenshotsCount = 0;
@@ -616,8 +701,17 @@ export const ExportService = {
                 for (let i = 0; i < context.data.steps.length; i++) {
                     const step = context.data.steps[i];
                     const stepEl = stepsInClone[i];
-                    if (!stepEl || !Array.isArray(step.screenshotIds) || step.screenshotIds.length === 0) continue;
-                    let screenshots = (await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))).filter(Boolean);
+                    if (
+                        !stepEl ||
+                        !Array.isArray(step.screenshotIds) ||
+                        step.screenshotIds.length === 0
+                    )
+                        continue;
+                    let screenshots = (
+                        await Promise.all(
+                            step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)),
+                        )
+                    ).filter(Boolean);
                     const seenIdsAlgo = new Set();
                     screenshots = screenshots.filter((sc) => {
                         const id = sc?.id;
@@ -638,7 +732,9 @@ export const ExportService = {
                         if (blob instanceof Blob) {
                             try {
                                 dataUrlsAlgo.push(await blobToDataUrl(blob));
-                            } catch (_) {}
+                            } catch {
+                                /* ignore */
+                            }
                         }
                     }
                     const uniqueDataUrls = [...new Set(dataUrlsAlgo)];
@@ -663,19 +759,28 @@ export const ExportService = {
                 let allScreenshotsRaw = [];
                 try {
                     allScreenshotsRaw = await getAllFromIndexedDB('screenshots');
-                } catch (_) {}
+                } catch {
+                    /* ignore */
+                }
                 const allScreenshots = Array.isArray(allScreenshotsRaw) ? allScreenshotsRaw : [];
                 allScreenshotsCount = allScreenshots.length;
 
                 sectionStepDataUrls = [];
                 if (PDF_EXPORT_DEBUG) {
-                    console.log('[PDF Export] algorithm-section: stepsFlat.length=', stepsFlat.length, ', allScreenshots=', allScreenshots.length);
+                    console.log(
+                        '[PDF Export] algorithm-section: stepsFlat.length=',
+                        stepsFlat.length,
+                        ', allScreenshots=',
+                        allScreenshots.length,
+                    );
                 }
                 for (let k = 0; k < stepsFlat.length; k++) {
                     const { algo, step, stepIndex } = stepsFlat[k];
                     let screenshots = [];
                     let source = 'none';
-                    const screenshotIds = Array.isArray(step.screenshotIds) ? step.screenshotIds : [];
+                    const screenshotIds = Array.isArray(step.screenshotIds)
+                        ? step.screenshotIds
+                        : [];
                     if (screenshotIds.length > 0) {
                         screenshots = (
                             await Promise.all(
@@ -698,7 +803,9 @@ export const ExportService = {
                                     s.parentType === 'algorithm',
                             );
                             if (screenshots.length) source = 'index';
-                        } catch (_) {}
+                        } catch {
+                            /* ignore */
+                        }
                     }
                     if (screenshots.length === 0 && allScreenshots.length > 0 && algo.id != null) {
                         screenshots = allScreenshots.filter(
@@ -731,17 +838,41 @@ export const ExportService = {
                         if (blob instanceof Blob) {
                             try {
                                 dataUrls.push(await blobToDataUrl(blob));
-                            } catch (_) {}
+                            } catch {
+                                /* ignore */
+                            }
                         }
                     }
                     const uniqueUrls = [...new Set(dataUrls)];
-                    if (PDF_EXPORT_DEBUG && (beforeDedupe > 0 || dataUrls.length > 0 || uniqueUrls.length > 0)) {
-                        console.log('[PDF Export] step', k, 'algoId=', algo?.id, 'stepIndex=', stepIndex, 'source=', source, 'screenshotsBeforeIdDedupe=', beforeDedupe, 'afterIdDedupe=', screenshots.length, 'dataUrlsBeforeSet=', dataUrls.length, 'afterSet=', uniqueUrls.length);
+                    if (
+                        PDF_EXPORT_DEBUG &&
+                        (beforeDedupe > 0 || dataUrls.length > 0 || uniqueUrls.length > 0)
+                    ) {
+                        console.log(
+                            '[PDF Export] step',
+                            k,
+                            'algoId=',
+                            algo?.id,
+                            'stepIndex=',
+                            stepIndex,
+                            'source=',
+                            source,
+                            'screenshotsBeforeIdDedupe=',
+                            beforeDedupe,
+                            'afterIdDedupe=',
+                            screenshots.length,
+                            'dataUrlsBeforeSet=',
+                            dataUrls.length,
+                            'afterSet=',
+                            uniqueUrls.length,
+                        );
                     }
                     sectionStepDataUrls.push(uniqueUrls);
                 }
                 if (PDF_EXPORT_DEBUG) {
-                    const summary = sectionStepDataUrls.map((arr, i) => `s${i}:${arr.length}`).join(', ');
+                    const summary = sectionStepDataUrls
+                        .map((arr, i) => `s${i}:${arr.length}`)
+                        .join(', ');
                     console.log('[PDF Export] sectionStepDataUrls summary:', summary);
                 }
                 const stepsInClone = clone.querySelectorAll('.algorithm-step');
@@ -750,7 +881,9 @@ export const ExportService = {
                     const dataUrls = sectionStepDataUrls[k];
                     // Remove any existing image containers so this step has exactly our images
                     // (avoids duplicates from buildAlgorithmSectionExport and ensures correct order).
-                    stepEl.querySelectorAll('.export-pdf-image-container').forEach((c) => c.remove());
+                    stepEl
+                        .querySelectorAll('.export-pdf-image-container')
+                        .forEach((c) => c.remove());
                     if (!dataUrls?.length) continue;
                     const container = document.createElement('div');
                     container.className = 'export-pdf-image-container';
@@ -773,9 +906,22 @@ export const ExportService = {
             if (sectionStepDataUrls && sectionStepDataUrls.length > 0) {
                 if (PDF_EXPORT_DEBUG) {
                     const blockCount = contentBlocks.filter((b) => b.type === 'block').length;
-                    console.log('[PDF Export] contentBlocks: total=', contentBlocks.length, ', type=block=', blockCount, ', sectionStepDataUrls.length=', sectionStepDataUrls.length);
+                    console.log(
+                        '[PDF Export] contentBlocks: total=',
+                        contentBlocks.length,
+                        ', type=block=',
+                        blockCount,
+                        ', sectionStepDataUrls.length=',
+                        sectionStepDataUrls.length,
+                    );
                     contentBlocks.forEach((b, i) => {
-                        if (b.type === 'block') console.log('[PDF Export] block from DOM before merge: blockIndex=', i, 'imagesFromDOM=', b.images?.length ?? 0);
+                        if (b.type === 'block')
+                            console.log(
+                                '[PDF Export] block from DOM before merge: blockIndex=',
+                                i,
+                                'imagesFromDOM=',
+                                b.images?.length ?? 0,
+                            );
                     });
                 }
                 // For algorithm-section, do NOT overwrite block.images: extractPdfContent already
@@ -787,12 +933,21 @@ export const ExportService = {
                     for (let blockIndex = 0; blockIndex < contentBlocks.length; blockIndex++) {
                         const block = contentBlocks[blockIndex];
                         if (block.type === 'block') {
-                            const urls = stepIdx < sectionStepDataUrls.length && Array.isArray(sectionStepDataUrls[stepIdx])
-                                ? sectionStepDataUrls[stepIdx]
-                                : [];
+                            const urls =
+                                stepIdx < sectionStepDataUrls.length &&
+                                Array.isArray(sectionStepDataUrls[stepIdx])
+                                    ? sectionStepDataUrls[stepIdx]
+                                    : [];
                             block.images = urls;
                             if (PDF_EXPORT_DEBUG && urls.length > 0) {
-                                console.log('[PDF Export] merge: blockIndex=', blockIndex, 'stepIdx=', stepIdx, 'imagesCount=', urls.length);
+                                console.log(
+                                    '[PDF Export] merge: blockIndex=',
+                                    blockIndex,
+                                    'stepIdx=',
+                                    stepIdx,
+                                    'imagesCount=',
+                                    urls.length,
+                                );
                             }
                             stepIdx++;
                         }
@@ -814,7 +969,8 @@ export const ExportService = {
                     blocksWithImages,
                 );
             }
-            if (loadingOverlayManager) loadingOverlayManager.updateProgress(40, 'Загрузка шрифта...');
+            if (loadingOverlayManager)
+                loadingOverlayManager.updateProgress(40, 'Загрузка шрифта...');
 
             let fontBytes = cachedFontBytes;
             if (!fontBytes) {
@@ -824,7 +980,8 @@ export const ExportService = {
             if (!fontBytes) {
                 const isFileProtocol =
                     typeof window !== 'undefined' &&
-                    (window.location?.protocol === 'file:' || document.baseURI?.startsWith('file:'));
+                    (window.location?.protocol === 'file:' ||
+                        document.baseURI?.startsWith('file:'));
                 const msg = isFileProtocol
                     ? 'Шрифт для PDF не загружается при открытии через file://. Запустите приложение с веб-сервера: в папке site выполните «npx serve .» или «python -m http.server 8080» и откройте в браузере http://localhost:8080'
                     : 'Не удалось загрузить шрифт для PDF. Проверьте, что в папке site есть папка fonts с файлом PT_Serif-Web-Regular.ttf.';

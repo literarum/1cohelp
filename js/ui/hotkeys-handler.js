@@ -215,10 +215,7 @@ export function setupHotkeys() {
         if (event.code !== 'KeyR' || event.altKey || event.shiftKey) return;
         const ae = document.activeElement;
         const isInputFocused =
-            ae &&
-            (ae.tagName === 'INPUT' ||
-                ae.tagName === 'TEXTAREA' ||
-                ae.isContentEditable);
+            ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
         if (isInputFocused) return;
         if (typeof hasBlockingModalsOpen !== 'function' || !hasBlockingModalsOpen()) return;
         event.preventDefault();
@@ -255,7 +252,12 @@ export async function handleGlobalHotkey(event) {
     const alt = event.altKey;
 
     // Ctrl+K / Cmd+K — палитра команд
-    if (ctrlOrMeta && !alt && !shift && (event.key === 'k' || event.key === 'K' || code === 'KeyK')) {
+    if (
+        ctrlOrMeta &&
+        !alt &&
+        !shift &&
+        (event.key === 'k' || event.key === 'K' || code === 'KeyK')
+    ) {
         event.preventDefault();
         event.stopPropagation();
         if (typeof openCommandPalette === 'function') {

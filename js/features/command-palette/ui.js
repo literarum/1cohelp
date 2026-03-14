@@ -44,8 +44,9 @@ export function getOrCreateModal() {
             />
           </div>
           <div id="commandPaletteList" class="max-h-[60vh] overflow-y-auto py-1"></div>
-          <div class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
-            ↑↓ навигация · Enter выбор · Esc закрыть · <span class="opacity-90">@тип</span> — фильтр по типу
+          <div class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2 flex-wrap">
+            <span id="commandPaletteCount" class="flex-shrink-0">Показано 0</span>
+            <span>↑↓ навигация · Enter выбор · Esc закрыть · <span class="opacity-90">@тип</span> — фильтр по типу</span>
           </div>
         </div>
     `;
@@ -63,6 +64,10 @@ export function getOrCreateModal() {
 export function renderResults(results) {
     currentResults = results;
     selectedIndex = 0;
+    const countEl = modalEl?.querySelector('#commandPaletteCount');
+    if (countEl)
+        countEl.textContent =
+            results.length === 0 ? 'Нет результатов' : `Показано ${results.length}`;
     if (!listEl) return;
     listEl.innerHTML = '';
     if (results.length === 0) {
@@ -73,7 +78,9 @@ export function renderResults(results) {
     results.forEach((r, i) => {
         const row = document.createElement('div');
         row.className = `command-palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer border-l-2 border-transparent ${
-            i === 0 ? 'bg-primary/10 dark:bg-primary/20 border-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+            i === 0
+                ? 'bg-primary/10 dark:bg-primary/20 border-primary'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
         }`;
         row.dataset.index = String(i);
         row.innerHTML = `
@@ -102,7 +109,9 @@ export function updateHighlight() {
         el.classList.toggle('hover:bg-gray-100', !isSelected);
         el.classList.toggle('dark:hover:bg-gray-700', !isSelected);
     });
-    const selectedEl = listEl?.querySelector(`.command-palette-item[data-index="${selectedIndex}"]`);
+    const selectedEl = listEl?.querySelector(
+        `.command-palette-item[data-index="${selectedIndex}"]`,
+    );
     if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 }
 
@@ -111,6 +120,11 @@ export function onKeydown(e) {
         e.preventDefault();
         e.stopPropagation();
         if (typeof onCloseCallback === 'function') onCloseCallback();
+        return;
+    }
+    if (e.key === 'Tab' && modalEl && modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        if (inputEl) inputEl.focus();
         return;
     }
     if (e.key === 'ArrowDown') {
@@ -127,7 +141,8 @@ export function onKeydown(e) {
     }
     if (e.key === 'Enter' && currentResults[selectedIndex]) {
         e.preventDefault();
-        if (typeof selectResultCallback === 'function') selectResultCallback(currentResults[selectedIndex]);
+        if (typeof selectResultCallback === 'function')
+            selectResultCallback(currentResults[selectedIndex]);
     }
 }
 

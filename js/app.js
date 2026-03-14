@@ -19,6 +19,7 @@ import * as FavoritesDB from './db/favorites.js';
 // Импорты сервисов
 import { NotificationService } from './services/notification.js';
 import { ExportService, setLoadingOverlayManager } from './services/export.js';
+import { registerCoreServices } from './core/kernel.js';
 
 // Импорты компонентов
 import * as Modals from './components/modals.js';
@@ -35,6 +36,11 @@ import * as Theme from './components/theme.js';
 // Импорты утилит
 import { escapeHtml } from './utils/html.js';
 import * as Helpers from './utils/helpers.js';
+
+registerCoreServices({
+    NotificationService,
+    State,
+});
 
 // ============================================================================
 // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (будут инициализированы позже)

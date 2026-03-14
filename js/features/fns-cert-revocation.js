@@ -440,7 +440,7 @@ function decodeTimeDetails(node, bytes) {
     return { display: text, epochMs: NaN, raw: text };
 }
 
-function decodeTime(node, bytes) {
+function _decodeTime(node, bytes) {
     return decodeTimeDetails(node, bytes).display;
 }
 
@@ -969,7 +969,7 @@ export function initFNSCertificateRevocationSystem() {
                 setCertSectionVisibility(false);
                 const platform = detectDownloadPlatform();
                 const origin = typeof window !== 'undefined' ? window.location.origin : '';
-                let installCmd = '';
+                let _installCmd = '';
                 if (platform === 'macos' || platform === 'linux' || platform === 'windows') {
                     renderInstallGateContent(installGate, platform, origin);
                 } else {
@@ -1258,7 +1258,7 @@ export function initFNSCertificateRevocationSystem() {
             const hasPartialResult = failedChecks > 0 || Boolean(batchResult.error);
             const serverNetworkCodes = new Set(['crl_fetch_network', 'crl_fetch_timeout']);
             const failedResults = results.filter((r) => r.error);
-            const hasNetworkFailures = failedResults.some(
+            const _hasNetworkFailures = failedResults.some(
                 (r) =>
                     (r.source === 'server' || r.source === 'server-proxy') &&
                     serverNetworkCodes.has(r.errorCode),
@@ -1283,7 +1283,7 @@ export function initFNSCertificateRevocationSystem() {
                     : hasPartialResult
                       ? 'По результатам проверки сертификат проверен частично'
                       : 'По результатам проверки сертификат не отозван';
-                const summaryHint = isRevoked
+                const _summaryHint = isRevoked
                     ? isExpiredOnly
                         ? 'Срок действия сертификата завершился.'
                         : 'Сертификат найден в списке отозванных.'

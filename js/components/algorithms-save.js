@@ -5,6 +5,8 @@
  * Вынесено из script.js
  */
 
+import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
+
 // ============================================================================
 // ЗАВИСИМОСТИ
 // ============================================================================
@@ -912,6 +914,7 @@ export async function deleteAlgorithm(algorithmId, section) {
 
     const algorithmToDelete = JSON.parse(JSON.stringify(algorithms[section][indexToDelete]));
     if (!algorithmToDelete.id) algorithmToDelete.id = algorithmId;
+    algorithmToDelete.section = section;
 
     console.log(`Начало удаления алгоритма ID: ${algorithmId}, Секция: ${section}`);
 
@@ -991,6 +994,14 @@ export async function deleteAlgorithm(algorithmId, section) {
         } else {
             console.log('[TX Delete] Связанных скриншотов для удаления не найдено.');
         }
+
+        await addRecentlyDeletedRecord({
+            storeName: 'algorithms',
+            entityId: algorithmToDelete.id,
+            payload: algorithmToDelete,
+            context: { section },
+            reason: 'delete_algorithm',
+        });
 
         algorithms[section].splice(indexToDelete, 1);
         console.log(`Алгоритм ${algorithmId} удален из массива в памяти [${section}].`);

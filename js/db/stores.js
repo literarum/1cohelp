@@ -90,4 +90,13 @@ export const storeConfigs = [
             { name: 'uploadedAt', keyPath: 'uploadedAt', options: { unique: false } },
         ],
     },
+    {
+        name: 'recentlyDeleted',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [
+            { name: 'storeName', keyPath: 'storeName', options: { unique: false } },
+            { name: 'entityId', keyPath: 'entityId', options: { unique: false } },
+            { name: 'deletedAt', keyPath: 'deletedAt', options: { unique: false } },
+        ],
+    },
 ];

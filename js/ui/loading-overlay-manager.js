@@ -24,7 +24,83 @@ export const loadingOverlayManager = {
     /** Время начала анимации «расширения сферы» при выходе (0 = не запущена) */
     exitScaleStartTime: 0,
 
+    readStoredOverlaySnapshot() {
+        try {
+            const raw = localStorage.getItem('copilot.loading-overlay.snapshot');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
+            return null;
+        }
+    },
+
+    getResolvedTheme() {
+        const snapshot = this.readStoredOverlaySnapshot();
+        if (snapshot?.tone === 'dark' || snapshot?.tone === 'light') {
+            return snapshot.tone;
+        }
+        const root = document.documentElement;
+        if (root?.dataset?.theme === 'light' || root?.dataset?.theme === 'dark') {
+            return root.dataset.theme;
+        }
+        return root.classList.contains('dark') ? 'dark' : 'light';
+    },
+
+    getThemeProfile(theme) {
+        if (theme === 'light') {
+            return {
+                palette: [
+                    [76, 29, 149, 0.98],
+                    [91, 33, 182, 1],
+                    [109, 40, 217, 0.98],
+                    [126, 34, 206, 0.95],
+                    [147, 51, 234, 0.95],
+                    [168, 85, 247, 0.92],
+                    [192, 132, 252, 0.9],
+                ],
+                particleCount: 3000,
+                haloSizeScale: 1.22,
+                haloAlphaScale: 1.34,
+                coreAlphaScale: 1.26,
+            };
+        }
+        return {
+            palette: [
+                [160, 90, 220, 1],
+                [190, 110, 245, 0.95],
+                [130, 60, 200, 0.95],
+                [210, 120, 250, 1],
+                [120, 120, 240, 1],
+                [90, 90, 210, 0.95],
+                [235, 170, 255, 0.9],
+            ],
+            particleCount: 2200,
+            haloSizeScale: 1,
+            haloAlphaScale: 1,
+            coreAlphaScale: 1,
+        };
+    },
+
+    applyOverlayTheme(theme) {
+        const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+        const snapshot = this.readStoredOverlaySnapshot();
+        if (typeof window.__applyLoadingOverlayThemeVars === 'function') {
+            window.__applyLoadingOverlayThemeVars(normalizedTheme, snapshot);
+        }
+        if (this.overlayElement) {
+            this.overlayElement.style.backgroundColor = 'var(--loading-overlay-bg, #0a0a1a)';
+        }
+        if (
+            window._earlySphereAnimation &&
+            typeof window._earlySphereAnimation.setTheme === 'function'
+        ) {
+            window._earlySphereAnimation.setTheme(normalizedTheme);
+        }
+    },
+
     createAndShow() {
+        this.applyOverlayTheme(this.getResolvedTheme());
         // Пытаемся использовать существующий оверлей из HTML
         const existingOverlay = document.getElementById('custom-loading-overlay');
         const existingStyles = document.getElementById('custom-loading-overlay-styles');
@@ -54,7 +130,9 @@ export const loadingOverlayManager = {
                         resize: window._earlySphereAnimation.resize || function () {},
                         isRunning: true,
                     };
-                    console.log('Using early sphere animation (single loop, exit effect on same canvas).');
+                    console.log(
+                        'Using early sphere animation (single loop, exit effect on same canvas).',
+                    );
                 } else {
                     // Ранней анимации нет (оверлей создан динамически) — запускаем анимацию менеджера
                     this.isSpawning = false;
@@ -147,7 +225,10 @@ export const loadingOverlayManager = {
             line-height: 1.4;
             font-weight: 600;
             z-index: 10;
-            background: linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2);
+            background: var(
+                --loading-overlay-text-gradient,
+                linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2)
+            );
             background-size: 250% 100%;
             -webkit-background-clip: text;
             background-clip: text;
@@ -183,7 +264,7 @@ export const loadingOverlayManager = {
         .progress-bar-line-track {
             width: 100%;
             height: 6px;
-            background-color: rgba(138, 43, 226, 0.15);
+            background-color: var(--loading-overlay-track-bg, rgba(138, 43, 226, 0.15));
             border-radius: 3px;
             margin-bottom: 8px;
             overflow: hidden;
@@ -193,7 +274,10 @@ export const loadingOverlayManager = {
         .progress-bar-line {
             width: 0%;
             height: 100%;
-            background: linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2);
+            background: var(
+                --loading-overlay-progress-gradient,
+                linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2)
+            );
             background-size: 300% 100%;
             border-radius: 3px;
             transition: width 0.25s ease-out;
@@ -209,7 +293,10 @@ export const loadingOverlayManager = {
             font-size: 14px;
             font-weight: 600;
             letter-spacing: 0.5px;
-            background: linear-gradient(120deg, #9333ea, #c084fc, #9333ea);
+            background: var(
+                --loading-overlay-percent-gradient,
+                linear-gradient(120deg, #9333ea, #c084fc, #9333ea)
+            );
             background-size: 200% 100%;
             -webkit-background-clip: text;
             background-clip: text;
@@ -241,7 +328,7 @@ export const loadingOverlayManager = {
             this.overlayElement.style.width = '100%';
             this.overlayElement.style.height = '100%';
             this.overlayElement.style.zIndex = '99999';
-            this.overlayElement.style.backgroundColor = '#0a0a1a';
+            this.overlayElement.style.backgroundColor = 'var(--loading-overlay-bg, #0a0a1a)';
             this.overlayElement.style.display = 'flex';
             this.overlayElement.style.justifyContent = 'center';
             this.overlayElement.style.alignItems = 'center';
@@ -457,13 +544,15 @@ export const loadingOverlayManager = {
         const ctx = canvasElement.getContext('2d');
         let width_anim, height_anim, centerX_anim, centerY_anim;
         let particles_anim = [];
+        let currentTheme_anim = manager.getResolvedTheme();
+        let themeProfile_anim = manager.getThemeProfile(currentTheme_anim);
         // Используем состояние из ранней анимации для плавного перехода
         let globalTime_anim = initialState?.globalTime || 0;
         let rotationX_anim = initialState?.rotationX || 0;
         let rotationY_anim = initialState?.rotationY || 0;
         let rotationStartTime_anim = 0;
-        let lastFrameTime_anim = null;
-        const ROTATION_DELTA_NORM = 1 / 16;
+        let _lastFrameTime_anim = null;
+        const _ROTATION_DELTA_NORM = 1 / 16;
 
         const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
         const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
@@ -503,15 +592,7 @@ export const loadingOverlayManager = {
             petalStrength: 0.2,
             baseParticleMinSize: 0.45,
             baseParticleMaxSize: 1.1,
-            colorPalette: [
-                [160, 90, 220, 1],
-                [190, 110, 245, 0.95],
-                [130, 60, 200, 0.95],
-                [210, 120, 250, 1],
-                [120, 120, 240, 1],
-                [90, 90, 210, 0.95],
-                [235, 170, 255, 0.9],
-            ],
+            colorPalette: themeProfile_anim.palette,
             backgroundColor: 'rgba(0, 0, 0, 0)',
             spawnIndigoColor: [75, 0, 130],
             spawnGlowBaseIntensity: 0.8,
@@ -606,7 +687,13 @@ export const loadingOverlayManager = {
             draw(spawnProgress, glowMultiplier = 1) {
                 const easedSpawnProgress = easeOutCubic(spawnProgress);
                 if (this.currentDisplaySize <= 0.15) return;
-                const mainAlpha = Math.min(1, this.alphaFactor * easedSpawnProgress * glowMultiplier);
+                const mainAlpha = Math.min(
+                    1,
+                    this.alphaFactor *
+                        easedSpawnProgress *
+                        glowMultiplier *
+                        themeProfile_anim.coreAlphaScale,
+                );
                 if (mainAlpha <= 0.02) return;
                 const mainSize = this.currentDisplaySize;
 
@@ -616,8 +703,11 @@ export const loadingOverlayManager = {
                     { sizeFactor: 2.2, alphaFactor: 0.4, innerStop: 0.15, outerStop: 0.85 },
                 ];
                 for (const layer of haloLayers) {
-                    const haloSize = mainSize * layer.sizeFactor;
-                    const haloAlpha = Math.min(1, mainAlpha * layer.alphaFactor);
+                    const haloSize = mainSize * layer.sizeFactor * themeProfile_anim.haloSizeScale;
+                    const haloAlpha = Math.min(
+                        1,
+                        mainAlpha * layer.alphaFactor * themeProfile_anim.haloAlphaScale,
+                    );
                     if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
                     const gradient = ctx.createRadialGradient(
                         this.screenX,
@@ -687,18 +777,37 @@ export const loadingOverlayManager = {
         function init_anim() {
             setupCanvas_anim();
             particles_anim = [];
-            for (let i = 0; i < config_anim.particleCount; i++) {
+            const particleCount =
+                Number.isFinite(themeProfile_anim.particleCount) && themeProfile_anim.particleCount > 0
+                    ? themeProfile_anim.particleCount
+                    : config_anim.particleCount;
+            for (let i = 0; i < particleCount; i++) {
                 particles_anim.push(new Particle_anim());
             }
         }
 
         function animate_anim(timestamp) {
+            const nextTheme = manager.getResolvedTheme();
+            if (nextTheme !== currentTheme_anim) {
+                currentTheme_anim = nextTheme;
+                themeProfile_anim = manager.getThemeProfile(currentTheme_anim);
+                config_anim.colorPalette = themeProfile_anim.palette;
+                particles_anim = [];
+                const particleCount =
+                    Number.isFinite(themeProfile_anim.particleCount) &&
+                    themeProfile_anim.particleCount > 0
+                        ? themeProfile_anim.particleCount
+                        : config_anim.particleCount;
+                for (let i = 0; i < particleCount; i++) {
+                    particles_anim.push(new Particle_anim());
+                }
+            }
             timestamp = timestamp || performance.now();
             if (!rotationStartTime_anim) rotationStartTime_anim = timestamp;
             const elapsedMs = timestamp - rotationStartTime_anim;
             rotationX_anim = elapsedMs * (config_anim.rotationSpeedX / 16);
             rotationY_anim = elapsedMs * (config_anim.rotationSpeedY / 16);
-            lastFrameTime_anim = timestamp;
+            _lastFrameTime_anim = timestamp;
             globalTime_anim++;
 
             ctx.fillStyle = config_anim.backgroundColor;

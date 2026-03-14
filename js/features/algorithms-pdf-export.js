@@ -111,18 +111,28 @@ async function buildAlgorithmSectionExport(sectionKey) {
                 if (Array.isArray(step.screenshotIds) && step.screenshotIds.length > 0) {
                     try {
                         screenshots = (
-                            await Promise.all(step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)))
+                            await Promise.all(
+                                step.screenshotIds.map((id) => getFromIndexedDB('screenshots', id)),
+                            )
                         ).filter(Boolean);
-                    } catch (_) {}
+                    } catch {
+                        /* ignore */
+                    }
                 }
                 if (screenshots.length === 0 && algorithm.id != null) {
                     try {
                         const parentKey = String(algorithm.id);
-                        const byParent = await getAllFromIndex('screenshots', 'parentId', parentKey);
+                        const byParent = await getAllFromIndex(
+                            'screenshots',
+                            'parentId',
+                            parentKey,
+                        );
                         screenshots = (byParent || []).filter(
                             (s) => s && s.stepIndex === stepIndex && s.parentType === 'algorithm',
                         );
-                    } catch (_) {}
+                    } catch {
+                        /* ignore */
+                    }
                 }
                 if (screenshots.length > 0) {
                     const container = document.createElement('div');
@@ -135,7 +145,9 @@ async function buildAlgorithmSectionExport(sectionKey) {
                                 img.src = dataUrl;
                                 img.alt = '';
                                 container.appendChild(img);
-                            } catch (_) {}
+                            } catch {
+                                /* ignore */
+                            }
                         }
                     }
                     if (container.children.length) stepCard.appendChild(container);

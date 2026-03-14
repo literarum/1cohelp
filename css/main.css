@@ -33,6 +33,7 @@
 @import url('./components/pdf-dropzone.css');
 @import url('./components/folders-examples.css');
 @import url('./components/health-modal.css');
+@import url('./components/db-merge-modal.css');
 
 /* 6. Скроллбар и кнопки (используют переменные из theme/variables.css) */
 @import url('./inline-styles.css');

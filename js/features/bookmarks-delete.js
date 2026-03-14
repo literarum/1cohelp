@@ -4,6 +4,8 @@
 // BOOKMARKS DELETE (вынос из script.js)
 // ============================================================================
 
+import { addRecentlyDeletedRecord } from './recently-deleted.js';
+
 let State = null;
 let getFromIndexedDB = null;
 let showNotification = null;
@@ -90,6 +92,15 @@ export async function deleteBookmark(id) {
             console.warn(
                 `Обновление индекса для закладки ${numericId} пропущено (данные не получены или функция недоступна).`,
             );
+        }
+
+        if (bookmarkToDelete) {
+            await addRecentlyDeletedRecord({
+                storeName: 'bookmarks',
+                entityId: numericId,
+                payload: bookmarkToDelete,
+                reason: 'delete_bookmark',
+            });
         }
 
         if (!State?.db) {

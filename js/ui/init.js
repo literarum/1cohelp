@@ -13,12 +13,12 @@ let _State = null;
 let setActiveTab = null;
 let getVisibleModals = null;
 let getTopmostModal = null;
-let toggleModalFullscreen = null;
-let showNotification = null;
+let _toggleModalFullscreen = null;
+let _showNotification = null;
 let _renderFavoritesPage = null;
 let _updateVisibleTabs = null;
 let _showBlacklistWarning = null;
-let hotkeysModalConfig = null;
+let _hotkeysModalConfig = null;
 let initBackgroundSystems = null;
 
 export function setUIInitDependencies(deps) {
@@ -27,12 +27,12 @@ export function setUIInitDependencies(deps) {
     if (deps.getVisibleModals !== undefined) getVisibleModals = deps.getVisibleModals;
     if (deps.getTopmostModal !== undefined) getTopmostModal = deps.getTopmostModal;
     if (deps.toggleModalFullscreen !== undefined)
-        toggleModalFullscreen = deps.toggleModalFullscreen;
-    if (deps.showNotification !== undefined) showNotification = deps.showNotification;
+        _toggleModalFullscreen = deps.toggleModalFullscreen;
+    if (deps.showNotification !== undefined) _showNotification = deps.showNotification;
     if (deps.renderFavoritesPage !== undefined) _renderFavoritesPage = deps.renderFavoritesPage;
     if (deps.updateVisibleTabs !== undefined) _updateVisibleTabs = deps.updateVisibleTabs;
     if (deps.showBlacklistWarning !== undefined) _showBlacklistWarning = deps.showBlacklistWarning;
-    if (deps.hotkeysModalConfig !== undefined) hotkeysModalConfig = deps.hotkeysModalConfig;
+    if (deps.hotkeysModalConfig !== undefined) _hotkeysModalConfig = deps.hotkeysModalConfig;
     if (deps.initBackgroundSystems !== undefined)
         initBackgroundSystems = deps.initBackgroundSystems;
 }
@@ -140,12 +140,7 @@ export function initHotkeysModal() {
     const closeHotkeysModalBtn = document.getElementById('closeHotkeysModalBtn');
     const okHotkeysModalBtn = document.getElementById('okHotkeysModalBtn');
 
-    if (
-        !showHotkeysBtn ||
-        !hotkeysModal ||
-        !closeHotkeysModalBtn ||
-        !okHotkeysModalBtn
-    ) {
+    if (!showHotkeysBtn || !hotkeysModal || !closeHotkeysModalBtn || !okHotkeysModalBtn) {
         console.warn(
             'Не найдены обязательные элементы для модального окна горячих клавиш ' +
                 '(#showHotkeysBtn, #hotkeysModal, #closeHotkeysModalBtn, #okHotkeysModalBtn). ' +

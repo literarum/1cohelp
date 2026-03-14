@@ -44,8 +44,10 @@ body.custom-background-active .tab-btn.tab-active > *,
 #timerIncreaseButton,
 #themeToggle,
 #clearSearchInputBtn,
+#openCommandPaletteBtn,
 #customizeUIBtn,
 #exportDataBtn,
+#mergeDataBtn,
 #importDataBtn,
 #forceReloadBtn,
 #showHotkeysBtn {
@@ -57,8 +59,10 @@ body.custom-background-active .tab-btn.tab-active > *,
 #timerIncreaseButton i,
 #themeToggle i,
 #clearSearchInputBtn i,
+#openCommandPaletteBtn i,
 #customizeUIBtn i,
 #exportDataBtn i,
+#mergeDataBtn i,
 #importDataBtn i,
 #forceReloadBtn i,
 #showHotkeysBtn i {
@@ -171,7 +175,8 @@ body.custom-background-active
         #noInnModal .bg-white.dark\:bg-gray-800,
         #reglamentDetailModal .bg-white.dark\:bg-gray-800,
         #bookmarkDetailModal .bg-white.dark\:bg-gray-800,
-        #extLinkModal .bg-white.dark\:bg-gray-800
+        #extLinkModal .bg-white.dark\:bg-gray-800,
+        #dbMergeModal .db-merge-dialog
     ) {
     background-color: var(--color-surface-2) !important;
 }
@@ -258,6 +263,8 @@ body.custom-background-active
         #saveUISettingsBtn,
         #sedoMainEditButton,
         #editMainBtn,
+        #dbMergeStartBtn,
+        #dbMergeSelectFileBtn,
         button.bg-primary,
         button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
                 .tab-btn
@@ -292,6 +299,8 @@ body.custom-background-active
         #saveUISettingsBtn,
         #sedoMainEditButton,
         #editMainBtn,
+        #dbMergeStartBtn,
+        #dbMergeSelectFileBtn,
         button.bg-primary,
         button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
                 .tab-btn
@@ -322,6 +331,8 @@ body.custom-background-active
         #saveUISettingsBtn,
         #sedoMainEditButton,
         #editMainBtn,
+        #dbMergeStartBtn,
+        #dbMergeSelectFileBtn,
         button.bg-primary,
         button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
                 .tab-btn
@@ -411,6 +422,8 @@ body.custom-background-active
         #saveUISettingsBtn,
         #sedoMainEditButton,
         #editMainBtn,
+        #dbMergeStartBtn,
+        #dbMergeSelectFileBtn,
         button.bg-primary,
         button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
                 .tab-btn
@@ -761,4 +774,3 @@ body.custom-background-active
     background-color: transparent !important;
     box-shadow: none !important;
 }
-

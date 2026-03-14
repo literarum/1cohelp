@@ -4,14 +4,14 @@ Third-party libraries are stored here so the site can work without depending on 
 
 ## Contents and versions
 
-| Library       | Version  | Path                                      | Source |
-|---------------|----------|-------------------------------------------|--------|
-| Sortable.js   | 1.14.0   | `sortablejs/1.14.0/Sortable.min.js`       | jsDelivr npm |
-| pdf-lib       | 1.17.1   | `pdf-lib/1.17.1/pdf-lib.min.js`           | jsDelivr npm |
-| @pdf-lib/fontkit | 1.1.1  | `fontkit/1.1.1/fontkit.umd.min.js`        | jsDelivr npm |
-| SheetJS (xlsx)| 0.20.3   | `xlsx/0.20.3/xlsx.full.min.js`            | cdn.sheetjs.com |
-| Font Awesome  | 6.4.0    | `fontawesome/6.4.0/css/all.min.css` + `webfonts/` | cdnjs |
-| Tailwind (fallback) | Play CDN snapshot | `tailwind-fallback/tailwind.min.js` | cdn.tailwindcss.com |
+| Library             | Version           | Path                                              | Source              |
+| ------------------- | ----------------- | ------------------------------------------------- | ------------------- |
+| Sortable.js         | 1.14.0            | `sortablejs/1.14.0/Sortable.min.js`               | jsDelivr npm        |
+| pdf-lib             | 1.17.1            | `pdf-lib/1.17.1/pdf-lib.min.js`                   | jsDelivr npm        |
+| @pdf-lib/fontkit    | 1.1.1             | `fontkit/1.1.1/fontkit.umd.min.js`                | jsDelivr npm        |
+| SheetJS (xlsx)      | 0.20.3            | `xlsx/0.20.3/xlsx.full.min.js`                    | cdn.sheetjs.com     |
+| Font Awesome        | 6.4.0             | `fontawesome/6.4.0/css/all.min.css` + `webfonts/` | cdnjs               |
+| Tailwind (fallback) | Play CDN snapshot | `tailwind-fallback/tailwind.min.js`               | cdn.tailwindcss.com |
 
 ## Switching CDN vs local
 

@@ -1,5 +1,7 @@
 'use strict';
 
+import { getCoreService, notify } from '../core/kernel.js';
+
 let deps = {
     NotificationService: null,
     loadingOverlayManager: null,
@@ -22,6 +24,8 @@ export function registerOnloadHandler() {
     window.onload = async () => {
         console.log('window.onload: Страница полностью загружена.');
         const appContent = document.getElementById('appContent');
+        const resolvedNotificationService =
+            deps.NotificationService || getCoreService('NotificationService');
 
         // Показываем appContent за оверлеем сразу, чтобы во время appInit интерфейс реально загружался и отрисовывался; при снятии оверлея пользователь видит уже готовый UI.
         if (appContent) {
@@ -29,11 +33,13 @@ export function registerOnloadHandler() {
             appContent.style.display = '';
             appContent.style.visibility = 'visible';
             appContent.style.opacity = '1';
-            console.log('[window.onload] appContent показан за оверлеем для фоновой загрузки интерфейса.');
+            console.log(
+                '[window.onload] appContent показан за оверлеем для фоновой загрузки интерфейса.',
+            );
         }
 
-        if (deps.NotificationService?.init) {
-            deps.NotificationService.init();
+        if (resolvedNotificationService?.init) {
+            resolvedNotificationService.init();
         } else {
             console.error('NotificationService не определен в window.onload!');
         }
@@ -169,11 +175,17 @@ export function registerOnloadHandler() {
                     appContent.classList.remove('hidden');
                 }
                 const errorMessageText = error instanceof Error ? error.message : String(error);
-                if (deps.NotificationService?.add) {
-                    deps.NotificationService.add(
+                if (resolvedNotificationService?.add) {
+                    resolvedNotificationService.add(
                         `Произошла ошибка при загрузке приложения: ${errorMessageText}.`,
                         'error',
                         { important: true, duration: 10000 },
+                    );
+                } else {
+                    notify(
+                        `Произошла ошибка при загрузке приложения: ${errorMessageText}.`,
+                        'error',
+                        { duration: 10000 },
                     );
                 }
             });

@@ -169,9 +169,21 @@ export function initBackgroundStatusHUD() {
     @media (prefers-reduced-motion: reduce){ #bg-status-hud .hud-bar{ animation: none; } }
     @keyframes hud-stripes{ 0%{ background-position: 0 0; } 100%{ background-position: 24px 0; } }
     #bg-hud-details-modal {
-      position: fixed; inset: 0; z-index: 9999; display: none;
+      position: fixed; z-index: 9999; display: none;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100vw; height: 100vh;
       align-items: center; justify-content: center;
       background: rgba(0,0,0,0.5);
+      box-sizing: border-box;
+    }
+    #bg-hud-details-modal .hud-modal-card {
+      width: min(56rem, 92vw) !important;
+      max-width: 92vw !important;
+      max-height: 90vh !important;
+      min-width: 18rem !important;
+      display: flex !important; flex-direction: column !important;
+      box-sizing: border-box;
+      flex-shrink: 0;
     }
   `;
         const style = document.createElement('style');
@@ -227,7 +239,7 @@ export function initBackgroundStatusHUD() {
     function renderWatchdogInfo() {
         if (!STATE.watchdogInfoEl) return;
         const status = STATE.watchdog.statusText || '—';
-        const lastRun = STATE.watchdog.lastRunAt
+        const _lastRun = STATE.watchdog.lastRunAt
             ? new Date(STATE.watchdog.lastRunAt).toLocaleTimeString('ru-RU')
             : '—';
         const lastAutosave = STATE.watchdog.lastAutosaveAt
@@ -445,6 +457,7 @@ export function initBackgroundStatusHUD() {
 
     function ensureDiagnosticsModal() {
         if (document.getElementById('bg-hud-details-modal')) return;
+        ensureStyles();
         const modal = document.createElement('div');
         modal.id = 'bg-hud-details-modal';
         modal.innerHTML = `
@@ -459,6 +472,12 @@ export function initBackgroundStatusHUD() {
                 <div class="hud-modal-body" id="bg-hud-details-body"></div>
             </div>
         `;
+        const card = modal.querySelector('.hud-modal-card');
+        const vw = Math.min(896, (window.innerWidth || 0) * 0.92);
+        card.style.width = `${vw}px`;
+        card.style.maxWidth = '92vw';
+        card.style.maxHeight = '90vh';
+        card.style.minWidth = '288px';
         modal.addEventListener('click', (event) => {
             if (event.target === modal) {
                 modal.style.display = 'none';
@@ -480,11 +499,36 @@ export function initBackgroundStatusHUD() {
     }
 
     function openDiagnosticsModal() {
+        const { errors, warnings, checks, updatedAt } = STATE.diagnostics;
+
+        // Если доступна полноразмерная модалка «Состояние здоровья», используем её,
+        // чтобы поведение и размеры были идентичны ручному прогону из настроек.
+        if (typeof window !== 'undefined' && typeof window.showHealthReportModal === 'function') {
+            const report = {
+                success: !errors?.length,
+                errors: errors || [],
+                warnings: warnings || [],
+                checks: checks || [],
+                startedAt: updatedAt || null,
+                finishedAt: updatedAt || null,
+            };
+            window.showHealthReportModal(report);
+            return;
+        }
+
+        // Fallback: собственная компактная модалка HUD
         ensureDiagnosticsModal();
         const modal = document.getElementById('bg-hud-details-modal');
+        const card = modal.querySelector('.hud-modal-card');
+        if (card) {
+            const w = Math.min(896, (window.innerWidth || 0) * 0.92);
+            card.style.width = `${w}px`;
+            card.style.maxWidth = '92vw';
+            card.style.maxHeight = '90vh';
+            card.style.minWidth = '288px';
+        }
         const body = modal.querySelector('#bg-hud-details-body');
         const updated = modal.querySelector('#bg-hud-details-updated');
-        const { errors, warnings, checks, updatedAt } = STATE.diagnostics;
         const esc = escapeHtml;
         updated.textContent = updatedAt ? `Обновлено: ${updatedAt}` : '';
 
@@ -504,9 +548,18 @@ export function initBackgroundStatusHUD() {
                 .join('');
         };
 
-        const errorsList = buildSectionList(errors, '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>');
-        const warningsList = buildSectionList(warnings, '<i class="fas fa-exclamation-triangle text-amber-500 dark:text-amber-400" aria-hidden="true"></i>');
-        const checksList = buildSectionList(checks, '<i class="fas fa-check text-primary" aria-hidden="true"></i>');
+        const errorsList = buildSectionList(
+            errors,
+            '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>',
+        );
+        const warningsList = buildSectionList(
+            warnings,
+            '<i class="fas fa-exclamation-triangle text-amber-500 dark:text-amber-400" aria-hidden="true"></i>',
+        );
+        const checksList = buildSectionList(
+            checks,
+            '<i class="fas fa-check text-primary" aria-hidden="true"></i>',
+        );
 
         const watchdogLabel = watchdogStatusLabel(STATE.watchdog.severity || 'running');
         const lastAutosave = STATE.watchdog.lastAutosaveAt
@@ -579,7 +632,9 @@ export function initBackgroundStatusHUD() {
         if (!modal || modal.dataset.hudDetailsCollapseInit) return;
         modal.dataset.hudDetailsCollapseInit = '1';
         modal.addEventListener('click', (e) => {
-            const header = e.target.closest('.health-report-section-collapsible .health-report-section-header');
+            const header = e.target.closest(
+                '.health-report-section-collapsible .health-report-section-header',
+            );
             if (!header) return;
             e.preventDefault();
             const section = header.closest('.health-report-section-collapsible');

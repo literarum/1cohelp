@@ -15,6 +15,9 @@ import {
     FIELD_WEIGHTS,
     SHABLONY_DOC_ID,
     CATEGORY_INFO_KEY,
+    SEARCH_MAX_IDF,
+    SEARCH_BM25_K1,
+    SEARCH_DIVERSITY_LIMITS,
 } from '../constants.js';
 
 import { tabsConfig, categoryDisplayInfo as categoryDisplayInfoImported } from '../config.js';
@@ -41,6 +44,45 @@ import {
 } from '../db/indexeddb.js';
 
 import { fetchGoogleDocs, parseShablonyContent, getOriginalShablonyData } from './google-docs.js';
+import { tokenizeNormalized, suggestTokenVariants } from './search-normalize.js';
+
+/** Доменные синонимы для расширения запроса (ФНС/СФР/Росстат и т.д.) — единый источник с палитрой команд */
+const QUERY_SYNONYMS = {
+    fns: ['фнс', 'ифнс', 'налоговая', 'федеральная налоговая', 'fns', 'налог'],
+    sfr: ['сфр', 'пфр', 'фсс', 'социальный фонд', 'пенсионный', 'sfr', 'pfr', 'fss'],
+    rosstat: ['росстат', 'фсгс', 'статистика', 'rosstat'],
+    rarp: ['рарп', 'фсрар', 'алкоголь', 'rarp'],
+    rpn: ['рпн', 'росприроднадзор', 'природнадзор', 'rpn'],
+};
+
+/**
+ * Расширяет набор токенов запроса синонимами: если в запросе есть токен из группы, добавляются все токены группы.
+ * @param {string[]} queryTokens — токены запроса (нормализованные/стеммы)
+ * @returns {string[]} уникальные токены для поиска по индексу
+ */
+function expandQueryTokensWithSynonyms(queryTokens) {
+    if (!queryTokens || queryTokens.length === 0) return queryTokens;
+    const expanded = new Set(queryTokens);
+    const tokenSet = new Set(queryTokens);
+    for (const variants of Object.values(QUERY_SYNONYMS)) {
+        let hasMatch = false;
+        for (const phrase of variants) {
+            const phraseTokens = tokenizeNormalized(phrase).filter((w) => w.length >= 2);
+            if (phraseTokens.some((t) => tokenSet.has(t))) {
+                hasMatch = true;
+                break;
+            }
+        }
+        if (hasMatch) {
+            variants.forEach((phrase) => {
+                tokenizeNormalized(phrase)
+                    .filter((w) => w.length >= 2)
+                    .forEach((t) => expanded.add(t));
+            });
+        }
+    }
+    return Array.from(expanded);
+}
 
 // ============================================================================
 // СОСТОЯНИЕ МОДУЛЯ
@@ -193,7 +235,7 @@ export function sanitizeQuery(query) {
 }
 
 /**
- * Определяет контекст поиска
+ * Определяет контекст поиска. Учитывает ключевые слова и синонимы (ФНС/СФР и т.д.).
  */
 export function determineSearchContext(normalizedQuery) {
     const FNS_KEYWORDS = new Set([
@@ -205,9 +247,22 @@ export function determineSearchContext(normalizedQuery) {
         'егрн',
         'кнд',
         'декларац',
+        'налоговая',
+        'федеральная',
+        'fns',
     ]);
     const SEDO_KEYWORDS = new Set(['сэдо', 'пвсо', 'сфр', 'фсс', 'извещение', 'элн', 'сообщение']);
-    const PFR_KEYWORDS = new Set(['пфр', 'пенсион', 'снилс', 'сзв', 'опс']);
+    const PFR_KEYWORDS = new Set([
+        'пфр',
+        'пенсион',
+        'снилс',
+        'сзв',
+        'опс',
+        'социальный',
+        'фонд',
+        'pfr',
+        'fss',
+    ]);
     const SKZI_KEYWORDS = new Set([
         'скзи',
         'крипто',
@@ -217,12 +272,13 @@ export function determineSearchContext(normalizedQuery) {
         'сертификат',
     ]);
 
-    if (FNS_KEYWORDS.has(normalizedQuery)) return 'fns';
-    if (SEDO_KEYWORDS.has(normalizedQuery)) return 'sedo';
-    if (PFR_KEYWORDS.has(normalizedQuery)) return 'pfr';
-    if (SKZI_KEYWORDS.has(normalizedQuery)) return 'skzi';
+    const q = normalizedQuery.toLowerCase().replace(/ё/g, 'е').trim();
+    if (FNS_KEYWORDS.has(q)) return 'fns';
+    if (SEDO_KEYWORDS.has(q)) return 'sedo';
+    if (PFR_KEYWORDS.has(q)) return 'pfr';
+    if (SKZI_KEYWORDS.has(q)) return 'skzi';
 
-    const queryWords = normalizedQuery.split(/\s+/);
+    const queryWords = q.split(/\s+/);
     for (const word of queryWords) {
         if (FNS_KEYWORDS.has(word)) return 'fns';
         if (SEDO_KEYWORDS.has(word)) return 'sedo';
@@ -1183,7 +1239,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
             if (!textContent || typeof textContent !== 'string' || textContent.trim() === '')
                 continue;
 
-            const tokens = tokenize(textContent);
+            const tokens = tokenizeNormalized(textContent);
             const weights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
             const fieldWeight = weights[fieldKey] || 1.0;
 
@@ -1234,7 +1290,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
             continue;
         }
 
-        const tokens = tokenize(textContent);
+        const tokens = tokenizeNormalized(textContent);
         const storeFieldWeightsConfig = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
 
         let baseFieldForWeightLookup = fieldKeyFromGetText;
@@ -1691,7 +1747,7 @@ export async function buildInitialSearchIndex(progressCallback) {
                 if (!textContent || typeof textContent !== 'string' || textContent.trim() === '')
                     continue;
 
-                const tokens = tokenize(textContent);
+                const tokens = tokenizeNormalized(textContent);
                 const storeWeights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
                 const fieldWeight = storeWeights[fieldKey] || 1.0;
 
@@ -1975,7 +2031,9 @@ export async function performSearch(query) {
 
     try {
         const searchContext = determineSearchContext(query);
-        const queryTokens = tokenize(query).filter((word) => word.length >= 2);
+        let queryTokens = tokenizeNormalized(query).filter((word) => word.length >= 2);
+        const originalQueryTokens = queryTokens.slice();
+        queryTokens = expandQueryTokensWithSynonyms(queryTokens);
         const sectionMatches = findSectionMatches(query);
 
         if (queryTokens.length === 0) {
@@ -1987,13 +2045,31 @@ export async function performSearch(query) {
         }
 
         let candidateDocs = await searchCandidates(queryTokens, searchContext);
+        if (
+            candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD &&
+            queryTokens.length >= 1 &&
+            queryTokens[0].length >= 3 &&
+            queryTokens[0].length <= 8
+        ) {
+            const variants = suggestTokenVariants(queryTokens[0], 2);
+            const existingInIndex = await findTokensThatExistInIndex(variants);
+            if (existingInIndex.length > 0) {
+                const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext);
+                mergeFuzzyCandidatesInto(candidateDocs, fuzzyCandidates);
+            }
+        }
 
-        const finalResults = await processSearchResults(candidateDocs, query, query);
+        const finalResults = await processSearchResults(
+            candidateDocs,
+            query,
+            query,
+            originalQueryTokens,
+        );
 
         const combinedResults = [...sectionMatches, ...finalResults];
         const sortedResults = sortSearchResults(combinedResults);
         const MAX_SEARCH_RESULTS_DISPLAY = 50;
-        let limitedResults = sortedResults.slice(0, MAX_SEARCH_RESULTS_DISPLAY);
+        let limitedResults = diversifyResults(sortedResults, MAX_SEARCH_RESULTS_DISPLAY);
 
         // Fallback-аудит: если индекс не дал результата, делаем медленный скан по хранилищам,
         // чтобы не терять навигацию для элементов, которые еще не попали в индекс.
@@ -2093,7 +2169,9 @@ export async function getGlobalSearchResults(query) {
     if (q.length < MIN_SEARCH_LENGTH) return [];
 
     const searchContext = determineSearchContext(q);
-    const queryTokens = tokenize(q).filter((word) => word.length >= 2);
+    let queryTokens = tokenizeNormalized(q).filter((word) => word.length >= 2);
+    const originalQueryTokens = queryTokens.slice();
+    queryTokens = expandQueryTokensWithSynonyms(queryTokens);
     const sectionMatches = findSectionMatches(q);
 
     if (queryTokens.length === 0) return sectionMatches;
@@ -2101,12 +2179,25 @@ export async function getGlobalSearchResults(query) {
     let candidateDocs;
     try {
         candidateDocs = await searchCandidates(queryTokens, searchContext);
+        if (
+            candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD &&
+            queryTokens.length >= 1 &&
+            queryTokens[0].length >= 3 &&
+            queryTokens[0].length <= 8
+        ) {
+            const variants = suggestTokenVariants(queryTokens[0], 2);
+            const existingInIndex = await findTokensThatExistInIndex(variants);
+            if (existingInIndex.length > 0) {
+                const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext);
+                mergeFuzzyCandidatesInto(candidateDocs, fuzzyCandidates);
+            }
+        }
     } catch (err) {
         console.warn('[getGlobalSearchResults] searchCandidates failed:', err);
         return sectionMatches;
     }
 
-    const finalResults = await processSearchResults(candidateDocs, q, q);
+    const finalResults = await processSearchResults(candidateDocs, q, q, originalQueryTokens);
     const combined = [...sectionMatches, ...finalResults];
     const sorted = sortSearchResults(combined);
     return sorted.slice(0, MAX_RESULTS);
@@ -2115,6 +2206,48 @@ export async function getGlobalSearchResults(query) {
 // ============================================================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ПОИСКА
 // ============================================================================
+
+const FUZZY_CANDIDATES_THRESHOLD = 2;
+const FUZZY_SCORE_FACTOR = 0.4;
+
+/**
+ * Возвращает те токены из списка, которые есть в индексе (точное совпадение ключа).
+ */
+async function findTokensThatExistInIndex(tokens) {
+    if (!State.db || !tokens || tokens.length === 0) return [];
+    const found = [];
+    const transaction = State.db.transaction(['searchIndex'], 'readonly');
+    const store = transaction.objectStore('searchIndex');
+    for (const t of tokens) {
+        const result = await new Promise((resolve, reject) => {
+            const r = store.get(t);
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+        });
+        if (result && result.word) found.push(result.word);
+    }
+    return found;
+}
+
+/**
+ * Добавляет кандидатов из fuzzySearch в candidateDocs с пониженным весом.
+ */
+function mergeFuzzyCandidatesInto(candidateDocs, fuzzyCandidates) {
+    for (const [docKey, candidate] of fuzzyCandidates.entries()) {
+        const scaledScore = candidate.score * FUZZY_SCORE_FACTOR;
+        if (candidateDocs.has(docKey)) {
+            const existing = candidateDocs.get(docKey);
+            existing.score += scaledScore;
+            candidate.matchedTokens.forEach((t) => existing.matchedTokens.add(t));
+        } else {
+            candidateDocs.set(docKey, {
+                ...candidate,
+                score: scaledScore,
+                matchedTokens: new Set(candidate.matchedTokens),
+            });
+        }
+    }
+}
 
 /**
  * Ищет кандидатов в индексе
@@ -2137,6 +2270,12 @@ async function searchCandidates(queryTokens, searchContext) {
                         const actualToken = indexEntry.word;
 
                         if (indexEntry.refs && Array.isArray(indexEntry.refs)) {
+                            const docFreq = new Set(
+                                indexEntry.refs
+                                    .filter((r) => r && r.store != null && r.id != null)
+                                    .map((r) => `${r.store}:${r.id}`),
+                            ).size;
+                            const idf = Math.min(SEARCH_MAX_IDF, Math.log(1 + 1 / (docFreq + 0.5)));
                             indexEntry.refs.forEach((ref) => {
                                 if (
                                     !ref ||
@@ -2166,17 +2305,26 @@ async function searchCandidates(queryTokens, searchContext) {
                                         ref: ref,
                                         score: 0,
                                         matchedTokens: new Set(),
+                                        termHitCounts: new Map(),
+                                        termRawScores: new Map(),
+                                        termIdf: new Map(),
                                         context: searchContext,
                                     });
                                 }
 
                                 const candidate = candidateDocs.get(docKey);
-                                candidate.score += calculateTokenScore(
-                                    actualToken,
-                                    queryToken,
-                                    ref,
-                                );
+                                const rawScore = calculateTokenScore(actualToken, queryToken, ref);
+                                candidate.termIdf.set(queryToken, idf);
+                                candidate.score += rawScore * idf;
                                 candidate.matchedTokens.add(queryToken);
+                                candidate.termHitCounts.set(
+                                    queryToken,
+                                    (candidate.termHitCounts.get(queryToken) || 0) + 1,
+                                );
+                                candidate.termRawScores.set(
+                                    queryToken,
+                                    (candidate.termRawScores.get(queryToken) || 0) + rawScore,
+                                );
                             });
                         }
                         cursor.continue();
@@ -2186,6 +2334,18 @@ async function searchCandidates(queryTokens, searchContext) {
                 };
                 request.onerror = (e) => reject(e.target.error);
             });
+        }
+
+        for (const candidate of candidateDocs.values()) {
+            let s = 0;
+            for (const term of candidate.matchedTokens) {
+                const tf = candidate.termHitCounts.get(term) || 0;
+                const idf = candidate.termIdf.get(term) || 1;
+                const rawSum = candidate.termRawScores.get(term) || 0;
+                if (tf <= 0) continue;
+                s += idf * (tf / (tf + SEARCH_BM25_K1)) * (rawSum / tf);
+            }
+            candidate.score = s;
         }
     } catch (error) {
         console.error('[searchCandidates] Ошибка поиска кандидатов:', error);
@@ -2249,8 +2409,12 @@ function generateDocKey(ref) {
     return docKey;
 }
 
+/** Поля-заголовки: совпадение в них даёт дополнительный буст */
+const TITLE_LIKE_FIELDS = new Set(['title', 'name', 'tableTitle', 'sectionNameForAlgo']);
+
 /**
- * Вычисляет score для токена
+ * Вычисляет базовый score для токена (без IDF).
+ * IDF применяется в searchCandidates; насыщение TF — при финальном пересчёте.
  */
 function calculateTokenScore(actualToken, queryToken, ref) {
     let score = 1.0 + Math.pow(actualToken.length, 0.6);
@@ -2264,7 +2428,32 @@ function calculateTokenScore(actualToken, queryToken, ref) {
     const fieldWeight = ref.weight || 1;
     score *= fieldWeight;
 
+    if (ref.field && TITLE_LIKE_FIELDS.has(ref.field)) {
+        score *= 1.5;
+    }
+
     return score;
+}
+
+/**
+ * Диверсификация: ограничивает число результатов одного типа в топ-N.
+ * @param {Array<{ type?: string }>} results — отсортированный по релевантности массив
+ * @param {number} maxTotal — максимум элементов в выдаче
+ * @returns {Array} подмассив results с лимитами по типам
+ */
+function diversifyResults(results, maxTotal) {
+    if (!results || results.length === 0 || maxTotal <= 0) return [];
+    const counts = new Map();
+    const out = [];
+    for (const r of results) {
+        if (out.length >= maxTotal) break;
+        const type = r.type || 'default';
+        const limit = SEARCH_DIVERSITY_LIMITS[type] ?? SEARCH_DIVERSITY_LIMITS.default ?? 6;
+        const n = (counts.get(type) || 0) + 1;
+        counts.set(type, n);
+        if (n <= limit) out.push(r);
+    }
+    return out;
 }
 
 /**
@@ -2480,8 +2669,17 @@ async function loadFullDataForResults(docEntries) {
 
 /**
  * Обрабатывает результаты поиска
+ * @param {Map} candidateDocs
+ * @param {string} normalizedQuery
+ * @param {string} originalQuery
+ * @param {string[]} [originalQueryTokens] — токены запроса до расширения синонимами (для бонуса «все слова нашлись»)
  */
-async function processSearchResults(candidateDocs, normalizedQuery, originalQuery) {
+async function processSearchResults(
+    candidateDocs,
+    normalizedQuery,
+    originalQuery,
+    originalQueryTokens = null,
+) {
     const startTime = performance.now();
     console.log(
         `[processSearchResults V4] Начало обработки ${candidateDocs.size} кандидатов для запроса "${originalQuery}"`,
@@ -2628,6 +2826,13 @@ async function processSearchResults(candidateDocs, normalizedQuery, originalQuer
                     result.isExactTitleMatch = true;
                     result.score = (result.score || 0) + 50000;
                 }
+            }
+            if (
+                Array.isArray(originalQueryTokens) &&
+                originalQueryTokens.length > 1 &&
+                originalQueryTokens.every((t) => group.matchedTokensUnion.has(t))
+            ) {
+                result.score = (result.score || 0) + 5000;
             }
             searchResults.push(result);
         }
@@ -3146,7 +3351,8 @@ export async function handleSearchResultClick(result) {
         });
     }
 
-    const effectiveType = result.type ?? result.originalType ?? (result.section ? 'section_fallback' : 'unknown');
+    const effectiveType =
+        result.type ?? result.originalType ?? (result.section ? 'section_fallback' : 'unknown');
 
     try {
         let tabId, itemSelector;
@@ -3521,8 +3727,14 @@ export function expandQueryWithSynonyms(query) {
  * regexStr может быть в формате "/pattern/" (тогда используется slice(1,-1)) или сырая строка (экранируется для RegExp).
  */
 export async function searchWithRegex(regexStr) {
-    const isWrapped = typeof regexStr === 'string' && regexStr.startsWith('/') && regexStr.endsWith('/') && regexStr.length >= 2;
-    const pattern = isWrapped ? regexStr.slice(1, -1) : String(regexStr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const isWrapped =
+        typeof regexStr === 'string' &&
+        regexStr.startsWith('/') &&
+        regexStr.endsWith('/') &&
+        regexStr.length >= 2;
+    const pattern = isWrapped
+        ? regexStr.slice(1, -1)
+        : String(regexStr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(pattern, 'i');
     const results = [];
     const stores = ['algorithms', 'links', 'bookmarks', 'reglaments', 'extLinks'];
@@ -3545,7 +3757,8 @@ export async function searchWithRegex(regexStr) {
                     }
                 }
                 Object.keys(algoContainer.data).forEach((sectionKey) => {
-                    if (sectionKey === 'main' || !Array.isArray(algoContainer.data[sectionKey])) return;
+                    if (sectionKey === 'main' || !Array.isArray(algoContainer.data[sectionKey]))
+                        return;
                     algoContainer.data[sectionKey].forEach((algo) => {
                         if (!algo || algo.id == null) return;
                         const texts = getTextForItem('algorithms', algo);

@@ -110,6 +110,7 @@ export function deactivateModalFocus(modal) {
 export function getVisibleModals() {
     const modals = document.querySelectorAll('[id$="Modal"]:not(.hidden)');
     return Array.from(modals).filter((modal) => {
+        if (modal.id === 'commandPaletteModal') return false;
         const style = window.getComputedStyle(modal);
         return style.display !== 'none' && style.visibility !== 'hidden';
     });
@@ -313,6 +314,182 @@ export function initBeforeUnloadHandler() {
             event.preventDefault();
             event.returnValue = '';
         }
+    });
+}
+
+/**
+ * Инициализирует вертикальные разделители с перетаскиванием внутри контейнера.
+ * Механизм централизованный и может переиспользоваться в любых модалках.
+ *
+ * Ожидаемая разметка:
+ * - split root: .js-draggable-split
+ * - левая панель: [data-split-pane="left"]
+ * - правая панель: [data-split-pane="right"]
+ * - вертикальный handle: .js-draggable-splitter
+ *
+ * Доп. data-атрибуты для split root:
+ * - data-split-min-left
+ * - data-split-min-right
+ * - data-split-storage-key (опционально, для запоминания ширины)
+ */
+export function initDraggableVerticalSplitters(rootElement, options = {}) {
+    const root =
+        rootElement && typeof rootElement.querySelectorAll === 'function' ? rootElement : document;
+    const splitSelector = options.splitSelector || '.js-draggable-split';
+    const handleSelector = options.handleSelector || '.js-draggable-splitter';
+    const leftSelector = options.leftSelector || '[data-split-pane="left"]';
+    const rightSelector = options.rightSelector || '[data-split-pane="right"]';
+    const defaultMinLeft = Number.isFinite(options.defaultMinLeft)
+        ? options.defaultMinLeft
+        : 220;
+    const defaultMinRight = Number.isFinite(options.defaultMinRight)
+        ? options.defaultMinRight
+        : 280;
+
+    const splitRoots = root.querySelectorAll(splitSelector);
+    splitRoots.forEach((splitRoot) => {
+        if (splitRoot.dataset.verticalSplitterReady === '1') {
+            return;
+        }
+
+        const handle = splitRoot.querySelector(handleSelector);
+        const leftPane = splitRoot.querySelector(leftSelector);
+        const rightPane = splitRoot.querySelector(rightSelector);
+        if (!handle || !leftPane || !rightPane) {
+            return;
+        }
+
+        const readNumber = (rawValue, fallback) => {
+            const parsed = Number.parseFloat(rawValue);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
+
+        const minLeft = readNumber(splitRoot.dataset.splitMinLeft, defaultMinLeft);
+        const minRight = readNumber(splitRoot.dataset.splitMinRight, defaultMinRight);
+        const storageKey = (splitRoot.dataset.splitStorageKey || '').trim();
+
+        const applyLeftWidth = (widthPx) => {
+            const numericWidth = Number.isFinite(widthPx) ? widthPx : minLeft;
+            leftPane.style.flex = `0 0 ${numericWidth}px`;
+            leftPane.style.width = `${numericWidth}px`;
+            rightPane.style.flex = '1 1 auto';
+            splitRoot.dataset.splitCurrentLeft = String(Math.round(numericWidth));
+        };
+
+        const clampLeftWidth = (widthPx, containerWidth) => {
+            const maxLeft = Math.max(minLeft, containerWidth - minRight);
+            return Math.min(Math.max(widthPx, minLeft), maxLeft);
+        };
+
+        if (storageKey) {
+            try {
+                const storedRaw = window.localStorage.getItem(storageKey);
+                const storedWidth = Number.parseFloat(storedRaw || '');
+                if (Number.isFinite(storedWidth)) {
+                    const containerWidth = splitRoot.getBoundingClientRect().width;
+                    applyLeftWidth(clampLeftWidth(storedWidth, containerWidth));
+                }
+            } catch (error) {
+                console.warn('[initDraggableVerticalSplitters] Не удалось прочитать localStorage:', error);
+            }
+        }
+
+        const persistCurrentWidth = () => {
+            if (!storageKey) return;
+            const currentWidth = Number.parseFloat(splitRoot.dataset.splitCurrentLeft || '');
+            if (!Number.isFinite(currentWidth)) return;
+            try {
+                window.localStorage.setItem(storageKey, String(currentWidth));
+            } catch (error) {
+                console.warn('[initDraggableVerticalSplitters] Не удалось записать localStorage:', error);
+            }
+        };
+
+        const HANDLE_HIT_MARGIN_PX = 40;
+
+        const isPointerInHandleZone = (clientX, clientY) => {
+            const rect = handle.getBoundingClientRect();
+            return (
+                clientX >= rect.left - HANDLE_HIT_MARGIN_PX &&
+                clientX <= rect.right + HANDLE_HIT_MARGIN_PX &&
+                clientY >= rect.top &&
+                clientY <= rect.bottom
+            );
+        };
+
+        const onPointerDown = (event) => {
+            if (event.button !== 0) return;
+            const modalForVisibility = splitRoot.closest('#dbMergeModal');
+            if (modalForVisibility?.classList.contains('hidden')) return;
+            if (!isPointerInHandleZone(event.clientX, event.clientY)) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            const modalEl = splitRoot.closest('#dbMergeModal');
+            if (modalEl) modalEl.style.overflow = 'hidden';
+
+            try {
+                splitRoot.setPointerCapture(event.pointerId);
+            } catch (_) {
+                /* ignore if unsupported */
+            }
+
+            const startX = event.clientX;
+            const startLeftWidth = leftPane.getBoundingClientRect().width;
+            const containerWidth = splitRoot.getBoundingClientRect().width;
+
+            splitRoot.classList.add('is-resizing');
+            document.body.classList.add('is-col-resizing');
+
+            const onPointerMove = (moveEvent) => {
+                const deltaX = moveEvent.clientX - startX;
+                const nextWidth = clampLeftWidth(startLeftWidth + deltaX, containerWidth);
+                applyLeftWidth(nextWidth);
+            };
+
+            const onPointerUp = (upEvent) => {
+                try {
+                    splitRoot.releasePointerCapture(upEvent.pointerId);
+                } catch (_) {
+                    /* ignore */
+                }
+                splitRoot.classList.remove('is-resizing');
+                document.body.classList.remove('is-col-resizing');
+                if (modalEl) modalEl.style.overflow = '';
+                persistCurrentWidth();
+                document.removeEventListener('pointermove', onPointerMove, true);
+                document.removeEventListener('pointerup', onPointerUp, true);
+            };
+
+            document.addEventListener('pointermove', onPointerMove, true);
+            document.addEventListener('pointerup', onPointerUp, true);
+        };
+
+        splitRoot.addEventListener('pointerdown', onPointerDown, { capture: true });
+
+        const modalEl = splitRoot.closest('#dbMergeModal');
+        if (modalEl && splitRoot.classList.contains('db-merge-body')) {
+            modalEl.addEventListener('pointerdown', onPointerDown, { capture: true });
+            document.addEventListener('pointerdown', onPointerDown, { capture: true });
+
+            const onModalPointerMove = (e) => {
+                if (modalEl.classList.contains('hidden')) {
+                    modalEl.style.overflow = '';
+                    return;
+                }
+                if (splitRoot.classList.contains('is-resizing')) return;
+                if (isPointerInHandleZone(e.clientX, e.clientY)) {
+                    modalEl.style.overflow = 'hidden';
+                } else {
+                    modalEl.style.overflow = '';
+                }
+            };
+            modalEl.addEventListener('pointermove', onModalPointerMove, { passive: true });
+        }
+
+        splitRoot.dataset.verticalSplitterReady = '1';
     });
 }
 

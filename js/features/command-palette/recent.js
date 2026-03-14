@@ -19,6 +19,17 @@ export function getRecentIds() {
 }
 
 /**
+ * Очищает список недавних результатов палитры в localStorage.
+ */
+export function clearRecentIds() {
+    try {
+        localStorage.removeItem(RECENT_STORAGE_KEY);
+    } catch {
+        // ignore
+    }
+}
+
+/**
  * Добавляет id выбранного результата в начало списка недавних и сохраняет в localStorage.
  * @param {string} id - id результата (например 'action:openSettings', 'tab:main')
  */

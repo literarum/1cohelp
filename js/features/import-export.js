@@ -16,6 +16,8 @@ import {
     CURRENT_SCHEMA_VERSION,
     DIALOG_WATCHDOG_TIMEOUT_NEW,
     CATEGORY_INFO_KEY,
+    IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY,
+    RECENTLY_DELETED_STORE_NAME,
 } from '../constants.js';
 import { base64ToBlob } from '../utils/helpers.js';
 import { appInit } from '../app/app-init.js';
@@ -89,6 +91,188 @@ export function clearTemporaryThumbnailsFromContainer(container) {
         console.log('[clearTemporaryThumbnails] Очищен массив _tempScreenshotBlobs.');
     }
     container.innerHTML = '';
+}
+
+const LEGACY_EXT_LINK_CATEGORY_KEY_TO_DEFAULT_NAME = {
+    docs: 'Документация',
+    gov: 'Гос. сайты',
+    gos: 'Гос. сайты',
+    tools: 'Инструменты',
+    other: 'Прочее',
+};
+
+const IMPORT_FALLBACK_SCHEMA_VERSION = '1.0';
+
+const COMPATIBILITY_STORE_ALIASES = {
+    externalLinks: 'extLinks',
+    externalLinkCategories: 'extLinkCategories',
+    bookmarkFolder: 'bookmarkFolders',
+    bookmarkNotes: 'bookmarks',
+    regulations: 'reglaments',
+};
+
+const IMPORT_META_KEYS = new Set(['schemaVersion', 'exportDate', 'meta', 'appVersion']);
+
+function normalizeText(value) {
+    if (!value) return '';
+    return String(value).trim().toLowerCase();
+}
+
+function normalizeCategoryName(value) {
+    return normalizeText(String(value || '').replace(/\s+/g, ' '));
+}
+
+/**
+ * Нормализует legacy-данные импорта до актуальной схемы stores.
+ * Функция детерминирована и не мутирует входной объект.
+ * @param {Record<string, any[]>} rawData
+ * @returns {Record<string, any[]>}
+ */
+export function normalizeLegacyImportData(rawData) {
+    if (!rawData || typeof rawData !== 'object') return {};
+
+    const normalizedData = {};
+    Object.keys(rawData).forEach((storeName) => {
+        normalizedData[storeName] = Array.isArray(rawData[storeName]) ? rawData[storeName] : [];
+    });
+
+    const extLinkCategoryNameToId = new Map();
+    (normalizedData.extLinkCategories || []).forEach((category) => {
+        if (typeof category?.id === 'undefined') return;
+        const name = normalizeCategoryName(category?.name);
+        if (!name) return;
+        extLinkCategoryNameToId.set(name, category.id);
+    });
+
+    const normalizeRecord = (storeName, record) => {
+        if (!record || typeof record !== 'object') return record;
+        const normalized = { ...record };
+
+        if (storeName === 'bookmarks') {
+            if (typeof normalized.folder === 'undefined' && typeof normalized.folderId !== 'undefined') {
+                normalized.folder = normalized.folderId;
+            }
+            delete normalized.folderId;
+        }
+
+        if (storeName === 'reglaments') {
+            if (
+                typeof normalized.category === 'undefined' &&
+                typeof normalized.categoryId !== 'undefined'
+            ) {
+                normalized.category = normalized.categoryId;
+            }
+            delete normalized.categoryId;
+        }
+
+        if (storeName === 'extLinks') {
+            if (typeof normalized.category === 'string') {
+                const oldKey = normalizeText(normalized.category);
+                const canonicalName = LEGACY_EXT_LINK_CATEGORY_KEY_TO_DEFAULT_NAME[oldKey] || oldKey;
+                const mappedId = extLinkCategoryNameToId.get(normalizeCategoryName(canonicalName));
+                if (typeof mappedId !== 'undefined') {
+                    normalized.category = mappedId;
+                } else {
+                    normalized.categoryName = canonicalName;
+                    normalized.category = null;
+                }
+            }
+        }
+
+        if (storeName === 'favorites' && typeof normalized.originalItemId !== 'undefined') {
+            normalized.originalItemId = String(normalized.originalItemId);
+        }
+
+        if (storeName === 'pdfFiles' && typeof normalized.parentId !== 'undefined') {
+            normalized.parentId = String(normalized.parentId);
+            if (!normalized.parentKey && typeof normalized.parentType !== 'undefined') {
+                normalized.parentKey = `${normalized.parentType}:${normalized.parentId}`;
+            }
+        }
+
+        if (storeName === 'screenshots') {
+            if (
+                typeof normalized.parentId === 'undefined' &&
+                typeof normalized.algorithmId !== 'undefined'
+            ) {
+                normalized.parentId = String(normalized.algorithmId);
+                normalized.parentType = 'algorithm';
+            } else if (typeof normalized.parentId !== 'undefined') {
+                normalized.parentId = String(normalized.parentId);
+            }
+            delete normalized.algorithmId;
+        }
+
+        return normalized;
+    };
+
+    Object.keys(normalizedData).forEach((storeName) => {
+        normalizedData[storeName] = normalizedData[storeName].map((record) =>
+            normalizeRecord(storeName, record),
+        );
+    });
+
+    return normalizedData;
+}
+
+/**
+ * Нормализует названия хранилищ между версиями/сборками.
+ * Алиасные store'ы объединяются в целевые.
+ * @param {Record<string, any[]>} rawData
+ * @returns {Record<string, any[]>}
+ */
+export function normalizeCompatibilityData(rawData) {
+    if (!rawData || typeof rawData !== 'object') return {};
+    const normalized = {};
+    Object.keys(rawData).forEach((sourceStoreName) => {
+        const targetStoreName = COMPATIBILITY_STORE_ALIASES[sourceStoreName] || sourceStoreName;
+        const sourceItems = Array.isArray(rawData[sourceStoreName]) ? rawData[sourceStoreName] : [];
+        if (!Array.isArray(normalized[targetStoreName])) normalized[targetStoreName] = [];
+        normalized[targetStoreName] = normalized[targetStoreName].concat(sourceItems);
+    });
+    return normalized;
+}
+
+/**
+ * Определяет версию схемы импорта. Если версия отсутствует, применяется fallback.
+ * @param {Record<string, any>} parsedImport
+ * @returns {{ schemaVersion: string, inferred: boolean }}
+ */
+export function resolveImportSchemaVersion(parsedImport) {
+    const rawVersion = parsedImport?.schemaVersion;
+    if (typeof rawVersion === 'string' && rawVersion.trim()) {
+        return { schemaVersion: rawVersion.trim(), inferred: false };
+    }
+    return { schemaVersion: IMPORT_FALLBACK_SCHEMA_VERSION, inferred: true };
+}
+
+/**
+ * Извлекает data-блок из файлов импорта разных поколений.
+ * Поддерживает:
+ *  - современный формат: { schemaVersion, data: {...} }
+ *  - legacy-формат: { schemaVersion?, <storeA>: [...], <storeB>: [...] }
+ * @param {Record<string, any>} parsedImport
+ * @returns {{ data: Record<string, any[]>, usedLegacyEnvelope: boolean }}
+ */
+export function extractImportDataEnvelope(parsedImport) {
+    if (!parsedImport || typeof parsedImport !== 'object') {
+        return { data: {}, usedLegacyEnvelope: false };
+    }
+
+    if (parsedImport.data && typeof parsedImport.data === 'object' && !Array.isArray(parsedImport.data)) {
+        return { data: parsedImport.data, usedLegacyEnvelope: false };
+    }
+
+    const legacyData = {};
+    Object.keys(parsedImport).forEach((key) => {
+        if (IMPORT_META_KEYS.has(key)) return;
+        const value = parsedImport[key];
+        if (Array.isArray(value)) {
+            legacyData[key] = value;
+        }
+    });
+
+    return { data: legacyData, usedLegacyEnvelope: true };
 }
 
 /**
@@ -194,35 +378,36 @@ export async function performForcedBackup() {
     const backupWarningMessagePlain =
         'Создать резервную копию текущей базы данных перед импортом?\n\n' +
         'ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.\n\n' +
-        "Нажмите 'ОК', чтобы создать резервную копию (рекомендуется).\n" +
-        "Нажмите 'Отмена', чтобы продолжить импорт без резервной копии (на свой страх и риск).";
+        "Нажмите 'Сделать бэкап', чтобы создать резервную копию (рекомендуется).\n" +
+        "Нажмите 'Без бэкапа', чтобы продолжить импорт без резервной копии (на свой страх и риск).";
     const backupWarningMessageHtml =
         '<p class="mb-3">Создать резервную копию текущей базы данных перед импортом?</p>' +
         '<p class="mb-3"><span class="app-confirm-warning-caps text-red-600 dark:text-red-400 font-semibold underline uppercase">ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.</span></p>' +
-        '<p class="mb-2">Нажмите «ОК», чтобы создать резервную копию (рекомендуется).</p>' +
-        '<p>Нажмите «Отмена», чтобы продолжить импорт без резервной копии (на свой страх и риск).</p>';
-    let userAgreesToBackup;
+        '<p class="mb-2">Нажмите «Сделать бэкап», чтобы создать резервную копию (рекомендуется).</p>' +
+        '<p>Нажмите «Без бэкапа», чтобы продолжить импорт без резервной копии (на свой страх и риск).</p>';
+    let backupPromptAction;
     if (deps.showAppConfirm) {
         document.body.classList.add('app-backup-warning-perimeter-pulse');
         try {
-            userAgreesToBackup = await deps.showAppConfirm({
+            backupPromptAction = await deps.showAppConfirm({
                 title: 'Резервное копирование перед импортом',
                 message: backupWarningMessageHtml,
                 messageIsHtml: true,
                 confirmText: 'Сделать бэкап',
                 cancelText: 'Без бэкапа',
                 confirmClass: 'bg-amber-600 hover:bg-amber-700 text-white',
+                returnAction: true,
             });
         } finally {
             document.body.classList.remove('app-backup-warning-perimeter-pulse');
         }
     } else {
-        userAgreesToBackup = window.confirm(backupWarningMessagePlain);
+        backupPromptAction = window.confirm(backupWarningMessagePlain) ? 'confirm' : 'cancel';
     }
 
     deps.NotificationService?.dismissImportant('critical-backup-warning-prompt');
 
-    if (userAgreesToBackup) {
+    if (backupPromptAction === 'confirm') {
         console.log('[performForcedBackup] Пользователь согласился на бэкап.');
         try {
             const exportOutcome = await exportAllData({ isForcedBackupMode: true });
@@ -269,9 +454,14 @@ export async function performForcedBackup() {
             );
             return false;
         }
-    } else {
+    } else if (backupPromptAction === 'cancel') {
         console.log('[performForcedBackup] Пользователь отказался от бэкапа.');
         return 'skipped_by_user';
+    } else {
+        console.log(
+            '[performForcedBackup] Пользователь закрыл окно предупреждения (dismiss). Импорт полностью отменен.',
+        );
+        return 'aborted_by_user';
     }
 }
 
@@ -350,11 +540,7 @@ export async function handleImportButtonClick() {
             backupOutcome = await performForcedBackup();
         }
 
-        if (
-            backupOutcome === true ||
-            backupOutcome === 'skipped_by_user' ||
-            backupOutcome === 'skipped_by_setting'
-        ) {
+        if (backupOutcome === true || backupOutcome === 'skipped_by_user' || backupOutcome === 'skipped_by_setting') {
             console.log(
                 `[handleImportButtonClick v_FOCUS_HANDLER_FINAL_FULL] Статус бэкапа: ${backupOutcome}. Запрос файла для импорта.`,
             );
@@ -591,6 +777,13 @@ export async function handleImportButtonClick() {
                 await deps.loadingOverlayManager.hideAndDestroy();
             }
             if (deps.importFileInput) deps.importFileInput.value = '';
+            if (backupOutcome === 'aborted_by_user') {
+                deps.NotificationService?.add(
+                    'Импорт полностью отменен: предупреждение перед импортом закрыто без выбора «Без бэкапа».',
+                    'info',
+                    { duration: 7000, id: 'import-aborted-by-backup-prompt-dismiss' },
+                );
+            }
         }
     } catch (error) {
         console.error(
@@ -846,6 +1039,7 @@ export async function _processActualImport(jsonString) {
     const errorsOccurred = [];
     let skippedPuts = 0;
     let storesToImport = [];
+    let fatalNoLossError = null;
 
     try {
         if (
@@ -884,122 +1078,80 @@ export async function _processActualImport(jsonString) {
             throw new Error('Некорректный формат JSON файла.');
         }
 
-        if (!importData || typeof importData.data !== 'object' || !importData.schemaVersion) {
+        if (!importData || typeof importData !== 'object') {
             throw new Error(
-                'Некорректный формат файла импорта (отсутствует data или schemaVersion)',
+                'Некорректный формат файла импорта',
+            );
+        }
+
+        const envelopeResolution = extractImportDataEnvelope(importData);
+        importData.data = envelopeResolution.data;
+        if (
+            envelopeResolution.usedLegacyEnvelope &&
+            deps.NotificationService?.add
+        ) {
+            deps.NotificationService?.add(
+                'Обнаружен legacy-формат импорта (без data-конверта). Применена совместимая обработка.',
+                'warning',
+                { important: true, duration: 12000 },
+            );
+        }
+
+        const schemaResolution = resolveImportSchemaVersion(importData);
+        importData.schemaVersion = schemaResolution.schemaVersion;
+        if (schemaResolution.inferred && deps.NotificationService?.add) {
+            deps.NotificationService?.add(
+                `В файле не указана schemaVersion. Применен режим совместимости (${schemaResolution.schemaVersion}).`,
+                'warning',
+                { important: true, duration: 12000 },
             );
         }
         console.log(
             `[_processActualImport V7] Импорт данных версии схемы файла: ${importData.schemaVersion}. Ожидаемая версия приложения: ${CURRENT_SCHEMA_VERSION}`,
         );
-        const [fileMajorStr, fileMinorStr] = importData.schemaVersion.split('.');
-        const [appMajorStr, appMinorStr] = CURRENT_SCHEMA_VERSION.split('.');
+        const [fileMajorStr, fileMinorStr] = String(importData.schemaVersion).split('.');
+        const [appMajorStr, appMinorStr] = String(CURRENT_SCHEMA_VERSION).split('.');
         const fileMajor = parseInt(fileMajorStr, 10);
         const fileMinor = parseInt(fileMinorStr, 10);
         const appMajor = parseInt(appMajorStr, 10);
         const appMinor = parseInt(appMinorStr, 10);
 
-        if (isNaN(fileMajor) || isNaN(fileMinor) || isNaN(appMajor) || isNaN(appMinor)) {
-            throw new Error('Некорректный формат версии схемы в файле или приложении.');
-        }
-        if (fileMajor !== appMajor) {
-            throw new Error(
-                `Импорт невозможен: версия схемы файла (${importData.schemaVersion}) несовместима с версией приложения (${CURRENT_SCHEMA_VERSION}). Требуется мажорная версия ${appMajor}.x.`,
-            );
-        }
-        if (fileMinor > appMinor) {
-            throw new Error(
-                `Импорт невозможен: версия схемы файла (${importData.schemaVersion}) новее, чем версия приложения (${CURRENT_SCHEMA_VERSION}). Обновите приложение до более новой версии.`,
-            );
-        }
-        if (fileMinor < appMinor && deps.NotificationService?.add) {
+        if (
+            Number.isNaN(fileMajor) ||
+            Number.isNaN(fileMinor) ||
+            Number.isNaN(appMajor) ||
+            Number.isNaN(appMinor)
+        ) {
             deps.NotificationService?.add(
-                `ВНИМАНИЕ: Версия импортируемого файла (${importData.schemaVersion}) старше текущей версии приложения (${CURRENT_SCHEMA_VERSION}). Некоторые данные могут не перенестись корректно или будут утеряны. Рекомендуется обновить файл экспорта.`,
+                `Версия схемы файла (${importData.schemaVersion}) не распознана. Импорт продолжается в режиме максимальной совместимости.`,
+                'warning',
+                { important: true, duration: 15000 },
+            );
+        } else if ((fileMajor < appMajor || fileMinor < appMinor) && deps.NotificationService?.add) {
+            deps.NotificationService?.add(
+                `Импортируется более ранняя версия схемы (${importData.schemaVersion} -> ${CURRENT_SCHEMA_VERSION}). Включен режим обратной совместимости.`,
                 'warning',
                 { important: true, id: 'old-schema-import-warning', isDismissible: true },
+            );
+        } else if ((fileMajor > appMajor || fileMinor > appMinor) && deps.NotificationService?.add) {
+            deps.NotificationService?.add(
+                `Импортируется более новая версия схемы (${importData.schemaVersion} -> ${CURRENT_SCHEMA_VERSION}). Включен режим прямой совместимости с сохранением неизвестных разделов.`,
+                'warning',
+                { important: true, id: 'new-schema-import-warning', isDismissible: true },
             );
         }
         updateTotalImportProgress(STAGE_WEIGHTS_ACTUAL_IMPORT.VALIDATE_SCHEMA, 'Валидация схемы');
 
-        if (
-            importData.data.extLinks &&
-            Array.isArray(importData.data.extLinks) &&
-            importData.data.extLinks.some((link) => typeof link.category === 'string') &&
-            importData.data.extLinkCategories
-        ) {
-            console.log(
-                '[_processActualImport V7] Обнаружены extLinks со строковыми категориями. Запуск надежной миграции категорий на лету.',
-            );
+        importData.data = normalizeCompatibilityData(importData.data);
+        importData.data = normalizeLegacyImportData(importData.data);
 
-            const legacyCategoryKeyToDefaultName = {
-                docs: 'Документация',
-                gov: 'Гос. сайты',
-                tools: 'Инструменты',
-                other: 'Прочее',
-            };
-
-            const oldKeyToNewIdMap = new Map();
-
-            if (Array.isArray(importData.data.extLinkCategories)) {
-                const defaultNameToNewId = new Map();
-                importData.data.extLinkCategories.forEach((cat) => {
-                    if (cat && cat.name && cat.id !== undefined) {
-                        for (const key in legacyCategoryKeyToDefaultName) {
-                            if (legacyCategoryKeyToDefaultName[key] === cat.name) {
-                                defaultNameToNewId.set(cat.name, cat.id);
-                                break;
-                            }
-                        }
-                    }
-                });
-
-                for (const oldKey in legacyCategoryKeyToDefaultName) {
-                    const defaultName = legacyCategoryKeyToDefaultName[oldKey];
-                    if (defaultNameToNewId.has(defaultName)) {
-                        oldKeyToNewIdMap.set(oldKey, defaultNameToNewId.get(defaultName));
-                    }
-                }
+        const unknownStoresPayload = {};
+        Object.keys(importData.data).forEach((storeName) => {
+            if (storeName === 'searchIndex' || storeName === RECENTLY_DELETED_STORE_NAME) return;
+            if (!State.db.objectStoreNames.contains(storeName)) {
+                unknownStoresPayload[storeName] = importData.data[storeName];
             }
-
-            console.log(
-                "[_processActualImport V7] Карта миграции 'Старый ключ -> Новый ID':",
-                oldKeyToNewIdMap,
-            );
-
-            let migrationCount = 0;
-            importData.data.extLinks.forEach((link) => {
-                if (link && typeof link.category === 'string') {
-                    const oldCatKey = link.category;
-                    if (oldKeyToNewIdMap.has(oldCatKey)) {
-                        const newId = oldKeyToNewIdMap.get(oldCatKey);
-                        console.log(
-                            `[Migration] Замена категории для ссылки "${
-                                link.title || 'Без названия'
-                            }": с ключа '${oldCatKey}' на новый ID '${newId}'`,
-                        );
-                        link.category = newId;
-                        migrationCount++;
-                    } else {
-                        console.warn(
-                            `[Migration] Не удалось найти новый ID для старого ключа категории '${oldCatKey}'. Ссылка "${
-                                link.title || 'Без названия'
-                            }" останется без категории.`,
-                        );
-                        link.category = null;
-                    }
-                }
-            });
-
-            if (migrationCount > 0) {
-                console.log(
-                    `[_processActualImport V7] Миграция категорий на лету завершена. Обновлено ${migrationCount} ссылок.`,
-                );
-            } else {
-                console.log(
-                    `[_processActualImport V7] Миграция категорий на лету не потребовалась (ссылки уже в новом формате или не найдено соответствий).`,
-                );
-            }
-        }
+        });
 
         storesToImport = Object.keys(importData.data).filter((storeName) => {
             if (!State.db.objectStoreNames.contains(storeName)) {
@@ -1008,9 +1160,9 @@ export async function _processActualImport(jsonString) {
                 );
                 return false;
             }
-            if (storeName === 'searchIndex') {
+            if (storeName === 'searchIndex' || storeName === RECENTLY_DELETED_STORE_NAME) {
                 console.log(
-                    `[_processActualImport V7] Хранилище 'searchIndex' будет пропущено при импорте данных, оно перестраивается отдельно.`,
+                    `[_processActualImport V7] Хранилище '${storeName}' будет пропущено при импорте данных.`,
                 );
                 return false;
             }
@@ -1164,6 +1316,7 @@ export async function _processActualImport(jsonString) {
                         `[_processActualImport V7] Начало записи ${totalItemsToPut} элементов...`,
                     );
                     for (const storeName of storesToImport) {
+                        if (fatalNoLossError) break;
                         let itemsToImportOriginal = importData.data[storeName];
                         if (!Array.isArray(itemsToImportOriginal)) {
                             errorsOccurred.push({
@@ -1171,13 +1324,10 @@ export async function _processActualImport(jsonString) {
                                 error: 'Данные не являются массивом',
                                 item: null,
                             });
-                            if (totalItemsToPut > 0) {
-                                totalItemsToPut = Math.max(
-                                    0,
-                                    totalItemsToPut - (importData.data[storeName]?.length || 0),
-                                );
-                            }
-                            continue;
+                            fatalNoLossError = new Error(
+                                `Нарушение целостности импорта: данные '${storeName}' не являются массивом.`,
+                            );
+                            break;
                         }
                         const configs = Array.isArray(deps.storeConfigs) ? deps.storeConfigs : null;
                         if (!configs) {
@@ -1215,7 +1365,10 @@ export async function _processActualImport(jsonString) {
                                     item: JSON.stringify(item)?.substring(0, 100),
                                 });
                                 skippedPuts++;
-                                continue;
+                                fatalNoLossError = new Error(
+                                    `Нарушение целостности импорта: невалидный элемент в '${storeName}'.`,
+                                );
+                                break;
                             }
                             if (!autoIncrementFromConfig && keyPathFromConfig) {
                                 let hasKey = false;
@@ -1241,7 +1394,10 @@ export async function _processActualImport(jsonString) {
                                         item: JSON.stringify(item).substring(0, 100),
                                     });
                                     skippedPuts++;
-                                    continue;
+                                    fatalNoLossError = new Error(
+                                        `Нарушение целостности импорта: отсутствует обязательный ключ '${keyPathFromConfig}' в '${storeName}'.`,
+                                    );
+                                    break;
                                 }
                             }
                             if (
@@ -1274,11 +1430,15 @@ export async function _processActualImport(jsonString) {
                                         item: JSON.stringify(item).substring(0, 100),
                                     });
                                     skippedPuts++;
-                                    continue;
+                                    fatalNoLossError = new Error(
+                                        `Нарушение целостности импорта: пустая запись в '${storeName}'.`,
+                                    );
+                                    break;
                                 }
                             }
                             validItemsForStore.push(item);
                         }
+                        if (fatalNoLossError) break;
                         let itemsToImport = validItemsForStore;
 
                         if (storeName === 'screenshots') {
@@ -1311,7 +1471,9 @@ export async function _processActualImport(jsonString) {
                                                         blobData,
                                                     )?.substring(0, 50)}...)`,
                                                 });
-                                                delete item.blob;
+                                                fatalNoLossError = new Error(
+                                                    `Нарушение целостности импорта: ошибка конвертации blob для screenshots (id=${item.id || 'N/A'}).`,
+                                                );
                                             }
                                         } else if (blobData === null) {
                                             delete item.blob;
@@ -1323,7 +1485,9 @@ export async function _processActualImport(jsonString) {
                                                 }`,
                                                 item: `(тип blob: ${typeof blobData})`,
                                             });
-                                            delete item.blob;
+                                            fatalNoLossError = new Error(
+                                                `Нарушение целостности импорта: некорректный blob для screenshots (id=${item.id || 'N/A'}).`,
+                                            );
                                         }
                                     }
                                     return item;
@@ -1365,7 +1529,9 @@ export async function _processActualImport(jsonString) {
                                                         blobData,
                                                     )?.substring(0, 50)}.)`,
                                                 });
-                                                delete item.blob;
+                                                fatalNoLossError = new Error(
+                                                    `Нарушение целостности импорта: ошибка конвертации blob для pdfFiles (id=${item.id || 'N/A'}).`,
+                                                );
                                             }
                                         } else if (blobData === null) {
                                             delete item.blob;
@@ -1377,7 +1543,9 @@ export async function _processActualImport(jsonString) {
                                                 }`,
                                                 item: `(тип blob: ${typeof blobData})`,
                                             });
-                                            delete item.blob;
+                                            fatalNoLossError = new Error(
+                                                `Нарушение целостности импорта: некорректный blob для pdfFiles (id=${item.id || 'N/A'}).`,
+                                            );
                                         }
                                     }
                                     return item;
@@ -1468,6 +1636,22 @@ export async function _processActualImport(jsonString) {
                                 );
                             }
                         }
+                        if (fatalNoLossError) break;
+                    }
+
+                    if (fatalNoLossError) {
+                        errorsOccurred.push({
+                            storeName: 'import-integrity',
+                            error: fatalNoLossError.message,
+                            item: null,
+                        });
+                        if (transaction.abort) {
+                            console.warn(
+                                '[_processActualImport V7] Отмена транзакции из-за нарушения целостности импорта.',
+                            );
+                            transaction.abort();
+                        }
+                        return rejectPromise(fatalNoLossError);
                     }
 
                     Promise.all(putPromises)
@@ -1581,6 +1765,40 @@ export async function _processActualImport(jsonString) {
                 ) {
                     if (typeof deps.loadUISettings === 'function') {
                         await deps.loadUISettings();
+                    }
+                }
+
+                const unknownStores = Object.keys(unknownStoresPayload);
+                if (
+                    unknownStores.length > 0 &&
+                    State.db?.objectStoreNames?.contains('preferences')
+                ) {
+                    try {
+                        await saveToIndexedDB('preferences', {
+                            id: IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY,
+                            data: {
+                                capturedAt: new Date().toISOString(),
+                                sourceSchemaVersion: importData.schemaVersion,
+                                stores: unknownStoresPayload,
+                            },
+                        });
+                        if (deps.NotificationService?.add) {
+                            deps.NotificationService?.add(
+                                `Обнаружены несовместимые разделы (${unknownStores.join(', ')}). Их резервная копия сохранена в preferences/${IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY}.`,
+                                'warning',
+                                { important: true, duration: 15000 },
+                            );
+                        }
+                    } catch (unknownStoreSnapshotError) {
+                        console.error(
+                            '[_processActualImport V8] Не удалось сохранить снимок неизвестных хранилищ:',
+                            unknownStoreSnapshotError,
+                        );
+                        errorsOccurred.push({
+                            storeName: 'preferences',
+                            error: `Ошибка сохранения snapshot неизвестных store: ${unknownStoreSnapshotError.message}`,
+                            item: IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY,
+                        });
                     }
                 }
 
@@ -1842,7 +2060,10 @@ export async function exportAllData(options = {}) {
         }
 
         const allStoreNames = Array.from(State.db.objectStoreNames);
-        const storesToRead = allStoreNames.filter((storeName) => storeName !== 'searchIndex');
+        const storesToRead = allStoreNames.filter(
+            (storeName) =>
+                storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
+        );
 
         if (storesToRead.length === 0) {
             console.warn('[exportAllData] Нет хранилищ для экспорта (кроме searchIndex).');
@@ -1905,7 +2126,9 @@ export async function exportAllData(options = {}) {
                             const base64Data = await blobToBase64(item.blob);
                             if (base64Data) return { ...item, blob: base64Data };
                         } catch (convErr) {
-                            return { ...item, blob: undefined, conversionError: convErr.message };
+                            throw new Error(
+                                `Не удалось сериализовать скриншот (id=${item.id || 'N/A'}): ${convErr.message || convErr}`,
+                            );
                         }
                     }
                     return item;
@@ -1930,7 +2153,9 @@ export async function exportAllData(options = {}) {
                             const base64Data = await blobToBase64(item.blob);
                             if (base64Data) return { ...item, blob: base64Data };
                         } catch (convErr) {
-                            return { ...item, blob: undefined, conversionError: convErr.message };
+                            throw new Error(
+                                `Не удалось сериализовать PDF (id=${item.id || 'N/A'}): ${convErr.message || convErr}`,
+                            );
                         }
                     }
                     return item;

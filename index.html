@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
     <head>
         <meta charset="UTF-8" />
@@ -8,19 +8,25 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260311-235720-3aba93f"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260311-235720-3aba93f"></script>
+        <script src="js/vendor-config.js?v=legacy-20260314-234905-a809ba1"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260314-234905-a809ba1"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
         <script type="text/javascript">
-            if (window.VendorLoader && window.VendorConfig && window.VendorConfig.USE_LOCAL_VENDORS) {
-                setTimeout(function() { VendorLoader.runVendorFallback('main', ''); }, 0);
+            if (
+                window.VendorLoader &&
+                window.VendorConfig &&
+                window.VendorConfig.USE_LOCAL_VENDORS
+            ) {
+                setTimeout(function () {
+                    VendorLoader.runVendorFallback('main', '');
+                }, 0);
             }
         </script>
         <script type="text/javascript">
-            window.__loadTailwindCDN = function() {
-                var applyTailwindConfig = function() {
+            window.__loadTailwindCDN = function () {
+                var applyTailwindConfig = function () {
                     if (typeof tailwind !== 'undefined') {
                         var tailwindConfig = {
                             darkMode: 'class',
@@ -29,27 +35,27 @@
                                     colors: {
                                         primary: 'var(--color-primary, #9933FF)',
                                         secondary: 'var(--color-secondary, #7B2FDF)',
-                                        blue: { 'DEFAULT': 'var(--color-primary, #5D5CDE)' }
+                                        blue: { DEFAULT: 'var(--color-primary, #5D5CDE)' },
                                     },
                                     borderRadius: {
                                         none: '0px',
                                         sm: 'calc(var(--border-radius, 8px) * 0.5)',
-                                        'DEFAULT': 'var(--border-radius, 8px)',
+                                        DEFAULT: 'var(--border-radius, 8px)',
                                         md: 'calc(var(--border-radius, 8px) * 0.75)',
                                         lg: 'calc(var(--border-radius, 8px) * 1.25)',
                                         xl: 'calc(var(--border-radius, 8px) * 1.75)',
                                         '2xl': 'calc(var(--border-radius, 8px) * 2.25)',
                                         '3xl': 'calc(var(--border-radius, 8px) * 3.0)',
-                                        full: '9999px'
+                                        full: '9999px',
                                     },
                                     spacing: {
                                         content: 'var(--content-spacing, 1rem)',
                                         'content-sm': 'calc(var(--content-spacing, 1rem) * 0.75)',
-                                        'content-lg': 'calc(var(--content-spacing, 1rem) * 1.5)'
-                                    }
-                                }
+                                        'content-lg': 'calc(var(--content-spacing, 1rem) * 1.5)',
+                                    },
+                                },
                             },
-                            plugins: []
+                            plugins: [],
                         };
                         tailwind.config = tailwindConfig;
                     }
@@ -66,9 +72,123 @@
             };
         </script>
         <!-- Production: use built CSS (npm run build:css). Fallback: vendor or CDN via __loadTailwindCDN. -->
-        <link id="tailwind-built" rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260311-235720-3aba93f" onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()">
+        <link
+            id="tailwind-built"
+            rel="stylesheet"
+            href="css/tailwind.generated.css?v=legacy-20260314-234905-a809ba1"
+            onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
+        />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260311-235720-3aba93f" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260314-234905-a809ba1" />
+        <script id="early-loading-overlay-theme-init">
+            (function () {
+                const root = document.documentElement;
+                const THEME_HINT_KEY = 'copilot.theme.hint';
+                const THEME_RESOLVED_KEY = 'copilot.theme.resolved';
+                const OVERLAY_SNAPSHOT_KEY = 'copilot.loading-overlay.snapshot';
+
+                function readStorage(key) {
+                    try {
+                        return localStorage.getItem(key);
+                    } catch {
+                        return null;
+                    }
+                }
+
+                const hint = readStorage(THEME_HINT_KEY);
+                const storedResolved = readStorage(THEME_RESOLVED_KEY);
+                let storedOverlaySnapshot = null;
+                try {
+                    const rawSnapshot = readStorage(OVERLAY_SNAPSHOT_KEY);
+                    storedOverlaySnapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null;
+                } catch {
+                    storedOverlaySnapshot = null;
+                }
+                const prefersDark =
+                    typeof window.matchMedia === 'function' &&
+                    window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+                let resolvedTheme = 'dark';
+                if (hint === 'dark' || hint === 'light') {
+                    resolvedTheme = hint;
+                } else if (hint === 'auto') {
+                    resolvedTheme = prefersDark ? 'dark' : 'light';
+                } else if (storedResolved === 'dark' || storedResolved === 'light') {
+                    resolvedTheme = storedResolved;
+                }
+
+                function parseHexToRgb(hex) {
+                    if (!hex || typeof hex !== 'string') return null;
+                    const normalized = hex.trim().replace(/^#/, '');
+                    if (!/^[a-fA-F0-9]{6}$/.test(normalized)) return null;
+                    return {
+                        r: parseInt(normalized.slice(0, 2), 16),
+                        g: parseInt(normalized.slice(2, 4), 16),
+                        b: parseInt(normalized.slice(4, 6), 16),
+                    };
+                }
+
+                function toRgba(hex, alpha) {
+                    const rgb = parseHexToRgb(hex);
+                    if (!rgb) return `rgba(138, 43, 226, ${alpha})`;
+                    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+                }
+
+                window.__applyLoadingOverlayThemeVars = function (theme, snapshot) {
+                    const normalizedTheme = theme === 'light' ? 'light' : 'dark';
+                    const tone =
+                        snapshot && (snapshot.tone === 'dark' || snapshot.tone === 'light')
+                            ? snapshot.tone
+                            : normalizedTheme;
+                    const isDarkTone = tone === 'dark';
+                    const primary =
+                        snapshot && typeof snapshot.primary === 'string'
+                            ? snapshot.primary
+                            : isDarkTone
+                              ? '#8a2be2'
+                              : '#4f46e5';
+                    const secondary =
+                        snapshot && typeof snapshot.secondary === 'string'
+                            ? snapshot.secondary
+                            : isDarkTone
+                              ? '#a020f0'
+                              : '#06b6d4';
+                    const background =
+                        snapshot && typeof snapshot.background === 'string'
+                            ? snapshot.background
+                            : isDarkTone
+                              ? '#0a0a1a'
+                              : '#f8fafc';
+
+                    root.dataset.loadingOverlayTheme = tone;
+                    root.style.setProperty('--loading-overlay-bg', background);
+                    root.style.setProperty(
+                        '--loading-overlay-text-gradient',
+                        isDarkTone
+                            ? `linear-gradient(120deg, ${primary}, #4B0082, ${secondary}, #4B0082, ${primary})`
+                            : `linear-gradient(120deg, #1e293b, ${primary}, ${secondary}, ${primary}, #1e293b)`,
+                    );
+                    root.style.setProperty(
+                        '--loading-overlay-track-bg',
+                        isDarkTone ? toRgba(primary, 0.15) : toRgba(primary, 0.2),
+                    );
+                    root.style.setProperty(
+                        '--loading-overlay-progress-gradient',
+                        isDarkTone
+                            ? `linear-gradient(90deg, ${primary}, ${secondary}, #4B0082, ${secondary}, ${primary})`
+                            : `linear-gradient(90deg, ${primary}, ${secondary}, #6366f1, ${secondary}, ${primary})`,
+                    );
+                    root.style.setProperty(
+                        '--loading-overlay-percent-gradient',
+                        isDarkTone
+                            ? `linear-gradient(120deg, ${primary}, #c084fc, ${secondary}, #c084fc, ${primary})`
+                            : `linear-gradient(120deg, #334155, ${primary}, ${secondary}, ${primary}, #334155)`,
+                    );
+                };
+
+                window.__applyLoadingOverlayThemeVars(resolvedTheme, storedOverlaySnapshot);
+            })();
+        </script>
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             #custom-loading-overlay {
@@ -82,7 +202,7 @@
                 width: 100%;
                 height: 100%;
                 z-index: 99999;
-                background-color: #0a0a1a;
+                background-color: var(--loading-overlay-bg, #0a0a1a);
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -108,7 +228,10 @@
                 line-height: 1.4;
                 font-weight: 600;
                 z-index: 10;
-                background: linear-gradient(120deg, #8A2BE2, #4B0082, rgb(80, 0, 186), #4B0082, #8A2BE2);
+                background: var(
+                    --loading-overlay-text-gradient,
+                    linear-gradient(120deg, #8a2be2, #4b0082, rgb(80, 0, 186), #4b0082, #8a2be2)
+                );
                 background-size: 250% 100%;
                 -webkit-background-clip: text;
                 background-clip: text;
@@ -123,7 +246,7 @@
                 text-align: left;
             }
             #custom-loading-overlay #animated-dots::before {
-                content: ".";
+                content: '.';
                 animation: ellipsis-content-for-span 1.5s infinite steps(1, end);
             }
             #custom-loading-overlay .progress-indicator-container {
@@ -140,30 +263,40 @@
             #custom-loading-overlay .progress-bar-line-track {
                 width: 100%;
                 height: 6px;
-                background-color: rgba(138, 43, 226, 0.15);
+                background-color: var(--loading-overlay-track-bg, rgba(138, 43, 226, 0.15));
                 border-radius: 3px;
                 margin-bottom: 8px;
                 overflow: hidden;
-                box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+                box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
             }
             #custom-loading-overlay .progress-bar-line {
                 width: 0%;
                 height: 100%;
-                background: linear-gradient(90deg, #8A2BE2, #A020F0, #4B0082, #A020F0, #8A2BE2);
+                background: var(
+                    --loading-overlay-progress-gradient,
+                    linear-gradient(90deg, #8a2be2, #a020f0, #4b0082, #a020f0, #8a2be2)
+                );
                 background-size: 300% 100%;
                 border-radius: 3px;
                 transition: width 0.25s ease-out;
                 animation: progress-gradient-flow 2s linear infinite;
             }
             @keyframes progress-gradient-flow {
-                0% { background-position: 0% center; }
-                100% { background-position: -300% center; }
+                0% {
+                    background-position: 0% center;
+                }
+                100% {
+                    background-position: -300% center;
+                }
             }
             #custom-loading-overlay .progress-percentage-text {
                 font-size: 14px;
                 font-weight: 600;
                 letter-spacing: 0.5px;
-                background: linear-gradient(120deg, #9333ea, #c084fc, #9333ea);
+                background: var(
+                    --loading-overlay-percent-gradient,
+                    linear-gradient(120deg, #9333ea, #c084fc, #9333ea)
+                );
                 background-size: 200% 100%;
                 -webkit-background-clip: text;
                 background-clip: text;
@@ -172,14 +305,26 @@
                 animation: gradient-text-flow-smooth 3s linear infinite;
             }
             @keyframes gradient-text-flow-smooth {
-                0% { background-position: 0% center; }
-                100% { background-position: -250% center; }
+                0% {
+                    background-position: 0% center;
+                }
+                100% {
+                    background-position: -250% center;
+                }
             }
             @keyframes ellipsis-content-for-span {
-                0% { content: "."; }
-                33% { content: ".."; }
-                66% { content: "..."; }
-                100% { content: "."; }
+                0% {
+                    content: '.';
+                }
+                33% {
+                    content: '..';
+                }
+                66% {
+                    content: '...';
+                }
+                100% {
+                    content: '.';
+                }
             }
         </style>
     </head>
@@ -190,7 +335,9 @@
         <!-- Оверлей загрузки первым в body — виден с первого кадра, до загрузки скриптов -->
         <div id="custom-loading-overlay">
             <canvas id="loadingCanvas"></canvas>
-            <div class="loading-text" id="loadingText">Загрузка<span id="animated-dots"></span></div>
+            <div class="loading-text" id="loadingText">
+                Загрузка<span id="animated-dots"></span>
+            </div>
             <div class="progress-indicator-container">
                 <div class="progress-bar-line-track">
                     <div class="progress-bar-line" id="progressBarLine"></div>
@@ -202,662 +349,839 @@
         <!-- Контейнер для toast-уведомлений (fixed, top-right) -->
         <div
             id="notification-container"
-            style="position:fixed;top:20px;right:20px;z-index:200000;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:min(380px,calc(100vw - 40px));"
+            style="
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 200000;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                pointer-events: none;
+                max-width: min(380px, calc(100vw - 40px));
+            "
         ></div>
 
         <!-- Ранняя анимация сферы - запускается сразу, до загрузки модулей -->
         <script>
-        (function() {
-            'use strict';
-            const canvas = document.getElementById('loadingCanvas');
-            if (!canvas) return;
-            
-            const ctx = canvas.getContext('2d');
-            let animationFrameId = null;
-            let width, height, centerX, centerY;
-            let particles = [];
-            let globalTime = 0;
-            let rotationX = 0;
-            let rotationY = 0;
-            let rotationStartTime = 0;
-            let lastFrameTime = null;
-            const ROTATION_DELTA_NORM = 1 / 16;
-            let exitScaleStartTime = 0;
-            const EXIT_WIND_UP_MS = 750;
-            const EXIT_EXPLODE_MS = 3300;
-            const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
-            const EXIT_SHRINK_SCALE = 0.35;
-            const EXIT_MAX_SCALE = 12;
-            const EXIT_GLOW_MULTIPLIER_MAX = 8;
-            const SPHERE_FADE_IN_MS = 1000;
-            
-            const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
-            const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
-            let sphereFadeInStartTime = 0;
-            
-            function getCurrentExitScale() {
-                if (!exitScaleStartTime) return 1;
-                const elapsed = performance.now() - exitScaleStartTime;
-                if (elapsed >= EXIT_TOTAL_MS) return EXIT_MAX_SCALE;
-                if (elapsed < EXIT_WIND_UP_MS) {
-                    const t = elapsed / EXIT_WIND_UP_MS;
-                    return 1 + (EXIT_SHRINK_SCALE - 1) * easeOutQuint(t);
-                }
-                const t = (elapsed - EXIT_WIND_UP_MS) / EXIT_EXPLODE_MS;
-                return EXIT_SHRINK_SCALE + (EXIT_MAX_SCALE - EXIT_SHRINK_SCALE) * easeOutQuart(t);
-            }
-            
-            function getCurrentExitGlowMultiplier() {
-                if (!exitScaleStartTime) return 1;
-                const elapsed = performance.now() - exitScaleStartTime;
-                if (elapsed < EXIT_WIND_UP_MS) {
-                    const t = elapsed / EXIT_WIND_UP_MS;
-                    return 1 + (EXIT_GLOW_MULTIPLIER_MAX - 1) * easeOutQuint(t);
-                }
-                return EXIT_GLOW_MULTIPLIER_MAX;
-            }
-            
-            function getSphereFadeInFactor(now) {
-                if (!sphereFadeInStartTime) return 1;
-                const elapsed = now - sphereFadeInStartTime;
-                if (elapsed >= SPHERE_FADE_IN_MS) return 1;
-                return easeOutQuart(elapsed / SPHERE_FADE_IN_MS);
-            }
-            
-            // Палитра цветов по умолчанию с весами (долями)
-            const colorPaletteWithWeights = [
-                { color: [17, 24, 39, 1], weight: 42.587 },   // #111827
-                { color: [31, 41, 55, 1], weight: 24.853 },   // #1F2937
-                { color: [55, 65, 81, 1], weight: 18.895 },   // #374151
-                { color: [147, 51, 234, 1], weight: 0.623 },  // #9333EA
-                { color: [30, 40, 54, 1], weight: 0.516 },     // #1E2836
-                { color: [15, 22, 36, 1], weight: 0.453 },     // #0F1624
-                { color: [29, 39, 53, 1], weight: 0.439 },    // #1D2735
-                { color: [15, 22, 37, 1], weight: 0.379 },     // #0F1625
-                { color: [28, 38, 52, 1], weight: 0.374 },     // #1C2634
-                { color: [75, 85, 99, 1], weight: 0.340 },     // #4B5563
-                { color: [243, 244, 246, 1], weight: 0.309 },  // #F3F4F6
-                { color: [15, 22, 35, 1], weight: 0.285 },     // #0F1623
-                { color: [25, 33, 42, 1], weight: 0.276 },     // #19212A
-                { color: [41, 49, 60, 1], weight: 0.273 },     // #29313C
-                { color: [24, 32, 44, 1], weight: 0.271 },     // #18202C
-            ];
+            (function () {
+                'use strict';
+                const canvas = document.getElementById('loadingCanvas');
+                if (!canvas) return;
 
-            // Функция для взвешенного выбора цвета
-            function getWeightedRandomColor() {
-                const totalWeight = colorPaletteWithWeights.reduce((sum, item) => sum + item.weight, 0);
-                let random = Math.random() * totalWeight;
-                for (const item of colorPaletteWithWeights) {
-                    random -= item.weight;
-                    if (random <= 0) {
-                        return item.color;
-                    }
-                }
-                return colorPaletteWithWeights[0].color; // fallback
-            }
+                const ctx = canvas.getContext('2d');
+                let animationFrameId = null;
+                let width, height, centerX, centerY;
+                let particles = [];
+                let globalTime = 0;
+                let rotationX = 0;
+                let rotationY = 0;
+                let rotationStartTime = 0;
+                let lastFrameTime = null;
+                const ROTATION_DELTA_NORM = 1 / 16;
+                let exitScaleStartTime = 0;
+                const EXIT_WIND_UP_MS = 750;
+                const EXIT_EXPLODE_MS = 3300;
+                const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
+                const EXIT_SHRINK_SCALE = 0.35;
+                const EXIT_MAX_SCALE = 12;
+                const EXIT_GLOW_MULTIPLIER_MAX = 8;
+                const SPHERE_FADE_IN_MS = 1000;
 
-            const config = {
-                particleCount: 2200,
-                sphereBaseRadius: 4,
-                focalLength: 250,
-                rotationSpeedX: 0.0003,
-                rotationSpeedY: 0.002,
-                breathAmplitude: 0.09,
-                breathSpeed: 0.01,
-                petalCount: 15,
-                petalStrength: 0.2,
-                baseParticleMinSize: 0.45,
-                baseParticleMaxSize: 1.1,
-                colorPalette: [
-                    [160, 90, 220, 1],
-                    [190, 110, 245, 0.95],
-                    [130, 60, 200, 0.95],
-                    [210, 120, 250, 1],
-                    [120, 120, 240, 1],
-                    [90, 90, 210, 0.95],
-                    [235, 170, 255, 0.9],
-                ],
-                backgroundColor: 'rgba(0, 0, 0, 0)',
-            };
-            
-            class Particle {
-                constructor() {
-                    const u = Math.random();
-                    const v = Math.random();
-                    const theta = 2 * Math.PI * u;
-                    const phi = Math.acos(2 * v - 1);
-                    this.baseR_factor = 0.75 + Math.random() * 0.25;
-                    const petalModulation = 1 + config.petalStrength * Math.sin(phi) * Math.cos(
-                        config.petalCount * theta + Math.PI / (Math.random() > 0.5 ? 2 : 1)
-                    );
-                    const effectiveR_factor = this.baseR_factor * petalModulation;
-                    this.x0 = effectiveR_factor * Math.sin(phi) * Math.cos(theta);
-                    this.y0 = effectiveR_factor * Math.sin(phi) * Math.sin(theta);
-                    this.z0 = effectiveR_factor * Math.cos(phi);
-                    const colorData = config.colorPalette[Math.floor(Math.random() * config.colorPalette.length)];
-                    this.color_r = colorData[0];
-                    this.color_g = colorData[1];
-                    this.color_b = colorData[2];
-                    this.baseAlphaMultiplier = colorData[3];
-                    this.baseSize = config.baseParticleMinSize + Math.random() * (config.baseParticleMaxSize - config.baseParticleMinSize);
-                    this.noiseAmp = 0.03 + Math.random() * 0.04;
-                    this.noiseFreq = 0.005 + Math.random() * 0.01;
-                    this.noisePhaseX = Math.random() * Math.PI * 2;
-                    this.noisePhaseY = Math.random() * Math.PI * 2;
-                    this.noisePhaseZ = Math.random() * Math.PI * 2;
-                    this.screenX = 0;
-                    this.screenY = 0;
-                    this.projectedSize = 0;
-                    this.alphaFactor = 0;
-                    this.depth = 0;
-                    this.currentDisplaySize = 0;
-                }
-                
-                projectAndTransform(currentSphereRadius, breathPulse) {
-                    const timeBasedNoisePhase = globalTime * this.noiseFreq;
-                    const dX = Math.sin(this.noisePhaseX + timeBasedNoisePhase) * this.noiseAmp;
-                    const dY = Math.cos(this.noisePhaseY + timeBasedNoisePhase) * this.noiseAmp;
-                    const dZ = Math.sin(this.noisePhaseZ + timeBasedNoisePhase) * this.noiseAmp;
-                    let x = this.x0 + dX;
-                    let y = this.y0 + dY;
-                    let z = this.z0 + dZ;
-                    let tempX_rotY = x * Math.cos(rotationY) - z * Math.sin(rotationY);
-                    let tempZ_rotY = x * Math.sin(rotationY) + z * Math.cos(rotationY);
-                    x = tempX_rotY;
-                    z = tempZ_rotY;
-                    let tempY_rotX = y * Math.cos(rotationX) - z * Math.sin(rotationX);
-                    let tempZ_rotX = y * Math.sin(rotationX) + z * Math.cos(rotationX);
-                    y = tempY_rotX;
-                    z = tempZ_rotX;
-                    const exitScale = getCurrentExitScale();
-                    const dynamicSphereRadius = currentSphereRadius * (1 + breathPulse * config.breathAmplitude) * exitScale;
-                    const perspectiveFactor = config.focalLength / (config.focalLength - z * dynamicSphereRadius * 0.8);
-                    this.screenX = centerX + x * dynamicSphereRadius * perspectiveFactor;
-                    this.screenY = centerY + y * dynamicSphereRadius * perspectiveFactor;
-                    const normalizedDepth = z;
-                    this.projectedSize = Math.max(0.1, this.baseSize * perspectiveFactor * ((normalizedDepth + 1.2) / 2.2));
-                    this.alphaFactor = Math.max(0.1, Math.min(1, ((normalizedDepth + 1.5) / 2.5) * this.baseAlphaMultiplier));
-                    this.depth = z;
-                    this.currentDisplaySize = this.projectedSize;
-                }
-                
-                draw(glowMultiplier, fadeInFactor) {
-                    if (glowMultiplier === undefined) glowMultiplier = 1;
-                    if (fadeInFactor === undefined) fadeInFactor = 1;
-                    if (this.currentDisplaySize <= 0.15) return;
-                    const mainAlpha = Math.min(1, this.alphaFactor * glowMultiplier * fadeInFactor);
-                    if (mainAlpha <= 0.02) return;
-                    const mainSize = this.currentDisplaySize;
-                    
-                    const haloLayers = [
-                        { sizeFactor: 5, alphaFactor: 0.2 },
-                        { sizeFactor: 3.5, alphaFactor: 0.28 },
-                        { sizeFactor: 2.2, alphaFactor: 0.4 },
-                    ];
-                    
-                    for (const layer of haloLayers) {
-                        const haloSize = mainSize * layer.sizeFactor;
-                        const haloAlpha = Math.min(1, mainAlpha * layer.alphaFactor);
-                        if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
-                        const gradient = ctx.createRadialGradient(
-                            this.screenX, this.screenY, haloSize * 0.1,
-                            this.screenX, this.screenY, haloSize
-                        );
-                        gradient.addColorStop(0, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`);
-                        gradient.addColorStop(0.6, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.4})`);
-                        gradient.addColorStop(1, 'rgba(0,0,0,0)');
-                        ctx.fillStyle = gradient;
-                        ctx.beginPath();
-                        ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
-                        ctx.fill();
+                const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
+                const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+                let sphereFadeInStartTime = 0;
+
+                function getCurrentExitScale() {
+                    if (!exitScaleStartTime) return 1;
+                    const elapsed = performance.now() - exitScaleStartTime;
+                    if (elapsed >= EXIT_TOTAL_MS) return EXIT_MAX_SCALE;
+                    if (elapsed < EXIT_WIND_UP_MS) {
+                        const t = elapsed / EXIT_WIND_UP_MS;
+                        return 1 + (EXIT_SHRINK_SCALE - 1) * easeOutQuint(t);
                     }
-                    
-                    const coreGradient = ctx.createRadialGradient(
-                        this.screenX, this.screenY, 0,
-                        this.screenX, this.screenY, mainSize
+                    const t = (elapsed - EXIT_WIND_UP_MS) / EXIT_EXPLODE_MS;
+                    return (
+                        EXIT_SHRINK_SCALE + (EXIT_MAX_SCALE - EXIT_SHRINK_SCALE) * easeOutQuart(t)
                     );
-                    coreGradient.addColorStop(0, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`);
-                    coreGradient.addColorStop(1, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`);
-                    ctx.fillStyle = coreGradient;
-                    ctx.beginPath();
-                    ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.globalAlpha = 1.0;
                 }
-            }
-            
-            function setupCanvas() {
-                const dpr = window.devicePixelRatio || 1;
-                width = window.innerWidth;
-                height = window.innerHeight;
-                canvas.width = width * dpr;
-                canvas.height = height * dpr;
-                ctx.resetTransform();
-                ctx.scale(dpr, dpr);
-                centerX = width / 2;
-                centerY = height / 2;
-                config.sphereBaseRadius = Math.min(width, height) * 0.1584;
-            }
-            
-            function init() {
-                setupCanvas();
-                particles = [];
-                for (let i = 0; i < config.particleCount; i++) {
-                    particles.push(new Particle());
+
+                function getCurrentExitGlowMultiplier() {
+                    if (!exitScaleStartTime) return 1;
+                    const elapsed = performance.now() - exitScaleStartTime;
+                    if (elapsed < EXIT_WIND_UP_MS) {
+                        const t = elapsed / EXIT_WIND_UP_MS;
+                        return 1 + (EXIT_GLOW_MULTIPLIER_MAX - 1) * easeOutQuint(t);
+                    }
+                    return EXIT_GLOW_MULTIPLIER_MAX;
                 }
-            }
-            
-            function animate(now) {
-                now = now || performance.now();
-                if (!rotationStartTime) rotationStartTime = now;
-                const elapsedMs = now - rotationStartTime;
-                rotationX = elapsedMs * (config.rotationSpeedX / 16);
-                rotationY = elapsedMs * (config.rotationSpeedY / 16);
-                lastFrameTime = now;
-                globalTime++;
-                
-                ctx.fillStyle = config.backgroundColor;
-                ctx.clearRect(0, 0, width, height);
-                
-                const breathPulse = Math.sin(globalTime * config.breathSpeed);
-                const exitGlowMultiplier = getCurrentExitGlowMultiplier();
-                const fadeInFactor = getSphereFadeInFactor(now);
-                
-                for (let i = 0; i < particles.length; i++) {
-                    const particle = particles[i];
-                    particle.projectAndTransform(config.sphereBaseRadius, breathPulse);
-                    particle.draw(exitGlowMultiplier, fadeInFactor);
+
+                function getSphereFadeInFactor(now) {
+                    if (!sphereFadeInStartTime) return 1;
+                    const elapsed = now - sphereFadeInStartTime;
+                    if (elapsed >= SPHERE_FADE_IN_MS) return 1;
+                    return easeOutQuart(elapsed / SPHERE_FADE_IN_MS);
                 }
-                
-                animationFrameId = requestAnimationFrame(animate);
-            }
-            
-            function setExitStartTime() {
-                exitScaleStartTime = performance.now();
-            }
-            
-            function getExitPromise() {
-                return new Promise(function(resolve) {
-                    setTimeout(resolve, EXIT_TOTAL_MS + 100);
-                });
-            }
-            
-            function resizeHandler() {
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
+
+                function getOverlayThemeProfile(theme) {
+                    if (theme === 'light') {
+                        return {
+                            particlePalette: [
+                                [76, 29, 149, 0.98], // deep violet core
+                                [91, 33, 182, 1], // application violet
+                                [109, 40, 217, 0.98], // bright violet
+                                [126, 34, 206, 0.95], // purple accent
+                                [147, 51, 234, 0.95], // brand purple
+                                [168, 85, 247, 0.92], // soft neon violet
+                                [192, 132, 252, 0.9], // halo violet
+                            ],
+                            particleCount: 3000,
+                            haloSizeScale: 1.22,
+                            haloAlphaScale: 1.34,
+                            coreAlphaScale: 1.26,
+                        };
+                    }
+                    return {
+                        particlePalette: [
+                            [160, 90, 220, 1],
+                            [190, 110, 245, 0.95],
+                            [130, 60, 200, 0.95],
+                            [210, 120, 250, 1],
+                            [120, 120, 240, 1],
+                            [90, 90, 210, 0.95],
+                            [235, 170, 255, 0.9],
+                        ],
+                        particleCount: 2200,
+                        haloSizeScale: 1,
+                        haloAlphaScale: 1,
+                        coreAlphaScale: 1,
+                    };
                 }
-                init();
-                if (!animationFrameId) {
-                    animationFrameId = requestAnimationFrame(animate);
+
+                // Палитра цветов по умолчанию с весами (долями)
+                const colorPaletteWithWeights = [
+                    { color: [17, 24, 39, 1], weight: 42.587 }, // #111827
+                    { color: [31, 41, 55, 1], weight: 24.853 }, // #1F2937
+                    { color: [55, 65, 81, 1], weight: 18.895 }, // #374151
+                    { color: [147, 51, 234, 1], weight: 0.623 }, // #9333EA
+                    { color: [30, 40, 54, 1], weight: 0.516 }, // #1E2836
+                    { color: [15, 22, 36, 1], weight: 0.453 }, // #0F1624
+                    { color: [29, 39, 53, 1], weight: 0.439 }, // #1D2735
+                    { color: [15, 22, 37, 1], weight: 0.379 }, // #0F1625
+                    { color: [28, 38, 52, 1], weight: 0.374 }, // #1C2634
+                    { color: [75, 85, 99, 1], weight: 0.34 }, // #4B5563
+                    { color: [243, 244, 246, 1], weight: 0.309 }, // #F3F4F6
+                    { color: [15, 22, 35, 1], weight: 0.285 }, // #0F1623
+                    { color: [25, 33, 42, 1], weight: 0.276 }, // #19212A
+                    { color: [41, 49, 60, 1], weight: 0.273 }, // #29313C
+                    { color: [24, 32, 44, 1], weight: 0.271 }, // #18202C
+                ];
+
+                // Функция для взвешенного выбора цвета
+                function getWeightedRandomColor() {
+                    const totalWeight = colorPaletteWithWeights.reduce(
+                        (sum, item) => sum + item.weight,
+                        0,
+                    );
+                    let random = Math.random() * totalWeight;
+                    for (const item of colorPaletteWithWeights) {
+                        random -= item.weight;
+                        if (random <= 0) {
+                            return item.color;
+                        }
+                    }
+                    return colorPaletteWithWeights[0].color; // fallback
                 }
-            }
-            
-            function start() {
-                sphereFadeInStartTime = performance.now();
-                init();
-                if (!animationFrameId) {
-                    animationFrameId = requestAnimationFrame(animate);
-                }
-                if (window._earlySphereAnimation) window._earlySphereAnimation.isRunning = true;
-            }
-            
-            function stop() {
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
-                }
-                if (window._earlySphereAnimation) window._earlySphereAnimation.isRunning = false;
-            }
-            
-            function getState() {
-                return {
-                    globalTime: globalTime,
-                    rotationX: rotationX,
-                    rotationY: rotationY
+
+                let currentThemeName =
+                    document.documentElement.dataset.loadingOverlayTheme === 'light'
+                        ? 'light'
+                        : 'dark';
+                let currentThemeProfile = getOverlayThemeProfile(currentThemeName);
+
+                const config = {
+                    particleCount: 2200,
+                    sphereBaseRadius: 4,
+                    focalLength: 250,
+                    rotationSpeedX: 0.0003,
+                    rotationSpeedY: 0.002,
+                    breathAmplitude: 0.09,
+                    breathSpeed: 0.01,
+                    petalCount: 15,
+                    petalStrength: 0.2,
+                    baseParticleMinSize: 0.45,
+                    baseParticleMaxSize: 1.1,
+                    colorPalette: currentThemeProfile.particlePalette,
+                    backgroundColor: 'rgba(0, 0, 0, 0)',
                 };
-            }
-            
-            window.addEventListener('resize', resizeHandler);
-            
-            window._earlySphereAnimation = {
-                isRunning: false,
-                start: start,
-                stop: stop,
-                resize: resizeHandler,
-                getState: getState,
-                setExitStartTime: setExitStartTime,
-                getExitPromise: getExitPromise
-            };
-            
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', start);
-            } else {
-                start();
-            }
-        })();
+
+                class Particle {
+                    constructor() {
+                        const u = Math.random();
+                        const v = Math.random();
+                        const theta = 2 * Math.PI * u;
+                        const phi = Math.acos(2 * v - 1);
+                        this.baseR_factor = 0.75 + Math.random() * 0.25;
+                        const petalModulation =
+                            1 +
+                            config.petalStrength *
+                                Math.sin(phi) *
+                                Math.cos(
+                                    config.petalCount * theta +
+                                        Math.PI / (Math.random() > 0.5 ? 2 : 1),
+                                );
+                        const effectiveR_factor = this.baseR_factor * petalModulation;
+                        this.x0 = effectiveR_factor * Math.sin(phi) * Math.cos(theta);
+                        this.y0 = effectiveR_factor * Math.sin(phi) * Math.sin(theta);
+                        this.z0 = effectiveR_factor * Math.cos(phi);
+                        const colorData =
+                            config.colorPalette[
+                                Math.floor(Math.random() * config.colorPalette.length)
+                            ];
+                        this.color_r = colorData[0];
+                        this.color_g = colorData[1];
+                        this.color_b = colorData[2];
+                        this.baseAlphaMultiplier = colorData[3];
+                        this.baseSize =
+                            config.baseParticleMinSize +
+                            Math.random() *
+                                (config.baseParticleMaxSize - config.baseParticleMinSize);
+                        this.noiseAmp = 0.03 + Math.random() * 0.04;
+                        this.noiseFreq = 0.005 + Math.random() * 0.01;
+                        this.noisePhaseX = Math.random() * Math.PI * 2;
+                        this.noisePhaseY = Math.random() * Math.PI * 2;
+                        this.noisePhaseZ = Math.random() * Math.PI * 2;
+                        this.screenX = 0;
+                        this.screenY = 0;
+                        this.projectedSize = 0;
+                        this.alphaFactor = 0;
+                        this.depth = 0;
+                        this.currentDisplaySize = 0;
+                    }
+
+                    projectAndTransform(currentSphereRadius, breathPulse) {
+                        const timeBasedNoisePhase = globalTime * this.noiseFreq;
+                        const dX = Math.sin(this.noisePhaseX + timeBasedNoisePhase) * this.noiseAmp;
+                        const dY = Math.cos(this.noisePhaseY + timeBasedNoisePhase) * this.noiseAmp;
+                        const dZ = Math.sin(this.noisePhaseZ + timeBasedNoisePhase) * this.noiseAmp;
+                        let x = this.x0 + dX;
+                        let y = this.y0 + dY;
+                        let z = this.z0 + dZ;
+                        let tempX_rotY = x * Math.cos(rotationY) - z * Math.sin(rotationY);
+                        let tempZ_rotY = x * Math.sin(rotationY) + z * Math.cos(rotationY);
+                        x = tempX_rotY;
+                        z = tempZ_rotY;
+                        let tempY_rotX = y * Math.cos(rotationX) - z * Math.sin(rotationX);
+                        let tempZ_rotX = y * Math.sin(rotationX) + z * Math.cos(rotationX);
+                        y = tempY_rotX;
+                        z = tempZ_rotX;
+                        const exitScale = getCurrentExitScale();
+                        const dynamicSphereRadius =
+                            currentSphereRadius *
+                            (1 + breathPulse * config.breathAmplitude) *
+                            exitScale;
+                        const perspectiveFactor =
+                            config.focalLength /
+                            (config.focalLength - z * dynamicSphereRadius * 0.8);
+                        this.screenX = centerX + x * dynamicSphereRadius * perspectiveFactor;
+                        this.screenY = centerY + y * dynamicSphereRadius * perspectiveFactor;
+                        const normalizedDepth = z;
+                        this.projectedSize = Math.max(
+                            0.1,
+                            this.baseSize * perspectiveFactor * ((normalizedDepth + 1.2) / 2.2),
+                        );
+                        this.alphaFactor = Math.max(
+                            0.1,
+                            Math.min(1, ((normalizedDepth + 1.5) / 2.5) * this.baseAlphaMultiplier),
+                        );
+                        this.depth = z;
+                        this.currentDisplaySize = this.projectedSize;
+                    }
+
+                    draw(glowMultiplier, fadeInFactor) {
+                        if (glowMultiplier === undefined) glowMultiplier = 1;
+                        if (fadeInFactor === undefined) fadeInFactor = 1;
+                        if (this.currentDisplaySize <= 0.15) return;
+                        const mainAlpha = Math.min(
+                            1,
+                            this.alphaFactor *
+                                glowMultiplier *
+                                fadeInFactor *
+                                currentThemeProfile.coreAlphaScale,
+                        );
+                        if (mainAlpha <= 0.02) return;
+                        const mainSize = this.currentDisplaySize;
+
+                        const haloLayers = [
+                            { sizeFactor: 5, alphaFactor: 0.2 },
+                            { sizeFactor: 3.5, alphaFactor: 0.28 },
+                            { sizeFactor: 2.2, alphaFactor: 0.4 },
+                        ];
+
+                        for (const layer of haloLayers) {
+                            const haloSize =
+                                mainSize * layer.sizeFactor * currentThemeProfile.haloSizeScale;
+                            const haloAlpha = Math.min(
+                                1,
+                                mainAlpha * layer.alphaFactor * currentThemeProfile.haloAlphaScale,
+                            );
+                            if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
+                            const gradient = ctx.createRadialGradient(
+                                this.screenX,
+                                this.screenY,
+                                haloSize * 0.1,
+                                this.screenX,
+                                this.screenY,
+                                haloSize,
+                            );
+                            gradient.addColorStop(
+                                0,
+                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`,
+                            );
+                            gradient.addColorStop(
+                                0.6,
+                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.4})`,
+                            );
+                            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                            ctx.fillStyle = gradient;
+                            ctx.beginPath();
+                            ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+
+                        const coreGradient = ctx.createRadialGradient(
+                            this.screenX,
+                            this.screenY,
+                            0,
+                            this.screenX,
+                            this.screenY,
+                            mainSize,
+                        );
+                        coreGradient.addColorStop(
+                            0,
+                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`,
+                        );
+                        coreGradient.addColorStop(
+                            1,
+                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
+                        );
+                        ctx.fillStyle = coreGradient;
+                        ctx.beginPath();
+                        ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
+
+                function setupCanvas() {
+                    const dpr = window.devicePixelRatio || 1;
+                    width = window.innerWidth;
+                    height = window.innerHeight;
+                    canvas.width = width * dpr;
+                    canvas.height = height * dpr;
+                    ctx.resetTransform();
+                    ctx.scale(dpr, dpr);
+                    centerX = width / 2;
+                    centerY = height / 2;
+                    config.sphereBaseRadius = Math.min(width, height) * 0.1584;
+                }
+
+                function init() {
+                    setupCanvas();
+                    particles = [];
+                    const particleCount =
+                        Number.isFinite(currentThemeProfile.particleCount) &&
+                        currentThemeProfile.particleCount > 0
+                            ? currentThemeProfile.particleCount
+                            : config.particleCount;
+                    for (let i = 0; i < particleCount; i++) {
+                        particles.push(new Particle());
+                    }
+                }
+
+                function animate(now) {
+                    now = now || performance.now();
+                    if (!rotationStartTime) rotationStartTime = now;
+                    const elapsedMs = now - rotationStartTime;
+                    rotationX = elapsedMs * (config.rotationSpeedX / 16);
+                    rotationY = elapsedMs * (config.rotationSpeedY / 16);
+                    lastFrameTime = now;
+                    globalTime++;
+
+                    ctx.fillStyle = config.backgroundColor;
+                    ctx.clearRect(0, 0, width, height);
+
+                    const breathPulse = Math.sin(globalTime * config.breathSpeed);
+                    const exitGlowMultiplier = getCurrentExitGlowMultiplier();
+                    const fadeInFactor = getSphereFadeInFactor(now);
+
+                    for (let i = 0; i < particles.length; i++) {
+                        const particle = particles[i];
+                        particle.projectAndTransform(config.sphereBaseRadius, breathPulse);
+                        particle.draw(exitGlowMultiplier, fadeInFactor);
+                    }
+
+                    animationFrameId = requestAnimationFrame(animate);
+                }
+
+                function setExitStartTime() {
+                    exitScaleStartTime = performance.now();
+                }
+
+                function getExitPromise() {
+                    return new Promise(function (resolve) {
+                        setTimeout(resolve, EXIT_TOTAL_MS + 100);
+                    });
+                }
+
+                function resizeHandler() {
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+                    init();
+                    if (!animationFrameId) {
+                        animationFrameId = requestAnimationFrame(animate);
+                    }
+                }
+
+                function start() {
+                    sphereFadeInStartTime = performance.now();
+                    init();
+                    if (!animationFrameId) {
+                        animationFrameId = requestAnimationFrame(animate);
+                    }
+                    if (window._earlySphereAnimation) window._earlySphereAnimation.isRunning = true;
+                }
+
+                function stop() {
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+                    if (window._earlySphereAnimation)
+                        window._earlySphereAnimation.isRunning = false;
+                }
+
+                function getState() {
+                    return {
+                        globalTime: globalTime,
+                        rotationX: rotationX,
+                        rotationY: rotationY,
+                    };
+                }
+
+                function setTheme(theme) {
+                    const normalizedTheme = theme === 'light' ? 'light' : 'dark';
+                    if (normalizedTheme === currentThemeName) return;
+                    currentThemeName = normalizedTheme;
+                    currentThemeProfile = getOverlayThemeProfile(currentThemeName);
+                    config.colorPalette = currentThemeProfile.particlePalette;
+                    if (typeof window.__applyLoadingOverlayThemeVars === 'function') {
+                        let snapshot = null;
+                        try {
+                            snapshot = JSON.parse(
+                                localStorage.getItem('copilot.loading-overlay.snapshot') || 'null',
+                            );
+                        } catch {
+                            snapshot = null;
+                        }
+                        window.__applyLoadingOverlayThemeVars(currentThemeName, snapshot);
+                    }
+                    init();
+                }
+
+                window.addEventListener('resize', resizeHandler);
+
+                window._earlySphereAnimation = {
+                    isRunning: false,
+                    start: start,
+                    stop: stop,
+                    resize: resizeHandler,
+                    getState: getState,
+                    setExitStartTime: setExitStartTime,
+                    getExitPromise: getExitPromise,
+                    setTheme: setTheme,
+                };
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', start);
+                } else {
+                    start();
+                }
+            })();
         </script>
         <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
             <div id="staticHeaderWrapper">
-            <header class="mb-4">
-                <div class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-3">
-                    <div>
-                        <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
-                        <p id="appSlogan" class="text-sm md:text-base text-primary">
-                            Ваш надежный второй пилот
-                        </p>
-                    </div>
+                <header class="mb-4">
                     <div
-                        class="flex flex-wrap items-center justify-center md:justify-end gap-x-3 gap-y-2 w-full md:w-auto"
+                        class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-3"
                     >
-                        <div class="flex items-center gap-x-2">
-                            <button
-                                id="showFavoritesHeaderBtn"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                title="Избранное"
-                            >
-                                <i class="fas fa-star hover:text-yellow-400"></i>
-                            </button>
-
-                            <div class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center"></div>
-
-                            <div
-                                id="appTimer"
-                                class="flex items-center gap-1 text-sm flex-shrink-0"
-                            >
-                                <button
-                                    id="timerToggleButton"
-                                    title="Старт/Пауза"
-                                    class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                >
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <button
-                                    id="timerResetButton"
-                                    title="Сброс"
-                                    class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                >
-                                    <i class="fas fa-undo"></i>
-                                </button>
-                                <span
-                                    id="timerDisplay"
-                                    class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-baseline text-base"
-                                >
-                                </span>
-                                <button
-                                    id="timerDecreaseButton"
-                                    title="Уменьшить на 1 мин"
-                                    class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                >
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <button
-                                    id="timerIncreaseButton"
-                                    title="Увеличить на 1 мин"
-                                    class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                >
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <button
-                            id="themeToggle"
-                            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0"
-                            title="Сменить тему"
-                        >
-                            <i class="fas fa-sun text-yellow-500 hidden dark:inline"></i>
-                            <i class="fas fa-moon text-blue-300 dark:hidden"></i>
-                        </button>
-                        <div
-                            class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:w-[24rem]"
-                        >
-                            <input
-                                type="text"
-                                id="searchInput"
-                                placeholder="Поиск..."
-                                class="w-full pl-10 pr-10 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
-                            />
-                            <i
-                                class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                            ></i>
-                            <button
-                                id="clearSearchInputBtn"
-                                type="button"
-                                class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
-                                title="Очистить поиск"
-                            >
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <div
-                                id="searchResults"
-                                class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto"
-                            ></div>
-                        </div>
-                        <div class="flex gap-2 flex-shrink-0">
-                            <button
-                                id="openCommandPaletteBtn"
-                                type="button"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Палитра команд (Ctrl+K)"
-                            >
-                                <i class="fas fa-terminal" aria-hidden="true"></i>
-                            </button>
-                            <button
-                                id="customizeUIBtn"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Настройки"
-                            >
-                                <i class="fas fa-cog"></i>
-                            </button>
-                            <button
-                                id="exportDataBtn"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Экспорт базы данных"
-                            >
-                                <i class="fas fa-upload"></i>
-                            </button>
-                            <button
-                                id="importDataBtn"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Импорт базы данных"
-                            >
-                                <i class="fas fa-download"></i>
-                            </button>
-                            <button
-                                id="forceReloadBtn"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Перезагрузка приложения"
-                            >
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                            <button
-                                id="showHotkeysBtn"
-                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Горячие клавиши и управление Copilot"
-                            >
-                                <i class="fas fa-info-circle"></i>
-                            </button>
-                            <input type="file" id="importFileInput" accept=".json" class="hidden" />
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    id="advancedSearchOptions"
-                    class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3"
-                >
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
-                            <label
-                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                >Искать по:</label
+                            <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
+                            <p id="appSlogan" class="text-sm md:text-base text-primary">
+                                Ваш надежный второй пилот
+                            </p>
+                        </div>
+                        <div
+                            class="flex flex-wrap items-center justify-center md:justify-end gap-x-3 gap-y-2 w-full md:w-auto"
+                        >
+                            <div class="flex items-center gap-x-2">
+                                <button
+                                    id="showFavoritesHeaderBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Избранное"
+                                >
+                                    <i class="fas fa-star hover:text-yellow-400"></i>
+                                </button>
+
+                                <div
+                                    class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center"
+                                ></div>
+
+                                <div
+                                    id="appTimer"
+                                    class="flex items-center gap-1 text-sm flex-shrink-0"
+                                >
+                                    <button
+                                        id="timerToggleButton"
+                                        title="Старт/Пауза"
+                                        class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    >
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button
+                                        id="timerResetButton"
+                                        title="Сброс"
+                                        class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    >
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                    <span
+                                        id="timerDisplay"
+                                        class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-baseline text-base"
+                                    >
+                                    </span>
+                                    <button
+                                        id="timerDecreaseButton"
+                                        title="Уменьшить на 1 мин"
+                                        class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    >
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <button
+                                        id="timerIncreaseButton"
+                                        title="Увеличить на 1 мин"
+                                        class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    >
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button
+                                id="themeToggle"
+                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0"
+                                title="Сменить тему"
                             >
-                            <div class="flex flex-wrap gap-2">
-                                <label class="inline-flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked
-                                        class="search-field form-checkbox text-primary focus:ring-primary"
-                                        value="title"
-                                    />
-                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                        >Заголовок</span
-                                    >
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked
-                                        class="search-field form-checkbox text-primary focus:ring-primary"
-                                        value="description"
-                                    />
-                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                        >Описание/Содержимое</span
-                                    >
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked
-                                        class="search-field form-checkbox text-primary focus:ring-primary"
-                                        value="steps"
-                                    />
-                                    <span class="ml-2 text-gray-700 dark:text-gray-300">Шаги</span>
-                                </label>
+                                <i class="fas fa-sun text-yellow-500 hidden dark:inline"></i>
+                                <i class="fas fa-moon text-blue-300 dark:hidden"></i>
+                            </button>
+                            <div
+                                class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:w-[24rem]"
+                            >
+                                <input
+                                    type="text"
+                                    id="searchInput"
+                                    placeholder="Поиск..."
+                                    class="w-full pl-10 pr-10 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                />
+                                <i
+                                    class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                                ></i>
+                                <button
+                                    id="clearSearchInputBtn"
+                                    type="button"
+                                    class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                                    title="Очистить поиск"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <div
+                                    id="searchResults"
+                                    class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto"
+                                ></div>
+                            </div>
+                            <div class="flex gap-2 flex-shrink-0">
+                                <button
+                                    id="openCommandPaletteBtn"
+                                    type="button"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Палитра команд (Ctrl+K)"
+                                >
+                                    <i class="fas fa-terminal" aria-hidden="true"></i>
+                                </button>
+                                <button
+                                    id="customizeUIBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Настройки"
+                                >
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                <button
+                                    id="exportDataBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Экспорт базы данных"
+                                >
+                                    <i class="fas fa-upload"></i>
+                                </button>
+                                <button
+                                    id="mergeDataBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Слияние баз данных"
+                                    type="button"
+                                >
+                                    <i class="fas fa-code-merge"></i>
+                                </button>
+                                <button
+                                    id="importDataBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Импорт базы данных"
+                                >
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button
+                                    id="forceReloadBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Перезагрузка приложения"
+                                >
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <button
+                                    id="showHotkeysBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Горячие клавиши и управление Copilot"
+                                >
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                                <input
+                                    type="file"
+                                    id="importFileInput"
+                                    accept=".json"
+                                    class="hidden"
+                                />
                             </div>
                         </div>
-                        <div class="flex justify-end items-end md:col-start-3">
-                            <button
-                                id="toggleAdvancedSearch"
-                                class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition"
-                            >
-                                <i class="fas fa-cog mr-1"></i>Параметры поиска
-                            </button>
+                    </div>
+
+                    <div
+                        id="advancedSearchOptions"
+                        class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3"
+                    >
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label
+                                    class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                    >Искать по:</label
+                                >
+                                <div class="flex flex-wrap gap-2">
+                                    <label class="inline-flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked
+                                            class="search-field form-checkbox text-primary focus:ring-primary"
+                                            value="title"
+                                        />
+                                        <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                            >Заголовок</span
+                                        >
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked
+                                            class="search-field form-checkbox text-primary focus:ring-primary"
+                                            value="description"
+                                        />
+                                        <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                            >Описание/Содержимое</span
+                                        >
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked
+                                            class="search-field form-checkbox text-primary focus:ring-primary"
+                                            value="steps"
+                                        />
+                                        <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                            >Шаги</span
+                                        >
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="flex justify-end items-end md:col-start-3">
+                                <button
+                                    id="toggleAdvancedSearch"
+                                    class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition"
+                                >
+                                    <i class="fas fa-cog mr-1"></i>Параметры поиска
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </header>
+                </header>
 
-            <!-- Навигация по вкладкам -->
-            <div class="mb-3 border-b border-gray-200 dark:border-gray-700">
-                <nav class="flex flex-wrap -mb-px text-sm font-medium text-center">
-                    <button
-                        id="mainTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-home mr-1"></i>Главная
-                    </button>
-                    <button
-                        id="programTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-desktop mr-1"></i>Программа 1С/УП
-                    </button>
-                    <button
-                        id="linksTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-link mr-1"></i>Ссылки 1С
-                    </button>
-                    <button
-                        id="extLinksTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-globe mr-1"></i>Внешние ресурсы
-                    </button>
-                    <button
-                        id="skziTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-key mr-1"></i>СКЗИ
-                    </button>
-                    <button
-                        id="lk1cTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-user-circle mr-1"></i>1СО ЛК
-                    </button>
-                    <button
-                        id="webRegTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-plug mr-1"></i>Веб-Регистратор
-                    </button>
-                    <button
-                        id="reglamentsTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-clipboard-list mr-1"></i>Регламенты
-                    </button>
-                    <button
-                        id="bookmarksTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-bookmark mr-1"></i>Закладки
-                    </button>
-                    <button
-                        id="sedoTypesTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-comments mr-1"></i>Типы СЭДО
-                    </button>
-                    <button
-                        id="blacklistedClientsTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                    >
-                        <i class="fas fa-user-secret mr-1"></i>
-                        <span class="hidden sm:inline">Черный список жаб</span>
-                    </button>
-                    <button
-                        id="fnsCertTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                        aria-controls="fnsCertContent"
-                    >
-                        <i class="fas fa-certificate mr-1"></i>
-                        <span class="hidden sm:inline">Проверка сертификата на отзыв</span>
-                    </button>
-                    <button
-                        id="xmlAnalyzerTab"
-                        class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                        aria-controls="xmlAnalyzerContent"
-                    >
-                        <i class="fas fa-file-code mr-1"></i>
-                        <span class="hidden sm:inline">Анализатор XML</span>
-                    </button>
-                    <div class="relative group ml-auto md:ml-1 shrink-0">
+                <!-- Навигация по вкладкам -->
+                <div class="mb-3 border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex flex-wrap -mb-px text-sm font-medium text-center">
                         <button
-                            id="moreTabsBtn"
+                            id="mainTab"
                             class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
                         >
-                            <i class="fas fa-ellipsis-h"></i>
+                            <i class="fas fa-home mr-1"></i>Главная
                         </button>
-                        <div
-                            id="moreTabsDropdown"
-                            class="absolute hidden right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10 w-48"
-                        ></div>
-                    </div>
-                </nav>
-            </div>
+                        <button
+                            id="programTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-desktop mr-1"></i>Программа 1С/УП
+                        </button>
+                        <button
+                            id="linksTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-link mr-1"></i>Ссылки 1С
+                        </button>
+                        <button
+                            id="extLinksTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-globe mr-1"></i>Внешние ресурсы
+                        </button>
+                        <button
+                            id="skziTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-key mr-1"></i>СКЗИ
+                        </button>
+                        <button
+                            id="lk1cTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-user-circle mr-1"></i>1СО ЛК
+                        </button>
+                        <button
+                            id="webRegTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-plug mr-1"></i>Веб-Регистратор
+                        </button>
+                        <button
+                            id="reglamentsTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-clipboard-list mr-1"></i>Регламенты
+                        </button>
+                        <button
+                            id="bookmarksTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-bookmark mr-1"></i>Закладки
+                        </button>
+                        <button
+                            id="sedoTypesTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-comments mr-1"></i>Типы СЭДО
+                        </button>
+                        <button
+                            id="blacklistedClientsTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                        >
+                            <i class="fas fa-user-secret mr-1"></i>
+                            <span class="hidden sm:inline">Черный список жаб</span>
+                        </button>
+                        <button
+                            id="fnsCertTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                            aria-controls="fnsCertContent"
+                        >
+                            <i class="fas fa-certificate mr-1"></i>
+                            <span class="hidden sm:inline">Проверка сертификата на отзыв</span>
+                        </button>
+                        <button
+                            id="xmlAnalyzerTab"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                            aria-controls="xmlAnalyzerContent"
+                        >
+                            <i class="fas fa-file-code mr-1"></i>
+                            <span class="hidden sm:inline">Анализатор XML</span>
+                        </button>
+                        <div class="relative group ml-auto md:ml-1 shrink-0">
+                            <button
+                                id="moreTabsBtn"
+                                class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                            >
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                            <div
+                                id="moreTabsDropdown"
+                                class="absolute hidden right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10 w-48"
+                            ></div>
+                        </div>
+                    </nav>
+                </div>
             </div>
 
             <!-- Главная -->
             <div id="mainContent" class="tab-content">
                 <div class="p-content rounded-lg shadow-md">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-content">
-                        <div id="mainAlgoCard" class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
-                            <div class="flex flex-nowrap justify-between items-center gap-2 mb-2 min-w-0">
-                                <div id="mainAlgoToolbar" class="flex flex-nowrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 min-w-0 shrink">
-                                    <label class="app-toggle app-toggle--compact flex items-center gap-1 cursor-pointer shrink-0" for="mainAlgoHeadersOnly">
-                                        <input type="checkbox" id="mainAlgoHeadersOnly" class="app-toggle-input">
+                        <div
+                            id="mainAlgoCard"
+                            class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md"
+                        >
+                            <div
+                                class="flex flex-nowrap justify-between items-center gap-2 mb-2 min-w-0"
+                            >
+                                <div
+                                    id="mainAlgoToolbar"
+                                    class="flex flex-nowrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 min-w-0 shrink"
+                                >
+                                    <label
+                                        class="app-toggle app-toggle--compact flex items-center gap-1 cursor-pointer shrink-0"
+                                        for="mainAlgoHeadersOnly"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            id="mainAlgoHeadersOnly"
+                                            class="app-toggle-input"
+                                        />
                                         <span class="app-toggle__track"></span>
-                                        <span class="whitespace-nowrap ml-1.5">Только заголовки</span>
+                                        <span class="whitespace-nowrap ml-1.5"
+                                            >Только заголовки</span
+                                        >
                                     </label>
                                     <span class="text-gray-400 dark:text-gray-500 shrink-0">|</span>
                                     <span class="flex items-center gap-1 shrink-0">
                                         <span>Вид:</span>
-                                        <button type="button" id="mainAlgoDensityNormal" class="main-algo-density-btn px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs" data-density="normal">Обычный</button>
-                                        <button type="button" id="mainAlgoDensityCompact" class="main-algo-density-btn px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs" data-density="compact">Компактный</button>
+                                        <button
+                                            type="button"
+                                            id="mainAlgoDensityNormal"
+                                            class="main-algo-density-btn px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs"
+                                            data-density="normal"
+                                        >
+                                            Обычный
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="mainAlgoDensityCompact"
+                                            class="main-algo-density-btn px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs"
+                                            data-density="compact"
+                                        >
+                                            Компактный
+                                        </button>
                                     </span>
                                 </div>
                                 <button
@@ -944,12 +1268,20 @@
                             </div>
                         </div>
 
-                        <div class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md min-w-0">
+                        <div
+                            class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md min-w-0"
+                        >
                             <div
                                 class="flex flex-row flex-nowrap justify-between items-center gap-3 mb-content-sm"
                             >
-                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0">Информация по обращению</h2>
-                                <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5 flex-shrink-0">
+                                <h2
+                                    class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0"
+                                >
+                                    Информация по обращению
+                                </h2>
+                                <div
+                                    class="flex flex-row flex-nowrap items-center justify-end gap-1.5 flex-shrink-0"
+                                >
                                     <button
                                         type="button"
                                         id="openClientNotesWindowBtn"
@@ -1370,6 +1702,12 @@
                                 <i class="fas fa-folder mr-2"></i>Управление папками
                             </button>
                             <button
+                                id="exportAllBookmarksToPdfBtn"
+                                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition flex items-center"
+                            >
+                                <i class="far fa-file-pdf mr-2"></i>Экспорт всех
+                            </button>
+                            <button
                                 id="addBookmarkBtn"
                                 class="px-3 py-1.5 bg-primary hover:bg-secondary text-white rounded-md transition flex items-center"
                             >
@@ -1600,32 +1938,73 @@
 
             <!-- Проверка сертификата на отзыв: зона загрузки, кнопка сброса, результат -->
             <div id="fnsCertContent" class="tab-content hidden" aria-labelledby="fnsCertTab">
-                <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md fns-cert-shell">
-                    <h2 class="text-2xl font-bold mb-3 text-gray-900 dark:text-gray-100">Проверка сертификата (БЕТА)</h2>
-                    <div id="fnsCertProbeStatus" class="hidden mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm">
-                        <span class="inline-block w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true"></span>
-                        <span class="text-sm text-gray-600 dark:text-gray-300">Проверяем подключение…</span>
+                <div
+                    class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md fns-cert-shell"
+                >
+                    <h2 class="text-2xl font-bold mb-3 text-gray-900 dark:text-gray-100">
+                        Проверка сертификата (БЕТА)
+                    </h2>
+                    <div
+                        id="fnsCertProbeStatus"
+                        class="hidden mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm"
+                    >
+                        <span
+                            class="inline-block w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
+                            aria-hidden="true"
+                        ></span>
+                        <span class="text-sm text-gray-600 dark:text-gray-300"
+                            >Проверяем подключение…</span
+                        >
                     </div>
                     <div id="fnsCertInstallGate" class="hidden"></div>
                     <div id="fnsCertMainBlock" class="hidden">
-                        <p id="fnsCertWelcome" class="text-gray-700 dark:text-gray-300 text-sm sm:text-base mb-2 max-w-3xl">
+                        <p
+                            id="fnsCertWelcome"
+                            class="text-gray-700 dark:text-gray-300 text-sm sm:text-base mb-2 max-w-3xl"
+                        >
                             Перетащите файл или выберите его вручную по клику на поле ниже.
                         </p>
-                        <p class="text-sm sm:text-base text-green-700 dark:text-green-400 mb-4 flex items-center gap-2">
+                        <p
+                            class="text-sm sm:text-base text-green-700 dark:text-green-400 mb-4 flex items-center gap-2"
+                        >
                             <i class="fas fa-shield-alt text-base sm:text-lg"></i>
-                            <span>Сертификат остается только на вашем компьютере и не загружается на сервер.</span>
+                            <span
+                                >Сертификат остается только на вашем компьютере и не загружается на
+                                сервер.</span
+                            >
                         </p>
-                        <div class="bg-white dark:bg-gray-700 p-6 rounded-xl border border-gray-200 dark:border-gray-600 space-y-4">
-                            <div id="fnsCertDropZone" class="fns-drop-zone border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-gray-50/50 dark:hover:bg-gray-600/30 transition-colors duration-200">
-                                <input type="file" id="fnsCertFileInput" accept=".pem,.cer,.crt,.der" class="hidden" />
-                                <p id="fnsCertDropZoneHint" class="text-gray-600 dark:text-gray-400 text-sm transition-colors duration-150">
+                        <div
+                            class="bg-white dark:bg-gray-700 p-6 rounded-xl border border-gray-200 dark:border-gray-600 space-y-4"
+                        >
+                            <div
+                                id="fnsCertDropZone"
+                                class="fns-drop-zone border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-gray-50/50 dark:hover:bg-gray-600/30 transition-colors duration-200"
+                            >
+                                <input
+                                    type="file"
+                                    id="fnsCertFileInput"
+                                    accept=".pem,.cer,.crt,.der"
+                                    class="hidden"
+                                />
+                                <p
+                                    id="fnsCertDropZoneHint"
+                                    class="text-gray-600 dark:text-gray-400 text-sm transition-colors duration-150"
+                                >
                                     <i class="fas fa-certificate mr-2 text-gray-400"></i>
                                     Перетащите сертификат сюда или нажмите для выбора
                                 </p>
                             </div>
-                            <div id="fnsCertInfo" class="text-sm text-gray-700 dark:text-gray-200"></div>
-                            <div id="fnsCrlDetails" class="text-sm text-gray-600 dark:text-gray-300 hidden"></div>
-                            <div class="flex flex-col sm:flex-row sm:items-stretch gap-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                            <div
+                                id="fnsCertInfo"
+                                class="text-sm text-gray-700 dark:text-gray-200"
+                            ></div>
+                            <div
+                                id="fnsCrlDetails"
+                                class="text-sm text-gray-600 dark:text-gray-300 hidden"
+                            ></div>
+                            <div
+                                class="flex flex-col sm:flex-row sm:items-stretch gap-3 pt-3 border-t border-gray-200 dark:border-gray-600"
+                            >
                                 <button
                                     type="button"
                                     id="fnsCertResetBtn"
@@ -1634,8 +2013,10 @@
                                     <i class="fas fa-rotate-left mr-2"></i>
                                     <span>Сброс</span>
                                 </button>
-                                <div id="fnsCrlStatus" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 min-h-[2.5rem] leading-relaxed">
-                                </div>
+                                <div
+                                    id="fnsCrlStatus"
+                                    class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 min-h-[2.5rem] leading-relaxed"
+                                ></div>
                             </div>
                         </div>
                     </div>
@@ -1643,41 +2024,100 @@
             </div>
 
             <!-- XMLизатор -->
-            <div id="xmlAnalyzerContent" class="tab-content hidden p-4" aria-labelledby="xmlAnalyzerTab">
+            <div
+                id="xmlAnalyzerContent"
+                class="tab-content hidden p-4"
+                aria-labelledby="xmlAnalyzerTab"
+            >
                 <div class="xml-analyzer-shell h-full flex flex-col gap-4">
                     <div class="flex flex-wrap items-center justify-between gap-4">
-                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">XMLизатор</h2>
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            XMLизатор
+                        </h2>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <button type="button" id="xmlAnalyzerResetBtn" class="flex-shrink-0 px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <button
+                                type="button"
+                                id="xmlAnalyzerResetBtn"
+                                class="flex-shrink-0 px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
                                 <i class="fas fa-redo mr-1"></i>Сбросить
                             </button>
-                            <button type="button" id="xmlAnalyzerAnalyzeBtn" class="flex-shrink-0 min-w-[140px] font-bold py-2 px-4 rounded-lg bg-primary hover:bg-secondary text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center" disabled>
+                            <button
+                                type="button"
+                                id="xmlAnalyzerAnalyzeBtn"
+                                class="flex-shrink-0 min-w-[140px] font-bold py-2 px-4 rounded-lg bg-primary hover:bg-secondary text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                                disabled
+                            >
                                 <span id="xmlAnalyzerAnalyzeBtnContent">Анализировать</span>
                             </button>
                         </div>
                     </div>
                     <div class="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
-                        <div id="xmlAnalyzerInputContainer" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div
+                            id="xmlAnalyzerInputContainer"
+                            class="flex flex-col flex-1 min-h-0 overflow-hidden"
+                        >
                             <div id="xmlAnalyzerInitialView" class="flex flex-col flex-grow">
-                                <div id="xmlAnalyzerDropZone" class="flex flex-col flex-grow min-h-0 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl overflow-hidden transition-colors">
-                                    <textarea id="xmlAnalyzerDataInput" class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none" placeholder="Вставьте XML рег.файла, JSON СЭДО, XML ЕФС из 1С или перетащите файл (.xml, .zip, .txt, .json)... (Ctrl/Cmd+Enter для анализа)"></textarea>
+                                <div
+                                    id="xmlAnalyzerDropZone"
+                                    class="flex flex-col flex-grow min-h-0 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl overflow-hidden transition-colors"
+                                >
+                                    <textarea
+                                        id="xmlAnalyzerDataInput"
+                                        class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none"
+                                        placeholder="Вставьте XML рег.файла, JSON СЭДО, XML ЕФС из 1С или перетащите файл (.xml, .zip, .txt, .json)... (Ctrl/Cmd+Enter для анализа)"
+                                    ></textarea>
                                 </div>
                                 <div class="flex gap-2 mt-4">
-                                    <button type="button" id="xmlAnalyzerLoadFileBtn" class="px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                    <button
+                                        type="button"
+                                        id="xmlAnalyzerLoadFileBtn"
+                                        class="px-4 py-2 rounded-lg font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                    >
                                         <i class="fas fa-upload mr-1"></i>Загрузить для анализа
                                     </button>
                                 </div>
                             </div>
-                            <div id="xmlAnalyzerCertManagerWrapper" class="hidden flex-col h-full bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 p-4">
+                            <div
+                                id="xmlAnalyzerCertManagerWrapper"
+                                class="hidden flex-col h-full bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 p-4"
+                            >
                                 <h3 class="text-lg font-bold mb-2">Менеджер сертификатов</h3>
-                                <input type="search" id="xmlAnalyzerCertSearch" placeholder="Поиск по ИНН, названию, ФИО..." class="w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 mb-4">
-                                <div id="xmlAnalyzerCertList" class="flex-grow overflow-y-auto space-y-2 min-h-[100px]"></div>
-                                <div id="xmlAnalyzerCertPlaceholder" class="hidden text-center text-gray-500 dark:text-gray-400 py-4">Сертификаты не найдены.</div>
-                                <button type="button" id="xmlAnalyzerExportZipBtn" class="w-full mt-4 py-2 rounded-lg bg-gray-500 hover:bg-gray-600 text-white font-semibold disabled:opacity-50" disabled>Экспортировать все в ZIP</button>
+                                <input
+                                    type="search"
+                                    id="xmlAnalyzerCertSearch"
+                                    placeholder="Поиск по ИНН, названию, ФИО..."
+                                    class="w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 mb-4"
+                                />
+                                <div
+                                    id="xmlAnalyzerCertList"
+                                    class="flex-grow overflow-y-auto space-y-2 min-h-[100px]"
+                                ></div>
+                                <div
+                                    id="xmlAnalyzerCertPlaceholder"
+                                    class="hidden text-center text-gray-500 dark:text-gray-400 py-4"
+                                >
+                                    Сертификаты не найдены.
+                                </div>
+                                <button
+                                    type="button"
+                                    id="xmlAnalyzerExportZipBtn"
+                                    class="w-full mt-4 py-2 rounded-lg bg-gray-500 hover:bg-gray-600 text-white font-semibold disabled:opacity-50"
+                                    disabled
+                                >
+                                    Экспортировать все в ZIP
+                                </button>
                             </div>
                         </div>
-                        <div id="xmlAnalyzerOutputContainer" class="flex-1 min-h-0 hidden bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 overflow-y-auto">
-                            <div id="xmlAnalyzerPlaceholder" class="flex flex-col items-center justify-center text-center p-8 text-gray-500 dark:text-gray-400">
+                        <div
+                            id="xmlAnalyzerOutputContainer"
+                            class="flex-1 min-h-0 hidden bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 overflow-y-auto"
+                        >
+                            <div
+                                id="xmlAnalyzerPlaceholder"
+                                class="flex flex-col items-center justify-center text-center p-8 text-gray-500 dark:text-gray-400"
+                            >
                                 <i class="fas fa-file-code text-4xl mb-4"></i>
                                 <p class="font-semibold">Готов к анализу</p>
                                 <p class="text-sm mt-1">Вставьте текст или выберите файл слева</p>
@@ -1685,35 +2125,134 @@
                             <div id="xmlAnalyzerOutput" class="p-6 hidden"></div>
                         </div>
                     </div>
-                    <div id="xmlAnalyzerNotificationContainer" class="fixed bottom-5 right-5 max-w-sm space-y-3 z-50 pointer-events-none"></div>
+                    <div
+                        id="xmlAnalyzerNotificationContainer"
+                        class="fixed bottom-5 right-5 max-w-sm space-y-3 z-50 pointer-events-none"
+                    ></div>
                 </div>
-                <div id="xmlAnalyzerCertModalOverlay" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm items-center justify-center p-4 z-[60]">
-                    <div id="xmlAnalyzerCertModal" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                        <header class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600">
+                <div
+                    id="xmlAnalyzerCertModalOverlay"
+                    class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm items-center justify-center p-4 z-[60]"
+                >
+                    <div
+                        id="xmlAnalyzerCertModal"
+                        class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+                    >
+                        <header
+                            class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600"
+                        >
                             <h3 class="text-xl font-bold">Свойства сертификата</h3>
-                            <button type="button" id="xmlAnalyzerModalClose" class="h-8 w-8 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600">×</button>
+                            <button
+                                type="button"
+                                id="xmlAnalyzerModalClose"
+                                class="h-8 w-8 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600"
+                            >
+                                ×
+                            </button>
                         </header>
-                        <div id="xmlAnalyzerModalContent" class="flex-grow p-6 overflow-y-auto"></div>
+                        <div
+                            id="xmlAnalyzerModalContent"
+                            class="flex-grow p-6 overflow-y-auto"
+                        ></div>
                     </div>
                 </div>
-                <div id="xmlAnalyzerSedoRawJsonViewer" class="hidden p-4 mt-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600"><pre class="text-xs overflow-auto max-h-64 whitespace-pre-wrap"></pre></div>
+                <div
+                    id="xmlAnalyzerSedoRawJsonViewer"
+                    class="hidden p-4 mt-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600"
+                >
+                    <pre class="text-xs overflow-auto max-h-64 whitespace-pre-wrap"></pre>
+                </div>
                 <template id="xmlAnalyzerAccordionSectionTemplate">
-                    <details class="overflow-hidden p-0 border border-gray-200 dark:border-gray-600 rounded-xl mb-3">
-                        <summary class="text-lg font-semibold cursor-pointer list-none flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><span class="accordion-title"></span><span class="accordion-toggle-container"><svg class="w-6 h-6 text-gray-500 accordion-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></span></summary>
-                        <div class="accordion-content p-4 rounded-b-xl border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50"></div>
+                    <details
+                        class="overflow-hidden p-0 border border-gray-200 dark:border-gray-600 rounded-xl mb-3"
+                    >
+                        <summary
+                            class="text-lg font-semibold cursor-pointer list-none flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <span class="accordion-title"></span
+                            ><span class="accordion-toggle-container"
+                                ><svg
+                                    class="w-6 h-6 text-gray-500 accordion-arrow"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M19 9l-7 7-7-7"
+                                    ></path></svg
+                            ></span>
+                        </summary>
+                        <div
+                            class="accordion-content p-4 rounded-b-xl border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50"
+                        ></div>
                     </details>
                 </template>
                 <template id="xmlAnalyzerInfoRowTemplate">
-                    <div class="flex justify-between items-start border-b border-dashed border-gray-200 dark:border-gray-700 py-2"><span class="info-key font-bold text-gray-600 dark:text-gray-400 pr-4"></span><span class="info-value text-right text-gray-800 dark:text-gray-200"></span></div>
+                    <div
+                        class="flex justify-between items-start border-b border-dashed border-gray-200 dark:border-gray-700 py-2"
+                    >
+                        <span
+                            class="info-key font-bold text-gray-600 dark:text-gray-400 pr-4"
+                        ></span
+                        ><span
+                            class="info-value text-right text-gray-800 dark:text-gray-200"
+                        ></span>
+                    </div>
                 </template>
                 <template id="xmlAnalyzerSedoRowTemplate">
-                    <tr class="sedo-message-row border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 cursor-pointer" title="Нажмите, чтобы увидеть полные данные"><td class="p-2 align-top"><span class="font-mono font-bold sedo-type"></span></td><td class="p-2 align-top"><span class="font-semibold sedo-sender"></span></td><td class="p-2 align-top"><p class="font-semibold text-gray-800 dark:text-gray-100 sedo-title"></p><p class="mt-1 text-xs sedo-status"></p></td><td class="p-2 align-top font-mono text-xs"><div class="sedo-date"></div><div class="sedo-delivered-at"></div></td></tr>
+                    <tr
+                        class="sedo-message-row border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 cursor-pointer"
+                        title="Нажмите, чтобы увидеть полные данные"
+                    >
+                        <td class="p-2 align-top">
+                            <span class="font-mono font-bold sedo-type"></span>
+                        </td>
+                        <td class="p-2 align-top">
+                            <span class="font-semibold sedo-sender"></span>
+                        </td>
+                        <td class="p-2 align-top">
+                            <p
+                                class="font-semibold text-gray-800 dark:text-gray-100 sedo-title"
+                            ></p>
+                            <p class="mt-1 text-xs sedo-status"></p>
+                        </td>
+                        <td class="p-2 align-top font-mono text-xs">
+                            <div class="sedo-date"></div>
+                            <div class="sedo-delivered-at"></div>
+                        </td>
+                    </tr>
                 </template>
                 <template id="xmlAnalyzerCertListItemTemplate">
-                    <div class="cert-list-item flex items-center justify-between gap-4 p-3 rounded-lg hover:bg-sky-500/10 transition-colors cursor-pointer" title="Нажмите для просмотра деталей"><div class="cert-info flex-grow min-w-0"><p class="cert-org font-semibold truncate"></p><p class="cert-fio text-sm text-gray-500 dark:text-gray-400 truncate"></p><p class="cert-thumbprint text-xs font-mono text-gray-400 dark:text-gray-500 truncate"></p></div><div class="download-button-container flex-shrink-0"></div></div>
+                    <div
+                        class="cert-list-item flex items-center justify-between gap-4 p-3 rounded-lg hover:bg-sky-500/10 transition-colors cursor-pointer"
+                        title="Нажмите для просмотра деталей"
+                    >
+                        <div class="cert-info flex-grow min-w-0">
+                            <p class="cert-org font-semibold truncate"></p>
+                            <p
+                                class="cert-fio text-sm text-gray-500 dark:text-gray-400 truncate"
+                            ></p>
+                            <p
+                                class="cert-thumbprint text-xs font-mono text-gray-400 dark:text-gray-500 truncate"
+                            ></p>
+                        </div>
+                        <div class="download-button-container flex-shrink-0"></div>
+                    </div>
                 </template>
                 <template id="xmlAnalyzerLogEntryTemplate">
-                    <div class="log-entry p-3 rounded-lg bg-black/5 dark:bg-white/5"><div class="flex justify-between items-center"><span class="log-event font-semibold text-gray-800 dark:text-gray-200"></span><span class="log-date text-xs text-gray-500"></span></div><p class="log-level text-sm"></p><div class="log-comment-wrapper"></div></div>
+                    <div class="log-entry p-3 rounded-lg bg-black/5 dark:bg-white/5">
+                        <div class="flex justify-between items-center">
+                            <span
+                                class="log-event font-semibold text-gray-800 dark:text-gray-200"
+                            ></span
+                            ><span class="log-date text-xs text-gray-500"></span>
+                        </div>
+                        <p class="log-level text-sm"></p>
+                        <div class="log-comment-wrapper"></div>
+                    </div>
                 </template>
             </div>
 
@@ -1732,6 +2271,14 @@
                                     Название алгоритма
                                 </h2>
                                 <div class="flex flex-wrap gap-2 justify-end flex-shrink-0">
+                                    <button
+                                        id="startStepExecutionBtn"
+                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition text-sm"
+                                        type="button"
+                                    >
+                                        <i class="fas fa-person-walking mr-2"></i>Начать выполнение
+                                        по шагам
+                                    </button>
                                     <button
                                         id="editAlgorithmBtn"
                                         class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm"
@@ -1765,6 +2312,42 @@
                             id="algorithmSteps"
                             class="p-content space-y-3 overflow-y-auto max-h-[calc(90vh-150px)]"
                         ></div>
+                        <div
+                            id="algorithmStepExecutionControls"
+                            class="p-content border-t border-gray-200 dark:border-gray-700 hidden"
+                        >
+                            <div class="flex flex-wrap gap-2 justify-between items-center">
+                                <div
+                                    id="algorithmStepExecutionProgress"
+                                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                    Шаг 1 из 1
+                                </div>
+                                <div class="flex flex-wrap gap-2 justify-end">
+                                    <button
+                                        id="prevStepExecutionBtn"
+                                        type="button"
+                                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 transition"
+                                    >
+                                        <i class="fas fa-arrow-left mr-2"></i>Предыдущий шаг
+                                    </button>
+                                    <button
+                                        id="nextStepExecutionBtn"
+                                        type="button"
+                                        class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
+                                    >
+                                        <i class="fas fa-arrow-right mr-2"></i>Следующий шаг
+                                    </button>
+                                    <button
+                                        id="exitStepExecutionBtn"
+                                        type="button"
+                                        class="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition"
+                                    >
+                                        <i class="fas fa-xmark mr-2"></i>Выйти
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2408,14 +2991,16 @@
                                                     id="runManualHealthCheckBtn"
                                                     class="px-4 py-2 bg-primary hover:bg-secondary text-white text-sm rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    <i class="fas fa-stethoscope mr-2"></i>Запустить проверку систем
+                                                    <i class="fas fa-stethoscope mr-2"></i>Запустить
+                                                    проверку систем
                                                 </button>
                                             </div>
                                             <p
                                                 class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                                             >
-                                                Запускает полную диагностику: localStorage, IndexedDB, поисковый индекс,
-                                                алгоритмы, хранилища, автосохранение. Отчёт отображается в модальном окне.
+                                                Запускает полную диагностику: localStorage,
+                                                IndexedDB, поисковый индекс, алгоритмы, хранилища,
+                                                автосохранение. Отчёт отображается в модальном окне.
                                             </p>
                                         </div>
                                     </div>
@@ -2439,6 +3024,12 @@
                                 >
                                     Сбросить настройки интерфейса
                                 </button>
+                                <button
+                                    id="openRecentlyDeletedBtn"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition"
+                                >
+                                    <i class="fas fa-trash mr-2 text-red-500"></i>Недавно удаленные
+                                </button>
                                 <div class="flex gap-2">
                                     <button
                                         id="cancelUISettingsBtn"
@@ -2461,18 +3052,356 @@
 
             <!-- Модальное окно полного отчёта о состоянии здоровья приложения -->
             <style id="health-report-modal-inline">
-                #healthReportModal { overflow: hidden !important; }
-                #healthReportModalBody { max-height: calc(90vh - 8rem) !important; min-height: 0 !important; overflow: hidden !important; }
-                #healthReportModal .health-report-section-header { display: flex !important; align-items: center !important; min-height: 2.25rem; padding: 0.5rem 1rem; box-sizing: border-box; }
+                #healthReportModal {
+                    overflow: hidden !important;
+                }
+                #healthReportModalBody {
+                    max-height: calc(90vh - 8rem) !important;
+                    min-height: 0 !important;
+                    overflow: hidden !important;
+                }
+                #healthReportModal .health-report-section-header {
+                    display: flex !important;
+                    align-items: center !important;
+                    min-height: 2.25rem;
+                    padding: 0.5rem 1rem;
+                    box-sizing: border-box;
+                }
             </style>
+            <!-- Модальное окно слияния баз данных -->
+            <div
+                id="dbMergeModal"
+                class="fixed inset-0 bg-black/50 hidden z-[65] p-4 flex items-center justify-center"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dbMergeModalTitle"
+            >
+                <div class="db-merge-dialog bg-white dark:bg-gray-900 flex flex-col w-full">
+                    <header class="db-merge-header">
+                        <div class="db-merge-header-inner">
+                            <div class="db-merge-header-icon" aria-hidden="true">
+                                <i class="fas fa-code-merge"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h2 id="dbMergeModalTitle" class="db-merge-title">
+                                    Слияние баз данных
+                                </h2>
+                            </div>
+                        </div>
+                        <div class="db-merge-header-actions flex items-center gap-2">
+                            <div id="dbMergeStepBadges" class="db-merge-step-badges hidden sm:flex">
+                                <span class="db-merge-step-badge is-active" data-step="select"
+                                    >1. Файл</span
+                                >
+                                <span class="db-merge-step-badge" data-step="analyze"
+                                    >2. Анализ</span
+                                >
+                                <span class="db-merge-step-badge" data-step="resolve"
+                                    >3. Конфликты</span
+                                >
+                                <span class="db-merge-step-badge" data-step="apply"
+                                    >4. Слияние</span
+                                >
+                            </div>
+                            <button
+                                type="button"
+                                id="toggleFullscreenDbMergeBtn"
+                                class="p-2 rounded-full text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                title="Развернуть на весь экран"
+                                aria-label="Развернуть на весь экран"
+                            >
+                                <i class="fas fa-expand text-base"></i>
+                            </button>
+                            <button
+                                type="button"
+                                class="db-merge-close-btn p-2 rounded-full text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                aria-label="Закрыть"
+                            >
+                                <i class="fas fa-times text-lg"></i>
+                            </button>
+                        </div>
+                    </header>
+                    <div
+                        class="db-merge-body db-merge-split-layout js-draggable-split"
+                        data-split-min-left="220"
+                        data-split-min-right="320"
+                        data-split-storage-key="db-merge-main-split-left-width"
+                    >
+                        <aside class="db-merge-aside" data-split-pane="left">
+                            <div class="db-merge-aside-inner">
+                                <h3 class="db-merge-aside-title">
+                                    <span
+                                        class="db-merge-aside-dot h-1.5 w-1.5 rounded-full animate-pulse"
+                                        aria-hidden="true"
+                                    ></span>
+                                    Параметры слияния
+                                </h3>
+                                <p class="db-merge-aside-desc">
+                                    Выберите, какие данные объединять.
+                                </p>
+                                <div class="db-merge-scope-list">
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
+                                            value="algorithms"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Алгоритмы</span
+                                            ></span
+                                        >
+                                    </label>
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
+                                            value="bookmarks"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Закладки и папки</span
+                                            ></span
+                                        >
+                                    </label>
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
+                                            value="reglaments"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Регламенты</span
+                                            ></span
+                                        >
+                                    </label>
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
+                                            value="extLinks"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Внешние ресурсы</span
+                                            ></span
+                                        >
+                                    </label>
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
+                                            value="favorites"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Избранное</span
+                                            ></span
+                                        >
+                                    </label>
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
+                                            value="attachments"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Вложения и скриншоты</span
+                                            ></span
+                                        >
+                                    </label>
+                                </div>
+                                <p
+                                    id="dbMergeScopeSummary"
+                                    class="mt-3 text-xs text-gray-600 dark:text-gray-300 leading-relaxed"
+                                ></p>
+                                <div
+                                    id="dbMergeRiskHint"
+                                    class="db-merge-risk-hint db-merge-risk-hint--aside"
+                                >
+                                    <i class="fas fa-shield-alt db-merge-risk-hint-icon shrink-0" aria-hidden="true"></i>
+                                    <span>Перед слиянием будет создана полная резервная копия текущей базы данных.</span>
+                                </div>
+                            </div>
+                        </aside>
+                        <div
+                            class="db-merge-vertical-splitter js-draggable-splitter"
+                            role="separator"
+                            aria-label="Изменить ширину панелей"
+                            aria-orientation="vertical"
+                            tabindex="0"
+                        ></div>
+                        <main class="db-merge-main" data-split-pane="right">
+                            <div id="dbMergeStepContainer" class="db-merge-step-container">
+                                <div
+                                    id="dbMergeStepSelect"
+                                    class="db-merge-step-select space-y-4"
+                                    data-step-content="select"
+                                >
+                                    <div class="db-merge-dropzone">
+                                        <div class="db-merge-dropzone-text">
+                                            <h3>Выберите файл экспорта для слияния</h3>
+                                            <p>
+                                                JSON в формате встроенного экспорта Copilot (полная
+                                                база).
+                                            </p>
+                                        </div>
+                                        <div class="flex items-center gap-3 flex-shrink-0">
+                                            <button
+                                                type="button"
+                                                id="dbMergeSelectFileBtn"
+                                                class="db-merge-btn-primary inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                                            >
+                                                <i class="fas fa-file-import mr-2"></i>Выбрать файл…
+                                            </button>
+                                            <input
+                                                type="file"
+                                                id="dbMergeFileInput"
+                                                accept="application/json,.json"
+                                                class="hidden"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div
+                                        id="dbMergeFileInfo"
+                                        class="db-merge-file-info hidden"
+                                    ></div>
+                                    <p
+                                        id="dbMergeAnalysisPlaceholder"
+                                        class="db-merge-analysis-placeholder"
+                                    >
+                                        После выбора файла будет выполнен предварительный анализ
+                                        отличий по разделам.
+                                    </p>
+                                </div>
+                                <div
+                                    id="dbMergeStepAnalyze"
+                                    class="hidden"
+                                    data-step-content="analyze"
+                                >
+                                    <div class="db-merge-section-head">
+                                        <h3 class="db-merge-section-title">
+                                            <span
+                                                class="db-merge-section-title-icon icon-primary"
+                                                ><i class="fas fa-chart-network text-xs"></i
+                                            ></span>
+                                            Результаты анализа
+                                        </h3>
+                                        <div
+                                            id="dbMergeOverallStats"
+                                            class="db-merge-overall-stats"
+                                        ></div>
+                                    </div>
+                                    <div
+                                        id="dbMergeStoresSummary"
+                                        class="db-merge-stores-grid"
+                                    ></div>
+                                </div>
+                                <div
+                                    id="dbMergeStepResolve"
+                                    class="hidden"
+                                    data-step-content="resolve"
+                                >
+                                    <div class="db-merge-section-head">
+                                        <h3 class="db-merge-section-title">
+                                            <span
+                                                class="db-merge-section-title-icon bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                                                ><i class="fas fa-exchange-alt text-xs"></i
+                                            ></span>
+                                            Разрешение конфликтов
+                                        </h3>
+                                        <div class="flex items-center gap-2">
+                                            <select
+                                                id="dbMergeGlobalConflictPolicy"
+                                                class="border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 min-w-0"
+                                            >
+                                                <option value="ask" selected>
+                                                    Всегда спрашивать
+                                                </option>
+                                                <option value="keepLocal">
+                                                    Предпочитать локальное
+                                                </option>
+                                                <option value="preferImport">
+                                                    Предпочитать импортируемое
+                                                </option>
+                                                <option value="keepBoth">
+                                                    Сохранять обе версии
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="dbMergeConflictsContainer" class="space-y-2"></div>
+                                </div>
+                                <div id="dbMergeStepApply" class="hidden" data-step-content="apply">
+                                    <h3 class="db-merge-section-title mb-3">
+                                        <span
+                                            class="db-merge-section-title-icon icon-primary"
+                                            ><i class="fas fa-play text-xs"></i
+                                        ></span>
+                                        Выполнение слияния
+                                    </h3>
+                                    <div class="db-merge-progress-wrap">
+                                        <div class="db-merge-progress-track">
+                                            <div
+                                                id="dbMergeProgressBar"
+                                                class="db-merge-progress-bar"
+                                                style="width: 0%"
+                                            ></div>
+                                        </div>
+                                        <div
+                                            id="dbMergeProgressText"
+                                            class="db-merge-progress-text"
+                                        >
+                                            Готово к запуску слияния.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <footer class="db-merge-footer">
+                                <div class="db-merge-footer-actions">
+                                    <button
+                                        type="button"
+                                        id="dbMergeCancelBtn"
+                                        class="db-merge-footer-btn border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    >
+                                        Отмена
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="dbMergeStartBtn"
+                                        class="db-merge-footer-btn db-merge-btn-primary font-semibold shadow-sm disabled:opacity-60 disabled:cursor-not-allowed border border-transparent"
+                                        disabled
+                                    >
+                                        Запустить слияние
+                                    </button>
+                                </div>
+                            </footer>
+                        </main>
+                    </div>
+                </div>
+            </div>
+
             <div
                 id="healthReportModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center"
             >
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden my-8">
-                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden my-8"
+                >
+                    <div
+                        class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center"
+                    >
                         <h2 class="text-xl font-bold">
-                            <i class="fas fa-heartbeat mr-2 text-primary"></i>Состояние здоровья приложения
+                            <i class="fas fa-heartbeat mr-2 text-primary"></i>Состояние здоровья
+                            приложения
                         </h2>
                         <div class="flex items-center gap-2">
                             <button
@@ -2494,7 +3423,10 @@
                             </button>
                         </div>
                     </div>
-                    <div id="healthReportModalBody" class="health-report-body p-4 overflow-y-auto flex-1 text-sm">
+                    <div
+                        id="healthReportModalBody"
+                        class="health-report-body p-4 overflow-y-auto flex-1 text-sm"
+                    >
                         <!-- Контент заполняется динамически -->
                     </div>
                 </div>
@@ -2583,22 +3515,42 @@
                 aria-labelledby="unsavedConfirmModalTitle"
             >
                 <div class="flex items-center justify-center min-h-full">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700"
+                    >
                         <div class="p-content border-b border-gray-200 dark:border-gray-700">
-                            <h2 id="unsavedConfirmModalTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100">
-                                <i class="fas fa-exclamation-circle mr-2 text-amber-500"></i>Выход без сохранения
+                            <h2
+                                id="unsavedConfirmModalTitle"
+                                class="text-lg font-bold text-gray-900 dark:text-gray-100"
+                            >
+                                <i class="fas fa-exclamation-circle mr-2 text-amber-500"></i>Выход
+                                без сохранения
                             </h2>
                         </div>
                         <div class="p-content">
-                            <p id="unsavedConfirmModalMessage" class="text-gray-700 dark:text-gray-300">
-                                Изменения не сохранены. Вы действительно хотите выйти без сохранения?
+                            <p
+                                id="unsavedConfirmModalMessage"
+                                class="text-gray-700 dark:text-gray-300"
+                            >
+                                Изменения не сохранены. Вы действительно хотите выйти без
+                                сохранения?
                             </p>
                         </div>
-                        <div class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg">
-                            <button type="button" id="unsavedConfirmCancelBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition font-medium">
+                        <div
+                            class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg"
+                        >
+                            <button
+                                type="button"
+                                id="unsavedConfirmCancelBtn"
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition font-medium"
+                            >
                                 Отмена
                             </button>
-                            <button type="button" id="unsavedConfirmLeaveBtn" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-md transition font-medium">
+                            <button
+                                type="button"
+                                id="unsavedConfirmLeaveBtn"
+                                class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-md transition font-medium"
+                            >
                                 Да, выйти без сохранения
                             </button>
                         </div>
@@ -2615,17 +3567,38 @@
                 aria-labelledby="appConfirmModalTitle"
             >
                 <div class="flex items-center justify-center min-h-full">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700"
+                    >
                         <div class="p-content border-b border-gray-200 dark:border-gray-700">
-                            <h2 id="appConfirmModalTitle" class="text-lg font-bold text-gray-900 dark:text-gray-100">
-                                <i class="fas fa-info-circle mr-2 text-primary"></i>Подтверждение
-                            </h2>
+                            <div class="flex justify-between items-center gap-3">
+                                <h2
+                                    id="appConfirmModalTitle"
+                                    class="text-lg font-bold text-gray-900 dark:text-gray-100"
+                                >
+                                    <i class="fas fa-info-circle mr-2 text-primary"></i
+                                    >Подтверждение
+                                </h2>
+                                <button
+                                    type="button"
+                                    id="appConfirmModalCloseBtn"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    aria-label="Закрыть"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="p-content">
-                            <div id="appConfirmModalMessage" class="text-gray-700 dark:text-gray-300"></div>
+                            <div
+                                id="appConfirmModalMessage"
+                                class="text-gray-700 dark:text-gray-300"
+                            ></div>
                         </div>
-                        <div id="appConfirmModalButtons" class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg">
-                        </div>
+                        <div
+                            id="appConfirmModalButtons"
+                            class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg"
+                        ></div>
                     </div>
                 </div>
             </div>
@@ -2639,13 +3612,17 @@
                 aria-labelledby="timerReturnToClientModalTitle"
             >
                 <div class="flex items-center justify-center min-h-full">
-                    <div id="timerReturnToClientModalBox" class="timer-return-to-client-modal-box bg-gray-900 rounded-xl shadow-2xl max-w-2xl w-full border-4 border-red-500 p-8 text-center">
-                        <h2 id="timerReturnToClientModalTitle" class="text-2xl sm:text-3xl font-bold text-white uppercase tracking-wide mb-4">
+                    <div
+                        id="timerReturnToClientModalBox"
+                        class="timer-return-to-client-modal-box bg-gray-900 rounded-xl shadow-2xl max-w-2xl w-full border-4 border-red-500 p-8 text-center"
+                    >
+                        <h2
+                            id="timerReturnToClientModalTitle"
+                            class="text-2xl sm:text-3xl font-bold text-white uppercase tracking-wide mb-4"
+                        >
                             Вернись к клиенту, потом всё остальное!
                         </h2>
-                        <p class="text-xl text-red-200 mb-6">
-                            Не получай снижение в прослушке!
-                        </p>
+                        <p class="text-xl text-red-200 mb-6">Не получай снижение в прослушке!</p>
                         <button
                             type="button"
                             id="timerReturnToClientModalCloseBtn"
@@ -2663,10 +3640,17 @@
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
             >
                 <div class="flex items-center justify-center min-h-full">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-                        <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+                    >
+                        <div
+                            class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0"
+                        >
                             <div class="flex justify-between items-center">
-                                <h2 id="cibLinkModalTitle" class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                <h2
+                                    id="cibLinkModalTitle"
+                                    class="text-2xl font-bold text-gray-900 dark:text-gray-100"
+                                >
                                     Добавить ссылку 1С
                                 </h2>
                                 <button
@@ -2721,7 +3705,9 @@
                                     ></textarea>
                                 </div>
                             </div>
-                            <div class="p-content border-t border-gray-200 dark:border-gray-600 flex-shrink-0">
+                            <div
+                                class="p-content border-t border-gray-200 dark:border-gray-600 flex-shrink-0"
+                            >
                                 <div class="flex justify-end gap-2">
                                     <button
                                         type="button"
@@ -2832,84 +3818,191 @@
 
                     <div class="p-6 overflow-y-auto flex-1 text-sm leading-relaxed min-h-0">
                         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-compass w-5 text-center text-primary mr-2"></i>Навигация
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Alt + H</code> — Главная.</li>
-                                        <li><code class="hotkey-code">Alt + L</code> — Избранное.</li>
-                                        <li><code class="hotkey-code">Alt + F</code> — Фокус в поиск.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd + K</code> — Палитра команд (поиск по алгоритмам, вкладкам, XML‑отчётам, ошибкам и действиям); также кнопка <i class="fas fa-terminal"></i> в шапке.</li>
-                                        <li><code class="hotkey-code">Backspace</code> (вне полей) — Назад.</li>
-                                    </ul>
-                                </section>
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-database w-5 text-center text-primary mr-2"></i>Сохранение и данные
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Alt + S</code> — Сохранить в активном окне.</li>
-                                        <li><code class="hotkey-code">Alt + N</code> — Новый элемент (алгоритм, закладка…).</li>
-                                        <li><code class="hotkey-code">Alt + Shift + S</code> — Экспорт БД в файл.</li>
-                                        <li><code class="hotkey-code">Alt + Shift + O</code> — Импорт БД из файла.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd + ЛКМ</code> в поле клиента — Копировать ИНН.</li>
-                                    </ul>
-                                </section>
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-window-maximize w-5 text-center text-primary mr-2"></i>Окна и интерфейс
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Alt + I</code> — Настройки.</li>
-                                        <li><code class="hotkey-code">Alt + T</code> — Тема (Авто/Светлая/Тёмная).</li>
-                                        <li><code class="hotkey-code">Alt + V</code> — Вид списка (список/плитки).</li>
-                                        <li><code class="hotkey-code">Alt + R</code> — Перезагрузка приложения.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd + Shift + H</code> — Это окно помощи.</li>
-                                        <li><code class="hotkey-code">Esc</code> — Закрыть окно / очистить поиск.</li>
-                                    </ul>
-                                </section>
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-star w-5 text-center text-primary mr-2"></i>Избранное
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Alt + K</code> — В окне деталей: добавить/убрать в Избранное.</li>
-                                    </ul>
-                                </section>
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-file-alt w-5 text-center text-primary mr-2"></i>Информация по обращению
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Ctrl/Cmd + Enter</code> — Новый пункт нумерованного списка.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd + Shift + Backspace</code> — Очистить поле (с подтверждением).</li>
-                                        <li><code class="hotkey-code">Alt + =</code> / <code class="hotkey-code">Alt + −</code> — Размер текста на Главной.</li>
-                                    </ul>
-                                </section>
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-stopwatch w-5 text-center text-primary mr-2"></i>Таймер
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">Ctrl/Cmd + Alt + T</code> — Старт/пауза.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd + Alt + R</code> — Сброс.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd + Alt + +</code> / <code class="hotkey-code">−</code> — ±5 сек.</li>
-                                        <li>Кнопки <i class="fas fa-plus w-4 text-center"></i>/<i class="fas fa-minus w-4 text-center"></i>: ±5 сек; с <code class="hotkey-code">Ctrl/Cmd</code> ±10 сек; с <code class="hotkey-code">Ctrl/Cmd + Shift</code> ±30 сек.</li>
-                                        <li><code class="hotkey-code">Ctrl/Cmd</code> + сброс — 00:00.</li>
-                                        <li class="text-gray-500 dark:text-gray-400 text-xs">macOS: <code class="hotkey-code">Ctrl + Option</code> или <code class="hotkey-code">⌘ + Option</code>.</li>
-                                    </ul>
-                                </section>
-                                <section class="min-w-0">
-                                    <h3 class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center">
-                                        <i class="fas fa-images w-5 text-center text-primary mr-2"></i>Просмотр изображений
-                                    </h3>
-                                    <ul class="space-y-2 list-inside">
-                                        <li><code class="hotkey-code">←</code> / <code class="hotkey-code">→</code> — Предыдущее/следующее изображение.</li>
-                                        <li><code class="hotkey-code">Колесо мыши</code> — Масштаб.</li>
-                                        <li><code class="hotkey-code">Перетаскивание</code> — Перемещение.</li>
-                                    </ul>
-                                </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i class="fas fa-compass w-5 text-center text-primary mr-2"></i
+                                    >Навигация
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li><code class="hotkey-code">Alt + H</code> — Главная.</li>
+                                    <li><code class="hotkey-code">Alt + L</code> — Избранное.</li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + F</code> — Фокус в поиск.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + K</code> — Палитра
+                                        команд (поиск по алгоритмам, вкладкам, XML‑отчётам, ошибкам
+                                        и действиям); также кнопка <i class="fas fa-terminal"></i> в
+                                        шапке.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Backspace</code> (вне полей) —
+                                        Назад.
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i class="fas fa-database w-5 text-center text-primary mr-2"></i
+                                    >Сохранение и данные
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li>
+                                        <code class="hotkey-code">Alt + S</code> — Сохранить в
+                                        активном окне.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + N</code> — Новый элемент
+                                        (алгоритм, закладка…).
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + Shift + S</code> — Экспорт
+                                        БД в файл.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + Shift + O</code> — Импорт БД
+                                        из файла.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + ЛКМ</code> в поле
+                                        клиента — Копировать ИНН.
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i
+                                        class="fas fa-window-maximize w-5 text-center text-primary mr-2"
+                                    ></i
+                                    >Окна и интерфейс
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li><code class="hotkey-code">Alt + I</code> — Настройки.</li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + T</code> — Тема
+                                        (Авто/Светлая/Тёмная).
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + V</code> — Вид списка
+                                        (список/плитки).
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + R</code> — Перезагрузка
+                                        приложения.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + Shift + H</code> — Это
+                                        окно помощи.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Esc</code> — Закрыть окно /
+                                        очистить поиск.
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i class="fas fa-star w-5 text-center text-primary mr-2"></i
+                                    >Избранное
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li>
+                                        <code class="hotkey-code">Alt + K</code> — В окне деталей:
+                                        добавить/убрать в Избранное.
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i class="fas fa-file-alt w-5 text-center text-primary mr-2"></i
+                                    >Информация по обращению
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + Enter</code> — Новый
+                                        пункт нумерованного списка.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code"
+                                            >Ctrl/Cmd + Shift + Backspace</code
+                                        >
+                                        — Очистить поле (с подтверждением).
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Alt + =</code> /
+                                        <code class="hotkey-code">Alt + −</code> — Размер текста на
+                                        Главной.
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i
+                                        class="fas fa-stopwatch w-5 text-center text-primary mr-2"
+                                    ></i
+                                    >Таймер
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + Alt + T</code> —
+                                        Старт/пауза.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + Alt + R</code> — Сброс.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd + Alt + +</code> /
+                                        <code class="hotkey-code">−</code> — ±5 сек.
+                                    </li>
+                                    <li>
+                                        Кнопки <i class="fas fa-plus w-4 text-center"></i>/<i
+                                            class="fas fa-minus w-4 text-center"
+                                        ></i
+                                        >: ±5 сек; с <code class="hotkey-code">Ctrl/Cmd</code> ±10
+                                        сек; с <code class="hotkey-code">Ctrl/Cmd + Shift</code> ±30
+                                        сек.
+                                    </li>
+                                    <li>
+                                        <code class="hotkey-code">Ctrl/Cmd</code> + сброс — 00:00.
+                                    </li>
+                                    <li class="text-gray-500 dark:text-gray-400 text-xs">
+                                        macOS: <code class="hotkey-code">Ctrl + Option</code> или
+                                        <code class="hotkey-code">⌘ + Option</code>.
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="min-w-0">
+                                <h3
+                                    class="text-base font-semibold mb-2 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center"
+                                >
+                                    <i class="fas fa-images w-5 text-center text-primary mr-2"></i
+                                    >Просмотр изображений
+                                </h3>
+                                <ul class="space-y-2 list-inside">
+                                    <li>
+                                        <code class="hotkey-code">←</code> /
+                                        <code class="hotkey-code">→</code> — Предыдущее/следующее
+                                        изображение.
+                                    </li>
+                                    <li><code class="hotkey-code">Колесо мыши</code> — Масштаб.</li>
+                                    <li>
+                                        <code class="hotkey-code">Перетаскивание</code> —
+                                        Перемещение.
+                                    </li>
+                                </ul>
+                            </section>
                         </div>
                     </div>
 
@@ -2973,11 +4066,25 @@
         </div>
 
         <!-- Кнопки прокрутки вверх/вниз для длинных страниц -->
-        <div id="scrollNavButtons" class="fixed right-6 bottom-24 z-40 flex flex-col gap-2 opacity-0 pointer-events-none transition-opacity duration-200" aria-hidden="true">
-            <button type="button" id="scrollUpBtn" class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Прокрутить вверх">
+        <div
+            id="scrollNavButtons"
+            class="fixed right-6 bottom-24 z-40 flex flex-col gap-2 opacity-0 pointer-events-none transition-opacity duration-200"
+            aria-hidden="true"
+        >
+            <button
+                type="button"
+                id="scrollUpBtn"
+                class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Прокрутить вверх"
+            >
                 <i class="fas fa-chevron-up"></i>
             </button>
-            <button type="button" id="scrollDownBtn" class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Прокрутить вниз">
+            <button
+                type="button"
+                id="scrollDownBtn"
+                class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Прокрутить вниз"
+            >
                 <i class="fas fa-chevron-down"></i>
             </button>
         </div>
@@ -2996,18 +4103,22 @@
 
         <script type="module">
             // Обработка ошибок загрузки модулей
-            window.addEventListener('error', (event) => {
-                console.error('Ошибка загрузки:', event);
-                const filename = event.filename || event.target?.src || '';
-                if (filename && (filename.includes('.js') || filename.includes('module'))) {
-                    const appContent = document.getElementById('appContent');
-                    if (appContent && appContent.classList.contains('hidden')) {
-                        appContent.classList.remove('hidden');
-                        console.error('Обнаружена ошибка загрузки модуля. Показываем контент.');
+            window.addEventListener(
+                'error',
+                (event) => {
+                    console.error('Ошибка загрузки:', event);
+                    const filename = event.filename || event.target?.src || '';
+                    if (filename && (filename.includes('.js') || filename.includes('module'))) {
+                        const appContent = document.getElementById('appContent');
+                        if (appContent && appContent.classList.contains('hidden')) {
+                            appContent.classList.remove('hidden');
+                            console.error('Обнаружена ошибка загрузки модуля. Показываем контент.');
+                        }
                     }
-                }
-            }, true);
-            
+                },
+                true,
+            );
+
             // Обработка необработанных промисов
             window.addEventListener('unhandledrejection', (event) => {
                 console.error('Необработанная ошибка промиса:', event.reason);
@@ -3017,7 +4128,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260311-235720-3aba93f"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260311-235720-3aba93f"></script>
+        <script type="module" src="./script.js?v=legacy-20260314-234905-a809ba1"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260314-234905-a809ba1"></script>
     </body>
 </html>

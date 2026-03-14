@@ -359,7 +359,9 @@ function setupClientNotesPopupMessageListener() {
             const el = getClientNotesEl();
             if (!el) return;
             if (data.type === 'clientNotesRequest') {
-                const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+                const theme = document.documentElement.classList.contains('dark')
+                    ? 'dark'
+                    : 'light';
                 _lastThemeForPopup = theme;
                 event.source?.postMessage(
                     CLIENT_NOTES_MSG_PREFIX +
@@ -418,7 +420,9 @@ export function openClientNotesPopupWindow() {
         });
         notesPopupRef.addEventListener('load', () => {
             if (notesPopupRef && !notesPopupRef.closed) {
-                const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+                const theme = document.documentElement.classList.contains('dark')
+                    ? 'dark'
+                    : 'light';
                 _lastThemeForPopup = theme;
                 notesPopupRef.postMessage(
                     CLIENT_NOTES_MSG_PREFIX +

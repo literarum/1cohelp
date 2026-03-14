@@ -53,7 +53,12 @@ function showNotification(message, type = 'success', duration = 5000) {
  */
 function playTimerEndSound() {
     try {
-        const Ctx = typeof AudioContext !== 'undefined' ? AudioContext : typeof window !== 'undefined' && window.webkitAudioContext ? window.webkitAudioContext : null;
+        const Ctx =
+            typeof AudioContext !== 'undefined'
+                ? AudioContext
+                : typeof window !== 'undefined' && window.webkitAudioContext
+                  ? window.webkitAudioContext
+                  : null;
         if (!Ctx) return;
         const ctx = new Ctx();
         const playBeep = (startTime) => {
@@ -145,10 +150,8 @@ function stopTimerEndEffects() {
 }
 
 /** Текст модалки "Вернись к клиенту" (таймер) */
-const TIMER_RETURN_TO_CLIENT_TITLE =
-    'ВЕРНИСЬ К КЛИЕНТУ, ПОТОМ ВСЁ ОСТАЛЬНОЕ!';
-const TIMER_RETURN_TO_CLIENT_SUBTITLE =
-    'НЕ ПОЛУЧАЙ СНИЖЕНИЕ В ПРОСЛУШКЕ!';
+const TIMER_RETURN_TO_CLIENT_TITLE = 'ВЕРНИСЬ К КЛИЕНТУ, ПОТОМ ВСЁ ОСТАЛЬНОЕ!';
+const TIMER_RETURN_TO_CLIENT_SUBTITLE = 'НЕ ПОЛУЧАЙ СНИЖЕНИЕ В ПРОСЛУШКЕ!';
 
 /**
  * Показать большое модальное окно "Вернись к клиенту" (вместо браузерного уведомления).

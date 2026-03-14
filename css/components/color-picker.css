@@ -34,4 +34,3 @@
 :is(#saturation-slider-gradient, #brightness-slider-gradient) {
     transition: background 0.1s ease-out;
 }
-

@@ -17,7 +17,10 @@ function hardReloadWithCacheBypass() {
         url.searchParams.set(cacheBusterParam, Date.now().toString());
         location.replace(url.toString());
     } catch (error) {
-        console.warn('[app-reload.js] Не удалось выполнить hard reload через URL, fallback к location.reload().', error);
+        console.warn(
+            '[app-reload.js] Не удалось выполнить hard reload через URL, fallback к location.reload().',
+            error,
+        );
         window.location.reload();
     }
 }

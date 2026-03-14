@@ -134,7 +134,7 @@
     cursor: pointer;
 }
 
-/* Группы главного алгоритма (аккордеон) */
+/* Группы главного алгоритма (аккордеон). Ховер единый на всю группу: и заголовок, и область карточек. */
 .main-algo-group {
     margin-bottom: 0.75rem;
     border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
@@ -143,17 +143,27 @@
     background: var(--color-surface-2);
     transition:
         box-shadow 0.2s ease,
-        background-color 0.2s ease;
+        background-color 0.2s ease,
+        border-color 0.2s ease;
 }
 .main-algo-group:hover {
     background-color: var(--color-hover-subtle, rgba(0, 0, 0, 0.02));
     box-shadow: var(--card-hover-shadow, 0 4px 12px rgba(0, 0, 0, 0.08));
+}
+/* При ховере группы заголовок наследует фон группы, чтобы тон совпадал с рамкой и областью карточек. */
+.main-algo-group:hover .main-algo-group-header {
+    background: transparent;
+    background-color: transparent;
 }
 html.dark .main-algo-group {
     background: var(--color-surface-2);
 }
 html.dark .main-algo-group:hover {
     background-color: var(--color-hover-subtle, rgba(255, 255, 255, 0.05));
+}
+html.dark .main-algo-group:hover .main-algo-group-header {
+    background: transparent;
+    background-color: transparent;
 }
 .main-algo-group-header {
     padding: 0.5rem 0.75rem;
@@ -167,21 +177,17 @@ html.dark .main-algo-group:hover {
     border-radius: inherit;
     border-top-left-radius: inherit;
     border-top-right-radius: inherit;
+    transition: background-color 0.2s ease;
 }
 /* При закрытой группе — скругление нижних углов заголовка */
 .main-algo-group.is-closed .main-algo-group-header {
     border-bottom-left-radius: inherit;
     border-bottom-right-radius: inherit;
 }
-.main-algo-group-header:hover {
-    background: var(--color-surface-3);
-}
+/* Отдельный ховер только на заголовок убран: подсветка только через .main-algo-group:hover для всей группы. */
 html.dark .main-algo-group-header {
     background: var(--color-surface-2);
     color: var(--color-text-primary);
-}
-html.dark .main-algo-group-header:hover {
-    background: var(--color-surface-3);
 }
 .main-algo-group-header .fa-chevron-down {
     transition: transform 0.2s ease;
@@ -219,4 +225,3 @@ html.dark .main-algo-group-header:hover {
     margin: 0;
     border: none;
 }
-

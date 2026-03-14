@@ -33,7 +33,10 @@
     border-radius: 9999px;
     background: var(--color-border, #d1d5db);
     border: 1px solid var(--color-border, #d1d5db);
-    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .app-toggle__track::after {

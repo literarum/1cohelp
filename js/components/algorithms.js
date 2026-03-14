@@ -631,7 +631,7 @@ export function initStepSorting(containerElement, isMainAlgoWithGroups = false) 
         return;
     }
     const SortableLib =
-        (typeof window !== 'undefined' && typeof window.Sortable !== 'undefined')
+        typeof window !== 'undefined' && typeof window.Sortable !== 'undefined'
             ? window.Sortable
             : Sortable;
 
@@ -1188,7 +1188,9 @@ export function getCurrentEditState() {
                       .filter(Boolean)
                 : [];
             const numbersModeInput = stepDiv.querySelector('.step-numbers-mode-input');
-            currentStepData.phoneNumbersEnabled = numbersModeInput ? numbersModeInput.checked : false;
+            currentStepData.phoneNumbersEnabled = numbersModeInput
+                ? numbersModeInput.checked
+                : false;
         }
 
         if (stepDiv.dataset.stepType) {

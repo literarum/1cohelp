@@ -259,6 +259,25 @@ export const healthReportModalConfig = {
     contentAreaSelector: '#healthReportModalBody',
 };
 
+export const dbMergeModalConfig = {
+    modalId: 'dbMergeModal',
+    buttonId: 'toggleFullscreenDbMergeBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-4'],
+            innerContainer: [],
+            contentArea: [],
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+            contentArea: ['h-full', 'max-h-full'],
+        },
+    },
+    innerContainerSelector: '.db-merge-dialog',
+    contentAreaSelector: '#dbMergeStepContainer',
+};
+
 /** Массив конфигов модалок для initFullscreenToggles (избегаем предупреждения "No modal configs provided") */
 export const FULLSCREEN_MODAL_CONFIGS = [
     algorithmDetailModalConfig,
@@ -270,6 +289,7 @@ export const FULLSCREEN_MODAL_CONFIGS = [
     bookmarkDetailModalConfigGlobal,
     hotkeysModalConfig,
     healthReportModalConfig,
+    dbMergeModalConfig,
 ];
 
 export const SAVE_BUTTON_SELECTORS =

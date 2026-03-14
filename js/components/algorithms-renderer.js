@@ -20,6 +20,8 @@ let renderScreenshotIcon = null;
 let handleViewScreenshotClick = null;
 let openAnimatedModal = null;
 let copyToClipboard = null;
+let resetAlgorithmStepExecutionMode = null;
+let refreshAlgorithmStepExecutionAvailability = null;
 
 /**
  * Устанавливает зависимости для модуля рендеринга
@@ -33,6 +35,8 @@ export function setAlgorithmsRendererDependencies(deps) {
     handleViewScreenshotClick = deps.handleViewScreenshotClick;
     openAnimatedModal = deps.openAnimatedModal;
     copyToClipboard = deps.copyToClipboard;
+    resetAlgorithmStepExecutionMode = deps.resetAlgorithmStepExecutionMode;
+    refreshAlgorithmStepExecutionAvailability = deps.refreshAlgorithmStepExecutionAvailability;
 }
 
 /**
@@ -72,6 +76,10 @@ export async function showAlgorithmDetail(algorithm, section) {
             showNotification('Ошибка: Некорректные данные алгоритма.', 'error');
         }
         return;
+    }
+
+    if (typeof resetAlgorithmStepExecutionMode === 'function') {
+        resetAlgorithmStepExecutionMode();
     }
     const currentAlgorithmId =
         section === 'main' || algorithm.id === 'main' ? 'main' : algorithm.id || null;
@@ -345,6 +353,10 @@ export async function showAlgorithmDetail(algorithm, section) {
             'algorithm',
             String(currentAlgorithmId),
         );
+    }
+
+    if (typeof refreshAlgorithmStepExecutionAvailability === 'function') {
+        refreshAlgorithmStepExecutionAvailability();
     }
 
     if (openAnimatedModal) {

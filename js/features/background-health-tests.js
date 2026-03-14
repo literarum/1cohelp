@@ -4,6 +4,7 @@ import { CURRENT_SCHEMA_VERSION, USER_PREFERENCES_KEY } from '../constants.js';
 import { REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER } from '../config/revocation-sources.js';
 import { REVOCATION_API_BASE_URL } from '../config.js';
 import { probeHelperAvailability } from './revocation-helper-probe.js';
+import { runSearchAndIndexHealthTests } from './search-health-tests.js';
 
 let deps = {};
 const WATCHDOG_INTERVAL_MS = 60000;
@@ -429,7 +430,11 @@ export function initBackgroundHealthTestsSystem() {
                         const quotaMb = quota ? Math.round(quota / 1024 / 1024) : 0;
                         const percent = quota > 0 ? (usage / quota) * 100 : 0;
                         const percentLabel =
-                            percent >= 1 ? `~${Math.round(percent)}%` : percent > 0 || usage > 0 ? '<1%' : '0%';
+                            percent >= 1
+                                ? `~${Math.round(percent)}%`
+                                : percent > 0 || usage > 0
+                                  ? '<1%'
+                                  : '0%';
                         if (percent > 90) {
                             report(
                                 'warn',
@@ -504,25 +509,8 @@ export function initBackgroundHealthTestsSystem() {
                 }
                 updateHud(40);
 
-                // Тест 3: состояние поискового индекса
-                try {
-                    if (!deps.performDBOperation) {
-                        throw new Error('Метод performDBOperation не доступен.');
-                    }
-                    const count = await runWithTimeout(
-                        deps.performDBOperation('searchIndex', 'readonly', (store) =>
-                            store.count(),
-                        ),
-                        5000,
-                    );
-                    if (!count) {
-                        report('warn', 'Поисковый индекс', 'Индекс пуст или не заполнен.');
-                    } else {
-                        report('info', 'Поисковый индекс', `Записей в индексе: ${count}.`);
-                    }
-                } catch (err) {
-                    report('error', 'Поисковый индекс', err.message);
-                }
+                // Тест 3: индексация и поиск (расширенный набор проверок)
+                await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
                 updateHud(60);
 
                 // Тест 4: доступность и структура базы алгоритмов
@@ -609,9 +597,10 @@ export function initBackgroundHealthTestsSystem() {
                         deps.getFromIndexedDB?.('clientData', 'current'),
                         3000,
                     );
-                    const notesLen = (currentForNotes?.notes != null && typeof currentForNotes.notes === 'string')
-                        ? currentForNotes.notes.length
-                        : 0;
+                    const notesLen =
+                        currentForNotes?.notes != null && typeof currentForNotes.notes === 'string'
+                            ? currentForNotes.notes.length
+                            : 0;
                     report('info', 'Заметки', `Символов в заметках: ${notesLen}.`);
                 } catch (err) {
                     report('warn', 'Заметки', err.message);
@@ -799,11 +788,21 @@ export function initBackgroundHealthTestsSystem() {
                 // Тест 6.0.2: стили (загрузка CSS)
                 try {
                     const sheetCount = document.styleSheets?.length ?? 0;
-                    const hasReportClass = Boolean(document.querySelector?.('.health-report-section'));
+                    const hasReportClass = Boolean(
+                        document.querySelector?.('.health-report-section'),
+                    );
                     if (sheetCount > 0 || hasReportClass) {
-                        report('info', 'Стили', `Таблиц стилей: ${sheetCount}, ключевые классы загружены.`);
+                        report(
+                            'info',
+                            'Стили',
+                            `Таблиц стилей: ${sheetCount}, ключевые классы загружены.`,
+                        );
                     } else {
-                        report('warn', 'Стили', 'Таблиц стилей не обнаружено или проверка недоступна.');
+                        report(
+                            'warn',
+                            'Стили',
+                            'Таблиц стилей не обнаружено или проверка недоступна.',
+                        );
                     }
                 } catch (err) {
                     report('warn', 'Стили', err.message);
@@ -832,7 +831,7 @@ export function initBackgroundHealthTestsSystem() {
                             `Текущая версия: ${CURRENT_SCHEMA_VERSION}.`,
                         );
                     }
-                } catch (_err) {
+                } catch {
                     report('info', 'Версия схемы', `Текущая: ${CURRENT_SCHEMA_VERSION}.`);
                 }
 
@@ -992,7 +991,11 @@ export function initBackgroundHealthTestsSystem() {
                     const quotaMb = quota ? Math.round(quota / 1024 / 1024) : 0;
                     const percent = quota > 0 ? (usage / quota) * 100 : 0;
                     const percentLabel =
-                        percent >= 1 ? `~${Math.round(percent)}%` : percent > 0 || usage > 0 ? '<1%' : '0%';
+                        percent >= 1
+                            ? `~${Math.round(percent)}%`
+                            : percent > 0 || usage > 0
+                              ? '<1%'
+                              : '0%';
                     if (percent > 90) {
                         report(
                             'warn',
@@ -1056,39 +1059,8 @@ export function initBackgroundHealthTestsSystem() {
                 }
             }
 
-            // Тест 3: поисковый индекс
-            try {
-                if (!deps.performDBOperation) throw new Error('performDBOperation недоступен.');
-                const count = await runWithTimeout(
-                    deps.performDBOperation('searchIndex', 'readonly', (s) => s.count()),
-                    5000,
-                );
-                report(
-                    count ? 'info' : 'warn',
-                    'Поисковый индекс',
-                    count ? `Записей в индексе: ${count}.` : 'Индекс пуст или не заполнен.',
-                );
-            } catch (err) {
-                report('error', 'Поисковый индекс', err.message);
-            }
-            // Тест 3.1: поиск — доступ по чтению (курсор)
-            try {
-                if (deps.performDBOperation) {
-                    await runWithTimeout(
-                        deps.performDBOperation('searchIndex', 'readonly', (store) => {
-                            return new Promise((resolve, reject) => {
-                                const r = store.openCursor();
-                                r.onsuccess = () => resolve(r.result != null ? 'readable' : 'empty');
-                                r.onerror = () => reject(r.error);
-                            });
-                        }),
-                        5000,
-                    );
-                    report('info', 'Поиск (чтение индекса)', 'Доступ по курсору успешен.');
-                }
-            } catch (err) {
-                report('warn', 'Поиск (чтение индекса)', err.message);
-            }
+            // Тест 3: индексация и поиск (расширенный набор проверок)
+            await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
 
             // Тест 4: алгоритмы (хранятся под ключом 'all' в data.main)
             try {
@@ -1323,7 +1295,11 @@ export function initBackgroundHealthTestsSystem() {
                 const sheetCount = document.styleSheets?.length ?? 0;
                 const hasReportClass = Boolean(document.querySelector?.('.health-report-section'));
                 if (sheetCount > 0 || hasReportClass) {
-                    report('info', 'Стили', `Таблиц стилей: ${sheetCount}, ключевые классы загружены.`);
+                    report(
+                        'info',
+                        'Стили',
+                        `Таблиц стилей: ${sheetCount}, ключевые классы загружены.`,
+                    );
                 } else {
                     report('warn', 'Стили', 'Таблиц стилей не обнаружено или проверка недоступна.');
                 }

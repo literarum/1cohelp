@@ -15,7 +15,8 @@
 export function createAppToggle(options = {}) {
     const { id, name, checked = false, labelText = '', compact = false } = options;
     const root = document.createElement('label');
-    root.className = 'app-toggle flex items-center cursor-pointer' + (compact ? ' app-toggle--compact' : '');
+    root.className =
+        'app-toggle flex items-center cursor-pointer' + (compact ? ' app-toggle--compact' : '');
     root.setAttribute('for', id || undefined);
 
     const input = document.createElement('input');

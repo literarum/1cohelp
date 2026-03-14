@@ -19,7 +19,7 @@ let addEscapeHandler = null;
 let getVisibleModals = null;
 let handleExtLinkFormSubmit = null;
 let showUnsavedConfirmModal = null;
-let deepEqual = null;
+let _deepEqual = null;
 let shouldConfirmBeforeClose = null;
 
 /** Состояние формы при открытии модалки (для проверки несохранённых изменений). */
@@ -54,7 +54,7 @@ export function setExtLinksModalDependencies(deps) {
     handleExtLinkFormSubmit = deps.handleExtLinkFormSubmit;
     if (deps.showUnsavedConfirmModal !== undefined)
         showUnsavedConfirmModal = deps.showUnsavedConfirmModal;
-    if (deps.deepEqual !== undefined) deepEqual = deps.deepEqual;
+    if (deps.deepEqual !== undefined) _deepEqual = deps.deepEqual;
     if (deps.shouldConfirmBeforeClose !== undefined)
         shouldConfirmBeforeClose = deps.shouldConfirmBeforeClose;
 }

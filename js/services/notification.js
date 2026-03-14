@@ -6,7 +6,7 @@ import { escapeHtml } from '../utils/html.js';
 // СТИЛИ ДЛЯ УВЕДОМЛЕНИЙ БЕЗ ИКОНОК
 // ============================================================================
 
-function ensureNotificationIconlessStyles() {
+export function ensureNotificationIconlessStyles() {
     try {
         if (document.getElementById('notification-iconless-css')) return;
         const style = document.createElement('style');
@@ -468,7 +468,7 @@ export function showNotification(message, type = 'success', duration = 5000) {
                 .map((line) => line.trim())
                 .join(' -> ');
         }
-    } catch (_e) {
+    } catch {
         // ignore stack parse errors
     }
     console.log(`[SHOW_NOTIFICATION_CALL_STACK_V5.2_INLINE_STYLE] Called from: ${callStackInfo}`);

@@ -13,6 +13,9 @@ html.dark #appContent .dark\:bg-gray-800 {
 html.dark #appContent .dark\:bg-gray-700 {
     background-color: var(--color-surface-2) !important;
 }
+html.dark #dbMergeModal .db-merge-dialog {
+    background-color: var(--color-surface-2) !important;
+}
 html.dark header {
     background-color: var(--color-background) !important;
 }
@@ -217,4 +220,3 @@ html.dark #appContent .dark\:text-gray-300 {
     ) {
     background-color: var(--color-hover-subtle) !important;
 }
-
