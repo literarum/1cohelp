@@ -339,9 +339,7 @@ export function initDraggableVerticalSplitters(rootElement, options = {}) {
     const handleSelector = options.handleSelector || '.js-draggable-splitter';
     const leftSelector = options.leftSelector || '[data-split-pane="left"]';
     const rightSelector = options.rightSelector || '[data-split-pane="right"]';
-    const defaultMinLeft = Number.isFinite(options.defaultMinLeft)
-        ? options.defaultMinLeft
-        : 220;
+    const defaultMinLeft = Number.isFinite(options.defaultMinLeft) ? options.defaultMinLeft : 220;
     const defaultMinRight = Number.isFinite(options.defaultMinRight)
         ? options.defaultMinRight
         : 280;
@@ -390,7 +388,10 @@ export function initDraggableVerticalSplitters(rootElement, options = {}) {
                     applyLeftWidth(clampLeftWidth(storedWidth, containerWidth));
                 }
             } catch (error) {
-                console.warn('[initDraggableVerticalSplitters] Не удалось прочитать localStorage:', error);
+                console.warn(
+                    '[initDraggableVerticalSplitters] Не удалось прочитать localStorage:',
+                    error,
+                );
             }
         }
 
@@ -401,7 +402,10 @@ export function initDraggableVerticalSplitters(rootElement, options = {}) {
             try {
                 window.localStorage.setItem(storageKey, String(currentWidth));
             } catch (error) {
-                console.warn('[initDraggableVerticalSplitters] Не удалось записать localStorage:', error);
+                console.warn(
+                    '[initDraggableVerticalSplitters] Не удалось записать localStorage:',
+                    error,
+                );
             }
         };
 
@@ -432,7 +436,7 @@ export function initDraggableVerticalSplitters(rootElement, options = {}) {
 
             try {
                 splitRoot.setPointerCapture(event.pointerId);
-            } catch (_) {
+            } catch {
                 /* ignore if unsupported */
             }
 
@@ -452,7 +456,7 @@ export function initDraggableVerticalSplitters(rootElement, options = {}) {
             const onPointerUp = (upEvent) => {
                 try {
                     splitRoot.releasePointerCapture(upEvent.pointerId);
-                } catch (_) {
+                } catch {
                     /* ignore */
                 }
                 splitRoot.classList.remove('is-resizing');

@@ -1,13 +1,15 @@
 'use strict';
 
 import { State } from '../app/state.js';
+import {
+    THEME_HINT_KEY as LOADING_THEME_HINT_KEY,
+    THEME_RESOLVED_KEY as LOADING_THEME_RESOLVED_KEY,
+    OVERLAY_SNAPSHOT_KEY as LOADING_OVERLAY_SNAPSHOT_KEY,
+} from '../features/loading-overlay/index.js';
 
 /**
  * Компонент темы (светлая / тёмная / системная).
  */
-const LOADING_THEME_HINT_KEY = 'copilot.theme.hint';
-const LOADING_THEME_RESOLVED_KEY = 'copilot.theme.resolved';
-const LOADING_OVERLAY_SNAPSHOT_KEY = 'copilot.loading-overlay.snapshot';
 
 function persistLoadingThemeHint(mode, isDark) {
     try {
@@ -50,7 +52,10 @@ function parseCssColorToRgb(value) {
 }
 
 function rgbToHex({ r, g, b }) {
-    const toHex = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+    const toHex = (n) =>
+        Math.max(0, Math.min(255, Math.round(n)))
+            .toString(16)
+            .padStart(2, '0');
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -93,7 +98,11 @@ function buildLoadingOverlaySnapshot(isDarkTheme) {
           : 'light';
     return {
         tone,
-        background: backgroundRgb ? rgbToHex(backgroundRgb) : tone === 'dark' ? '#0a0a1a' : '#f8fafc',
+        background: backgroundRgb
+            ? rgbToHex(backgroundRgb)
+            : tone === 'dark'
+              ? '#060612'
+              : '#f8fafc',
         primary: primaryRgb ? rgbToHex(primaryRgb) : tone === 'dark' ? '#8a2be2' : '#4f46e5',
         secondary: secondaryRgb ? rgbToHex(secondaryRgb) : tone === 'dark' ? '#a020f0' : '#06b6d4',
     };
@@ -114,7 +123,10 @@ function applyLoadingOverlayTheme(isDark) {
     if (typeof window.__applyLoadingOverlayThemeVars === 'function') {
         window.__applyLoadingOverlayThemeVars(overlayTone, snapshot);
     }
-    if (window._earlySphereAnimation && typeof window._earlySphereAnimation.setTheme === 'function') {
+    if (
+        window._earlySphereAnimation &&
+        typeof window._earlySphereAnimation.setTheme === 'function'
+    ) {
         window._earlySphereAnimation.setTheme(overlayTone);
     }
 }

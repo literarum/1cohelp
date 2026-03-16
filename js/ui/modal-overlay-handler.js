@@ -69,6 +69,7 @@ export function initModalOverlayHandler() {
                 topmostModal.id === 'screenshotViewerModal' ||
                 topmostModal.id === 'noInnModal' ||
                 topmostModal.id === 'hotkeysModal' ||
+                topmostModal.id === 'engineeringCockpitModal' ||
                 topmostModal.id === 'confirmClearDataModal' ||
                 topmostModal.id === 'cibLinkModal'
             ) {

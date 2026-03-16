@@ -123,6 +123,10 @@ function selectResult(result) {
             } else {
                 document.getElementById('openRecentlyDeletedBtn')?.click();
             }
+        } else if (action === 'openEngineeringCockpit') {
+            if (typeof window.openEngineeringCockpit === 'function') {
+                window.openEngineeringCockpit();
+            }
         }
         return;
     }

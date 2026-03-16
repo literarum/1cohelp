@@ -224,7 +224,10 @@ function normalizeImportedRecordForStore(storeName, record, ctx) {
     const normalized = { ...record };
 
     if (storeName === 'bookmarks') {
-        if (typeof normalized.folder === 'undefined' && typeof normalized.folderId !== 'undefined') {
+        if (
+            typeof normalized.folder === 'undefined' &&
+            typeof normalized.folderId !== 'undefined'
+        ) {
             normalized.folder = normalized.folderId;
         }
         delete normalized.folderId;
@@ -285,7 +288,9 @@ function normalizeImportedRecordForStore(storeName, record, ctx) {
 function normalizeImportDataForMerge(importDataRaw, stores) {
     const importData = {};
     stores.forEach((storeName) => {
-        importData[storeName] = Array.isArray(importDataRaw?.[storeName]) ? importDataRaw[storeName] : [];
+        importData[storeName] = Array.isArray(importDataRaw?.[storeName])
+            ? importDataRaw[storeName]
+            : [];
     });
 
     const extLinkCategoryNameToId = new Map();
@@ -348,8 +353,8 @@ function areRecordsSemanticallyEqual(a, b) {
         Object.keys(obj || {})
             .sort()
             .forEach((key) => {
-            if (key === 'id' || key === '_id') return;
-            if (key === 'dateAdded' || key === 'createdAt' || key === 'updatedAt') return;
+                if (key === 'id' || key === '_id') return;
+                if (key === 'dateAdded' || key === 'createdAt' || key === 'updatedAt') return;
                 clone[key] = stableNormalize(obj[key]);
             });
         return clone;
@@ -465,7 +470,9 @@ function mergeAlgorithmSectionArray(
 
     const usedIds = new Set(
         result
-            .map((item) => (typeof item?.id === 'undefined' || item?.id === null ? null : String(item.id)))
+            .map((item) =>
+                typeof item?.id === 'undefined' || item?.id === null ? null : String(item.id),
+            )
             .filter(Boolean),
     );
     const localIndexById = new Map();
@@ -836,7 +843,8 @@ export function buildMergePlan(analysisResult, userResolutions) {
         const toUpdate = [];
 
         if (storeName === 'algorithms') {
-            const firstConflict = Array.isArray(conflicts) && conflicts.length > 0 ? conflicts[0] : null;
+            const firstConflict =
+                Array.isArray(conflicts) && conflicts.length > 0 ? conflicts[0] : null;
             const localContainer = firstConflict?.local || localOnly?.[0] || null;
             const importContainer = firstConflict?.incoming || importOnly?.[0] || null;
 
@@ -957,9 +965,7 @@ export async function applyMergePlan(mergePlan) {
             if (mapping.has(asString)) {
                 return mapping.get(asString);
             }
-            return (
-                undefined
-            );
+            return undefined;
         };
 
         const mapParentEntityId = (parentType, parentId) => {
@@ -1146,7 +1152,10 @@ export async function applyMergePlan(mergePlan) {
                     'warning',
                 );
             } catch (rollbackError) {
-                console.error('[DbMerge] Ошибка аварийного отката после сбоя merge:', rollbackError);
+                console.error(
+                    '[DbMerge] Ошибка аварийного отката после сбоя merge:',
+                    rollbackError,
+                );
                 deps.showNotification?.(
                     'Слияние завершилось ошибкой, и откат не удался. Восстановите базу из резервной копии.',
                     'error',
@@ -1181,13 +1190,7 @@ export async function applyMergePlan(mergePlan) {
     return true;
 }
 
-const CONFLICT_DIFF_IGNORED_FIELDS = new Set([
-    'id',
-    '_id',
-    'dateAdded',
-    'createdAt',
-    'updatedAt',
-]);
+const CONFLICT_DIFF_IGNORED_FIELDS = new Set(['id', '_id', 'dateAdded', 'createdAt', 'updatedAt']);
 
 function stableNormalizeValue(value) {
     if (Array.isArray(value)) {
@@ -1206,7 +1209,10 @@ function stableNormalizeValue(value) {
 }
 
 function areFieldValuesEqual(leftValue, rightValue) {
-    return JSON.stringify(stableNormalizeValue(leftValue)) === JSON.stringify(stableNormalizeValue(rightValue));
+    return (
+        JSON.stringify(stableNormalizeValue(leftValue)) ===
+        JSON.stringify(stableNormalizeValue(rightValue))
+    );
 }
 
 function truncateForConflictUi(text, maxLength = 220) {
@@ -1238,7 +1244,10 @@ function formatConflictValueForUi(value, depth = 0) {
         if (depth >= 1) return `${entries.length} полей`;
         const formatted = entries
             .slice(0, 5)
-            .map(([key, nestedValue]) => `${key}: ${formatConflictValueForUi(nestedValue, depth + 1)}`)
+            .map(
+                ([key, nestedValue]) =>
+                    `${key}: ${formatConflictValueForUi(nestedValue, depth + 1)}`,
+            )
             .join('; ');
         const suffix = entries.length > 5 ? `; … (+${entries.length - 5})` : '';
         return `${formatted}${suffix}`;
@@ -1247,29 +1256,30 @@ function formatConflictValueForUi(value, depth = 0) {
 }
 
 function buildConflictDiffView(localRecord, incomingRecord) {
-    const allKeys = new Set([...Object.keys(localRecord || {}), ...Object.keys(incomingRecord || {})]);
+    const allKeys = new Set([
+        ...Object.keys(localRecord || {}),
+        ...Object.keys(incomingRecord || {}),
+    ]);
     const sameFields = [];
     const differentFields = [];
 
-    [...allKeys]
-        .sort()
-        .forEach((key) => {
-            if (CONFLICT_DIFF_IGNORED_FIELDS.has(key)) return;
-            const localValue = localRecord ? localRecord[key] : undefined;
-            const incomingValue = incomingRecord ? incomingRecord[key] : undefined;
-            const localUi = truncateForConflictUi(formatConflictValueForUi(localValue));
-            const incomingUi = truncateForConflictUi(formatConflictValueForUi(incomingValue));
-            const item = {
-                key,
-                localUi,
-                incomingUi,
-            };
-            if (areFieldValuesEqual(localValue, incomingValue)) {
-                sameFields.push(item);
-            } else {
-                differentFields.push(item);
-            }
-        });
+    [...allKeys].sort().forEach((key) => {
+        if (CONFLICT_DIFF_IGNORED_FIELDS.has(key)) return;
+        const localValue = localRecord ? localRecord[key] : undefined;
+        const incomingValue = incomingRecord ? incomingRecord[key] : undefined;
+        const localUi = truncateForConflictUi(formatConflictValueForUi(localValue));
+        const incomingUi = truncateForConflictUi(formatConflictValueForUi(incomingValue));
+        const item = {
+            key,
+            localUi,
+            incomingUi,
+        };
+        if (areFieldValuesEqual(localValue, incomingValue)) {
+            sameFields.push(item);
+        } else {
+            differentFields.push(item);
+        }
+    });
 
     return {
         sameFields,
@@ -1292,7 +1302,9 @@ function getConflictRecordLabel(storeName, localRecord, incomingRecord) {
     if (firstFilled) return truncateForConflictUi(firstFilled, 120);
 
     const localId =
-        typeof localRecord?.id !== 'undefined' && localRecord?.id !== null ? `L#${localRecord.id}` : 'L#?';
+        typeof localRecord?.id !== 'undefined' && localRecord?.id !== null
+            ? `L#${localRecord.id}`
+            : 'L#?';
     const incomingId =
         typeof incomingRecord?.id !== 'undefined' && incomingRecord?.id !== null
             ? `I#${incomingRecord.id}`
@@ -1800,10 +1812,7 @@ export function openDbMergeModal() {
             }
             if (!lastAnalysis) return;
             if (typeof deps.exportAllData !== 'function') {
-                deps.showNotification?.(
-                    'Экспорт данных не доступен. Слияние отключено.',
-                    'error',
-                );
+                deps.showNotification?.('Экспорт данных не доступен. Слияние отключено.', 'error');
                 return;
             }
             setStep('apply');

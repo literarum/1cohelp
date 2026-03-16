@@ -3543,6 +3543,8 @@ export function initSearchSystem() {
     const searchInput = document.getElementById('searchInput');
     const searchResultsContainer = document.getElementById('searchResults');
     const clearSearchBtn = document.getElementById('clearSearchInputBtn');
+    const toggleAdvancedSearchBtn = document.getElementById('toggleAdvancedSearch');
+    const advancedSearchOptions = document.getElementById('advancedSearchOptions');
     const searchFieldFilters = document.querySelectorAll('.search-field-filter');
 
     if (!searchInput) {
@@ -3600,20 +3602,38 @@ export function initSearchSystem() {
     };
 
     const handleClickOutside = (event) => {
+        const target = event.target;
+        const isClickOnToggle =
+            toggleAdvancedSearchBtn && (target === toggleAdvancedSearchBtn || toggleAdvancedSearchBtn.contains(target));
+        const isClickInsideAdvancedPanel =
+            advancedSearchOptions && advancedSearchOptions.contains(target);
+        const isClickInsideFilters = Array.from(searchFieldFilters).some(
+            (filter) =>
+                filter.contains(target) || filter.closest?.('label')?.contains(target),
+        );
+
         if (
             searchResultsContainer &&
             !searchResultsContainer.classList.contains('hidden') &&
             searchInput
         ) {
-            const isClickInsideSearchInput = searchInput.contains(event.target);
-            const isClickInsideSearchResults = searchResultsContainer.contains(event.target);
-            const isClickInsideFilters = Array.from(searchFieldFilters).some(
-                (filter) =>
-                    filter.contains(event.target) || filter.labels?.[0]?.contains(event.target),
-            );
-
-            if (!isClickInsideSearchInput && !isClickInsideSearchResults && !isClickInsideFilters) {
+            const isClickInsideSearchInput = searchInput.contains(target);
+            const isClickInsideSearchResults = searchResultsContainer.contains(target);
+            const keepResultsOpen =
+                isClickInsideSearchInput ||
+                isClickInsideSearchResults ||
+                isClickInsideFilters ||
+                isClickOnToggle ||
+                isClickInsideAdvancedPanel;
+            if (!keepResultsOpen) {
                 searchResultsContainer.classList.add('hidden');
+            }
+        }
+
+        if (advancedSearchOptions && toggleAdvancedSearchBtn && !advancedSearchOptions.classList.contains('hidden')) {
+            if (!isClickInsideAdvancedPanel && !isClickOnToggle) {
+                advancedSearchOptions.classList.add('hidden');
+                toggleAdvancedSearchBtn.setAttribute('aria-expanded', 'false');
             }
         }
     };
@@ -3631,6 +3651,21 @@ export function initSearchSystem() {
             clearSearchBtn.classList.add('hidden');
         }
     };
+
+    if (toggleAdvancedSearchBtn && advancedSearchOptions) {
+        toggleAdvancedSearchBtn.addEventListener('click', () => {
+            const isHidden = advancedSearchOptions.classList.toggle('hidden');
+            toggleAdvancedSearchBtn.setAttribute('aria-expanded', String(!isHidden));
+        });
+    }
+
+    searchFieldFilters.forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+            if (searchInput && sanitizeQuery(searchInput.value).length >= 1) {
+                debouncedSearchHandler();
+            }
+        });
+    });
 
     searchInput.addEventListener('input', handleInput);
     document.addEventListener('click', handleClickOutside);

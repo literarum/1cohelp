@@ -57,20 +57,53 @@ export function createPanelItemElement(id, name, isVisible = true) {
 }
 
 /**
- * Заполняет элементы модального окна настроек UI
+ * Заполняет элементы модального окна кастомизации (тема, цвета, скругление, отступы, фон).
+ * Элементы находятся в #appCustomizationModal.
+ */
+export function populateCustomizationModalControls(settings) {
+    const modal = document.getElementById('appCustomizationModal');
+    if (!modal) return;
+
+    if (typeof settings !== 'object' || settings === null) {
+        settings = { ...DEFAULT_UI_SETTINGS, themeMode: State?.userPreferences?.theme };
+    }
+
+    const themeVal = settings.theme || settings.themeMode || 'dark';
+    const themeRadio = modal.querySelector(
+        `input[name="themeMode"][value="${themeVal === 'auto' ? 'dark' : themeVal}"]`,
+    );
+    if (themeRadio) themeRadio.checked = true;
+
+    const borderRadiusSlider = modal.querySelector('#borderRadiusSlider');
+    if (borderRadiusSlider) borderRadiusSlider.value = String(settings.borderRadius ?? 8);
+
+    const densitySlider = modal.querySelector('#densitySlider');
+    if (densitySlider) densitySlider.value = String(settings.contentDensity ?? 3);
+
+    const colorTargetSelector = modal.querySelector('#colorTargetSelector');
+    const target = (State?.uiModalState?.currentColorTarget) || 'elements';
+    const targetRadio = colorTargetSelector?.querySelector(`input[value="${target}"]`);
+    if (targetRadio) targetRadio.checked = true;
+
+    if (typeof setColorPickerStateFromHex === 'function') {
+        const hex =
+            settings.primaryColor ||
+            (State?.currentPreviewSettings?.primaryColor) ||
+            DEFAULT_UI_SETTINGS?.primaryColor;
+        setColorPickerStateFromHex(hex || '#9933FF');
+    }
+}
+
+/**
+ * Заполняет элементы основного модального окна настроек UI (вкладки, масштаб, переключатели).
  */
 export function populateModalControls(settings) {
     const modal = document.getElementById('customizeUIModal');
     if (!modal) return;
 
     if (typeof settings !== 'object' || settings === null) {
-        settings = { ...DEFAULT_UI_SETTINGS, themeMode: State.userPreferences.theme };
+        settings = { ...DEFAULT_UI_SETTINGS, themeMode: State?.userPreferences?.theme };
     }
-
-    const themeRadio = modal.querySelector(
-        `input[name="themeMode"][value="${settings.theme || settings.themeMode || 'auto'}"]`,
-    );
-    if (themeRadio) themeRadio.checked = true;
 
     const showBlacklistWarningToggle = modal.querySelector('#toggleBlacklistWarning');
     if (showBlacklistWarningToggle) {
@@ -89,12 +122,6 @@ export function populateModalControls(settings) {
 
     const fontSizeLabel = modal.querySelector('#fontSizeLabel');
     if (fontSizeLabel) fontSizeLabel.textContent = (settings.fontSize ?? 100) + '%';
-
-    const borderRadiusSlider = modal.querySelector('#borderRadiusSlider');
-    if (borderRadiusSlider) borderRadiusSlider.value = settings.borderRadius ?? 8;
-
-    const densitySlider = modal.querySelector('#densitySlider');
-    if (densitySlider) densitySlider.value = settings.contentDensity ?? 3;
 
     const panelSortContainer = document.getElementById('panelSortContainer');
     if (panelSortContainer) {
@@ -145,11 +172,13 @@ export function handleModalVisibilityToggle(event) {
 }
 
 /**
- * Получает настройки из модального окна
+ * Получает настройки из модальных окон (основное + кастомизация).
  */
 export function getSettingsFromModal() {
     const modal = document.getElementById('customizeUIModal');
     if (!modal) return null;
+
+    const customizationModal = document.getElementById('appCustomizationModal');
 
     const showBlacklistWarningToggle = modal.querySelector('#toggleBlacklistWarning');
     const disableForcedBackupToggle = modal.querySelector('#toggleDisableForcedBackup');
@@ -162,6 +191,13 @@ export function getSettingsFromModal() {
     const customTextColor = State.currentPreviewSettings.customTextColor;
     const isTextCustom = State.currentPreviewSettings.isTextCustom || false;
 
+    const themeFromCustomization =
+        customizationModal?.querySelector('input[name="themeMode"]:checked')?.value ||
+        State.currentPreviewSettings?.theme ||
+        'auto';
+    const borderRadiusSlider = customizationModal?.querySelector('#borderRadiusSlider');
+    const densitySlider = customizationModal?.querySelector('#densitySlider');
+
     const panelItems = Array.from(modal.querySelectorAll('#panelSortContainer .panel-item'));
     const panelOrder = panelItems.map((item) => item.getAttribute('data-section'));
     const panelVisibility = panelItems.map(
@@ -170,15 +206,15 @@ export function getSettingsFromModal() {
 
     return {
         mainLayout: 'horizontal',
-        theme: modal.querySelector('input[name="themeMode"]:checked')?.value || 'auto',
+        theme: themeFromCustomization,
         primaryColor: primaryColor,
         backgroundColor: backgroundColor,
         isBackgroundCustom: isBackgroundCustom,
         customTextColor: customTextColor,
         isTextCustom: isTextCustom,
         fontSize: parseInt(modal.querySelector('#fontSizeLabel')?.textContent) || 100,
-        borderRadius: parseInt(modal.querySelector('#borderRadiusSlider')?.value) || 8,
-        contentDensity: parseInt(modal.querySelector('#densitySlider')?.value) || 3,
+        borderRadius: parseInt(borderRadiusSlider?.value) || State.currentPreviewSettings?.borderRadius || 8,
+        contentDensity: parseInt(densitySlider?.value) || State.currentPreviewSettings?.contentDensity || 3,
         panelOrder: panelOrder,
         panelVisibility: panelVisibility,
         showBlacklistUsageWarning: showBlacklistWarningToggle
@@ -248,16 +284,13 @@ export async function resetUISettingsInModal() {
 
     try {
         populateModalControls(State.currentPreviewSettings);
+        populateCustomizationModalControls(State.currentPreviewSettings);
 
-        State.uiModalState.currentColorTarget = 'elements';
+        if (State.uiModalState) State.uiModalState.currentColorTarget = 'elements';
 
         const colorTargetSelector = document.getElementById('colorTargetSelector');
         const elementsRadio = colorTargetSelector?.querySelector('input[value="elements"]');
         if (elementsRadio) elementsRadio.checked = true;
-
-        if (typeof setColorPickerStateFromHex === 'function') {
-            setColorPickerStateFromHex(State.currentPreviewSettings.primaryColor);
-        }
 
         if (typeof applyPreviewSettings === 'function') {
             await applyPreviewSettings(State.currentPreviewSettings);
@@ -278,6 +311,7 @@ export async function resetUISettingsInModal() {
         State.currentPreviewSettings = JSON.parse(JSON.stringify(State.originalUISettings));
         State.isUISettingsDirty = false;
         populateModalControls(State.currentPreviewSettings);
+        populateCustomizationModalControls(State.currentPreviewSettings);
         if (typeof applyPreviewSettings === 'function') {
             await applyPreviewSettings(State.currentPreviewSettings);
         }

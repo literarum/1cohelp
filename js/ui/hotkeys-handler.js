@@ -41,6 +41,7 @@ let searchEscClearHandler = null;
 let altRReloadHandler = null;
 let ctrlRReloadHandler = null;
 let openCommandPalette = null;
+let openEngineeringCockpit = null;
 
 export function setHotkeysDependencies(deps) {
     if (deps.showNoInnModal !== undefined) showNoInnModal = deps.showNoInnModal;
@@ -84,6 +85,8 @@ export function setHotkeysDependencies(deps) {
     if (deps.hasBlockingModalsOpen !== undefined)
         hasBlockingModalsOpen = deps.hasBlockingModalsOpen;
     if (deps.openCommandPalette !== undefined) openCommandPalette = deps.openCommandPalette;
+    if (deps.openEngineeringCockpit !== undefined)
+        openEngineeringCockpit = deps.openEngineeringCockpit;
 }
 
 /**
@@ -262,6 +265,18 @@ export async function handleGlobalHotkey(event) {
         event.stopPropagation();
         if (typeof openCommandPalette === 'function') {
             openCommandPalette();
+        }
+        return;
+    }
+
+    // Ctrl/Cmd + Alt + Shift + M — скрытый вход в инженерный режим
+    if (ctrlOrMeta && alt && shift && (event.key === 'm' || event.key === 'M' || code === 'KeyM')) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof openEngineeringCockpit === 'function') {
+            openEngineeringCockpit();
+        } else if (typeof window.openEngineeringCockpit === 'function') {
+            window.openEngineeringCockpit();
         }
         return;
     }

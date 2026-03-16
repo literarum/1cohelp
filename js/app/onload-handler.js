@@ -109,6 +109,7 @@ export function registerOnloadHandler() {
                     if (tabsNav) {
                         tabsNav.style.visibility = 'visible';
                         tabsNav.style.display = 'flex';
+                        tabsNav.style.flexWrap = 'nowrap';
                     }
                     console.log(
                         '[window.onload Promise.all.then] Оверлей снят; интерфейс уже загружен, применён content-fading-in.',
@@ -116,16 +117,24 @@ export function registerOnloadHandler() {
 
                     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-                    if (appInitSuccessfully) {
-                        if (typeof deps.initGoogleDocSections === 'function') {
+                    if (typeof deps.initGoogleDocSections === 'function') {
+                        try {
                             deps.initGoogleDocSections();
-                        } else {
+                            if (!appInitSuccessfully) {
+                                console.warn(
+                                    '[window.onload] initGoogleDocSections выполнена в fallback-режиме (appInit без ready-статуса).',
+                                );
+                            }
+                        } catch (error) {
                             console.error(
-                                'Функция initGoogleDocSections не найдена в window.onload!',
+                                '[window.onload] Ошибка инициализации секций Google Docs:',
+                                error,
                             );
                         }
-                        // finishTask('app-init') вызывается в app-init.js при завершении инициализации
+                    } else {
+                        console.error('Функция initGoogleDocSections не найдена в window.onload!');
                     }
+                    // finishTask('app-init') вызывается в app-init.js при завершении инициализации
 
                     requestAnimationFrame(() => {
                         if (typeof deps.initTabClickDelegation === 'function') {
@@ -173,6 +182,19 @@ export function registerOnloadHandler() {
                 document.body.style.backgroundColor = '';
                 if (appContent) {
                     appContent.classList.remove('hidden');
+                }
+                if (typeof deps.initGoogleDocSections === 'function') {
+                    try {
+                        deps.initGoogleDocSections();
+                        console.warn(
+                            '[window.onload catch] initGoogleDocSections выполнена как аварийный fallback после ошибки инициализации.',
+                        );
+                    } catch (fallbackError) {
+                        console.error(
+                            '[window.onload catch] Ошибка fallback-инициализации секций Google Docs:',
+                            fallbackError,
+                        );
+                    }
                 }
                 const errorMessageText = error instanceof Error ? error.message : String(error);
                 if (resolvedNotificationService?.add) {

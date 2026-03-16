@@ -177,9 +177,57 @@ export function updateVisibleTabs() {
 }
 
 /**
+ * Обработчик клика по кнопке "Ещё" (вызывается при открытии/закрытии меню)
+ */
+function toggleMoreTabsDropdown() {
+    const dropdown = document.getElementById('moreTabsDropdown');
+    if (!dropdown) return;
+
+    // Перед открытием синхронизируем overflow-пункты,
+    // чтобы меню не было пустым из-за устаревшего состояния.
+    const isHidden = dropdown.classList.contains('hidden');
+    if (isHidden) {
+        updateVisibleTabs();
+    }
+
+    dropdown.classList.toggle('hidden');
+}
+
+/**
+ * Глобальный обработчик (document, capture): по клику на #moreTabsBtn открывает/закрывает меню.
+ * Не зависит от nav — срабатывает всегда, как только setupTabsOverflow вызван.
+ */
+function documentMoreTabsCapture(e) {
+    if (!e.target || typeof e.target.closest !== 'function') return;
+    if (!e.target.closest('#moreTabsBtn')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    toggleMoreTabsDropdown();
+}
+
+const DOC_MORE_TABS_INIT_KEY = 'tabsOverflowDocumentListener_v1';
+
+function attachDocumentMoreTabsListener() {
+    if (document[DOC_MORE_TABS_INIT_KEY]) return;
+    document.addEventListener('click', documentMoreTabsCapture, true);
+    document[DOC_MORE_TABS_INIT_KEY] = true;
+}
+
+// Привязка по клику «…» при первой возможности, чтобы меню работало независимо от порядка инициализации
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachDocumentMoreTabsListener);
+    } else {
+        attachDocumentMoreTabsListener();
+    }
+}
+
+/**
  * Настраивает обработчики событий для системы переполнения вкладок
  */
 export function setupTabsOverflow() {
+    attachDocumentMoreTabsListener();
+
     const tabsNav = document.querySelector('nav.flex.flex-wrap');
     if (!tabsNav) {
         console.warn('[setupTabsOverflow v15_FIXED] Setup skipped: tabsNav not found.');
@@ -192,15 +240,6 @@ export function setupTabsOverflow() {
     }
 
     console.log('[setupTabsOverflow v15_FIXED] Performing INITIAL setup of event listeners...');
-
-    const moreTabsBtn = document.getElementById('moreTabsBtn');
-    if (moreTabsBtn) {
-        if (moreTabsBtn._clickHandler) {
-            moreTabsBtn.removeEventListener('click', moreTabsBtn._clickHandler, true);
-        }
-        moreTabsBtn.addEventListener('click', handleMoreTabsBtnClick, true);
-        moreTabsBtn._clickHandler = handleMoreTabsBtnClick;
-    }
 
     if (document._clickOutsideTabsHandler) {
         document.removeEventListener('click', document._clickOutsideTabsHandler, true);

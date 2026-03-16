@@ -30,10 +30,10 @@ export function getOrCreateModal() {
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-label', 'Палитра команд');
     modal.className =
-        'fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-black/50 dark:bg-black/60';
+        'command-palette-overlay fixed inset-0 z-[100] flex flex-col items-stretch bg-black/50 dark:bg-black/60';
     modal.innerHTML = `
-        <div class="command-palette-box w-full max-w-xl rounded-xl shadow-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div class="p-2 border-b border-gray-200 dark:border-gray-700">
+        <div class="command-palette-panel w-full max-w-none rounded-b-xl shadow-2xl bg-white dark:bg-gray-800 border-x border-b border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[85vh]">
+          <div class="flex-shrink-0 p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700">
             <input
               type="text"
               id="commandPaletteInput"
@@ -43,8 +43,8 @@ export function getOrCreateModal() {
               autocapitalize="off"
             />
           </div>
-          <div id="commandPaletteList" class="max-h-[60vh] overflow-y-auto py-1"></div>
-          <div class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2 flex-wrap">
+          <div id="commandPaletteList" class="flex-1 min-h-0 overflow-y-auto py-1 max-h-[60vh]"></div>
+          <div class="flex-shrink-0 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2 flex-wrap">
             <span id="commandPaletteCount" class="flex-shrink-0">Показано 0</span>
             <span>↑↓ навигация · Enter выбор · Esc закрыть · <span class="opacity-90">@тип</span> — фильтр по типу</span>
           </div>
@@ -129,13 +129,17 @@ export function onKeydown(e) {
     }
     if (e.key === 'ArrowDown') {
         e.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, currentResults.length - 1);
+        if (currentResults.length === 0) return;
+        selectedIndex =
+            selectedIndex === currentResults.length - 1 ? 0 : selectedIndex + 1;
         updateHighlight();
         return;
     }
     if (e.key === 'ArrowUp') {
         e.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, 0);
+        if (currentResults.length === 0) return;
+        selectedIndex =
+            selectedIndex === 0 ? currentResults.length - 1 : selectedIndex - 1;
         updateHighlight();
         return;
     }

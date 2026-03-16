@@ -18,7 +18,9 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-width: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     transition:
         background-color 0.45s ease-out,
         color 0.45s ease-out;
@@ -50,8 +52,15 @@ header,
         border-color 0.45s ease-out;
 }
 
+/* Основной контейнер приложения: центрирование и ограничение ширины (как container + max-w-7xl) */
 #appContent {
     flex-grow: 1;
+    min-width: 0;
+    width: 100%;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
 }
 
 #appContent.has-static-header {
@@ -72,9 +81,20 @@ header,
     box-shadow: none;
 }
 
+/* Сетки и карточки: не растягивают страницу по горизонтали */
+#appContent .grid > *,
+#appContent [class*='grid-cols'] > * {
+    min-width: 0;
+}
+#appContent .flex > * {
+    min-width: 0;
+}
+
 /* Специализированные состояния зоны проверки сертификата ФНС */
 .fns-cert-shell {
     position: relative;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .fns-cert-shell-danger {
@@ -162,6 +182,7 @@ html.dark .fns-cert-status-panel--success {
 
 .fns-cert-table {
     width: 100%;
+    min-width: 480px;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
     border-collapse: collapse;
     font-size: 0.875rem;
@@ -246,6 +267,39 @@ html.dark .fns-cert-shell-danger {
 header button {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+}
+
+/* Адаптивность хедера: touch-цели на малых/тач экранах, отступы */
+@media (pointer: coarse) and (max-width: 1024px) {
+    #staticHeaderWrapper header button:not([class*='search']) {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.5rem;
+    }
+}
+/* Верхняя панель (шапка): блок с кнопками/поиском — одна строка, без переноса; при нехватке места — горизонтальный скролл */
+#staticHeaderWrapper header > div > div:last-child {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    min-width: 0;
+}
+@media (max-width: 640px) {
+    #staticHeaderWrapper header .flex.flex-wrap {
+        gap: 0.5rem 0.75rem;
+    }
+}
+
+/* Кнопки в формах и модалках: удобная зона нажатия на тач-устройствах */
+@media (pointer: coarse) and (max-width: 1024px) {
+    .modal-inner-container button:not([class*='p-1']):not([class*='p-2']),
+    form button[type='submit'],
+    form button[type='button']:not([class*='p-1']):not([class*='p-2']) {
+        min-height: 44px;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
 }
 
 button:focus-visible,

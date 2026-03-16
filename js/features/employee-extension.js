@@ -32,10 +32,10 @@ export function updateExtensionDisplay(extensionValue) {
 
     if (extensionValue) {
         displaySpan.textContent = extensionValue;
-        displaySpan.classList.remove('italic', 'text-gray-500', 'dark:text-gray-400');
+        displaySpan.classList.remove('text-gray-500', 'dark:text-gray-400');
     } else {
         displaySpan.textContent = 'Введите свой добавочный';
-        displaySpan.classList.add('italic', 'text-gray-500', 'dark:text-gray-400');
+        displaySpan.classList.add('text-gray-500', 'dark:text-gray-400');
     }
 }
 

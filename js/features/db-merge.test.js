@@ -321,7 +321,9 @@ describe('db-merge identity and diff logic', () => {
         expect(savedContainer.section).toBe('all');
         expect(savedContainer.data.main.title).toBe('Main Import');
         expect(savedContainer.data.support).toHaveLength(2);
-        expect(savedContainer.data.support.find((item) => item.id === 'a1')?.title).toBe('Импортный');
+        expect(savedContainer.data.support.find((item) => item.id === 'a1')?.title).toBe(
+            'Импортный',
+        );
         expect(savedContainer.data.support.find((item) => item.id === 'a2')?.title).toBe('Новый');
         expect(savedContainer.data.sales.find((item) => item.id === 's1')?.title).toBe('Продажи');
 
@@ -379,7 +381,9 @@ describe('db-merge identity and diff logic', () => {
 
         await expect(applyMergePlan(mergePlan)).resolves.toBe(true);
 
-        const screenshotCall = saveSpy.mock.calls.find(([storeName]) => storeName === 'screenshots');
+        const screenshotCall = saveSpy.mock.calls.find(
+            ([storeName]) => storeName === 'screenshots',
+        );
         expect(screenshotCall).toBeTruthy();
         const savedScreenshot = screenshotCall?.[1];
         expect(savedScreenshot.parentId).toBe('a1__importCopy');
@@ -446,7 +450,9 @@ describe('db-merge conflict UI helpers', () => {
     it('formats nested values into readable text for UI', () => {
         const { formatConflictValueForUi } = __dbMergeConflictUiInternals;
         expect(formatConflictValueForUi(['one', 'two'])).toContain('one');
-        expect(formatConflictValueForUi({ title: 'Документ', tags: ['a', 'b'] })).toContain('title');
+        expect(formatConflictValueForUi({ title: 'Документ', tags: ['a', 'b'] })).toContain(
+            'title',
+        );
         expect(formatConflictValueForUi(null)).toBe('—');
     });
 

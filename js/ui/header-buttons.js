@@ -9,13 +9,6 @@ export function setHeaderButtonsDependencies(dependencies) {
 }
 
 export function initHeaderButtons() {
-    const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
-    if (showFavoritesHeaderButton && !showFavoritesHeaderButton.dataset.listenerAttached) {
-        showFavoritesHeaderButton.addEventListener('click', () => {
-            if (typeof deps.setActiveTab === 'function') {
-                deps.setActiveTab('favorites');
-            }
-        });
-        showFavoritesHeaderButton.dataset.listenerAttached = 'true';
-    }
+    // Кнопка «Избранное» (#showFavoritesHeaderBtn) вешается в app-init; здесь не дублируем,
+    // чтобы избежать двойного вызова setActiveTab и мерцания при возврате из избранного.
 }

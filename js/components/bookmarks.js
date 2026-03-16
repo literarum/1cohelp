@@ -1506,7 +1506,11 @@ export async function handleDeleteBookmarkFolderClick(folderId, folderItem) {
                 reason: shouldDeleteBookmarks ? 'delete_folder_with_content' : 'delete_folder',
             });
         }
-        if (shouldDeleteBookmarks && Array.isArray(bookmarksInFolder) && bookmarksInFolder.length > 0) {
+        if (
+            shouldDeleteBookmarks &&
+            Array.isArray(bookmarksInFolder) &&
+            bookmarksInFolder.length > 0
+        ) {
             await Promise.all(
                 bookmarksInFolder.map((bookmark) =>
                     addRecentlyDeletedRecord({

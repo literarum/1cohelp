@@ -754,11 +754,7 @@ export function initFavoritesSystem() {
         favoritesContainer.addEventListener('click', handleFavoriteContainerClick);
     }
 
-    // Кнопка в хедере
-    const showFavoritesHeaderBtn = document.getElementById('showFavoritesHeaderBtn');
-    if (showFavoritesHeaderBtn) {
-        showFavoritesHeaderBtn.addEventListener('click', () => deps.setActiveTab?.('favorites'));
-    }
+    // Кнопка «Избранное» в хедере вешается в app-init; здесь не дублируем, чтобы избежать двойного вызова setActiveTab и мерцания при возврате из избранного.
 
     // Кнопка очистки избранного
     const clearFavoritesBtn = document.getElementById('clearFavoritesBtn');

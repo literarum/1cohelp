@@ -244,8 +244,14 @@ export function updateVisibleTabs() {
             dropdownItem.dataset.tabId = tab.id.replace('Tab', '');
             dropdownItem.addEventListener('click', (e) => {
                 e.preventDefault();
-                if (typeof window.setActiveTab === 'function') {
+                if (typeof deps.setActiveTab === 'function') {
+                    deps.setActiveTab(dropdownItem.dataset.tabId);
+                } else if (typeof window.setActiveTab === 'function') {
                     window.setActiveTab(dropdownItem.dataset.tabId);
+                } else {
+                    console.error(
+                        `[updateVisibleTabs] setActiveTab недоступна для overflow-вкладки "${dropdownItem.dataset.tabId}".`,
+                    );
                 }
                 if (moreTabsDropdown) moreTabsDropdown.classList.add('hidden');
             });
@@ -273,6 +279,17 @@ export function initTabClickDelegation() {
 }
 
 /**
+ * Делегированный обработчик клика: открывает/закрывает меню при клике по кнопке «…»
+ */
+function delegatedMoreTabsClick(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('#moreTabsBtn') : null;
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+    handleMoreTabsBtnClick(e);
+}
+
+/**
  * Настраивает обработчики событий для переполнения вкладок
  */
 export function setupTabsOverflow() {
@@ -289,14 +306,12 @@ export function setupTabsOverflow() {
 
     console.log('[setupTabsOverflow v15_FIXED] Performing INITIAL setup of event listeners...');
 
-    const moreTabsBtn = document.getElementById('moreTabsBtn');
-    if (moreTabsBtn) {
-        if (moreTabsBtn._clickHandler) {
-            moreTabsBtn.removeEventListener('click', moreTabsBtn._clickHandler, true);
-        }
-        moreTabsBtn.addEventListener('click', handleMoreTabsBtnClick, true);
-        moreTabsBtn._clickHandler = handleMoreTabsBtnClick;
+    // Делегирование клика на nav: меню открывается по клику на #moreTabsBtn даже при поздней отрисовке
+    if (tabsNav._delegatedMoreTabsClick) {
+        tabsNav.removeEventListener('click', tabsNav._delegatedMoreTabsClick, true);
     }
+    tabsNav._delegatedMoreTabsClick = delegatedMoreTabsClick;
+    tabsNav.addEventListener('click', delegatedMoreTabsClick, true);
 
     if (typeof clickOutsideTabsHandler === 'function') {
         if (document._clickOutsideTabsHandler) {
@@ -496,6 +511,12 @@ export function applyPanelOrderAndVisibility(order, visibility) {
  * @param {boolean} warningJustAccepted - флаг, что предупреждение было принято
  */
 export async function setActiveTab(tabId, warningJustAccepted = false) {
+    if (tabId === 'favorites' && State.currentSection === 'favorites') {
+        tabId = State.sectionBeforeFavorites || 'main';
+    }
+    if (tabId === 'favorites' && State.currentSection !== 'favorites') {
+        State.sectionBeforeFavorites = State.currentSection;
+    }
     const targetTabId = tabId + 'Tab';
     const targetContentId = tabId + 'Content';
 
@@ -506,6 +527,24 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
     const FADE_DURATION = 150;
 
     console.log(`[setActiveTab v.Corrected] Активация вкладки: ${tabId}`);
+
+    let targetContent = document.getElementById(targetContentId);
+    // Резервный контур: динамический раздел "Шаблоны" может не быть создан к моменту клика.
+    if (!targetContent && tabId === 'shablony' && typeof window.initGoogleDocSections === 'function') {
+        try {
+            window.initGoogleDocSections();
+            targetContent = document.getElementById(targetContentId);
+        } catch (error) {
+            console.error('[setActiveTab] Ошибка fallback-инициализации раздела "Шаблоны":', error);
+        }
+    }
+
+    if (!targetContent && tabId !== 'favorites') {
+        console.error(
+            `[setActiveTab] Контент вкладки "${tabId}" (${targetContentId}) не найден. Переключение отменено.`,
+        );
+        return;
+    }
 
     if (
         tabId === 'blacklistedClients' &&
@@ -545,8 +584,6 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
 
     State.currentSection = tabId;
     localStorage.setItem('lastActiveTabCopilot1CO', tabId);
-
-    const targetContent = document.getElementById(targetContentId);
     let currentActiveContent = null;
 
     allTabContents.forEach((content) => {
@@ -582,6 +619,27 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
         });
     }
 
+    // Fail-safe: иногда вкладка остается с opacity:0 после анимации (race при множественных init/RAF).
+    // Принудительно нормализуем состояние отображения целевой вкладки.
+    if (targetContent) {
+        targetContent.classList.remove('hidden');
+        targetContent.classList.remove('is-hiding');
+        targetContent.style.opacity = '1';
+        targetContent.style.visibility = 'visible';
+        targetContent.style.pointerEvents = 'auto';
+    }
+
+    if (targetContent && tabId === 'shablony') {
+        setTimeout(() => {
+            if (State.currentSection !== 'shablony') return;
+            targetContent.classList.remove('hidden');
+            targetContent.classList.remove('is-hiding');
+            targetContent.style.opacity = '1';
+            targetContent.style.visibility = 'visible';
+            targetContent.style.pointerEvents = 'auto';
+        }, FADE_DURATION + 40);
+    }
+
     if (targetContent && tabId === 'favorites') {
         if (deps.renderFavoritesPage && typeof deps.renderFavoritesPage === 'function') {
             await deps.renderFavoritesPage();
@@ -601,6 +659,45 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
 
     if (targetContent) {
         document.dispatchEvent(new CustomEvent('copilot1co:tabShown', { detail: { tabId } }));
+    }
+
+    if (targetContent && tabId === 'shablony') {
+        const shablonyContainer =
+            targetContent.querySelector('#doc-content-shablony') ||
+            document.getElementById('doc-content-shablony');
+        const hasRenderedBlocks = Boolean(
+            shablonyContainer && shablonyContainer.querySelector('.shablony-block'),
+        );
+        const hasMeaningfulText = Boolean(shablonyContainer?.textContent?.trim()?.length);
+
+        console.log('[setActiveTab][shablony] visibility-diagnostics:', {
+            hasTargetContent: Boolean(targetContent),
+            targetHidden: targetContent.classList.contains('hidden'),
+            targetDisplay: window.getComputedStyle(targetContent).display,
+            targetOpacity: window.getComputedStyle(targetContent).opacity,
+            shablonyContentCount: document.querySelectorAll('#shablonyContent').length,
+            hasContainer: Boolean(shablonyContainer),
+            shablonyDocContainerCount: document.querySelectorAll('#doc-content-shablony').length,
+            containerTextLength: shablonyContainer?.textContent?.trim()?.length || 0,
+            hasRenderedBlocks,
+        });
+
+        if (
+            shablonyContainer &&
+            !hasRenderedBlocks &&
+            (!hasMeaningfulText || /загрузка|ошибка/i.test(shablonyContainer.textContent || ''))
+        ) {
+            if (typeof window.loadAndRenderGoogleDoc === 'function') {
+                window
+                    .loadAndRenderGoogleDoc(SHABLONY_DOC_ID, 'doc-content-shablony', true)
+                    .catch((error) => {
+                        console.error(
+                            '[setActiveTab][shablony] Force-refresh render failed:',
+                            error,
+                        );
+                    });
+            }
+        }
     }
 
     if (deps.updateVisibleTabs && typeof deps.updateVisibleTabs === 'function') {
@@ -624,4 +721,8 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
             document.body.classList.remove('overflow-hidden');
         }
     });
+}
+
+if (typeof window !== 'undefined') {
+    window.setActiveTab = setActiveTab;
 }

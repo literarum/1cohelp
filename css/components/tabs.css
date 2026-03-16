@@ -19,12 +19,18 @@
 #staticHeaderWrapper > div.mb-3.border-b {
     width: 100%;
 }
+/* Верхняя панель вкладок — одна строка, без переноса; переполнение через горизонтальный скролл или кнопку «…» */
 #staticHeaderWrapper > div.mb-3.border-b > nav {
     background-color: transparent !important;
     width: 100%;
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap !important;
     align-items: center;
+    /* Dropdown "..." should not be clipped by nav container */
+    overflow-x: visible;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
 }
 /* Видимые вкладки растягиваются и заполняют место; минимальная ширина 6rem — подписи не обрезаются */
 #staticHeaderWrapper > div.mb-3.border-b > nav .tab-btn:not(#moreTabsBtn):not(.overflow-tab) {
@@ -42,6 +48,12 @@
         border-color 0.2s ease-in-out;
     position: relative;
     color: #b0b0b0 !important;
+}
+@media (pointer: coarse) and (max-width: 1024px) {
+    #staticHeaderWrapper .tab-btn {
+        min-height: 44px;
+        padding: 0.5rem 0.75rem;
+    }
 }
 
 .tab-btn i,
@@ -85,6 +97,11 @@
 }
 #appContent #moreTabsDropdown a:hover {
     text-decoration: none !important;
+}
+
+/* Keep overflow menu above sticky header/content layers */
+#moreTabsDropdown {
+    z-index: 80 !important;
 }
 
 .tab-btn:hover:not(.tab-active) {

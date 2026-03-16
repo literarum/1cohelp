@@ -12,6 +12,10 @@
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;
+    max-height: min(24rem, calc(100vh - 120px));
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 #searchResults:not(.hidden) {
@@ -77,4 +81,16 @@ mark {
 .highlight-search-result-textarea {
     transition: box-shadow 0.3s ease-in-out;
     box-shadow: 0 0 8px 2px var(--color-primary, var(--color-primary-default));
+}
+
+/* ----------------------------------- */
+/*      Расширенные параметры поиска   */
+/* ----------------------------------- */
+#advancedSearchOptions {
+    transition: opacity 0.2s ease-out;
+}
+
+#toggleAdvancedSearch:focus-visible {
+    outline: 2px solid var(--color-primary, #9933ff);
+    outline-offset: 2px;
 }

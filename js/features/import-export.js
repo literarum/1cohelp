@@ -149,7 +149,10 @@ export function normalizeLegacyImportData(rawData) {
         const normalized = { ...record };
 
         if (storeName === 'bookmarks') {
-            if (typeof normalized.folder === 'undefined' && typeof normalized.folderId !== 'undefined') {
+            if (
+                typeof normalized.folder === 'undefined' &&
+                typeof normalized.folderId !== 'undefined'
+            ) {
                 normalized.folder = normalized.folderId;
             }
             delete normalized.folderId;
@@ -168,7 +171,8 @@ export function normalizeLegacyImportData(rawData) {
         if (storeName === 'extLinks') {
             if (typeof normalized.category === 'string') {
                 const oldKey = normalizeText(normalized.category);
-                const canonicalName = LEGACY_EXT_LINK_CATEGORY_KEY_TO_DEFAULT_NAME[oldKey] || oldKey;
+                const canonicalName =
+                    LEGACY_EXT_LINK_CATEGORY_KEY_TO_DEFAULT_NAME[oldKey] || oldKey;
                 const mappedId = extLinkCategoryNameToId.get(normalizeCategoryName(canonicalName));
                 if (typeof mappedId !== 'undefined') {
                     normalized.category = mappedId;
@@ -259,7 +263,11 @@ export function extractImportDataEnvelope(parsedImport) {
         return { data: {}, usedLegacyEnvelope: false };
     }
 
-    if (parsedImport.data && typeof parsedImport.data === 'object' && !Array.isArray(parsedImport.data)) {
+    if (
+        parsedImport.data &&
+        typeof parsedImport.data === 'object' &&
+        !Array.isArray(parsedImport.data)
+    ) {
         return { data: parsedImport.data, usedLegacyEnvelope: false };
     }
 
@@ -540,7 +548,11 @@ export async function handleImportButtonClick() {
             backupOutcome = await performForcedBackup();
         }
 
-        if (backupOutcome === true || backupOutcome === 'skipped_by_user' || backupOutcome === 'skipped_by_setting') {
+        if (
+            backupOutcome === true ||
+            backupOutcome === 'skipped_by_user' ||
+            backupOutcome === 'skipped_by_setting'
+        ) {
             console.log(
                 `[handleImportButtonClick v_FOCUS_HANDLER_FINAL_FULL] Статус бэкапа: ${backupOutcome}. Запрос файла для импорта.`,
             );
@@ -1079,17 +1091,12 @@ export async function _processActualImport(jsonString) {
         }
 
         if (!importData || typeof importData !== 'object') {
-            throw new Error(
-                'Некорректный формат файла импорта',
-            );
+            throw new Error('Некорректный формат файла импорта');
         }
 
         const envelopeResolution = extractImportDataEnvelope(importData);
         importData.data = envelopeResolution.data;
-        if (
-            envelopeResolution.usedLegacyEnvelope &&
-            deps.NotificationService?.add
-        ) {
+        if (envelopeResolution.usedLegacyEnvelope && deps.NotificationService?.add) {
             deps.NotificationService?.add(
                 'Обнаружен legacy-формат импорта (без data-конверта). Применена совместимая обработка.',
                 'warning',
@@ -1127,13 +1134,19 @@ export async function _processActualImport(jsonString) {
                 'warning',
                 { important: true, duration: 15000 },
             );
-        } else if ((fileMajor < appMajor || fileMinor < appMinor) && deps.NotificationService?.add) {
+        } else if (
+            (fileMajor < appMajor || fileMinor < appMinor) &&
+            deps.NotificationService?.add
+        ) {
             deps.NotificationService?.add(
                 `Импортируется более ранняя версия схемы (${importData.schemaVersion} -> ${CURRENT_SCHEMA_VERSION}). Включен режим обратной совместимости.`,
                 'warning',
                 { important: true, id: 'old-schema-import-warning', isDismissible: true },
             );
-        } else if ((fileMajor > appMajor || fileMinor > appMinor) && deps.NotificationService?.add) {
+        } else if (
+            (fileMajor > appMajor || fileMinor > appMinor) &&
+            deps.NotificationService?.add
+        ) {
             deps.NotificationService?.add(
                 `Импортируется более новая версия схемы (${importData.schemaVersion} -> ${CURRENT_SCHEMA_VERSION}). Включен режим прямой совместимости с сохранением неизвестных разделов.`,
                 'warning',
@@ -2061,8 +2074,7 @@ export async function exportAllData(options = {}) {
 
         const allStoreNames = Array.from(State.db.objectStoreNames);
         const storesToRead = allStoreNames.filter(
-            (storeName) =>
-                storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
+            (storeName) => storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
         );
 
         if (storesToRead.length === 0) {

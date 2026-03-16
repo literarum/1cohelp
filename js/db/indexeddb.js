@@ -503,7 +503,10 @@ export async function deleteFromIndexedDB(storeName, key) {
                 await saveToIndexedDB(RECENTLY_DELETED_STORE_NAME, recentRecord);
             }
         } catch (recentErr) {
-            console.warn('[deleteFromIndexedDB] Не удалось сохранить запись в recentlyDeleted:', recentErr);
+            console.warn(
+                '[deleteFromIndexedDB] Не удалось сохранить запись в recentlyDeleted:',
+                recentErr,
+            );
         }
     }
     return performDBOperation(storeName, 'readwrite', (store) => store.delete(keyToUse));

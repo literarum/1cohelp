@@ -32,6 +32,132 @@ function debounce(func, wait, immediate) {
 
 // Store original data for search
 let originalShablonyData = [];
+const GOOGLE_DOC_CACHE_PREFIX = 'copilot1co:gdoc-cache:';
+const GOOGLE_DOC_REQUEST_TIMEOUT_MS = 12000;
+const GOOGLE_DOC_RETRY_DELAYS_MS = [250, 900, 1800];
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isLikelyTransientNetworkError(message) {
+    if (!message) return false;
+    return /fetch|failed|network|socket|err_|timed out|aborted|connection|internet|сеть|интернет/i.test(
+        String(message),
+    );
+}
+
+function normalizeNetworkError(errorLike) {
+    if (!errorLike) return 'Сеть недоступна';
+    const raw = errorLike.message || String(errorLike);
+    const msg = String(raw);
+    return isLikelyTransientNetworkError(msg)
+        ? 'Не удалось загрузить документ. Проверьте подключение к интернету и повторите попытку.'
+        : msg;
+}
+
+async function requestJsonViaFetch(requestUrl, timeoutMs) {
+    let timeoutId = null;
+    const timeoutError = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+            () => reject(new Error('Превышено время ожидания загрузки документа.')),
+            timeoutMs,
+        );
+    });
+    const response = await Promise.race([fetch(requestUrl), timeoutError]);
+    if (timeoutId) {
+        clearTimeout(timeoutId);
+    }
+    if (!response?.ok) {
+        throw new Error(`Ошибка загрузки: статус ${response?.status ?? 'unknown'}`);
+    }
+    return await response.json();
+}
+
+function requestJsonViaXhr(requestUrl, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', requestUrl, true);
+        xhr.timeout = timeoutMs;
+        xhr.responseType = 'text';
+
+        xhr.onload = () => {
+            if (xhr.status < 200 || xhr.status >= 300) {
+                reject(new Error(`Ошибка загрузки: статус ${xhr.status}`));
+                return;
+            }
+            try {
+                resolve(JSON.parse(xhr.responseText || '[]'));
+            } catch (error) {
+                reject(new Error(`Ошибка разбора JSON: ${error.message || String(error)}`));
+            }
+        };
+        xhr.onerror = () => reject(new Error('Ошибка сети при загрузке документа.'));
+        xhr.ontimeout = () => reject(new Error('Превышено время ожидания загрузки документа.'));
+        xhr.onabort = () => reject(new Error('Запрос загрузки документа был прерван.'));
+        xhr.send();
+    });
+}
+
+async function requestGoogleDocJson(requestUrl) {
+    const errors = [];
+
+    for (let attempt = 0; attempt < GOOGLE_DOC_RETRY_DELAYS_MS.length + 1; attempt++) {
+        try {
+            return await requestJsonViaFetch(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+        } catch (error) {
+            errors.push(`fetch:${error?.message || String(error)}`);
+            const hasMoreAttempts = attempt < GOOGLE_DOC_RETRY_DELAYS_MS.length;
+            if (!hasMoreAttempts) break;
+            await sleep(GOOGLE_DOC_RETRY_DELAYS_MS[attempt]);
+        }
+    }
+
+    try {
+        return await requestJsonViaXhr(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+    } catch (error) {
+        errors.push(`xhr:${error?.message || String(error)}`);
+        throw new Error(
+            `${normalizeNetworkError(error)} [chain=${errors
+                .map((e) => e.replace(/\s+/g, ' ').trim())
+                .join(' | ')}]`,
+        );
+    }
+}
+
+function getGoogleDocCacheKey(docId) {
+    return `${GOOGLE_DOC_CACHE_PREFIX}${docId}`;
+}
+
+function saveGoogleDocCache(docId, data) {
+    if (!docId || !Array.isArray(data) || data.length === 0) return;
+    try {
+        localStorage.setItem(
+            getGoogleDocCacheKey(docId),
+            JSON.stringify({
+                ts: Date.now(),
+                data,
+            }),
+        );
+    } catch (error) {
+        console.warn('[google-docs] Не удалось сохранить кэш документа:', error);
+    }
+}
+
+function loadGoogleDocCacheEntry(docId) {
+    if (!docId) return null;
+    try {
+        const raw = localStorage.getItem(getGoogleDocCacheKey(docId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const data = Array.isArray(parsed?.data) ? parsed.data : [];
+        if (data.length === 0) return null;
+        return { data, ts: Number(parsed?.ts) || null };
+    } catch (error) {
+        console.warn('[google-docs] Не удалось прочитать кэш документа:', error);
+        return null;
+    }
+}
 
 // Getter functions for search module
 export function getOriginalShablonyData() {
@@ -118,31 +244,7 @@ export async function fetchGoogleDocs(docIds, force = false) {
     }
 
     try {
-        let response;
-        try {
-            response = await fetch(requestUrl);
-        } catch (networkError) {
-            const msg =
-                networkError && networkError.message ? networkError.message : 'Сеть недоступна';
-            console.debug('[fetchGoogleDocs] Ошибка сети:', msg);
-            const isOfflineOrFailed =
-                !navigator.onLine ||
-                msg.includes('fetch') ||
-                msg.includes('Failed') ||
-                msg.includes('network') ||
-                msg.includes('SOCKET') ||
-                msg.includes('ERR_');
-            throw new Error(
-                isOfflineOrFailed
-                    ? 'Не удалось загрузить документ. Проверьте подключение к интернету и повторите попытку.'
-                    : msg,
-            );
-        }
-        if (!response.ok) {
-            throw new Error(`Ошибка загрузки: статус ${response.status}`);
-        }
-
-        const results = await response.json();
+        const results = await requestGoogleDocJson(requestUrl);
         console.log(
             '[fetchGoogleDocs] Получен ответ от API:',
             results,
@@ -238,7 +340,13 @@ export async function fetchGoogleDocs(docIds, force = false) {
         console.error('Неожиданный формат ответа от API:', results);
         return docIds.map((id) => ({ docId: id, data: [], error: 'Неверный формат ответа' }));
     } catch (error) {
-        console.error(`Ошибка при загрузке документов: ${error.message}`);
+        const message = error?.message || String(error);
+        const isNetworkError = /интернет|сеть|fetch|failed|network|socket|err_/i.test(message);
+        if (isNetworkError) {
+            console.warn(`Ошибка при загрузке документов: ${message}`);
+        } else {
+            console.error(`Ошибка при загрузке документов: ${message}`);
+        }
         return docIds.map((id) => ({ docId: id, data: [], error: error.message }));
     }
 }
@@ -282,6 +390,9 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
             }
             const flatData = normalizeShablonyData(rawData);
             originalShablonyData = flatData;
+            if (result.docId) {
+                saveGoogleDocCache(result.docId, flatData);
+            }
             renderStyledParagraphs(container, flatData);
             return;
         }
@@ -293,6 +404,27 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
     if (fragment.childNodes.length > 0) {
         container.appendChild(fragment);
     }
+}
+
+function resolveGoogleDocStatusElement(parentContainerId) {
+    if (!parentContainerId || !parentContainerId.startsWith('doc-content-')) return null;
+    const sectionId = parentContainerId.replace('doc-content-', '');
+    return document.getElementById(`doc-status-${sectionId}`);
+}
+
+function updateGoogleDocStatusMessage(parentContainerId, status) {
+    const statusEl = resolveGoogleDocStatusElement(parentContainerId);
+    if (!statusEl) return;
+
+    if (!status || !status.visible) {
+        statusEl.className = 'hidden';
+        statusEl.innerHTML = '';
+        return;
+    }
+
+    statusEl.className =
+        'mb-3 px-3 py-2 rounded-md border text-sm bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-200';
+    statusEl.innerHTML = `<i class="fas fa-database mr-1"></i>${escapeHtml(status.message)}`;
 }
 
 /**
@@ -322,13 +454,48 @@ function normalizeShablonyData(rawData) {
 
     if (first && typeof first === 'object' && !Array.isArray(first)) {
         const out = [];
+        const headingKeyHints = [
+            'heading',
+            'title',
+            'name',
+            'template',
+            'заголовок',
+            'название',
+            'шаблон',
+            'тема',
+        ];
 
         for (const block of rawData) {
-            const title = block.heading ?? block.title ?? '';
+            let title = block.heading ?? block.title ?? '';
+            let paras = block.paragraphs ?? block.content ?? block.body;
+
+            // Поддержка табличного формата из Google Apps Script:
+            // [{ "Название": "...", "Текст": "...", ... }, ...]
+            if (!title && !paras && block && typeof block === 'object' && !Array.isArray(block)) {
+                const entries = Object.entries(block).filter(([, value]) => {
+                    const normalized = value == null ? '' : String(value).trim();
+                    return normalized.length > 0;
+                });
+
+                if (entries.length > 0) {
+                    const headingEntry = entries.find(([key]) =>
+                        headingKeyHints.some((hint) => key.toLowerCase().includes(hint)),
+                    );
+                    if (headingEntry) {
+                        title = String(headingEntry[1]).trim();
+                        paras = entries
+                            .filter(([key]) => key !== headingEntry[0])
+                            .map(([key, value]) => `${key}: ${String(value).trim()}`);
+                    } else {
+                        title = String(entries[0][1]).trim();
+                        paras = entries.slice(1).map(([key, value]) => `${key}: ${String(value).trim()}`);
+                    }
+                }
+            }
+
             const level = Math.min(Math.max(block.level ?? 1, 1), 3);
             const marker = markers[level] || '⏩ ';
             if (title) out.push(marker + String(title).trim());
-            const paras = block.paragraphs ?? block.content ?? block.body;
             if (Array.isArray(paras)) {
                 paras.forEach((p) => {
                     const s = String(p).trim();
@@ -377,6 +544,10 @@ function normalizeShablonyData(rawData) {
     return fallback.length ? fallback : rawData;
 }
 
+export const __googleDocsInternals = {
+    normalizeShablonyData,
+};
+
 /**
  * Parse Shablony content into blocks (для поиска)
  */
@@ -420,6 +591,22 @@ export function parseShablonyContent(data) {
         blocks.push(currentBlock);
     }
 
+    if (blocks.length === 0) {
+        const fallbackParagraphs = data
+            .map((p) => normalizeBrokenEntities(String(p)).trim())
+            .filter(Boolean);
+        if (fallbackParagraphs.length > 0) {
+            return [
+                {
+                    title: 'Шаблоны',
+                    content: fallbackParagraphs.join('\n'),
+                    level: 1,
+                    originalIndex: 0,
+                },
+            ];
+        }
+    }
+
     return blocks;
 }
 
@@ -460,7 +647,27 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
         return;
     }
 
+    // Защитный контур визуализации: контент шаблонов не должен "пропадать"
+    // из-за внешних тем/кастомных CSS-переопределений.
+    container.style.color = 'var(--color-text-primary, #e5e7eb)';
+    container.style.minHeight = '18rem';
+
     const fragment = document.createDocumentFragment();
+    const normalizedData = (() => {
+        const hasHeaders = data.some(
+            (line) =>
+                typeof line === 'string' &&
+                (line.trim().startsWith('⏩') ||
+                    line.trim().startsWith('➧') ||
+                    line.trim().startsWith('▸')),
+        );
+        if (hasHeaders) return data;
+        const plain = data
+            .map((line) => (line == null ? '' : String(line).trim()))
+            .filter(Boolean);
+        if (!plain.length) return data;
+        return ['➧ Шаблоны', ...plain];
+    })();
     let currentBlockWrapper = null;
     let blockIndex = -1;
 
@@ -485,7 +692,7 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
         return wrapper;
     };
 
-    data.forEach((p) => {
+    normalizedData.forEach((p) => {
         const trimmedP = normalizeBrokenEntities(p).trim();
         if (trimmedP === '') return;
 
@@ -509,6 +716,7 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
 
             header.className = classMap[headerTag];
             header.innerHTML = highlight(trimmedP.slice(1).trim());
+            header.style.color = 'var(--color-text-primary, #e5e7eb)';
             currentBlockWrapper.appendChild(header);
             fragment.appendChild(currentBlockWrapper);
         } else if (currentBlockWrapper) {
@@ -525,11 +733,13 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
                 }
                 const li = document.createElement('li');
                 li.innerHTML = highlight(trimmedP.slice(1).trim());
+                li.style.color = 'var(--color-text-primary, #e5e7eb)';
                 list.appendChild(li);
             } else {
                 const pElem = document.createElement('p');
                 pElem.className = 'mb-2';
                 pElem.innerHTML = highlight(trimmedP.replace(/\*(.*?)\*/g, '<strong>$1</strong>'));
+                pElem.style.color = 'var(--color-text-primary, #e5e7eb)';
                 currentBlockWrapper.appendChild(pElem);
             }
         }
@@ -608,7 +818,46 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
     }
 
     try {
-        const results = await fetchGoogleDocs([docId], force);
+        let results = await fetchGoogleDocs([docId], force);
+        let statusMessage = { visible: false, message: '' };
+        const hasUsableData = Array.isArray(results)
+            ? results.some((item) => {
+                  const arr = item?.data || item?.content?.data;
+                  return Array.isArray(arr) && arr.length > 0;
+              })
+            : false;
+        const allHaveErrors =
+            Array.isArray(results) && results.length > 0 && results.every((item) => Boolean(item?.error));
+
+        if (!hasUsableData && allHaveErrors) {
+            const cachedEntry = loadGoogleDocCacheEntry(docId);
+            const cachedData = cachedEntry?.data || [];
+            if (cachedData.length > 0) {
+                console.warn(
+                    `[google-docs] Использую кэш для документа ${docId} из-за сетевой ошибки.`,
+                );
+                const cacheAgeMinutes =
+                    cachedEntry?.ts && Number.isFinite(cachedEntry.ts)
+                        ? Math.max(1, Math.floor((Date.now() - cachedEntry.ts) / 60000))
+                        : null;
+                statusMessage = {
+                    visible: true,
+                    message: cacheAgeMinutes
+                        ? `Показаны кэшированные данные (обновлены ~${cacheAgeMinutes} мин назад).`
+                        : 'Показаны кэшированные данные из последней успешной загрузки.',
+                };
+                results = [
+                    {
+                        docId,
+                        status: 'cached',
+                        content: { type: 'paragraphs', data: cachedData },
+                        data: cachedData,
+                        error: null,
+                        message: 'Показаны кэшированные данные из последней успешной загрузки.',
+                    },
+                ];
+            }
+        }
 
         if (
             window.BackgroundStatusHUD &&
@@ -623,6 +872,7 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
         }
         State.googleDocTimestamps.set(docId, Date.now());
 
+        updateGoogleDocStatusMessage(targetContainerId, statusMessage);
         renderGoogleDocContent(results, docContainer, targetContainerId);
 
         if (
@@ -643,7 +893,8 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
             try {
                 if (docId === SHABLONY_DOC_ID && sectionId === 'shablony') {
                     const rawData = results[0]?.data || results[0]?.content?.data || [];
-                    const blocks = parseShablonyContent(rawData);
+                    const normalized = normalizeShablonyData(rawData).map((line) => String(line));
+                    const blocks = parseShablonyContent(normalized);
                     await window.updateSearchIndex('shablony', docId, blocks, 'update');
                 }
             } catch (indexError) {
@@ -666,6 +917,7 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
         const userMessage = isNetwork
             ? 'Не удалось загрузить документ. Проверьте подключение к интернету.'
             : message;
+        updateGoogleDocStatusMessage(targetContainerId, { visible: false, message: '' });
         docContainer.innerHTML =
             '<div class="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">' +
             '<p>' +
@@ -706,12 +958,20 @@ export function initGoogleDocSections() {
         return;
     }
 
-    let mainContentArea = appContent.querySelector('main');
+    let mainContentArea = appContent.querySelector(':scope > main[data-app-main="true"]');
+    if (!mainContentArea) {
+        const directMain = appContent.querySelector(':scope > main');
+        if (directMain) {
+            mainContentArea = directMain;
+            mainContentArea.dataset.appMain = 'true';
+        }
+    }
     if (!mainContentArea) {
         console.debug(
             '[initGoogleDocSections] Тег <main> внутри #appContent не найден, создаю динамически.',
         );
         mainContentArea = document.createElement('main');
+        mainContentArea.dataset.appMain = 'true';
         mainContentArea.className = 'flex-grow p-4 overflow-y-auto custom-scrollbar';
         const staticHeaderWrapper = appContent.querySelector('#staticHeaderWrapper');
         if (staticHeaderWrapper) {
@@ -719,7 +979,9 @@ export function initGoogleDocSections() {
         } else {
             appContent.appendChild(mainContentArea);
         }
-        const tabContents = appContent.querySelectorAll('.tab-content');
+        const tabContents = Array.from(appContent.children).filter((node) =>
+            node.classList?.contains('tab-content'),
+        );
         tabContents.forEach((content) => mainContentArea.appendChild(content));
     }
 
@@ -727,12 +989,18 @@ export function initGoogleDocSections() {
         typeof debounce === 'function' ? debounce(handleShablonySearch, 300) : handleShablonySearch;
 
     GOOGLE_DOC_SECTIONS.forEach((section) => {
-        if (!document.getElementById(`${section.id}Content`)) {
+        const existingSection = document.getElementById(`${section.id}Content`);
+        if (existingSection && existingSection.parentElement !== mainContentArea) {
+            // Self-heal: секция могла попасть во вложенный/скрытый <main> (например, модалки).
+            mainContentArea.appendChild(existingSection);
+        }
+
+        if (!existingSection) {
             const tabContentDiv = document.createElement('div');
             tabContentDiv.id = `${section.id}Content`;
-            tabContentDiv.className = 'tab-content hidden h-full';
+            tabContentDiv.className = 'tab-content hidden';
             tabContentDiv.innerHTML = `
-                <div class="p-4 bg-gray-100 dark:bg-gray-800 h-full flex flex-col">
+                <div class="p-4 bg-gray-100 dark:bg-gray-800 min-h-[60vh] flex flex-col">
                     <div class="flex-shrink-0 flex flex-wrap gap-y-2 justify-between items-center mb-4">
                          <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${section.title}</h2>
                          <div class="flex items-center gap-2">
@@ -747,7 +1015,8 @@ export function initGoogleDocSections() {
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
-                    <div id="doc-content-${section.id}" class="flex-grow overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow p-4 custom-scrollbar">
+                    <div id="doc-status-${section.id}" class="hidden"></div>
+                    <div id="doc-content-${section.id}" class="overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow p-4 custom-scrollbar min-h-[28rem]">
                         Загрузка данных из Google-дока...
                     </div>
                 </div>
@@ -793,6 +1062,12 @@ export function initGoogleDocSections() {
                             window.copyToClipboard(textToCopy, 'Содержимое шаблона скопировано!');
                         }
                     });
+                }
+                if (docContainer) {
+                    docContainer.style.color = 'var(--color-text-primary, #e5e7eb)';
+                    docContainer.style.minHeight = '18rem';
+                    docContainer.style.display = 'block';
+                    docContainer.style.visibility = 'visible';
                 }
             }
 

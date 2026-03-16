@@ -1151,13 +1151,13 @@ export function initBlacklistSystem() {
         const rightContainer = addBlacklistEntryBtn
             ? addBlacklistEntryBtn.parentElement
             : actionsContainer;
-        if (rightContainer) rightContainer.classList.add('flex', 'items-center', 'gap-2');
+        if (rightContainer) rightContainer.classList.add('flex', 'items-center', 'gap-1');
 
         let sortControls = document.getElementById('blacklistSortControls');
         if (!sortControls) {
             sortControls = document.createElement('div');
             sortControls.id = 'blacklistSortControls';
-            sortControls.className = 'flex items-center gap-2';
+            sortControls.className = 'flex items-center gap-1';
             sortControls.innerHTML = `
                 <button id="sortBlacklistByLevel"
                     class="h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition

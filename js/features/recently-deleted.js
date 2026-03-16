@@ -221,7 +221,13 @@ async function restoreGenericEntry(entry) {
         }
     }
     await saveToIndexedDB(entry.storeName, payload);
-    await deps.updateSearchIndex?.(entry.storeName, payload.id ?? entry.entityId, payload, 'add', null);
+    await deps.updateSearchIndex?.(
+        entry.storeName,
+        payload.id ?? entry.entityId,
+        payload,
+        'add',
+        null,
+    );
 }
 
 export function setRecentlyDeletedDependencies(nextDeps = {}) {

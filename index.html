@@ -4,12 +4,77 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Copilot 1СО 2.0</title>
+        <script type="text/javascript">
+            (function bootstrapEngineeringConsole() {
+                if (typeof window === 'undefined' || !window.console) return;
+                if (window.__ENGINEERING_BOOTSTRAP_READY__) return;
+                window.__ENGINEERING_BOOTSTRAP_READY__ = true;
+
+                const nativeWarn =
+                    typeof window.console.warn === 'function'
+                        ? window.console.warn.bind(window.console)
+                        : function () {};
+                const nativeLog =
+                    typeof window.console.log === 'function'
+                        ? window.console.log.bind(window.console)
+                        : function () {};
+                const nativeInfo =
+                    typeof window.console.info === 'function'
+                        ? window.console.info.bind(window.console)
+                        : nativeLog;
+                const nativeError =
+                    typeof window.console.error === 'function'
+                        ? window.console.error.bind(window.console)
+                        : nativeWarn;
+
+                window.__ENGINEERING_BOOTLOGS__ = window.__ENGINEERING_BOOTLOGS__ || [];
+                window.__ENGINEERING_BOOTERRORS__ = window.__ENGINEERING_BOOTERRORS__ || [];
+
+                function pushBootLog(level, argsLike) {
+                    try {
+                        window.__ENGINEERING_BOOTLOGS__.push({
+                            level: level,
+                            ts: new Date().toISOString(),
+                            args: Array.prototype.slice.call(argsLike),
+                        });
+                    } catch (_) {}
+                }
+
+                window.console.log = function engineeringLogProxy() {
+                    pushBootLog('log', arguments);
+                };
+
+                window.console.info = function engineeringInfoProxy() {
+                    pushBootLog('info', arguments);
+                };
+
+                window.console.warn = function engineeringWarnProxy() {
+                    pushBootLog('warn', arguments);
+                };
+
+                window.console.error = function engineeringErrorProxy() {
+                    try {
+                        window.__ENGINEERING_BOOTERRORS__.push({
+                            source: 'console.error.bootstrap',
+                            ts: new Date().toISOString(),
+                            args: Array.prototype.slice.call(arguments),
+                        });
+                    } catch (_) {}
+                    nativeError.apply(window.console, arguments);
+                };
+
+                window.__ENGINEERING_NATIVE_WARN__ = nativeWarn;
+                window.__ENGINEERING_NATIVE_LOG__ = nativeLog;
+                window.__ENGINEERING_NATIVE_INFO__ = nativeInfo;
+                window.__ENGINEERING_NATIVE_ERROR__ = nativeError;
+            })();
+        </script>
         <link
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260314-234905-a809ba1"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260314-234905-a809ba1"></script>
+        <script src="js/vendor-config.js?v=legacy-20260316-193618-2c02e80"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260316-193618-2c02e80"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -75,11 +140,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260314-234905-a809ba1"
+            href="css/tailwind.generated.css?v=legacy-20260316-193618-2c02e80"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260314-234905-a809ba1" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260316-193618-2c02e80" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -108,13 +173,16 @@
                     typeof window.matchMedia === 'function' &&
                     window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-                let resolvedTheme = 'dark';
+                // При первом входе (нет сохранённых ключей) — всегда тёмная тема. Ноль задержки, ноль FOUC.
+                var resolvedTheme = 'dark';
                 if (hint === 'dark' || hint === 'light') {
                     resolvedTheme = hint;
                 } else if (hint === 'auto') {
                     resolvedTheme = prefersDark ? 'dark' : 'light';
                 } else if (storedResolved === 'dark' || storedResolved === 'light') {
                     resolvedTheme = storedResolved;
+                } else if (storedOverlaySnapshot && (storedOverlaySnapshot.tone === 'dark' || storedOverlaySnapshot.tone === 'light')) {
+                    resolvedTheme = storedOverlaySnapshot.tone;
                 }
 
                 function parseHexToRgb(hex) {
@@ -153,15 +221,18 @@
                             : isDarkTone
                               ? '#a020f0'
                               : '#06b6d4';
-                    const background =
+                    var background =
                         snapshot && typeof snapshot.background === 'string'
                             ? snapshot.background
                             : isDarkTone
-                              ? '#0a0a1a'
+                              ? '#060612'
                               : '#f8fafc';
 
                     root.dataset.loadingOverlayTheme = tone;
+                    root.classList.toggle('dark', isDarkTone);
+                    root.dataset.theme = tone;
                     root.style.setProperty('--loading-overlay-bg', background);
+                    root.style.backgroundColor = background;
                     root.style.setProperty(
                         '--loading-overlay-text-gradient',
                         isDarkTone
@@ -191,6 +262,9 @@
         </script>
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
+            html {
+                background-color: var(--loading-overlay-bg, #060612);
+            }
             #custom-loading-overlay {
                 margin: 0;
                 overflow: hidden;
@@ -202,7 +276,7 @@
                 width: 100%;
                 height: 100%;
                 z-index: 99999;
-                background-color: var(--loading-overlay-bg, #0a0a1a);
+                background-color: var(--loading-overlay-bg, #060612);
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -221,9 +295,9 @@
                 left: 50%;
                 transform: translateX(-50%);
                 max-width: 90%;
-                padding: 0 20px;
+                padding: 0 clamp(1rem, 5vw, 1.25rem);
                 box-sizing: border-box;
-                font-size: 20px;
+                font-size: clamp(1rem, 4vw, 1.25rem);
                 letter-spacing: 1px;
                 line-height: 1.4;
                 font-weight: 600;
@@ -254,7 +328,8 @@
                 bottom: 5%;
                 left: 50%;
                 transform: translateX(-50%);
-                width: 280px;
+                width: min(280px, calc(100vw - 2rem));
+                max-width: 90%;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
@@ -290,7 +365,7 @@
                 }
             }
             #custom-loading-overlay .progress-percentage-text {
-                font-size: 14px;
+                font-size: clamp(0.75rem, 3vw, 0.875rem);
                 font-weight: 600;
                 letter-spacing: 0.5px;
                 background: var(
@@ -351,14 +426,15 @@
             id="notification-container"
             style="
                 position: fixed;
-                top: 20px;
-                right: 20px;
+                top: clamp(0.5rem, 2vw, 1.25rem);
+                right: clamp(0.5rem, 2vw, 1.25rem);
                 z-index: 200000;
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
+                gap: 0.5rem;
                 pointer-events: none;
-                max-width: min(380px, calc(100vw - 40px));
+                max-width: min(380px, calc(100vw - 2rem));
+                box-sizing: border-box;
             "
         ></div>
 
@@ -427,18 +503,22 @@
                     if (theme === 'light') {
                         return {
                             particlePalette: [
-                                [76, 29, 149, 0.98], // deep violet core
-                                [91, 33, 182, 1], // application violet
-                                [109, 40, 217, 0.98], // bright violet
-                                [126, 34, 206, 0.95], // purple accent
-                                [147, 51, 234, 0.95], // brand purple
-                                [168, 85, 247, 0.92], // soft neon violet
-                                [192, 132, 252, 0.9], // halo violet
+                                [67, 26, 130, 0.85],
+                                [88, 28, 135, 0.9],
+                                [107, 33, 168, 0.88],
+                                [124, 58, 237, 0.82],
+                                [99, 102, 241, 0.8],
+                                [129, 140, 248, 0.75],
+                                [139, 92, 246, 0.85],
+                                [79, 70, 229, 0.88],
+                                [67, 56, 202, 0.9],
                             ],
-                            particleCount: 3000,
-                            haloSizeScale: 1.22,
-                            haloAlphaScale: 1.34,
-                            coreAlphaScale: 1.26,
+                            particleCount: 3733,
+                            particleSizeScale: 1.05,
+                            useHalo: false,
+                            haloSizeScale: 1,
+                            haloAlphaScale: 1,
+                            coreAlphaScale: 1,
                         };
                     }
                     return {
@@ -450,11 +530,13 @@
                             [120, 120, 240, 1],
                             [90, 90, 210, 0.95],
                             [235, 170, 255, 0.9],
+                            [180, 100, 255, 0.98],
+                            [148, 80, 230, 0.96],
                         ],
-                        particleCount: 2200,
-                        haloSizeScale: 1,
-                        haloAlphaScale: 1,
-                        coreAlphaScale: 1,
+                        particleCount: 2600,
+                        haloSizeScale: 1.18,
+                        haloAlphaScale: 1.22,
+                        coreAlphaScale: 1.15,
                     };
                 }
 
@@ -500,17 +582,18 @@
                 let currentThemeProfile = getOverlayThemeProfile(currentThemeName);
 
                 const config = {
-                    particleCount: 2200,
+                    particleCount: currentThemeProfile.particleCount || 2600,
                     sphereBaseRadius: 4,
                     focalLength: 250,
-                    rotationSpeedX: 0.0003,
-                    rotationSpeedY: 0.002,
-                    breathAmplitude: 0.09,
-                    breathSpeed: 0.01,
+                    rotationSpeedX: 0.00032,
+                    rotationSpeedY: 0.0021,
+                    breathAmplitude: currentThemeName === 'light' ? 0.11 : 0.1,
+                    breathSpeed: currentThemeName === 'light' ? 0.012 : 0.011,
                     petalCount: 15,
                     petalStrength: 0.2,
                     baseParticleMinSize: 0.45,
                     baseParticleMaxSize: 1.1,
+                    particleSizeScale: currentThemeProfile.particleSizeScale || 1,
                     colorPalette: currentThemeProfile.particlePalette,
                     backgroundColor: 'rgba(0, 0, 0, 0)',
                 };
@@ -542,10 +625,11 @@
                         this.color_g = colorData[1];
                         this.color_b = colorData[2];
                         this.baseAlphaMultiplier = colorData[3];
-                        this.baseSize =
+                        const sizeBase =
                             config.baseParticleMinSize +
                             Math.random() *
                                 (config.baseParticleMaxSize - config.baseParticleMinSize);
+                        this.baseSize = sizeBase * (config.particleSizeScale || 1);
                         this.noiseAmp = 0.03 + Math.random() * 0.04;
                         this.noiseFreq = 0.005 + Math.random() * 0.01;
                         this.noisePhaseX = Math.random() * Math.PI * 2;
@@ -607,65 +691,69 @@
                             this.alphaFactor *
                                 glowMultiplier *
                                 fadeInFactor *
-                                currentThemeProfile.coreAlphaScale,
+                                (currentThemeProfile.coreAlphaScale || 1),
                         );
                         if (mainAlpha <= 0.02) return;
                         const mainSize = this.currentDisplaySize;
-
-                        const haloLayers = [
-                            { sizeFactor: 5, alphaFactor: 0.2 },
-                            { sizeFactor: 3.5, alphaFactor: 0.28 },
-                            { sizeFactor: 2.2, alphaFactor: 0.4 },
-                        ];
-
-                        for (const layer of haloLayers) {
-                            const haloSize =
-                                mainSize * layer.sizeFactor * currentThemeProfile.haloSizeScale;
-                            const haloAlpha = Math.min(
-                                1,
-                                mainAlpha * layer.alphaFactor * currentThemeProfile.haloAlphaScale,
-                            );
-                            if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
-                            const gradient = ctx.createRadialGradient(
-                                this.screenX,
-                                this.screenY,
-                                haloSize * 0.1,
-                                this.screenX,
-                                this.screenY,
-                                haloSize,
-                            );
-                            gradient.addColorStop(
-                                0,
-                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`,
-                            );
-                            gradient.addColorStop(
-                                0.6,
-                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.4})`,
-                            );
-                            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-                            ctx.fillStyle = gradient;
-                            ctx.beginPath();
-                            ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
-                            ctx.fill();
+                        const useHalo = currentThemeProfile.useHalo !== false;
+                        if (useHalo) {
+                            const haloLayers = [
+                                { sizeFactor: 5, alphaFactor: 0.2 },
+                                { sizeFactor: 3.5, alphaFactor: 0.28 },
+                                { sizeFactor: 2.2, alphaFactor: 0.4 },
+                            ];
+                            for (const layer of haloLayers) {
+                                const haloSize =
+                                    mainSize * layer.sizeFactor * (currentThemeProfile.haloSizeScale || 1);
+                                const haloAlpha = Math.min(
+                                    1,
+                                    mainAlpha * layer.alphaFactor * (currentThemeProfile.haloAlphaScale || 1),
+                                );
+                                if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
+                                const gradient = ctx.createRadialGradient(
+                                    this.screenX,
+                                    this.screenY,
+                                    haloSize * 0.1,
+                                    this.screenX,
+                                    this.screenY,
+                                    haloSize,
+                                );
+                                gradient.addColorStop(
+                                    0,
+                                    `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`,
+                                );
+                                gradient.addColorStop(
+                                    0.6,
+                                    `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.4})`,
+                                );
+                                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                                ctx.fillStyle = gradient;
+                                ctx.beginPath();
+                                ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
                         }
-
-                        const coreGradient = ctx.createRadialGradient(
-                            this.screenX,
-                            this.screenY,
-                            0,
-                            this.screenX,
-                            this.screenY,
-                            mainSize,
-                        );
-                        coreGradient.addColorStop(
-                            0,
-                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`,
-                        );
-                        coreGradient.addColorStop(
-                            1,
-                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
-                        );
-                        ctx.fillStyle = coreGradient;
+                        if (useHalo) {
+                            const coreGradient = ctx.createRadialGradient(
+                                this.screenX,
+                                this.screenY,
+                                0,
+                                this.screenX,
+                                this.screenY,
+                                mainSize,
+                            );
+                            coreGradient.addColorStop(
+                                0,
+                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`,
+                            );
+                            coreGradient.addColorStop(
+                                1,
+                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
+                            );
+                            ctx.fillStyle = coreGradient;
+                        } else {
+                            ctx.fillStyle = `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`;
+                        }
                         ctx.beginPath();
                         ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
                         ctx.fill();
@@ -777,6 +865,8 @@
                     currentThemeName = normalizedTheme;
                     currentThemeProfile = getOverlayThemeProfile(currentThemeName);
                     config.colorPalette = currentThemeProfile.particlePalette;
+                    config.particleCount = currentThemeProfile.particleCount || config.particleCount;
+                    config.particleSizeScale = currentThemeProfile.particleSizeScale || 1;
                     if (typeof window.__applyLoadingOverlayThemeVars === 'function') {
                         let snapshot = null;
                         try {
@@ -878,7 +968,10 @@
                                     </button>
                                 </div>
                             </div>
-
+                            <div
+                                class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
+                                aria-hidden="true"
+                            ></div>
                             <button
                                 id="themeToggle"
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0"
@@ -888,31 +981,41 @@
                                 <i class="fas fa-moon text-blue-300 dark:hidden"></i>
                             </button>
                             <div
-                                class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:w-[24rem]"
+                                class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:max-w-[24rem] flex-shrink-0"
                             >
                                 <input
                                     type="text"
                                     id="searchInput"
                                     placeholder="Поиск..."
-                                    class="w-full pl-10 pr-10 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                    class="w-full pl-10 pr-20 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                                 />
                                 <i
-                                    class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                                    class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
                                 ></i>
                                 <button
                                     id="clearSearchInputBtn"
                                     type="button"
-                                    class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                                    class="absolute top-1/2 right-10 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
                                     title="Очистить поиск"
                                 >
                                     <i class="fas fa-times"></i>
+                                </button>
+                                <button
+                                    id="toggleAdvancedSearch"
+                                    type="button"
+                                    class="absolute top-1/2 right-2 transform -translate-y-1/2 p-1.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Параметры поиска (Расширенный поиск)"
+                                    aria-expanded="false"
+                                    aria-controls="advancedSearchOptions"
+                                >
+                                    <i class="fas fa-cog text-sm" aria-hidden="true"></i>
                                 </button>
                                 <div
                                     id="searchResults"
                                     class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto"
                                 ></div>
                             </div>
-                            <div class="flex gap-2 flex-shrink-0">
+                            <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
                                 <button
                                     id="openCommandPaletteBtn"
                                     type="button"
@@ -921,13 +1024,10 @@
                                 >
                                     <i class="fas fa-terminal" aria-hidden="true"></i>
                                 </button>
-                                <button
-                                    id="customizeUIBtn"
-                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                    title="Настройки"
-                                >
-                                    <i class="fas fa-cog"></i>
-                                </button>
+                                <div
+                                    class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
+                                    aria-hidden="true"
+                                ></div>
                                 <button
                                     id="exportDataBtn"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -950,6 +1050,10 @@
                                 >
                                     <i class="fas fa-download"></i>
                                 </button>
+                                <div
+                                    class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
+                                    aria-hidden="true"
+                                ></div>
                                 <button
                                     id="forceReloadBtn"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -964,6 +1068,13 @@
                                 >
                                     <i class="fas fa-info-circle"></i>
                                 </button>
+                                <button
+                                    id="customizeUIBtn"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                    title="Настройки"
+                                >
+                                    <i class="fas fa-cog"></i>
+                                </button>
                                 <input
                                     type="file"
                                     id="importFileInput"
@@ -977,56 +1088,49 @@
                     <div
                         id="advancedSearchOptions"
                         class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3"
+                        role="region"
+                        aria-labelledby="advancedSearchOptionsLabel"
                     >
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div>
-                                <label
-                                    class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                    >Искать по:</label
-                                >
-                                <div class="flex flex-wrap gap-2">
-                                    <label class="inline-flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            checked
-                                            class="search-field form-checkbox text-primary focus:ring-primary"
-                                            value="title"
-                                        />
-                                        <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                            >Заголовок</span
-                                        >
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            checked
-                                            class="search-field form-checkbox text-primary focus:ring-primary"
-                                            value="description"
-                                        />
-                                        <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                            >Описание/Содержимое</span
-                                        >
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            checked
-                                            class="search-field form-checkbox text-primary focus:ring-primary"
-                                            value="steps"
-                                        />
-                                        <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                            >Шаги</span
-                                        >
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="flex justify-end items-end md:col-start-3">
-                                <button
-                                    id="toggleAdvancedSearch"
-                                    class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition"
-                                >
-                                    <i class="fas fa-cog mr-1"></i>Параметры поиска
-                                </button>
+                        <div class="flex flex-nowrap items-center gap-x-4 gap-y-0">
+                            <span
+                                id="advancedSearchOptionsLabel"
+                                class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap flex-shrink-0"
+                                >Искать по:</span
+                            >
+                            <div class="flex flex-nowrap items-center gap-x-4 gap-y-0 min-w-0">
+                                <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked
+                                        class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                        value="title"
+                                    />
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                        >Заголовок</span
+                                    >
+                                </label>
+                                <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked
+                                        class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                        value="description"
+                                    />
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                        >Описание/Содержимое</span
+                                    >
+                                </label>
+                                <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked
+                                        class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                        value="steps"
+                                    />
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                        >Шаги</span
+                                    >
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -1897,16 +2001,18 @@
             </div>
 
             <div id="blacklistedClientsContent" class="tab-content hidden p-4">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200">
+                <div class="flex justify-between items-center mb-4 gap-2">
+                    <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 min-w-0">
                         Черный список для жаб (но не говорите о нем <s>жабам</s> клиентам!)
                     </h2>
-                    <button
-                        id="addBlacklistEntryBtn"
-                        class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md shadow-sm transition"
-                    >
-                        <i class="fas fa-plus mr-2"></i>Добавить
-                    </button>
+                    <div class="flex items-center gap-1 flex-shrink-0" id="blacklistHeaderActions">
+                        <button
+                            id="addBlacklistEntryBtn"
+                            class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md shadow-sm transition"
+                        >
+                            <i class="fas fa-plus mr-2"></i>Добавить
+                        </button>
+                    </div>
                 </div>
                 <div class="mb-4 flex items-center gap-2">
                     <label for="blacklistSearchInput" class="sr-only"
@@ -2579,7 +2685,7 @@
 
                         <div class="p-content overflow-y-auto flex-1">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-content-lg">
-                                <div>
+                                <div class="settings-modal-tabs-column">
                                     <div class="mb-content">
                                         <label
                                             class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
@@ -2595,192 +2701,41 @@
                                             </p>
                                         </div>
                                     </div>
+                                    <div class="settings-modal-extra-actions">
+                                        <button
+                                            type="button"
+                                            id="openRecentlyDeletedBtn"
+                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md transition bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                            title="Открыть список недавно удалённых записей"
+                                            aria-label="Недавно удаленные"
+                                        >
+                                            <i class="fas fa-trash text-red-500 dark:text-red-400 mr-2" aria-hidden="true"></i>
+                                            Недавно удаленные
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="restartOnboardingTourBtn"
+                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md transition bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                            title="Повторить онбординг-тур"
+                                            aria-label="Повторить онбординг-тур"
+                                        >
+                                            <i class="fas fa-route mr-2" aria-hidden="true"></i>
+                                            Повторить онбординг-тур
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="openAppCustomizationModalBtn"
+                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md transition bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                            title="Открыть настройки кастомизации (тема, цвета, скругление, отступы, фон)"
+                                            aria-label="Кастомизация"
+                                        >
+                                            <i class="fas fa-palette mr-2" aria-hidden="true"></i>
+                                            Кастомизация
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div>
-                                    <h3
-                                        class="text-lg font-semibold mb-content-sm text-gray-900 dark:text-gray-100"
-                                    >
-                                        Настройка цветов элементов (БЕТА)
-                                    </h3>
-                                    <div
-                                        class="flex justify-between flex-wrap space-x-4"
-                                        id="colorTargetSelector"
-                                    >
-                                        <label class="flex items-center cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="colorTarget"
-                                                value="elements"
-                                                class="form-radio text-primary focus:ring-primary"
-                                                checked
-                                            />
-                                            <span
-                                                class="ml-2 text-gray-700 dark:text-gray-300 font-medium"
-                                                >ЦВЕТ ЭЛЕМЕНТОВ</span
-                                            >
-                                        </label>
-                                        <label class="flex items-center cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="colorTarget"
-                                                value="background"
-                                                class="form-radio text-primary focus:ring-primary"
-                                            />
-                                            <span
-                                                class="ml-2 text-gray-700 dark:text-gray-300 font-medium"
-                                                >ЦВЕТ ФОНА</span
-                                            >
-                                        </label>
-                                        <label class="flex items-center cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="colorTarget"
-                                                value="text"
-                                                class="form-radio text-primary focus:ring-primary"
-                                            />
-                                            <span
-                                                class="ml-2 text-gray-700 dark:text-gray-300 font-medium"
-                                                >ЦВЕТ ТЕКСТА</span
-                                            >
-                                        </label>
-                                    </div>
-                                    <div class="mb-content" id="advancedColorPicker">
-                                        <div class="flex items-center justify-center mt-2 mb-4">
-                                            <div
-                                                id="color-preview-swatch"
-                                                class="w-20 h-20 rounded-lg border-4 border-white dark:border-gray-700 shadow-inner"
-                                            ></div>
-                                        </div>
-
-                                        <div class="space-y-3 mt-4">
-                                            <div>
-                                                <div
-                                                    class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1"
-                                                >
-                                                    <label for="hue-value">Цвет</label>
-                                                    <input
-                                                        id="hue-value"
-                                                        type="text"
-                                                        readonly
-                                                        class="w-16 text-center bg-gray-100 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded text-sm py-0.5"
-                                                    />
-                                                </div>
-                                                <div
-                                                    id="hue-slider"
-                                                    class="relative w-full h-4 rounded-full cursor-pointer p-0.5 bg-gray-200 dark:bg-gray-700"
-                                                >
-                                                    <div
-                                                        class="w-full h-full rounded-full overflow-hidden"
-                                                    >
-                                                        <div
-                                                            id="hue-slider-gradient"
-                                                            class="w-full h-full"
-                                                        ></div>
-                                                    </div>
-                                                    <div
-                                                        id="hue-handle"
-                                                        class="absolute w-5 h-5 -mt-2.5 top-1/2 rounded-full border-2 border-white shadow-md bg-transparent pointer-events-none"
-                                                        style="left: 0%"
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div
-                                                    class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1"
-                                                >
-                                                    <label for="saturation-value"
-                                                        >Насыщенность</label
-                                                    >
-                                                    <input
-                                                        id="saturation-value"
-                                                        type="text"
-                                                        readonly
-                                                        class="w-16 text-center bg-gray-100 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded text-sm py-0.5"
-                                                    />
-                                                </div>
-                                                <div
-                                                    id="saturation-slider"
-                                                    class="relative w-full h-4 rounded-full cursor-pointer p-0.5 bg-gray-200 dark:bg-gray-700"
-                                                >
-                                                    <div
-                                                        class="w-full h-full rounded-full overflow-hidden"
-                                                    >
-                                                        <div
-                                                            id="saturation-slider-gradient"
-                                                            class="w-full h-full"
-                                                        ></div>
-                                                    </div>
-                                                    <div
-                                                        id="saturation-handle"
-                                                        class="absolute w-5 h-5 -mt-2.5 top-1/2 rounded-full border-2 border-white shadow-md pointer-events-none"
-                                                        style="left: 80%"
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div
-                                                    class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1"
-                                                >
-                                                    <label for="brightness-value">Яркость</label>
-                                                    <input
-                                                        id="brightness-value"
-                                                        type="text"
-                                                        readonly
-                                                        class="w-16 text-center bg-gray-100 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded text-sm py-0.5"
-                                                    />
-                                                </div>
-                                                <div
-                                                    id="brightness-slider"
-                                                    class="relative w-full h-4 rounded-full cursor-pointer p-0.5 bg-gray-200 dark:bg-gray-700"
-                                                >
-                                                    <div
-                                                        class="w-full h-full rounded-full overflow-hidden"
-                                                    >
-                                                        <div
-                                                            id="brightness-slider-gradient"
-                                                            class="w-full h-full"
-                                                        ></div>
-                                                    </div>
-                                                    <div
-                                                        id="brightness-handle"
-                                                        class="absolute w-5 h-5 -mt-2.5 top-1/2 rounded-full border-2 border-white shadow-md pointer-events-none"
-                                                        style="left: 88%"
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="mb-content">
-                                        <label
-                                            class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                            >Режим темы</label
-                                        >
-                                        <div class="flex space-x-3 mt-2">
-                                            <label class="flex items-center">
-                                                <input
-                                                    type="radio"
-                                                    name="themeMode"
-                                                    value="light"
-                                                    class="form-radio text-primary focus:ring-primary mr-2"
-                                                />
-                                                <span class="text-gray-700 dark:text-gray-300"
-                                                    >Светлая</span
-                                                >
-                                            </label>
-                                            <label class="flex items-center">
-                                                <input
-                                                    type="radio"
-                                                    name="themeMode"
-                                                    value="dark"
-                                                    class="form-radio text-primary focus:ring-primary mr-2"
-                                                />
-                                                <span class="text-gray-700 dark:text-gray-300"
-                                                    >Темная</span
-                                                >
-                                            </label>
-                                        </div>
-                                    </div>
                                     <div class="mb-content">
                                         <label
                                             class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
@@ -2810,86 +2765,6 @@
                                             >
                                                 Сбросить на 100%
                                             </button>
-                                        </div>
-                                    </div>
-                                    <div class="mb-content">
-                                        <label
-                                            class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                            >Скругление углов</label
-                                        >
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="20"
-                                            value="8"
-                                            class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
-                                            id="borderRadiusSlider"
-                                        />
-                                        <div
-                                            class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1"
-                                        >
-                                            <span>Квадратные</span>
-                                            <span>Скругленные</span>
-                                        </div>
-                                    </div>
-                                    <div class="mb-content">
-                                        <label
-                                            class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                            >Настройка отступов</label
-                                        >
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="6"
-                                            value="3"
-                                            class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
-                                            id="densitySlider"
-                                        />
-                                        <div
-                                            class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1"
-                                        >
-                                            <span>Меньше</span>
-                                            <span>Больше</span>
-                                        </div>
-                                    </div>
-                                    <div class="mb-content">
-                                        <label
-                                            class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                            >Фоновое изображение</label
-                                        >
-                                        <div class="flex items-center gap-4 mt-2">
-                                            <div
-                                                id="backgroundImagePreview"
-                                                class="rounded-md bg-gray-200 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 flex-shrink-0 flex items-center justify-center"
-                                            >
-                                                <span
-                                                    id="backgroundImagePreviewText"
-                                                    class="text-xs text-gray-500 dark:text-gray-400 p-2 text-center"
-                                                    >Нет изображения</span
-                                                >
-                                            </div>
-                                            <div class="flex flex-col gap-2">
-                                                <button
-                                                    type="button"
-                                                    id="backgroundImageUploadBtn"
-                                                    class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition"
-                                                >
-                                                    <i class="fas fa-upload mr-2"></i>Загрузить...
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    id="backgroundImageRemoveBtn"
-                                                    class="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition hidden"
-                                                >
-                                                    <i class="fas fa-trash mr-2"></i>Удалить
-                                                </button>
-                                                <input
-                                                    type="file"
-                                                    id="backgroundImageInput"
-                                                    class="hidden"
-                                                    accept="image/png, image/jpeg, image/gif, image/webp"
-                                                />
-                                            </div>
                                         </div>
                                     </div>
                                     <div
@@ -2995,13 +2870,6 @@
                                                     проверку систем
                                                 </button>
                                             </div>
-                                            <p
-                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
-                                            >
-                                                Запускает полную диагностику: localStorage,
-                                                IndexedDB, поисковый индекс, алгоритмы, хранилища,
-                                                автосохранение. Отчёт отображается в модальном окне.
-                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -3009,28 +2877,25 @@
                         </div>
 
                         <div
-                            class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto bg-gray-50 dark:bg-gray-700 -mx-6 -mb-6 rounded-b-lg"
+                            class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto bg-gray-50 dark:bg-gray-700 -mx-6 -mb-6 rounded-b-lg settings-modal-footer"
                         >
-                            <div class="flex justify-between gap-2 flex-wrap">
-                                <button
-                                    id="clearAllDataBtn"
-                                    class="btn-destructive btn-destructive-all"
-                                >
-                                    <i class="fas fa-skull-crossbones mr-2"></i>Очистить все данные
-                                </button>
-                                <button
-                                    id="resetUiBtn"
-                                    class="btn-secondary btn-destructive border-b p-2"
-                                >
-                                    Сбросить настройки интерфейса
-                                </button>
-                                <button
-                                    id="openRecentlyDeletedBtn"
-                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition"
-                                >
-                                    <i class="fas fa-trash mr-2 text-red-500"></i>Недавно удаленные
-                                </button>
-                                <div class="flex gap-2">
+                            <div class="settings-modal-footer-actions">
+                                <div class="settings-modal-footer-left">
+                                    <button
+                                        id="clearAllDataBtn"
+                                        class="btn-destructive btn-destructive-all settings-modal-btn-critical"
+                                    >
+                                        <i class="fas fa-skull-crossbones mr-1"></i>
+                                        Очистить все данные
+                                    </button>
+                                    <button
+                                        id="resetUiBtn"
+                                        class="btn-secondary btn-destructive border-b settings-modal-btn-critical"
+                                    >
+                                        Сбросить настройки интерфейса
+                                    </button>
+                                </div>
+                                <div class="settings-modal-footer-right">
                                     <button
                                         id="cancelUISettingsBtn"
                                         class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition"
@@ -3043,6 +2908,252 @@
                                     >
                                         Сохранить
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно Кастомизация (тема, цвета, скругление, отступы, фон) -->
+            <div
+                id="appCustomizationModal"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 overflow-y-auto flex items-center justify-center"
+                aria-labelledby="appCustomizationModalTitle"
+                aria-modal="true"
+            >
+                <div class="flex items-center justify-center min-h-full">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden modal-inner-container"
+                    >
+                        <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                            <div class="flex justify-between items-center gap-4">
+                                <h2 id="appCustomizationModalTitle" class="text-xl font-bold">Кастомизация</h2>
+                                <button
+                                    type="button"
+                                    id="closeAppCustomizationModalBtn"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Закрыть"
+                                    aria-label="Закрыть"
+                                >
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-content overflow-y-auto flex-1">
+                            <div class="space-y-content-lg">
+                                <div class="mb-content">
+                                    <label
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                        >Режим темы</label
+                                    >
+                                    <div class="flex space-x-3 mt-2">
+                                        <label class="flex items-center">
+                                            <input
+                                                type="radio"
+                                                name="themeMode"
+                                                value="light"
+                                                class="form-radio text-primary focus:ring-primary mr-2"
+                                            />
+                                            <span class="text-gray-700 dark:text-gray-300">Светлая</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input
+                                                type="radio"
+                                                name="themeMode"
+                                                value="dark"
+                                                class="form-radio text-primary focus:ring-primary mr-2"
+                                            />
+                                            <span class="text-gray-700 dark:text-gray-300">Темная</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-content-sm text-gray-900 dark:text-gray-100">
+                                        Настройка цветов элементов (БЕТА)
+                                    </h3>
+                                    <div
+                                        class="flex justify-between flex-wrap space-x-4"
+                                        id="colorTargetSelector"
+                                    >
+                                        <label class="flex items-center cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="colorTarget"
+                                                value="elements"
+                                                class="form-radio text-primary focus:ring-primary"
+                                                checked
+                                            />
+                                            <span class="ml-2 text-gray-700 dark:text-gray-300 font-medium">ЦВЕТ ЭЛЕМЕНТОВ</span>
+                                        </label>
+                                        <label class="flex items-center cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="colorTarget"
+                                                value="background"
+                                                class="form-radio text-primary focus:ring-primary"
+                                            />
+                                            <span class="ml-2 text-gray-700 dark:text-gray-300 font-medium">ЦВЕТ ФОНА</span>
+                                        </label>
+                                        <label class="flex items-center cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="colorTarget"
+                                                value="text"
+                                                class="form-radio text-primary focus:ring-primary"
+                                            />
+                                            <span class="ml-2 text-gray-700 dark:text-gray-300 font-medium">ЦВЕТ ТЕКСТА</span>
+                                        </label>
+                                    </div>
+                                    <div class="mb-content" id="advancedColorPicker">
+                                        <div class="flex items-center justify-center mt-2 mb-4">
+                                            <div
+                                                id="color-preview-swatch"
+                                                class="w-20 h-20 rounded-lg border-4 border-white dark:border-gray-700 shadow-inner"
+                                            ></div>
+                                        </div>
+                                        <div class="space-y-3 mt-4">
+                                            <div>
+                                                <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                                    <label for="hue-value">Цвет</label>
+                                                    <input
+                                                        id="hue-value"
+                                                        type="text"
+                                                        readonly
+                                                        class="w-16 text-center bg-gray-100 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded text-sm py-0.5"
+                                                    />
+                                                </div>
+                                                <div
+                                                    id="hue-slider"
+                                                    class="relative w-full h-4 rounded-full cursor-pointer p-0.5 bg-gray-200 dark:bg-gray-700"
+                                                >
+                                                    <div class="w-full h-full rounded-full overflow-hidden">
+                                                        <div id="hue-slider-gradient" class="w-full h-full"></div>
+                                                    </div>
+                                                    <div
+                                                        id="hue-handle"
+                                                        class="absolute w-5 h-5 -mt-2.5 top-1/2 rounded-full border-2 border-white shadow-md bg-transparent pointer-events-none"
+                                                        style="left: 0%"
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                                    <label for="saturation-value">Насыщенность</label>
+                                                    <input
+                                                        id="saturation-value"
+                                                        type="text"
+                                                        readonly
+                                                        class="w-16 text-center bg-gray-100 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded text-sm py-0.5"
+                                                    />
+                                                </div>
+                                                <div
+                                                    id="saturation-slider"
+                                                    class="relative w-full h-4 rounded-full cursor-pointer p-0.5 bg-gray-200 dark:bg-gray-700"
+                                                >
+                                                    <div class="w-full h-full rounded-full overflow-hidden">
+                                                        <div id="saturation-slider-gradient" class="w-full h-full"></div>
+                                                    </div>
+                                                    <div
+                                                        id="saturation-handle"
+                                                        class="absolute w-5 h-5 -mt-2.5 top-1/2 rounded-full border-2 border-white shadow-md pointer-events-none"
+                                                        style="left: 80%"
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                                    <label for="brightness-value">Яркость</label>
+                                                    <input
+                                                        id="brightness-value"
+                                                        type="text"
+                                                        readonly
+                                                        class="w-16 text-center bg-gray-100 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded text-sm py-0.5"
+                                                    />
+                                                </div>
+                                                <div
+                                                    id="brightness-slider"
+                                                    class="relative w-full h-4 rounded-full cursor-pointer p-0.5 bg-gray-200 dark:bg-gray-700"
+                                                >
+                                                    <div class="w-full h-full rounded-full overflow-hidden">
+                                                        <div id="brightness-slider-gradient" class="w-full h-full"></div>
+                                                    </div>
+                                                    <div
+                                                        id="brightness-handle"
+                                                        class="absolute w-5 h-5 -mt-2.5 top-1/2 rounded-full border-2 border-white shadow-md pointer-events-none"
+                                                        style="left: 88%"
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скругление углов</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="20"
+                                        value="8"
+                                        class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        id="borderRadiusSlider"
+                                    />
+                                    <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Квадратные</span>
+                                        <span>Скругленные</span>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Настройка отступов</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="6"
+                                        value="3"
+                                        class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        id="densitySlider"
+                                    />
+                                    <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Меньше</span>
+                                        <span>Больше</span>
+                                    </div>
+                                </div>
+                                <div class="mb-content">
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Фоновое изображение</label>
+                                    <div class="flex items-center gap-4 mt-2">
+                                        <div
+                                            id="backgroundImagePreview"
+                                            class="rounded-md bg-gray-200 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 flex-shrink-0 flex items-center justify-center w-24 h-24 min-w-[6rem]"
+                                        >
+                                            <span
+                                                id="backgroundImagePreviewText"
+                                                class="text-xs text-gray-500 dark:text-gray-400 p-2 text-center"
+                                                >Нет изображения</span
+                                            >
+                                        </div>
+                                        <div class="flex flex-col gap-2">
+                                            <button
+                                                type="button"
+                                                id="backgroundImageUploadBtn"
+                                                class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition"
+                                            >
+                                                <i class="fas fa-upload mr-2"></i>Загрузить...
+                                            </button>
+                                            <button
+                                                type="button"
+                                                id="backgroundImageRemoveBtn"
+                                                class="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition hidden"
+                                            >
+                                                <i class="fas fa-trash mr-2"></i>Удалить
+                                            </button>
+                                            <input
+                                                type="file"
+                                                id="backgroundImageInput"
+                                                class="hidden"
+                                                accept="image/png, image/jpeg, image/gif, image/webp"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3227,8 +3338,14 @@
                                     id="dbMergeRiskHint"
                                     class="db-merge-risk-hint db-merge-risk-hint--aside"
                                 >
-                                    <i class="fas fa-shield-alt db-merge-risk-hint-icon shrink-0" aria-hidden="true"></i>
-                                    <span>Перед слиянием будет создана полная резервная копия текущей базы данных.</span>
+                                    <i
+                                        class="fas fa-shield-alt db-merge-risk-hint-icon shrink-0"
+                                        aria-hidden="true"
+                                    ></i>
+                                    <span
+                                        >Перед слиянием будет создана полная резервная копия текущей
+                                        базы данных.</span
+                                    >
                                 </div>
                             </div>
                         </aside>
@@ -3289,8 +3406,7 @@
                                 >
                                     <div class="db-merge-section-head">
                                         <h3 class="db-merge-section-title">
-                                            <span
-                                                class="db-merge-section-title-icon icon-primary"
+                                            <span class="db-merge-section-title-icon icon-primary"
                                                 ><i class="fas fa-chart-network text-xs"></i
                                             ></span>
                                             Результаты анализа
@@ -3342,8 +3458,7 @@
                                 </div>
                                 <div id="dbMergeStepApply" class="hidden" data-step-content="apply">
                                     <h3 class="db-merge-section-title mb-3">
-                                        <span
-                                            class="db-merge-section-title-icon icon-primary"
+                                        <span class="db-merge-section-title-icon icon-primary"
                                             ><i class="fas fa-play text-xs"></i
                                         ></span>
                                         Выполнение слияния
@@ -3428,6 +3543,150 @@
                         class="health-report-body p-4 overflow-y-auto flex-1 text-sm"
                     >
                         <!-- Контент заполняется динамически -->
+                    </div>
+                </div>
+            </div>
+
+            <div
+                id="engineeringCockpitModal"
+                class="fixed inset-0 bg-black/70 hidden z-[80] p-4 flex items-center justify-center"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="engineeringCockpitTitle"
+            >
+                <div
+                    class="engineering-cockpit-shell bg-slate-950 text-slate-100 rounded-xl border border-slate-700 shadow-2xl w-full max-w-7xl max-h-[92vh] overflow-hidden flex flex-col"
+                >
+                    <div
+                        class="engineering-cockpit-header px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3"
+                    >
+                        <div>
+                            <h2 id="engineeringCockpitTitle" class="text-lg font-semibold">
+                                Engineering Cockpit
+                            </h2>
+                            <p class="text-xs text-slate-400">
+                                Скрытое пространство инженерной диагностики
+                            </p>
+                        </div>
+                        <button
+                            id="engineeringCockpitCloseBtn"
+                            class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                            title="Закрыть"
+                            aria-label="Закрыть инженерный режим"
+                        >
+                            Закрыть
+                        </button>
+                    </div>
+
+                    <div id="engineeringCockpitAuth" class="p-6 space-y-4">
+                        <p class="text-sm text-slate-300">
+                            Введите инженерный пароль для доступа к машинному отделению.
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <input
+                                id="engineeringCockpitPasswordInput"
+                                type="password"
+                                inputmode="numeric"
+                                autocomplete="off"
+                                class="px-3 py-2 rounded-md bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary min-w-[220px]"
+                                placeholder="Пароль доступа"
+                            />
+                            <button
+                                id="engineeringCockpitUnlockBtn"
+                                class="px-4 py-2 rounded-md bg-primary hover:bg-secondary text-white transition"
+                            >
+                                Войти
+                            </button>
+                            <span
+                                id="engineeringCockpitAuthMessage"
+                                class="text-xs text-amber-300"
+                                aria-live="polite"
+                            ></span>
+                        </div>
+                    </div>
+
+                    <div
+                        id="engineeringCockpitWorkspace"
+                        class="hidden min-h-0 flex-1 flex flex-col"
+                    >
+                        <div
+                            class="engineering-cockpit-toolbar px-4 py-2 border-b border-slate-800 flex flex-wrap items-center gap-2"
+                        >
+                            <button
+                                class="engineering-cockpit-tab-btn is-active"
+                                data-cockpit-tab="overview"
+                            >
+                                Сводка
+                            </button>
+                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="logs">
+                                Логи
+                            </button>
+                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="errors">
+                                Ошибки
+                            </button>
+                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="db">
+                                База данных
+                            </button>
+                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="state">
+                                State
+                            </button>
+                            <div class="ml-auto flex flex-wrap gap-2">
+                                <button
+                                    id="engineeringCockpitRefreshBtn"
+                                    class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                                >
+                                    Обновить
+                                </button>
+                                <button
+                                    id="engineeringCockpitClearLogsBtn"
+                                    class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                                >
+                                    Очистить логи
+                                </button>
+                                <button
+                                    id="engineeringCockpitCopySnapshotBtn"
+                                    class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                                >
+                                    Копировать snapshot
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="engineering-cockpit-content flex-1 min-h-0 overflow-auto p-4">
+                            <section
+                                class="engineering-cockpit-tab is-active"
+                                data-cockpit-tab="overview"
+                            >
+                                <pre
+                                    id="engineeringCockpitOverview"
+                                    class="engineering-cockpit-pre"
+                                ></pre>
+                            </section>
+                            <section class="engineering-cockpit-tab" data-cockpit-tab="logs">
+                                <pre
+                                    id="engineeringCockpitLogs"
+                                    class="engineering-cockpit-pre"
+                                ></pre>
+                            </section>
+                            <section class="engineering-cockpit-tab" data-cockpit-tab="errors">
+                                <pre
+                                    id="engineeringCockpitErrors"
+                                    class="engineering-cockpit-pre"
+                                ></pre>
+                            </section>
+                            <section class="engineering-cockpit-tab" data-cockpit-tab="db">
+                                <pre
+                                    id="engineeringCockpitDb"
+                                    class="engineering-cockpit-pre"
+                                ></pre>
+                            </section>
+                            <section class="engineering-cockpit-tab" data-cockpit-tab="state">
+                                <pre
+                                    id="engineeringCockpitState"
+                                    class="engineering-cockpit-pre"
+                                ></pre>
+                            </section>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4128,7 +4387,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260314-234905-a809ba1"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260314-234905-a809ba1"></script>
+        <script type="module" src="./script.js?v=legacy-20260316-193618-2c02e80"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260316-193618-2c02e80"></script>
     </body>
 </html>

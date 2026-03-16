@@ -196,6 +196,14 @@ const EXTRA_ACTIONS = [
         score: 0.95,
         payload: { action: 'openRecentlyDeleted' },
     },
+    {
+        id: 'action:openEngineeringCockpit',
+        type: 'action',
+        label: 'Машинное отделение (инженерный режим)',
+        subtitle: 'Открыть скрытую инженерную диагностику приложения',
+        score: 0.95,
+        payload: { action: 'openEngineeringCockpit' },
+    },
 ];
 
 const ACTION_KEYWORDS = {
@@ -222,6 +230,15 @@ const ACTION_KEYWORDS = {
     organizeBookmarks: ['организовать', 'закладки', 'папки', 'organize', 'bookmarks'],
     clearFavorites: ['очист избранн', 'избранное очист', 'clear favorites', 'очистить избранное'],
     openRecentlyDeleted: ['корзин', 'удален', 'recently deleted', 'trash', 'восстановить'],
+    openEngineeringCockpit: [
+        'машин',
+        'инженер',
+        'debug',
+        'diagnostic',
+        'cockpit',
+        'engine room',
+        '05213587',
+    ],
 };
 
 function normalizeText(s) {
@@ -300,6 +317,11 @@ export function getActionResults(query) {
             tryAdd('clearFavorites', EXTRA_ACTIONS[14]);
         if (ACTION_KEYWORDS.openRecentlyDeleted.some((k) => word.includes(k) || k.includes(word)))
             tryAdd('openRecentlyDeleted', EXTRA_ACTIONS[15]);
+        if (
+            ACTION_KEYWORDS.openEngineeringCockpit.some((k) => word.includes(k) || k.includes(word))
+        ) {
+            tryAdd('openEngineeringCockpit', EXTRA_ACTIONS[16]);
+        }
     }
 
     return results;

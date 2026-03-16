@@ -59,7 +59,10 @@
                                 </button>
                             </div>
                         </div>
-
+                        <div
+                            class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
+                            aria-hidden="true"
+                        ></div>
                         <button
                             id="themeToggle"
                             class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0"
@@ -69,38 +72,53 @@
                             <i class="fas fa-moon text-blue-300 dark:hidden"></i>
                         </button>
                         <div
-                            class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:w-[24rem]"
+                            class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:max-w-[24rem] flex-shrink-0"
                         >
                             <input
                                 type="text"
                                 id="searchInput"
                                 placeholder="Поиск..."
-                                class="w-full pl-10 pr-10 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                class="w-full pl-10 pr-20 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                             />
                             <i
-                                class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                                class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
                             ></i>
                             <button
                                 id="clearSearchInputBtn"
                                 type="button"
-                                class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                                class="absolute top-1/2 right-10 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
                                 title="Очистить поиск"
                             >
                                 <i class="fas fa-times"></i>
+                            </button>
+                            <button
+                                id="toggleAdvancedSearch"
+                                type="button"
+                                class="absolute top-1/2 right-2 transform -translate-y-1/2 p-1.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                title="Параметры поиска (Расширенный поиск)"
+                                aria-expanded="false"
+                                aria-controls="advancedSearchOptions"
+                            >
+                                <i class="fas fa-cog text-sm" aria-hidden="true"></i>
                             </button>
                             <div
                                 id="searchResults"
                                 class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto"
                             ></div>
                         </div>
-                        <div class="flex gap-2 flex-shrink-0">
+                        <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
                             <button
-                                id="customizeUIBtn"
+                                id="openCommandPaletteBtn"
+                                type="button"
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                title="Настройки"
+                                title="Палитра команд (Ctrl+K)"
                             >
-                                <i class="fas fa-cog"></i>
+                                <i class="fas fa-terminal" aria-hidden="true"></i>
                             </button>
+                            <div
+                                class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
+                                aria-hidden="true"
+                            ></div>
                             <button
                                 id="exportDataBtn"
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -115,6 +133,10 @@
                             >
                                 <i class="fas fa-download"></i>
                             </button>
+                            <div
+                                class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
+                                aria-hidden="true"
+                            ></div>
                             <button
                                 id="forceReloadBtn"
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -129,6 +151,13 @@
                             >
                                 <i class="fas fa-info-circle"></i>
                             </button>
+                            <button
+                                id="customizeUIBtn"
+                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                title="Настройки"
+                            >
+                                <i class="fas fa-cog"></i>
+                            </button>
                             <input type="file" id="importFileInput" accept=".json" class="hidden" />
                         </div>
                     </div>
@@ -137,54 +166,45 @@
                 <div
                     id="advancedSearchOptions"
                     class="hidden bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mb-3"
+                    role="region"
+                    aria-labelledby="advancedSearchOptionsLabel"
                 >
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                            <label
-                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                >Искать по:</label
-                            >
-                            <div class="flex flex-wrap gap-2">
-                                <label class="inline-flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked
-                                        class="search-field form-checkbox text-primary focus:ring-primary"
-                                        value="title"
-                                    />
-                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                        >Заголовок</span
-                                    >
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked
-                                        class="search-field form-checkbox text-primary focus:ring-primary"
-                                        value="description"
-                                    />
-                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
-                                        >Описание/Содержимое</span
-                                    >
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked
-                                        class="search-field form-checkbox text-primary focus:ring-primary"
-                                        value="steps"
-                                    />
-                                    <span class="ml-2 text-gray-700 dark:text-gray-300">Шаги</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="flex justify-end items-end md:col-start-3">
-                            <button
-                                id="toggleAdvancedSearch"
-                                class="px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition"
-                            >
-                                <i class="fas fa-cog mr-1"></i>Параметры поиска
-                            </button>
+                    <div class="flex flex-nowrap items-center gap-x-4 gap-y-0">
+                        <span
+                            id="advancedSearchOptionsLabel"
+                            class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap flex-shrink-0"
+                            >Искать по:</span
+                        >
+                        <div class="flex flex-nowrap items-center gap-x-4 gap-y-0 min-w-0">
+                            <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                <input
+                                    type="checkbox"
+                                    checked
+                                    class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                    value="title"
+                                />
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Заголовок</span>
+                            </label>
+                            <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                <input
+                                    type="checkbox"
+                                    checked
+                                    class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                    value="description"
+                                />
+                                <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                    >Описание/Содержимое</span
+                                >
+                            </label>
+                            <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                <input
+                                    type="checkbox"
+                                    checked
+                                    class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                    value="steps"
+                                />
+                                <span class="ml-2 text-gray-700 dark:text-gray-300">Шаги</span>
+                            </label>
                         </div>
                     </div>
                 </div>

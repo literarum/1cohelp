@@ -34,7 +34,8 @@ export function notify(message, type = 'info', options = {}) {
     const notificationService = getCoreService('NotificationService');
     const showNotification = getCoreService('showNotification');
     const normalizedOptions = typeof options === 'number' ? { duration: options } : options || {};
-    const duration = typeof normalizedOptions.duration === 'number' ? normalizedOptions.duration : 5000;
+    const duration =
+        typeof normalizedOptions.duration === 'number' ? normalizedOptions.duration : 5000;
 
     if (notificationService && typeof notificationService.add === 'function') {
         notificationService.add(message, type, normalizedOptions);

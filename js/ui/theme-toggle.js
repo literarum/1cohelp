@@ -58,8 +58,11 @@ export function initThemeToggle() {
 
         if (prefsSaved) {
             const customizeUIModal = document.getElementById('customizeUIModal');
-            if (customizeUIModal && !customizeUIModal.classList.contains('hidden')) {
-                const nextThemeRadio = customizeUIModal.querySelector(
+            const customizationModal = document.getElementById('appCustomizationModal');
+            const settingsModalOpen = customizeUIModal && !customizeUIModal.classList.contains('hidden');
+            if (settingsModalOpen) {
+                const modalWithTheme = customizationModal || customizeUIModal;
+                const nextThemeRadio = modalWithTheme?.querySelector(
                     `input[name="themeMode"][value="${nextTheme}"]`,
                 );
                 if (nextThemeRadio) {

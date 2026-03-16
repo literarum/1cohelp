@@ -34,6 +34,8 @@
 @import url('./components/folders-examples.css');
 @import url('./components/health-modal.css');
 @import url('./components/db-merge-modal.css');
+@import url('./components/onboarding-tour.css');
+@import url('./components/engineering-cockpit.css');
 
 /* 6. Скроллбар и кнопки (используют переменные из theme/variables.css) */
 @import url('./inline-styles.css');

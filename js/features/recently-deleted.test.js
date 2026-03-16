@@ -74,7 +74,10 @@ describe('recently-deleted', () => {
         const restored = await restoreRecentlyDeletedRecord(9);
 
         expect(restored.storeName).toBe('bookmarks');
-        expect(saveToIndexedDB).toHaveBeenCalledWith('bookmarks', { id: 11, title: 'Restored bookmark' });
+        expect(saveToIndexedDB).toHaveBeenCalledWith('bookmarks', {
+            id: 11,
+            title: 'Restored bookmark',
+        });
         expect(deleteFromIndexedDB).toHaveBeenCalledWith(RECENTLY_DELETED_STORE_NAME, 9);
     });
 

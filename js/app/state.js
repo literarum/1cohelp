@@ -10,7 +10,7 @@ export const State = {
 
     // Настройки пользователя
     userPreferences: {
-        theme: 'auto',
+        theme: 'dark',
         showBlacklistUsageWarning: true,
         staticHeader: false,
     },
@@ -75,6 +75,8 @@ export const State = {
 
     // Текущая секция и алгоритм
     currentSection: 'main',
+    /** Секция, с которой перешли в избранное; повторный клик по «Избранное» возвращает в неё */
+    sectionBeforeFavorites: 'main',
     currentAlgorithm: null,
     editMode: false,
     viewPreferences: {},

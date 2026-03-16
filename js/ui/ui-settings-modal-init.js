@@ -4,6 +4,7 @@ let deps = {
     State: null,
     loadUISettings: null,
     populateModalControls: null,
+    populateCustomizationModalControls: null,
     setColorPickerStateFromHex: null,
     addEscapeHandler: null,
     openAnimatedModal: null,
@@ -20,6 +21,7 @@ let deps = {
     loadEmployeeExtension: null,
     showAppConfirm: null,
     openRecentlyDeletedModal: null,
+    startOnboardingTour: null,
 };
 
 export function setUISettingsModalInitDependencies(dependencies) {
@@ -40,12 +42,6 @@ export function initUISettingsModalHandlers() {
                     deps.populateModalControls(
                         deps.State?.currentPreviewSettings || deps.State?.userPreferences,
                     );
-                }
-                if (typeof deps.setColorPickerStateFromHex === 'function') {
-                    const hex =
-                        deps.State?.currentPreviewSettings?.primaryColor ||
-                        deps.State?.userPreferences?.primaryColor;
-                    deps.setColorPickerStateFromHex(hex || '#9933FF');
                 }
                 if (deps.State) deps.State.isUISettingsDirty = false;
                 customizeUIModal.classList.remove('hidden');
@@ -145,12 +141,14 @@ export function initUISettingsModalHandlers() {
         const resetUiBtn = document.getElementById('resetUiBtn');
         const closeCustomizeUIModalBtn = document.getElementById('closeCustomizeUIModalBtn');
         const openRecentlyDeletedBtn = document.getElementById('openRecentlyDeletedBtn');
+        const restartOnboardingTourBtn = document.getElementById('restartOnboardingTourBtn');
+        const openAppCustomizationModalBtn = document.getElementById('openAppCustomizationModalBtn');
         const decreaseFontBtn = document.getElementById('decreaseFontBtn');
         const increaseFontBtn = document.getElementById('increaseFontBtn');
         const resetFontBtn = document.getElementById('resetFontBtn');
         const fontSizeLabel = customizeUIModal.querySelector('#fontSizeLabel');
-        const borderRadiusSlider = customizeUIModal.querySelector('#borderRadiusSlider');
-        const densitySlider = customizeUIModal.querySelector('#densitySlider');
+        const borderRadiusSlider = document.getElementById('borderRadiusSlider');
+        const densitySlider = document.getElementById('densitySlider');
 
         if (saveUISettingsBtn) {
             saveUISettingsBtn.addEventListener('click', async () => {
@@ -194,6 +192,58 @@ export function initUISettingsModalHandlers() {
                     await window.openRecentlyDeletedModal();
                 }
             });
+        }
+        if (restartOnboardingTourBtn) {
+            restartOnboardingTourBtn.addEventListener('click', async () => {
+                if (typeof deps.startOnboardingTour === 'function') {
+                    await deps.startOnboardingTour();
+                }
+            });
+        }
+
+        const appCustomizationModal = document.getElementById('appCustomizationModal');
+        const closeAppCustomizationModalBtn = document.getElementById('closeAppCustomizationModalBtn');
+        if (openAppCustomizationModalBtn && appCustomizationModal && !openAppCustomizationModalBtn.dataset.customizationListenerAttached) {
+            openAppCustomizationModalBtn.addEventListener('click', () => {
+                if (appCustomizationModal.classList.contains('hidden')) {
+                    if (typeof deps.populateCustomizationModalControls === 'function') {
+                        deps.populateCustomizationModalControls(
+                            deps.State?.currentPreviewSettings || deps.State?.userPreferences,
+                        );
+                    }
+                    appCustomizationModal.classList.remove('hidden');
+                    if (typeof deps.addEscapeHandler === 'function') {
+                        deps.addEscapeHandler(appCustomizationModal);
+                    }
+                    if (typeof deps.openAnimatedModal === 'function') {
+                        deps.openAnimatedModal(appCustomizationModal);
+                    }
+                    if (typeof deps.initColorPicker === 'function') deps.initColorPicker();
+                }
+            });
+            openAppCustomizationModalBtn.dataset.customizationListenerAttached = 'true';
+        }
+        if (closeAppCustomizationModalBtn && appCustomizationModal) {
+            closeAppCustomizationModalBtn.addEventListener('click', () => {
+                if (typeof deps.closeAnimatedModal === 'function') {
+                    deps.closeAnimatedModal(appCustomizationModal);
+                }
+                appCustomizationModal.classList.add('hidden');
+            });
+        }
+        if (appCustomizationModal && !appCustomizationModal.dataset.customizationChangeAttached) {
+            appCustomizationModal.addEventListener('change', (e) => {
+                if (e.target.matches('input[name="themeMode"]')) {
+                    if (typeof deps.updatePreviewSettingsFromModal === 'function') {
+                        deps.updatePreviewSettingsFromModal();
+                        if (deps.State && typeof deps.applyPreviewSettings === 'function') {
+                            deps.applyPreviewSettings(deps.State.currentPreviewSettings);
+                        }
+                        deps.State.isUISettingsDirty = true;
+                    }
+                }
+            });
+            appCustomizationModal.dataset.customizationChangeAttached = 'true';
         }
 
         const FONT_MIN = 80;
@@ -438,7 +488,7 @@ export function initUISettingsModalHandlers() {
         }
 
         customizeUIModal.addEventListener('change', (e) => {
-            if (e.target.matches('input[name="themeMode"], input[name="staticHeader"]')) {
+            if (e.target.matches('input[name="staticHeader"]')) {
                 if (typeof deps.updatePreviewSettingsFromModal === 'function') {
                     deps.updatePreviewSettingsFromModal();
                     if (deps.State && typeof deps.applyPreviewSettings === 'function') {

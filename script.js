@@ -128,7 +128,7 @@ import { registerCoreServices } from './js/core/kernel.js';
 
 import { ExportService, setLoadingOverlayManager } from './js/services/export.js';
 
-import { loadingOverlayManager } from './js/ui/loading-overlay-manager.js';
+import { loadingOverlayManager } from './js/features/loading-overlay/index.js';
 
 import { State } from './js/app/state.js';
 
@@ -228,6 +228,19 @@ import { initFNSCertificateRevocationSystem } from './js/features/fns-cert-revoc
 
 // XMLизатор
 import { initXmlAnalyzer } from './js/features/xml-analyzer.js';
+
+// Onboarding Tour
+import {
+    setOnboardingTourDependencies,
+    shouldShowOnboardingAfterInit,
+    promptAndStartOnboardingTour,
+    startOnboardingTour,
+} from './js/features/onboarding-tour.js';
+import {
+    setEngineeringCockpitDependencies,
+    initEngineeringCockpit,
+    openEngineeringCockpit,
+} from './js/features/engineering-cockpit.js';
 
 // UI Customization (PR11)
 import {
@@ -738,6 +751,7 @@ import {
 import {
     setUISettingsModalDependencies,
     populateModalControls as populateModalControlsModule,
+    populateCustomizationModalControls as populateCustomizationModalControlsModule,
     handleModalVisibilityToggle as handleModalVisibilityToggleModule,
     getSettingsFromModal as getSettingsFromModalModule,
     updatePreviewSettingsFromModal as updatePreviewSettingsFromModalModule,
@@ -781,6 +795,9 @@ import {
 window.NotificationService = NotificationService;
 window.ExportService = ExportService;
 
+// Ранний перехват консоли для централизованного логирования и снижения шумных warning-сообщений.
+initEngineeringCockpit();
+
 // ============================================================================
 // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 // ============================================================================
@@ -788,11 +805,8 @@ window.ExportService = ExportService;
 // userPreferences теперь в State.userPreferences - используем State.userPreferences напрямую
 // Все глобальные переменные теперь в State - используем State.* напрямую
 
-const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
-if (showFavoritesHeaderButton && !showFavoritesHeaderButton.dataset.listenerAttached) {
-    showFavoritesHeaderButton.addEventListener('click', () => setActiveTab('favorites'));
-    showFavoritesHeaderButton.dataset.listenerAttached = 'true';
-}
+// Обработчик кнопки "Избранное" регистрируется в app-init,
+// чтобы избежать дублирования слушателей и повторных переходов.
 
 // Все эти переменные теперь в State - используем State.* напрямую
 // originalUISettings, State.currentPreviewSettings, State.isUISettingsDirty, State.uiModalState
@@ -1603,9 +1617,42 @@ setOnloadHandlerDependencies({
             };
             document.addEventListener('copilot1co:tabShown', onTabShown);
         },
+        () => {
+            setTimeout(() => {
+                if (shouldShowOnboardingAfterInit()) {
+                    void promptAndStartOnboardingTour();
+                }
+            }, 400);
+        },
     ],
 });
 registerOnloadHandler();
+
+function ensureGoogleDocSectionsReady() {
+    if (typeof initGoogleDocSections !== 'function') return;
+    if (document.getElementById('shablonyContent')) return;
+    try {
+        initGoogleDocSections();
+    } catch (error) {
+        console.warn('[script.js] ensureGoogleDocSectionsReady failed:', error);
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        requestAnimationFrame(ensureGoogleDocSectionsReady);
+    });
+} else {
+    requestAnimationFrame(ensureGoogleDocSectionsReady);
+}
+
+window.addEventListener(
+    'load',
+    () => {
+        setTimeout(ensureGoogleDocSectionsReady, 300);
+    },
+    { once: true },
+);
 
 // loadUserPreferences и saveUserPreferences теперь импортируются из js/app/user-preferences.js
 async function loadUserPreferences() {
@@ -4097,6 +4144,7 @@ setHotkeysDependencies({
     showNotification,
     handleGlobalHotkey: handleGlobalHotkeyModule, // Теперь импортируется из модуля
     openCommandPalette,
+    openEngineeringCockpit,
     forceReloadApp,
     hasBlockingModalsOpen: hasBlockingModalsOpenModule,
     // Dependencies for handleGlobalHotkey
@@ -4126,6 +4174,13 @@ setHotkeysDependencies({
     showAppConfirm: showAppConfirmModule,
 });
 console.log('[script.js] Зависимости модуля Hotkeys Handler установлены');
+
+setEngineeringCockpitDependencies({
+    State,
+    storeConfigs,
+    getAllFromIndexedDB,
+    showNotification,
+});
 
 // Escape Handler Dependencies (PR11)
 setEscapeHandlerDependencies({ getVisibleModals, getTopmostModal, requestCloseModal });
@@ -4179,6 +4234,7 @@ setUISettingsModalInitDependencies({
     State,
     loadUISettings: typeof loadUISettings !== 'undefined' ? loadUISettings : null,
     populateModalControls: populateModalControlsModule,
+    populateCustomizationModalControls: populateCustomizationModalControlsModule,
     setColorPickerStateFromHex: setColorPickerStateFromHexModule,
     addEscapeHandler,
     openAnimatedModal: openAnimatedModalModule,
@@ -4197,6 +4253,15 @@ setUISettingsModalInitDependencies({
         typeof loadEmployeeExtension === 'function' ? loadEmployeeExtension : null,
     showAppConfirm: showAppConfirmModule,
     openRecentlyDeletedModal,
+    startOnboardingTour,
+});
+
+setOnboardingTourDependencies({
+    State,
+    setActiveTab,
+    saveUserPreferences: saveUserPreferencesModule,
+    showAppConfirm: showAppConfirmModule,
+    showNotification,
 });
 
 // UI Settings Modal Dependencies (applyPreviewSettings определена ниже, но доступна благодаря hoisting)
