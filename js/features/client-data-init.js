@@ -58,10 +58,74 @@ function __acquireCopyLock(minIntervalMs = 250) {
 }
 
 /** На macOS для копирования ИНН и превью используется Cmd (metaKey), на Win/Linux — Ctrl (ctrlKey). */
-function isMac() {
+export function isMac() {
     const plat = typeof navigator !== 'undefined' && navigator.platform ? navigator.platform : '';
     const ua = typeof navigator !== 'undefined' && navigator.userAgent ? navigator.userAgent : '';
     return /Mac/i.test(plat) || /Mac|iPhone|iPad/i.test(ua);
+}
+
+/**
+ * Ищет ИНН (10 или 12 цифр) в тексте textarea рядом с текущей позицией курсора.
+ * @param {HTMLTextAreaElement} ta
+ * @returns {{ inn: string, start: number, end: number } | null}
+ */
+export function getInnAtCursor(ta) {
+    if (!ta || typeof ta.value !== 'string') return null;
+    const text = ta.value;
+    const n = text.length;
+    const isDigit = (ch) => ch >= '0' && ch <= '9';
+    const basePos = ta.selectionStart ?? 0;
+    const candidates = [basePos, basePos - 1, basePos + 1, basePos - 2, basePos + 2];
+    for (const p of candidates) {
+        if (p < 0 || p >= n) continue;
+        if (!isDigit(text[p])) continue;
+        let l = p,
+            r = p + 1;
+        while (l > 0 && isDigit(text[l - 1])) l--;
+        while (r < n && isDigit(text[r])) r++;
+        const token = text.slice(l, r);
+        if (token.length === 10 || token.length === 12) {
+            return { inn: token, start: l, end: r };
+        }
+    }
+    return null;
+}
+
+/**
+ * Вешает на textarea обработчик Ctrl+ЛКМ (Cmd+ЛКМ на Mac): выделение ИНН под курсором и копирование.
+ * Используется для основного #clientNotes, плавающей панели и standalone-окна.
+ * @param {HTMLTextAreaElement} textarea
+ * @param {(text: string, message?: string) => Promise<boolean>|boolean} copyToClipboardFn
+ * @param {() => void} [onAfterCopy] — опционально (напр. сброс превью в основном окне)
+ * @returns {((e: MouseEvent) => void) | undefined} — обработчик (для сохранения в State / removeEventListener)
+ */
+export function attachInnCtrlClickToTextarea(textarea, copyToClipboardFn, onAfterCopy) {
+    if (!textarea || typeof copyToClipboardFn !== 'function') return undefined;
+    const handler = async (event) => {
+        const modifier = isMac() ? event.metaKey : event.ctrlKey;
+        if (!modifier) return;
+        if (typeof event.button === 'number' && event.button !== 0) return;
+        if (!__acquireCopyLock(250)) return;
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const hit = getInnAtCursor(textarea);
+        if (!hit) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        try {
+            textarea.setSelectionRange(hit.start, hit.end);
+            await copyToClipboardFn(hit.inn, `ИНН ${hit.inn} скопирован!`);
+        } catch (e) {
+            console.error('[ClientDataSystem] Ошибка копирования ИНН по Ctrl+MouseDown:', e);
+        } finally {
+            if (typeof onAfterCopy === 'function') onAfterCopy();
+        }
+    };
+    textarea.addEventListener('mousedown', handler);
+    return handler;
 }
 
 export function ensureInnPreviewStyles() {
@@ -71,7 +135,7 @@ export function ensureInnPreviewStyles() {
     style.textContent = `
     .client-notes-preview{
         position: absolute;
-        --inn-offset-x: -0.4px;
+        --inn-offset-x: 0.6px;
         white-space: pre-wrap;
         word-wrap: break-word;
         overflow-wrap: break-word;
@@ -245,73 +309,16 @@ export async function initClientDataSystem() {
     clientNotes.addEventListener('keydown', State.clientNotesKeydownHandler);
     console.log(`${LOG_PREFIX} Обработчик 'keydown' (Ctrl+Enter) успешно привязан.`);
 
-    function getInnAtCursor(ta) {
-        const text = ta.value || '';
-        const n = text.length;
-        const isDigit = (ch) => ch >= '0' && ch <= '9';
-        const basePos = ta.selectionStart ?? 0;
-        console.log(`[getInnAtCursor] Base position (selectionStart): ${basePos}`);
-        const candidates = [basePos, basePos - 1, basePos + 1, basePos - 2, basePos + 2];
-        for (const p of candidates) {
-            if (p < 0 || p >= n) continue;
-            if (!isDigit(text[p])) continue;
-            let l = p,
-                r = p + 1;
-            while (l > 0 && isDigit(text[l - 1])) l--;
-            while (r < n && isDigit(text[r])) r++;
-            const token = text.slice(l, r);
-            if (token.length === 10 || token.length === 12) {
-                console.log(`[getInnAtCursor] Found valid INN: "${token}" at [${l}, ${r}]`);
-                return { inn: token, start: l, end: r };
-            }
-        }
-        console.log(`[getInnAtCursor] No INN found at position ${basePos}.`);
-        return null;
-    }
-
-    const clientNotesCtrlMouseDownHandler = async (event) => {
-        const modifier = isMac() ? event.metaKey : event.ctrlKey;
-        console.log(
-            `[ClientNotes Handler] Event triggered: ${event.type}. Ctrl/Meta: ${
-                event.ctrlKey || event.metaKey
-            }`,
-        );
-        if (!modifier) return;
-        if (typeof event.button === 'number' && event.button !== 0) return;
-        if (!__acquireCopyLock(250)) return;
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        console.log(
-            `[ClientNotes Handler] Before getInnAtCursor: selectionStart=${clientNotes.selectionStart}, selectionEnd=${clientNotes.selectionEnd}`,
-        );
-        const hit = getInnAtCursor(clientNotes);
-
-        if (!hit) {
-            console.log('[ClientNotes Handler] INN not found, handler exits without action.');
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        try {
-            clientNotes.setSelectionRange(hit.start, hit.end);
-            await copyToClipboard(hit.inn, `ИНН ${hit.inn} скопирован!`);
-        } catch (e) {
-            console.error('[ClientDataSystem] Ошибка копирования ИНН по Ctrl+MouseDown:', e);
-        } finally {
-            releaseClientNotesCtrlState();
-        }
-    };
-
     function releaseClientNotesCtrlState() {
         clientNotes.style.cursor = '';
         if (window.__clientNotesInnPreview) window.__clientNotesInnPreview.hide();
     }
 
-    clientNotes.addEventListener('mousedown', clientNotesCtrlMouseDownHandler);
-    State.clientNotesCtrlClickHandler = clientNotesCtrlMouseDownHandler;
+    State.clientNotesCtrlClickHandler = attachInnCtrlClickToTextarea(
+        clientNotes,
+        copyToClipboard,
+        releaseClientNotesCtrlState,
+    );
     console.log(`${LOG_PREFIX} Обработчик 'mousedown' (Ctrl+Click INN→copy) привязан.`);
 
     State.clientNotesCtrlKeyDownHandler = (e) => {

@@ -278,6 +278,41 @@ export const dbMergeModalConfig = {
     contentAreaSelector: '#dbMergeStepContainer',
 };
 
+export const engineeringCockpitModalConfig = {
+    modalId: 'engineeringCockpitModal',
+    buttonId: 'toggleFullscreenEngineeringCockpitBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-4'],
+            innerContainer: [
+                'rounded-xl',
+                'border',
+                'shadow-2xl',
+                'w-full',
+                'max-w-7xl',
+                'max-h-[92vh]',
+                'overflow-hidden',
+                'flex',
+                'flex-col',
+            ],
+            contentArea: ['flex', 'flex-col', 'flex-1', 'min-h-0', 'overflow-hidden'],
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+            contentArea: [
+                ...UNIFIED_FULLSCREEN_MODAL_CLASSES.contentArea,
+                'flex',
+                'flex-col',
+                'min-h-0',
+                'overflow-hidden',
+            ],
+        },
+    },
+    innerContainerSelector: '.engineering-cockpit-shell',
+    contentAreaSelector: '#engineeringCockpitWorkspace',
+};
+
 /** Массив конфигов модалок для initFullscreenToggles (избегаем предупреждения "No modal configs provided") */
 export const FULLSCREEN_MODAL_CONFIGS = [
     algorithmDetailModalConfig,
@@ -290,6 +325,7 @@ export const FULLSCREEN_MODAL_CONFIGS = [
     hotkeysModalConfig,
     healthReportModalConfig,
     dbMergeModalConfig,
+    engineeringCockpitModalConfig,
 ];
 
 export const SAVE_BUTTON_SELECTORS =

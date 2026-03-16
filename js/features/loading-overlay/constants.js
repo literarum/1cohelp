@@ -25,4 +25,4 @@ export const OVERLAY_BG_DARK = '#0a0a1a';
 export const OVERLAY_BG_LIGHT = '#f8fafc';
 
 /** Более глубокий фон для тёмной темы (частицы лучше выделяются) */
-export const OVERLAY_BG_DARK_DEEP = '#060612';
+export const OVERLAY_BG_DARK_DEEP = '#030308';

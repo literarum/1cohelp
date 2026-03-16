@@ -10,9 +10,9 @@ import { getThemeProfile } from './particles-config.js';
 const EXIT_WIND_UP_MS = 750;
 const EXIT_EXPLODE_MS = 3300;
 const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
-const EXIT_SHRINK_SCALE = 0.35;
-const EXIT_MAX_SCALE = 12;
-const EXIT_GLOW_MULTIPLIER_MAX = 8;
+const EXIT_SHRINK_SCALE = 0.175;
+const EXIT_MAX_SCALE = 18;
+const EXIT_GLOW_MULTIPLIER_MAX = 12;
 
 /**
  * Менеджер оверлея загрузки. Централизованное управление показом/скрытием, темой и анимацией.
@@ -64,7 +64,7 @@ export const loadingOverlayManager = {
         const snapshot = this.readStoredOverlaySnapshot();
         applyLoadingOverlayThemeVars(normalizedTheme, snapshot, { setHtmlBackground: true });
         if (this.overlayElement) {
-            this.overlayElement.style.backgroundColor = 'var(--loading-overlay-bg, #0a0a1a)';
+            this.overlayElement.style.backgroundColor = 'var(--loading-overlay-bg, #030308)';
         }
         if (
             window._earlySphereAnimation &&
@@ -203,7 +203,7 @@ export const loadingOverlayManager = {
         this.overlayElement.innerHTML = overlayHTML;
         this.overlayElement.style.cssText =
             'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;' +
-            'background-color:var(--loading-overlay-bg, #0a0a1a);display:flex;justify-content:center;align-items:center;';
+            'background-color:var(--loading-overlay-bg, #030308);display:flex;justify-content:center;align-items:center;';
 
         this.styleElement = document.createElement('style');
         this.styleElement.id = 'custom-loading-overlay-styles';
@@ -457,6 +457,9 @@ export const loadingOverlayManager = {
                 this.depth = z;
                 const easedSpawnProgress = easeOutCubic(spawnProgress);
                 this.currentDisplaySize = this.projectedSize * easedSpawnProgress;
+                if (exitScale > 1.5) {
+                    this.currentDisplaySize = Math.max(this.currentDisplaySize, 0.14);
+                }
             }
             draw(spawnProgress, glowMultiplier = 1) {
                 const easedSpawnProgress = easeOutCubic(spawnProgress);

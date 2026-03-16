@@ -101,7 +101,7 @@ function buildLoadingOverlaySnapshot(isDarkTheme) {
         background: backgroundRgb
             ? rgbToHex(backgroundRgb)
             : tone === 'dark'
-              ? '#060612'
+              ? '#030308'
               : '#f8fafc',
         primary: primaryRgb ? rgbToHex(primaryRgb) : tone === 'dark' ? '#8a2be2' : '#4f46e5',
         secondary: secondaryRgb ? rgbToHex(secondaryRgb) : tone === 'dark' ? '#a020f0' : '#06b6d4',

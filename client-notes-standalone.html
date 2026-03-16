@@ -5,19 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Заметки по обращению — Copilot 1СО 2.0</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='4' width='24' height='24' rx='4' fill='none' stroke='%23DC2626' stroke-width='2'/><text x='16' y='16' font-size='12' font-weight='bold' fill='%23DC2626' text-anchor='middle' dominant-baseline='central'>SOS</text></svg>" />
-    <script src="js/vendor-config.js?v=legacy-20260316-193618-2c02e80"></script>
-    <script src="js/vendor-loader.js?v=legacy-20260316-193618-2c02e80"></script>
+    <script src="js/vendor-config.js?v=legacy-20260316-232307-93b652f"></script>
+    <script src="js/vendor-loader.js?v=legacy-20260316-232307-93b652f"></script>
     <script type="text/javascript">if (window.VendorLoader) VendorLoader.writeVendors('standalone', '');</script>
     <script type="text/javascript">if (window.VendorLoader && window.VendorConfig && window.VendorConfig.USE_LOCAL_VENDORS) { setTimeout(function() { VendorLoader.runVendorFallback('standalone', ''); }, 0); }</script>
-    <link rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260316-193618-2c02e80" />
-    <link rel="stylesheet" href="css/main.css?v=legacy-20260316-193618-2c02e80" />
-    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-193618-2c02e80" />
-    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-193618-2c02e80" />
-    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-193618-2c02e80" />
-    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-193618-2c02e80" />
+    <link rel="stylesheet" href="css/tailwind.generated.css?v=legacy-20260316-232307-93b652f" />
+    <link rel="stylesheet" href="css/main.css?v=legacy-20260316-232307-93b652f" />
+    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-232307-93b652f" />
+    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-232307-93b652f" />
+    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-232307-93b652f" />
+    <link rel="stylesheet" href="css/inline-styles.css?v=legacy-20260316-232307-93b652f" />
     <style>
         body { min-height: 100vh; margin: 0; }
         #clientNotesStandalone { font-family: inherit; }
+        /* Подсветка ИНН при Ctrl — как в основном приложении (client-data-init ensureInnPreviewStyles) */
+        .client-notes-preview{
+            position: absolute;
+            --inn-offset-x: 0.6px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            overflow: hidden;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            background: transparent;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .client-notes-preview::-webkit-scrollbar{ width: 0; height: 0; display: none; }
+        .client-notes-preview__inner{ position: relative; will-change: transform; }
+        .client-notes-preview .inn-highlight{
+            color: var(--color-primary, #7aa2ff) !important;
+            text-decoration: underline;
+            text-decoration-color: var(--color-primary);
+            text-decoration-thickness: .1em;
+            text-underline-offset: .12em;
+            text-decoration-skip-ink: auto;
+            display: inline;
+            padding: 0;
+            margin: 0;
+        }
+        /* Тост как в основном приложении (notification.js showNotification) */
+        #notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 200000;
+            max-width: 28rem;
+        }
     </style>
     <script>
         (function() {
@@ -40,11 +75,13 @@
             <span id="pinHintText">Windows: PowerToys (Win+Ctrl+T) · macOS: Floaty или Rectangle · Linux: зависит от WM (KWin, Compiz)</span>
             <button type="button" id="dismissPinHint" class="app-hint-action ml-2" title="Скрыть подсказку">Скрыть</button>
         </div>
-        <textarea
-            id="clientNotesStandalone"
-            class="flex-1 w-full min-h-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base resize-none focus:ring-2 focus:ring-primary focus:border-primary custom-scrollbar"
-            placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
-        ></textarea>
+        <div id="clientNotesStandaloneWrap" class="flex-1 min-h-0 flex flex-col" style="position:relative">
+            <textarea
+                id="clientNotesStandalone"
+                class="w-full flex-1 min-h-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base resize-none focus:ring-2 focus:ring-primary focus:border-primary custom-scrollbar"
+                placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
+            ></textarea>
+        </div>
     </div>
     <script>
 (function() {
@@ -98,6 +135,206 @@
 
     textarea.addEventListener('input', function() {
         sendToOpener({ type: 'clientNotesSync', value: textarea.value });
+    });
+
+    /* Подсветка ИНН при Ctrl и тост — как в основном приложении */
+    function isMac() {
+        var plat = typeof navigator !== 'undefined' && navigator.platform ? navigator.platform : '';
+        var ua = typeof navigator !== 'undefined' && navigator.userAgent ? navigator.userAgent : '';
+        return /Mac/i.test(plat) || /Mac|iPhone|iPad/i.test(ua);
+    }
+    function getInnAtCursor(ta) {
+        if (!ta || typeof ta.value !== 'string') return null;
+        var text = ta.value;
+        var n = text.length;
+        var basePos = ta.selectionStart != null ? ta.selectionStart : 0;
+        var candidates = [basePos, basePos - 1, basePos + 1, basePos - 2, basePos + 2];
+        for (var i = 0; i < candidates.length; i++) {
+            var p = candidates[i];
+            if (p < 0 || p >= n) continue;
+            var ch = text[p];
+            if (ch < '0' || ch > '9') continue;
+            var l = p, r = p + 1;
+            while (l > 0 && text[l - 1] >= '0' && text[l - 1] <= '9') l--;
+            while (r < n && text[r] >= '0' && text[r] <= '9') r++;
+            var token = text.slice(l, r);
+            if (token.length === 10 || token.length === 12) {
+                return { inn: token, start: l, end: r };
+            }
+        }
+        return null;
+    }
+
+    /* Тост в стиле основного приложения (notification.js showNotification) */
+    var NOTIFICATION_DURATION = 3000;
+    var FADE_DURATION_MS = 300;
+    function showStandaloneNotification(message, type) {
+        if (!message || typeof message !== 'string' || message.trim() === '') return;
+        var isDark = document.documentElement.classList.contains('dark');
+        var bgClass = type === 'error' ? (isDark ? 'bg-red-700' : 'bg-red-600') :
+            type === 'warning' ? (isDark ? 'bg-yellow-600' : 'bg-yellow-500') :
+            type === 'info' ? (isDark ? 'bg-blue-600' : 'bg-blue-500') :
+            (isDark ? 'bg-green-600' : 'bg-green-500');
+        var el = document.getElementById('notification');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'notification';
+            el.setAttribute('role', 'alert');
+            el.className = 'fixed p-4 rounded-lg shadow-xl text-white text-sm font-medium transform transition-all duration-300 ease-out max-w-sm sm:max-w-md ' + bgClass;
+            el.style.top = '20px';
+            el.style.right = '20px';
+            el.style.zIndex = '200000';
+            var textContainer = document.createElement('div');
+            textContainer.className = 'flex items-center flex-grow min-w-0';
+            var messageSpan = document.createElement('span');
+            messageSpan.className = 'flex-1 notification-message-span';
+            textContainer.appendChild(messageSpan);
+            var closeBtn = document.createElement('button');
+            closeBtn.setAttribute('type', 'button');
+            closeBtn.setAttribute('aria-label', 'Закрыть уведомление');
+            closeBtn.className = 'ml-4 p-1 text-current opacity-70 hover:opacity-100 rounded-full flex items-center justify-center w-6 h-6 leading-none notification-close-btn';
+            closeBtn.innerHTML = '<i class="fas fa-times fa-sm"></i>';
+            var contentWrapper = document.createElement('div');
+            contentWrapper.className = 'flex items-center justify-between w-full';
+            contentWrapper.appendChild(textContainer);
+            contentWrapper.appendChild(closeBtn);
+            el.appendChild(contentWrapper);
+            document.body.appendChild(el);
+        }
+        el.className = 'fixed p-4 rounded-lg shadow-xl text-white text-sm font-medium transform transition-all duration-300 ease-out max-w-sm sm:max-w-md ' + bgClass;
+        var msgSpan = el.querySelector('.notification-message-span');
+        var closeButton = el.querySelector('.notification-close-btn');
+        if (msgSpan) msgSpan.textContent = message;
+        el.style.transform = 'translateX(0)';
+        el.style.opacity = '1';
+        if (el._hideTimeout) clearTimeout(el._hideTimeout);
+        if (el._removeTimeout) clearTimeout(el._removeTimeout);
+        var closeAndRemove = function() {
+            if (!document.body.contains(el)) return;
+            clearTimeout(el._hideTimeout);
+            clearTimeout(el._removeTimeout);
+            el.style.transform = 'translateX(100%)';
+            el.style.opacity = '0';
+            el._removeTimeout = setTimeout(function() {
+                if (document.body.contains(el)) el.remove();
+            }, FADE_DURATION_MS);
+        };
+        if (closeButton && !closeButton._bound) {
+            closeButton._bound = true;
+            closeButton.addEventListener('click', closeAndRemove);
+        }
+        el._hideTimeout = setTimeout(closeAndRemove, NOTIFICATION_DURATION);
+    }
+
+    /* Подсветка ИНН при зажатом Ctrl — оверлей как createClientNotesInnPreview */
+    var standalonePreview = null;
+    var standaloneWrap = document.getElementById('clientNotesStandaloneWrap');
+    function createStandaloneInnPreview() {
+        if (standalonePreview) return standalonePreview;
+        var preview = document.createElement('div');
+        preview.className = 'client-notes-preview';
+        preview.style.display = 'none';
+        var inner = document.createElement('div');
+        inner.className = 'client-notes-preview__inner';
+        preview.appendChild(inner);
+        if (standaloneWrap) {
+            var wrap = standaloneWrap;
+            if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+            wrap.appendChild(preview);
+        }
+        var posOverlay = function() {
+            if (!standaloneWrap || !textarea) return;
+            var tr = textarea.getBoundingClientRect();
+            var wr = standaloneWrap.getBoundingClientRect();
+            var scrollLeft = standaloneWrap.scrollLeft || 0;
+            var scrollTop = standaloneWrap.scrollTop || 0;
+            preview.style.left = (tr.left - wr.left + scrollLeft) + 'px';
+            preview.style.top = (tr.top - wr.top + scrollTop) + 'px';
+            preview.style.width = textarea.clientWidth + 'px';
+            preview.style.height = textarea.clientHeight + 'px';
+        };
+        var getOffsetX = function() {
+            var v = getComputedStyle(preview).getPropertyValue('--inn-offset-x').trim();
+            return v ? parseFloat(v) : 0;
+        };
+        var syncMetrics = function() {
+            var cs = getComputedStyle(textarea);
+            preview.style.font = cs.font;
+            preview.style.lineHeight = cs.lineHeight;
+            preview.style.letterSpacing = cs.letterSpacing;
+            preview.style.paddingTop = cs.paddingTop;
+            preview.style.paddingRight = cs.paddingRight;
+            preview.style.paddingBottom = cs.paddingBottom;
+            preview.style.paddingLeft = cs.paddingLeft;
+            preview.style.color = 'transparent';
+            preview.style.boxSizing = cs.boxSizing;
+            posOverlay();
+        };
+        var update = function() {
+            var text = textarea.value || '';
+            var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var rx = /(^|\D)(\d{10}|\d{12})(?!\d)/g;
+            inner.innerHTML = escaped.replace(rx, '$1<span class="inn-highlight">$2</span>');
+            inner.style.transform = 'translate(' + getOffsetX() + 'px, ' + (-textarea.scrollTop) + 'px)';
+            posOverlay();
+        };
+        textarea.addEventListener('scroll', function() {
+            inner.style.transform = 'translate(' + getOffsetX() + 'px, ' + (-textarea.scrollTop) + 'px)';
+        });
+        window.addEventListener('resize', syncMetrics);
+        syncMetrics();
+        standalonePreview = {
+            show: function() {
+                textarea.style.cursor = 'pointer';
+                preview.style.display = '';
+                syncMetrics();
+            },
+            hide: function() {
+                textarea.style.cursor = '';
+                preview.style.display = 'none';
+            },
+            update: update
+        };
+        return standalonePreview;
+    }
+    document.addEventListener('keydown', function(e) {
+        var modifier = isMac() ? e.metaKey : e.ctrlKey;
+        if (!modifier || document.activeElement !== textarea) return;
+        var p = createStandaloneInnPreview();
+        p.show();
+        p.update();
+    });
+    document.addEventListener('keyup', function(e) {
+        var modifier = isMac() ? e.metaKey : e.ctrlKey;
+        if (!modifier && standalonePreview) standalonePreview.hide();
+    });
+    textarea.addEventListener('blur', function() {
+        if (standalonePreview) standalonePreview.hide();
+    });
+    textarea.addEventListener('input', function() {
+        if (standalonePreview) standalonePreview.update();
+    });
+
+    /* Ctrl+ЛКМ / Cmd+ЛКМ: выделение ИНН и копирование + тост как в приложении */
+    var lastInnCopyTime = 0;
+    textarea.addEventListener('mousedown', function(ev) {
+        var modifier = isMac() ? ev.metaKey : ev.ctrlKey;
+        if (!modifier) return;
+        if (typeof ev.button === 'number' && ev.button !== 0) return;
+        var now = Date.now();
+        if (now - lastInnCopyTime < 250) return;
+        lastInnCopyTime = now;
+
+        setTimeout(function() {
+            var hit = getInnAtCursor(textarea);
+            if (!hit) return;
+            textarea.setSelectionRange(hit.start, hit.end);
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(hit.inn).then(function() {
+                    showStandaloneNotification('ИНН ' + hit.inn + ' скопирован!', 'success');
+                }).catch(function() {});
+            }
+        }, 0);
     });
 
     if (dismissBtn) {

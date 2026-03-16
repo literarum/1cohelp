@@ -24,6 +24,7 @@ const TRANSIENT_MODAL_SELECTORS = [
     '#dbMergeModal',
     '#recentlyDeletedModal',
 ];
+const TOUR_MODAL_ID_HINT = 'Modal';
 
 const TOUR_STEP_BLUEPRINTS = [
     {
@@ -62,7 +63,7 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'В верхней панели палитры можно выполнять действия и перемещаться по разделам без ручного поиска.',
         openSelectors: ['#openCommandPaletteBtn'],
-        selectors: ['#commandPaletteModal', '#commandPaletteInput'],
+        selectors: ['#commandPaletteModal', '#commandPaletteInput', '#openCommandPaletteBtn'],
         side: 'bottom',
         align: 'center',
     },
@@ -70,8 +71,33 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Управление данными',
         description:
             'Здесь экспорт, слияние, импорт и принудительная перезагрузка данных. Используйте блок для резервирования и переноса базы.',
-        selectors: ['#exportDataBtn', '#mergeDataBtn', '#importDataBtn'],
+        selectors: ['#dataTransferControls', '#exportDataBtn', '#mergeDataBtn', '#importDataBtn'],
         side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Экспорт базы (как использовать)',
+        description:
+            'Кнопка экспорта создает резервную копию базы данных. На этом шаге показываем только расположение и назначение кнопки, без запуска диалогов.',
+        selectors: ['#dataTransferControls', '#exportDataBtn'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Импорт базы (как использовать)',
+        description:
+            'Кнопка импорта загружает файл резервной копии. На этом шаге показываем только интерфейс импорта, без открытия проводника.',
+        selectors: ['#dataTransferControls', '#importDataBtn'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Мастер слияния баз данных',
+        description:
+            'Пошаговый мастер слияния помогает безопасно объединять базы и управлять конфликтами записей.',
+        openSelectors: ['#mergeDataBtn'],
+        selectors: ['#dbMergeModal', '#dbMergeModalTitle', '#mergeDataBtn'],
+        side: 'left',
         align: 'center',
     },
     {
@@ -87,7 +113,7 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'Справка по горячим клавишам помогает быстрее работать без мыши в повседневных сценариях.',
         openSelectors: ['#showHotkeysBtn'],
-        selectors: ['#hotkeysModal', '#closeHotkeysModalBtn'],
+        selectors: ['#hotkeysModal', '#closeHotkeysModalBtn', '#showHotkeysBtn'],
         side: 'left',
         align: 'center',
     },
@@ -96,7 +122,21 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'В этом окне можно менять тему, плотность, шрифт, поведение импорта, запускать диагностику и повторно запускать тур.',
         openSelectors: ['#customizeUIBtn'],
-        selectors: ['#customizeUIModal', '#runManualHealthCheckBtn', '#restartOnboardingTourBtn'],
+        selectors: [
+            '#customizeUIModal',
+            '#runManualHealthCheckBtn',
+            '#restartOnboardingTourBtn',
+            '#customizeUIBtn',
+        ],
+        side: 'left',
+        align: 'center',
+    },
+    {
+        title: 'Включение и порядок разделов',
+        description:
+            'При первом запуске часть разделов может быть скрыта. Здесь можно включить все вкладки, поменять порядок и сразу увидеть, где они находятся.',
+        openSelectors: ['#customizeUIBtn'],
+        selectors: ['#customizeUIModal', '#panelSortContainer', '#customizeUIBtn'],
         side: 'left',
         align: 'center',
     },
@@ -105,15 +145,28 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'Из окна настроек доступна корзина: отсюда можно восстановить удаленные записи или очистить их окончательно.',
         openSelectors: ['#customizeUIBtn', '#openRecentlyDeletedBtn'],
-        selectors: ['#recentlyDeletedModal', '#recentlyDeletedList'],
+        selectors: [
+            '#recentlyDeletedModal',
+            '#recentlyDeletedList',
+            '#openRecentlyDeletedBtn',
+            '#customizeUIBtn',
+        ],
         side: 'left',
         align: 'center',
     },
     {
-        title: 'Таймер и тема',
+        title: 'Таймер',
         description:
-            'Рабочий таймер и быстрый переключатель темы всегда под рукой в шапке приложения.',
-        selectors: ['#appTimer', '#themeToggle'],
+            'Таймер помогает держать фокус по времени клиента: запуск, пауза и быстрый сброс доступны прямо в шапке.',
+        selectors: ['#appTimer', '#timerToggleButton', '#timerResetButton'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Переключение темы',
+        description:
+            'Кнопка мгновенно переключает светлую и темную тему без перехода в настройки.',
+        selectors: ['#themeToggle'],
         side: 'bottom',
         align: 'center',
     },
@@ -121,7 +174,15 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Панель вкладок',
         description:
             'Основные разделы приложения собраны в панели вкладок. Если вкладок много, часть будет скрыта в меню "Еще".',
-        selectors: ['#mainTab', '#moreTabsBtn'],
+        selectors: ['header + .border-b nav.flex.flex-wrap', '#moreTabsBtn'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Скрытые вкладки и меню "Еще"',
+        description:
+            'Если часть разделов не помещается или скрыта, используйте кнопку "Еще". Там доступны дополнительные вкладки и быстрый переход к ним.',
+        selectors: ['#moreTabsBtn', '#moreTabsDropdown'],
         side: 'bottom',
         align: 'center',
     },
@@ -145,20 +206,28 @@ const TOUR_STEP_BLUEPRINTS = [
     {
         title: 'Заметки по клиенту',
         description:
-            'Ведите рабочие заметки в панели, открывайте отдельное окно или всплывающую форму для быстрого доступа.',
+            'Здесь основная панель заметок: отдельное окно, закрепляемое окно, очистка и сохранение заметок в файл.',
         tabId: 'main',
-        selectors: ['#clientNotes', '#openClientNotesWindowBtn', '#openClientNotesPopupBtn'],
+        selectors: [
+            '#clientNotesPanel',
+            '#clientNotesActions',
+            '#clientNotes',
+            '#openClientNotesWindowBtn',
+            '#openClientNotesPopupBtn',
+            '#clearClientDataBtn',
+            '#exportTextBtn',
+        ],
         side: 'left',
         align: 'center',
     },
     {
-        title: 'Программа 1С',
+        title: 'Программа 1СО',
         description:
             'Раздел с алгоритмами по сценариям работы в программе 1С: добавление, редактирование и хранение инструкций.',
         tabId: 'program',
-        selectors: ['#programTab', '#programAlgorithms', '#addProgramAlgorithmBtn'],
-        side: 'bottom',
-        align: 'center',
+        selectors: ['#programAlgorithms', '#addProgramAlgorithmBtn', '#programTab'],
+        side: 'right',
+        align: 'start',
     },
     {
         title: 'СКЗИ',
@@ -169,31 +238,31 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'ЛК 1С',
+        title: 'ЛК 1СО',
         description:
             'Здесь инструкции для сценариев личного кабинета 1С с отдельной базой алгоритмов.',
         tabId: 'lk1c',
-        selectors: ['#lk1cTab', '#lk1cAlgorithms', '#addLk1cAlgorithmBtn'],
-        side: 'bottom',
-        align: 'center',
+        selectors: ['#lk1cAlgorithms', '#addLk1cAlgorithmBtn', '#lk1cTab'],
+        side: 'right',
+        align: 'start',
     },
     {
-        title: 'Web-регламенты',
+        title: 'Web-регистратор',
         description:
             'Вкладка для веб-регламентов и соответствующих алгоритмов по внешним рабочим процессам.',
         tabId: 'webReg',
-        selectors: ['#webRegTab', '#webRegAlgorithms', '#addWebRegAlgorithmBtn'],
-        side: 'bottom',
-        align: 'center',
+        selectors: ['#webRegAlgorithms', '#addWebRegAlgorithmBtn', '#webRegTab'],
+        side: 'right',
+        align: 'start',
     },
     {
-        title: 'Ссылки ЦИБ',
+        title: 'Ссылки 1С',
         description:
-            'Каталог внутренних ссылок ЦИБ с поиском и быстрым добавлением карточек ссылок.',
+            'Каталог рабочих ссылок 1С с поиском и быстрым добавлением карточек.',
         tabId: 'links',
-        selectors: ['#linksTab', '#linksContainer', '#addLinkBtn', '#linkSearchInput'],
-        side: 'bottom',
-        align: 'center',
+        selectors: ['#linksContainer', '#addLinkBtn', '#linkSearchInput', '#linksTab'],
+        side: 'right',
+        align: 'start',
     },
     {
         title: 'Внешние ресурсы',
@@ -220,15 +289,6 @@ const TOUR_STEP_BLUEPRINTS = [
         tabId: 'bookmarks',
         selectors: ['#bookmarksTab', '#bookmarksContainer', '#addBookmarkBtn', '#bookmarkSearchInput'],
         side: 'bottom',
-        align: 'center',
-    },
-    {
-        title: 'Мастер слияния баз данных',
-        description:
-            'Пошаговый мастер слияния помогает безопасно объединять базы и управлять конфликтами записей.',
-        openSelectors: ['#mergeDataBtn'],
-        selectors: ['#dbMergeModal', '#dbMergeModalTitle'],
-        side: 'left',
         align: 'center',
     },
     {
@@ -367,7 +427,9 @@ async function ensureDriverFactory() {
 function resolveFirstAvailableElement(selectors) {
     for (const selector of selectors) {
         const el = document.querySelector(selector);
-        if (el) return el;
+        if (!el) continue;
+        if (typeof el.getClientRects !== 'function') return el;
+        if (typeof el.getClientRects === 'function' && el.getClientRects().length > 0) return el;
     }
     return null;
 }
@@ -376,6 +438,12 @@ function clickElementBySelector(selector) {
     if (!selector) return false;
     const el = document.querySelector(selector);
     if (!el || typeof el.click !== 'function') return false;
+    if (el.classList?.contains('hidden')) {
+        el.classList.remove('hidden');
+    }
+    if (el.style?.display === 'none') {
+        el.style.display = '';
+    }
     el.click();
     return true;
 }
@@ -387,15 +455,49 @@ function clickSelectorsInOrder(selectors) {
     });
 }
 
+function forceShowElementForTour(el) {
+    if (!el) return;
+    if (el.classList?.contains('hidden')) {
+        el.classList.remove('hidden');
+    }
+    if (el.style?.display === 'none') {
+        el.style.display = '';
+    }
+}
+
+function isModalSelector(selector) {
+    return typeof selector === 'string' && selector.includes(TOUR_MODAL_ID_HINT);
+}
+
+function forceShowTabContent(tabId) {
+    if (!tabId || typeof document.getElementById !== 'function') return;
+    const content = document.getElementById(`${tabId}Content`);
+    if (!content) return;
+    content.classList.remove('hidden', 'is-hiding');
+    content.style.opacity = '1';
+    content.style.visibility = 'visible';
+    content.style.pointerEvents = 'auto';
+}
+
+function ensureBlueprintTargetsVisible(blueprint) {
+    if (blueprint.tabId) {
+        forceShowTabContent(blueprint.tabId);
+    }
+
+    const selectorList = Array.isArray(blueprint.selectors) ? blueprint.selectors : [];
+    selectorList.forEach((selector) => {
+        if (!isModalSelector(selector)) return;
+        const modal = document.querySelector(selector);
+        forceShowElementForTour(modal);
+    });
+}
+
 function hideElementBySelector(selector) {
     if (!selector) return;
     const el = document.querySelector(selector);
     if (!el) return;
     if (el.classList && typeof el.classList.add === 'function') {
         el.classList.add('hidden');
-    }
-    if (el.style) {
-        el.style.display = 'none';
     }
 }
 
@@ -439,7 +541,15 @@ function buildTourSteps() {
                 closeTransientModalsForTour();
                 if (blueprint.tabId) activateTourTab(blueprint.tabId);
                 clickSelectorsInOrder(blueprint.openSelectors);
-                return resolveFirstAvailableElement(blueprint.selectors);
+                ensureBlueprintTargetsVisible(blueprint);
+
+                const target = resolveFirstAvailableElement(blueprint.selectors);
+                if (target) return target;
+
+                const openTrigger = resolveFirstAvailableElement(blueprint.openSelectors || []);
+                if (openTrigger) return openTrigger;
+
+                return resolveFirstAvailableElement(['#mainTab', '#searchInput', '#openCommandPaletteBtn']);
             };
         }
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" style="background-color:#030308">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -73,8 +73,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260316-193618-2c02e80"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260316-193618-2c02e80"></script>
+        <script src="js/vendor-config.js?v=legacy-20260316-232307-93b652f"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260316-232307-93b652f"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -140,11 +140,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260316-193618-2c02e80"
+            href="css/tailwind.generated.css?v=legacy-20260316-232307-93b652f"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260316-193618-2c02e80" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260316-232307-93b652f" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -225,7 +225,7 @@
                         snapshot && typeof snapshot.background === 'string'
                             ? snapshot.background
                             : isDarkTone
-                              ? '#060612'
+                              ? '#030308'
                               : '#f8fafc';
 
                     root.dataset.loadingOverlayTheme = tone;
@@ -263,7 +263,7 @@
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             html {
-                background-color: var(--loading-overlay-bg, #060612);
+                background-color: var(--loading-overlay-bg, #030308);
             }
             #custom-loading-overlay {
                 margin: 0;
@@ -276,7 +276,7 @@
                 width: 100%;
                 height: 100%;
                 z-index: 99999;
-                background-color: var(--loading-overlay-bg, #060612);
+                background-color: var(--loading-overlay-bg, #030308);
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -459,9 +459,9 @@
                 const EXIT_WIND_UP_MS = 750;
                 const EXIT_EXPLODE_MS = 3300;
                 const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
-                const EXIT_SHRINK_SCALE = 0.35;
-                const EXIT_MAX_SCALE = 12;
-                const EXIT_GLOW_MULTIPLIER_MAX = 8;
+                const EXIT_SHRINK_SCALE = 0.175;
+                const EXIT_MAX_SCALE = 18;
+                const EXIT_GLOW_MULTIPLIER_MAX = 12;
                 const SPHERE_FADE_IN_MS = 1000;
 
                 const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
@@ -523,20 +523,20 @@
                     }
                     return {
                         particlePalette: [
-                            [160, 90, 220, 1],
-                            [190, 110, 245, 0.95],
-                            [130, 60, 200, 0.95],
-                            [210, 120, 250, 1],
-                            [120, 120, 240, 1],
-                            [90, 90, 210, 0.95],
-                            [235, 170, 255, 0.9],
-                            [180, 100, 255, 0.98],
-                            [148, 80, 230, 0.96],
+                            [175, 100, 235, 1],
+                            [200, 125, 252, 0.98],
+                            [145, 75, 215, 0.98],
+                            [220, 140, 255, 1],
+                            [135, 135, 248, 1],
+                            [105, 105, 225, 0.98],
+                            [245, 185, 255, 0.95],
+                            [195, 115, 255, 1],
+                            [165, 95, 242, 0.98],
                         ],
                         particleCount: 2600,
-                        haloSizeScale: 1.18,
-                        haloAlphaScale: 1.22,
-                        coreAlphaScale: 1.15,
+                        haloSizeScale: 1.35,
+                        haloAlphaScale: 1.5,
+                        coreAlphaScale: 1.22,
                     };
                 }
 
@@ -680,6 +680,9 @@
                         );
                         this.depth = z;
                         this.currentDisplaySize = this.projectedSize;
+                        if (exitScale > 1.5) {
+                            this.currentDisplaySize = Math.max(this.currentDisplaySize, 0.14);
+                        }
                     }
 
                     draw(glowMultiplier, fadeInFactor) {
@@ -1015,7 +1018,7 @@
                                     class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto"
                                 ></div>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+                            <div id="topHeaderActions" class="flex flex-wrap items-center gap-2 flex-shrink-0">
                                 <button
                                     id="openCommandPaletteBtn"
                                     type="button"
@@ -1028,28 +1031,30 @@
                                     class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
                                     aria-hidden="true"
                                 ></div>
-                                <button
-                                    id="exportDataBtn"
-                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                    title="Экспорт базы данных"
-                                >
-                                    <i class="fas fa-upload"></i>
-                                </button>
-                                <button
-                                    id="mergeDataBtn"
-                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                    title="Слияние баз данных"
-                                    type="button"
-                                >
-                                    <i class="fas fa-code-merge"></i>
-                                </button>
-                                <button
-                                    id="importDataBtn"
-                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
-                                    title="Импорт базы данных"
-                                >
-                                    <i class="fas fa-download"></i>
-                                </button>
+                                <div id="dataTransferControls" class="flex items-center gap-2">
+                                    <button
+                                        id="exportDataBtn"
+                                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                        title="Экспорт базы данных"
+                                    >
+                                        <i class="fas fa-upload"></i>
+                                    </button>
+                                    <button
+                                        id="mergeDataBtn"
+                                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                        title="Слияние баз данных"
+                                        type="button"
+                                    >
+                                        <i class="fas fa-code-merge"></i>
+                                    </button>
+                                    <button
+                                        id="importDataBtn"
+                                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                        title="Импорт базы данных"
+                                    >
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                </div>
                                 <div
                                     class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
                                     aria-hidden="true"
@@ -1373,6 +1378,7 @@
                         </div>
 
                         <div
+                            id="clientNotesPanel"
                             class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md min-w-0"
                         >
                             <div
@@ -1384,6 +1390,7 @@
                                     Информация по обращению
                                 </h2>
                                 <div
+                                    id="clientNotesActions"
                                     class="flex flex-row flex-nowrap items-center justify-end gap-1.5 flex-shrink-0"
                                 >
                                     <button
@@ -3555,104 +3562,110 @@
                 aria-labelledby="engineeringCockpitTitle"
             >
                 <div
-                    class="engineering-cockpit-shell bg-slate-950 text-slate-100 rounded-xl border border-slate-700 shadow-2xl w-full max-w-7xl max-h-[92vh] overflow-hidden flex flex-col"
+                    class="engineering-cockpit-shell rounded-xl border shadow-2xl w-full max-w-7xl max-h-[92vh] overflow-hidden flex flex-col"
                 >
-                    <div
-                        class="engineering-cockpit-header px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3"
-                    >
+                    <div class="engineering-cockpit-header flex items-center justify-between">
                         <div>
-                            <h2 id="engineeringCockpitTitle" class="text-lg font-semibold">
-                                Engineering Cockpit
+                            <h2 id="engineeringCockpitTitle" class="engineering-cockpit-title">
+                                Машинное отделение
                             </h2>
-                            <p class="text-xs text-slate-400">
-                                Скрытое пространство инженерной диагностики
-                            </p>
                         </div>
-                        <button
-                            id="engineeringCockpitCloseBtn"
-                            class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
-                            title="Закрыть"
-                            aria-label="Закрыть инженерный режим"
-                        >
-                            Закрыть
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button
+                                id="toggleFullscreenEngineeringCockpitBtn"
+                                type="button"
+                                class="engineering-cockpit-toolbar-btn engineering-cockpit-fullscreen-btn"
+                                title="Развернуть на весь экран"
+                                aria-label="Развернуть машинное отделение на весь экран"
+                            >
+                                <i class="fas fa-expand" aria-hidden="true"></i>
+                            </button>
+                            <button
+                                id="engineeringCockpitCloseBtn"
+                                type="button"
+                                class="engineering-cockpit-close-btn"
+                                title="Закрыть"
+                                aria-label="Закрыть машинное отделение"
+                            >
+                                <i class="fas fa-times engineering-cockpit-close-icon" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
 
-                    <div id="engineeringCockpitAuth" class="p-6 space-y-4">
-                        <p class="text-sm text-slate-300">
-                            Введите инженерный пароль для доступа к машинному отделению.
-                        </p>
-                        <div class="flex flex-wrap items-center gap-3">
+                    <div id="engineeringCockpitAuth" class="engineering-cockpit-auth">
+                        <div class="engineering-cockpit-auth-row">
                             <input
                                 id="engineeringCockpitPasswordInput"
                                 type="password"
                                 inputmode="numeric"
                                 autocomplete="off"
-                                class="px-3 py-2 rounded-md bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary min-w-[220px]"
+                                class="engineering-cockpit-password-input"
                                 placeholder="Пароль доступа"
+                                aria-describedby="engineeringCockpitAuthMessage"
                             />
                             <button
                                 id="engineeringCockpitUnlockBtn"
-                                class="px-4 py-2 rounded-md bg-primary hover:bg-secondary text-white transition"
+                                type="button"
+                                class="engineering-cockpit-unlock-btn"
                             >
                                 Войти
                             </button>
-                            <span
-                                id="engineeringCockpitAuthMessage"
-                                class="text-xs text-amber-300"
-                                aria-live="polite"
-                            ></span>
                         </div>
+                        <span
+                            id="engineeringCockpitAuthMessage"
+                            class="engineering-cockpit-auth-message"
+                            aria-live="polite"
+                            role="status"
+                        ></span>
                     </div>
 
-                    <div
-                        id="engineeringCockpitWorkspace"
-                        class="hidden min-h-0 flex-1 flex flex-col"
-                    >
-                        <div
-                            class="engineering-cockpit-toolbar px-4 py-2 border-b border-slate-800 flex flex-wrap items-center gap-2"
-                        >
+                    <div id="engineeringCockpitWorkspace" class="hidden flex flex-col flex-1 min-h-0">
+                        <div class="engineering-cockpit-toolbar">
                             <button
+                                type="button"
                                 class="engineering-cockpit-tab-btn is-active"
                                 data-cockpit-tab="overview"
                             >
                                 Сводка
                             </button>
-                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="logs">
+                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="logs">
                                 Логи
                             </button>
-                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="errors">
+                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="errors">
                                 Ошибки
                             </button>
-                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="db">
+                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="db">
                                 База данных
                             </button>
-                            <button class="engineering-cockpit-tab-btn" data-cockpit-tab="state">
+                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="state">
                                 State
                             </button>
-                            <div class="ml-auto flex flex-wrap gap-2">
+                            <div class="engineering-cockpit-toolbar-actions">
                                 <button
                                     id="engineeringCockpitRefreshBtn"
-                                    class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                                    type="button"
+                                    class="engineering-cockpit-toolbar-btn"
                                 >
                                     Обновить
                                 </button>
                                 <button
                                     id="engineeringCockpitClearLogsBtn"
-                                    class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                                    type="button"
+                                    class="engineering-cockpit-toolbar-btn"
                                 >
                                     Очистить логи
                                 </button>
                                 <button
                                     id="engineeringCockpitCopySnapshotBtn"
-                                    class="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                                    type="button"
+                                    class="engineering-cockpit-toolbar-btn"
                                 >
                                     Копировать snapshot
                                 </button>
                             </div>
                         </div>
 
-                        <div class="engineering-cockpit-content flex-1 min-h-0 overflow-auto p-4">
+                        <div class="engineering-cockpit-content">
                             <section
                                 class="engineering-cockpit-tab is-active"
                                 data-cockpit-tab="overview"
@@ -4387,7 +4400,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260316-193618-2c02e80"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260316-193618-2c02e80"></script>
+        <script type="module" src="./script.js?v=legacy-20260316-232307-93b652f"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260316-232307-93b652f"></script>
     </body>
 </html>

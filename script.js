@@ -652,6 +652,7 @@ import {
     initClientDataSystem,
     ensureInnPreviewStyles,
     setClientDataInitDependencies,
+    attachInnCtrlClickToTextarea as attachInnCtrlClickToTextareaModule,
 } from './js/features/client-data-init.js';
 
 import {
@@ -4378,8 +4379,14 @@ setClipboardDependencies({
 });
 console.log('[script.js] Зависимости модуля Clipboard установлены');
 
-// Client Data System Dependencies
-setClientNotesWindowDependencies({ highlightElement });
+// Client Data System Dependencies (плавающая панель: подсветка поиска, подсветка ИНН при Ctrl, Ctrl+клик ИНН, тост)
+setClientNotesWindowDependencies({
+    highlightElement,
+    copyToClipboard: copyToClipboardModule,
+    attachInnCtrlClickToTextarea: attachInnCtrlClickToTextareaModule,
+    createClientNotesInnPreview,
+    ensureInnPreviewStyles,
+});
 
 setClientDataDependencies({
     showNotification,

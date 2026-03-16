@@ -6,9 +6,24 @@
  */
 
 let highlightElement = null;
+let copyToClipboard = null;
+let attachInnCtrlClickToTextarea = null;
+let createClientNotesInnPreview = null;
+let ensureInnPreviewStyles = null;
+
+/** Превью подсветки ИНН для textarea плавающей панели (показ при зажатом Ctrl). */
+let panelInnPreview = null;
+let panelInnPreviewInputHandler = null;
 
 export function setClientNotesWindowDependencies(deps) {
     if (deps.highlightElement !== undefined) highlightElement = deps.highlightElement;
+    if (deps.copyToClipboard !== undefined) copyToClipboard = deps.copyToClipboard;
+    if (deps.attachInnCtrlClickToTextarea !== undefined)
+        attachInnCtrlClickToTextarea = deps.attachInnCtrlClickToTextarea;
+    if (deps.createClientNotesInnPreview !== undefined)
+        createClientNotesInnPreview = deps.createClientNotesInnPreview;
+    if (deps.ensureInnPreviewStyles !== undefined)
+        ensureInnPreviewStyles = deps.ensureInnPreviewStyles;
 }
 
 let panel = null;
@@ -26,6 +41,16 @@ let savedPanelRect = null;
 
 function getClientNotesEl() {
     return document.getElementById('clientNotes');
+}
+
+function isMac() {
+    const plat = typeof navigator !== 'undefined' && navigator.platform ? navigator.platform : '';
+    const ua = typeof navigator !== 'undefined' && navigator.userAgent ? navigator.userAgent : '';
+    return /Mac/i.test(plat) || /Mac|iPhone|iPad/i.test(ua);
+}
+
+function releasePanelInnPreview() {
+    if (panelInnPreview) panelInnPreview.hide();
 }
 
 function syncToParent(value) {
@@ -263,6 +288,39 @@ function createPanel() {
     panelTextarea.addEventListener('input', () => {
         syncToParent(panelTextarea.value);
     });
+
+    if (typeof attachInnCtrlClickToTextarea === 'function' && typeof copyToClipboard === 'function') {
+        attachInnCtrlClickToTextarea(panelTextarea, copyToClipboard, releasePanelInnPreview);
+    }
+
+    if (
+        typeof createClientNotesInnPreview === 'function' &&
+        typeof ensureInnPreviewStyles === 'function'
+    ) {
+        document.addEventListener('keydown', onPanelKeydown);
+        document.addEventListener('keyup', onPanelKeyup);
+        panelTextarea.addEventListener('blur', releasePanelInnPreview);
+    }
+
+    function onPanelKeydown(e) {
+        const modifier = isMac() ? e.metaKey : e.ctrlKey;
+        if (!modifier || document.activeElement !== panelTextarea) return;
+        ensureInnPreviewStyles();
+        if (!panelInnPreview) {
+            panelInnPreview = createClientNotesInnPreview(panelTextarea);
+            panelInnPreviewInputHandler = () => {
+                if (panelInnPreview) panelInnPreview.update();
+            };
+            panelTextarea.addEventListener('input', panelInnPreviewInputHandler);
+        }
+        panelInnPreview.show();
+        panelInnPreview.update();
+    }
+
+    function onPanelKeyup(e) {
+        const modifier = isMac() ? e.metaKey : e.ctrlKey;
+        if (!modifier) releasePanelInnPreview();
+    }
 
     if (notesEl) {
         notesEl.addEventListener('input', syncFromParentToPanel);

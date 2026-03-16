@@ -25,6 +25,24 @@ body.modal-open {
 #cibLinkModal .p-content {
     padding: 1rem 1.25rem !important;
 }
+
+/* Модал подтверждения: блюр фона за окном (не только затемнение) */
+#appConfirmModal {
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+}
+
+/* Модал подтверждения: сдвиг вверх на 20% (приглашение «Начать тур» и др.) */
+#appConfirmModal > div > div {
+    transform: translateY(-20vh);
+}
+
+/* Кнопка закрытия (крестик): без фокус-бордера */
+#appConfirmModalCloseBtn:focus,
+#appConfirmModalCloseBtn:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
 #algorithmModal #algorithmSteps,
 #algorithmModal [id='algorithmSteps'] {
     padding: 1rem 1.25rem !important;

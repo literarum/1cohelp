@@ -298,14 +298,17 @@ async function tryUnlock() {
     state.unlocked = true;
     refs.auth.classList.add('hidden');
     refs.workspace.classList.remove('hidden');
+    refs.shell?.classList.remove('engineering-cockpit-shell--compact');
     refs.passwordInput.value = '';
     refs.authMessage.textContent = '';
     await refreshCockpitData();
 }
 
 function bindUi() {
+    const modal = document.getElementById('engineeringCockpitModal');
     refs = {
-        modal: document.getElementById('engineeringCockpitModal'),
+        modal,
+        shell: modal?.querySelector('.engineering-cockpit-shell'),
         closeBtn: document.getElementById('engineeringCockpitCloseBtn'),
         auth: document.getElementById('engineeringCockpitAuth'),
         workspace: document.getElementById('engineeringCockpitWorkspace'),
@@ -394,11 +397,15 @@ export function openEngineeringCockpit() {
     refs.modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
     if (!state.unlocked) {
+        refs.shell?.classList.add('engineering-cockpit-shell--compact');
         refs.auth.classList.remove('hidden');
         refs.workspace.classList.add('hidden');
         refs.passwordInput.focus();
         return;
     }
+    refs.shell?.classList.remove('engineering-cockpit-shell--compact');
+    refs.auth.classList.add('hidden');
+    refs.workspace.classList.remove('hidden');
     activateTab(state.currentTab);
     void refreshCockpitData();
 }
