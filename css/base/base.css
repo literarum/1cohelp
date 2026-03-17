@@ -52,7 +52,7 @@ header,
         border-color 0.45s ease-out;
 }
 
-/* Основной контейнер приложения: центрирование и ограничение ширины (как container + max-w-7xl) */
+/* Основной контейнер приложения: центрирование и ограничение ширины (как container + max-w-7xl); safe area и адаптивные отступы */
 #appContent {
     flex-grow: 1;
     min-width: 0;
@@ -60,6 +60,8 @@ header,
     max-width: 80rem;
     margin-left: auto;
     margin-right: auto;
+    padding-left: max(var(--content-padding-inline), var(--safe-area-left));
+    padding-right: max(var(--content-padding-inline), var(--safe-area-right));
     box-sizing: border-box;
 }
 
@@ -74,7 +76,7 @@ header,
     transform: translateX(-50%);
     width: 100%;
     max-width: 80rem;
-    padding: 1.5rem 1rem 0 1rem;
+    padding: max(1.5rem, var(--safe-area-top)) max(var(--content-padding-inline), var(--safe-area-right)) 0 max(var(--content-padding-inline), var(--safe-area-left));
     box-sizing: border-box;
     z-index: 30;
     background-color: var(--color-background);
@@ -269,11 +271,11 @@ header button {
     -webkit-backdrop-filter: none !important;
 }
 
-/* Адаптивность хедера: touch-цели на малых/тач экранах, отступы */
+/* Адаптивность хедера: touch-цели на малых/тач экранах (Apple HIG — layout/responsive.css) */
 @media (pointer: coarse) and (max-width: 1024px) {
     #staticHeaderWrapper header button:not([class*='search']) {
-        min-height: 44px;
-        min-width: 44px;
+        min-height: var(--touch-target-min);
+        min-width: var(--touch-target-min);
         padding: 0.5rem;
     }
 }
@@ -291,12 +293,12 @@ header button {
     }
 }
 
-/* Кнопки в формах и модалках: удобная зона нажатия на тач-устройствах */
+/* Кнопки в формах и модалках: удобная зона нажатия на тач-устройствах (--touch-target-min) */
 @media (pointer: coarse) and (max-width: 1024px) {
     .modal-inner-container button:not([class*='p-1']):not([class*='p-2']),
     form button[type='submit'],
     form button[type='button']:not([class*='p-1']):not([class*='p-2']) {
-        min-height: 44px;
+        min-height: var(--touch-target-min);
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;
     }
@@ -305,7 +307,7 @@ header button {
 button:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible {
-    outline: 2px solid var(--color-primary, #9933ff);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 

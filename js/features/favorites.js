@@ -6,7 +6,7 @@
  */
 
 import { State } from '../app/state.js';
-import { escapeHtml, highlightElement } from '../utils/html.js';
+import { escapeHtml, highlightElement, linkify } from '../utils/html.js';
 import {
     addToFavoritesDB,
     removeFromFavoritesDB,
@@ -269,7 +269,7 @@ export async function renderFavoritesPage() {
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Тип: ${typeText}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3" title="${escapeHtml(
                             fav.description || '',
-                        )}">${escapeHtml(fav.description || 'Нет описания')}</p>
+                        )}">${linkify(fav.description || 'Нет описания')}</p>
                     </div>
                     <div class="actions-container absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">${favButtonHTML}</div>
                     <div class="mt-auto pt-2 border-t border-gray-200 dark:border-gray-600 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">

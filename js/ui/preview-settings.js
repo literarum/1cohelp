@@ -1,5 +1,7 @@
 'use strict';
 
+import { THEME_DEFAULTS } from '../config.js';
+
 /**
  * Модуль применения предпросмотра настроек UI
  * Вынесено из script.js
@@ -45,7 +47,7 @@ export async function applyPreviewSettings(settings) {
     let primary =
         settings?.primaryColor || (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor);
     if (typeof primary !== 'string' || !/^#[a-fA-F0-9]{3}([a-fA-F0-9]{3})?$/.test(primary.trim())) {
-        primary = (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor) || '#7E22CE';
+        primary = (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor) || THEME_DEFAULTS.primary;
     }
     primary = primary.trim();
     style.setProperty('--color-primary', primary);

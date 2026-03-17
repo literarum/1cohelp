@@ -5,7 +5,7 @@
  * Содержит функции для работы с внешними ссылками.
  */
 
-import { escapeHtml } from '../utils/html.js';
+import { escapeHtml, linkify } from '../utils/html.js';
 import { getAllFromIndexedDB } from '../db/indexeddb.js';
 import { NotificationService } from '../services/notification.js';
 
@@ -212,6 +212,7 @@ export function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards')
 
     const safeTitle = escapeHtml(link.title);
     const safeDescription = escapeHtml(link.description || 'Нет описания');
+    const descriptionLinked = linkify(link.description || 'Нет описания');
 
     if (viewMode === 'cards') {
         linkElement.className =
@@ -220,7 +221,7 @@ export function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards')
         const mainContentHTML = `
             <div class="flex-grow min-w-0 cursor-pointer pt-10 mb-3" data-action="open-link">
                 <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 mb-1 truncate w-full" title="${safeTitle}">${safeTitle}</h3>
-                <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mb-2 line-clamp-2 w-full" title="${safeDescription}">${safeDescription}</p>
+                <p class="ext-link-description text-gray-600 dark:text-gray-400 text-sm mb-2 line-clamp-2 w-full" title="${safeDescription}">${descriptionLinked}</p>
             </div>
             <div class="ext-link-meta mt-auto pt-2 border-t border-gray-200 dark:border-gray-600 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 ${categoryBadgeHTML}
@@ -247,7 +248,7 @@ export function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards')
                 <i class="fas fa-link text-gray-400 dark:text-gray-500 mr-4 flex-shrink-0"></i>
                 <div class="min-w-0 flex-1">
                     <h3 class="font-medium text-gray-900 dark:text-gray-100 truncate" title="${safeTitle}">${safeTitle}</h3>
-                    <p class="ext-link-description text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5" title="${safeDescription}">${safeDescription}</p>
+                    <p class="ext-link-description text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5" title="${safeDescription}">${descriptionLinked}</p>
                 </div>
             </div>
             <div class="ext-link-actions flex-shrink-0 ml-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">

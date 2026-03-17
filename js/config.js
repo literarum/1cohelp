@@ -376,11 +376,26 @@ export const SECTION_GRID_COLS = {
 };
 
 // ============================================================================
+// КОНСТАНТЫ ТЕМЫ (единственный источник для JS; значения синхронизированы с css/theme/variables.css)
+// ============================================================================
+export const THEME_DEFAULTS = Object.freeze({
+    initialBg: '#030308',
+    primary: '#9933ff',
+    secondary: '#7b2fdf',
+    backgroundDark: '#030308',
+    backgroundLight: '#f8fafc',
+    primaryDark: '#8a2be2',
+    primaryLight: '#4f46e5',
+    secondaryDark: '#a020f0',
+    secondaryLight: '#06b6d4',
+});
+
+// ============================================================================
 // НАСТРОЙКИ UI ПО УМОЛЧАНИЮ
 // ============================================================================
 export function getDefaultUISettings(allPanelIdsForDefault) {
     return {
-        primaryColor: '#7E22CE',
+        primaryColor: THEME_DEFAULTS.primary,
         fontSize: 80,
         borderRadius: 2,
         contentDensity: 3,

@@ -5,6 +5,7 @@
  * Замена стандартных window.confirm() и window.alert().
  */
 
+import { linkify } from '../utils/html.js';
 import {
     activateModalFocus,
     deactivateModalFocus,
@@ -64,7 +65,7 @@ export function showAppConfirm(options = {}) {
     if (messageIsHtml) {
         messageEl.innerHTML = message;
     } else {
-        messageEl.textContent = message;
+        messageEl.innerHTML = linkify(message);
     }
     enhanceModalAccessibility(modal, {
         labelledBy: 'appConfirmModalTitle',

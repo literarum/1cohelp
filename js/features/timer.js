@@ -11,6 +11,11 @@ import { NotificationService } from '../services/notification.js';
 // Timer state variables
 let notificationPermissionState = null;
 let timerInterval = null;
+let timerRafId = null;
+let lastTimerTickAt = 0;
+let timerWatchdogId = null;
+const TIMER_WATCHDOG_INTERVAL_MS = 3000;
+const TIMER_STALL_THRESHOLD_MS = 2500;
 const timerDefaultDuration = 110;
 let timerCurrentSetDuration = timerDefaultDuration;
 let targetEndTime = 0;
@@ -559,6 +564,10 @@ export function handleTimerEnd() {
     isTimerRunning = false;
     if (timerInterval) clearInterval(timerInterval);
     timerInterval = null;
+    if (timerRafId) {
+        cancelAnimationFrame(timerRafId);
+        timerRafId = null;
+    }
 
     timeLeftVisual = 0;
 
@@ -584,28 +593,48 @@ export function handleTimerEnd() {
 }
 
 /**
+ * Redundant display update driven by rAF when tab is visible.
+ * Ensures the timer display keeps updating even if setInterval is throttled.
+ */
+function scheduleTimerDisplayRaf() {
+    timerRafId = null;
+    if (document.hidden || !isTimerRunning) return;
+    const now = Date.now();
+    const remaining = Math.max(0, Math.round((targetEndTime - now) / 1000));
+    if (remaining <= 0) return;
+    if (remaining !== timeLeftVisual) {
+        timeLeftVisual = remaining;
+        updateTimerDisplay();
+    }
+    timerRafId = requestAnimationFrame(scheduleTimerDisplayRaf);
+}
+
+/**
  * Start timer internal
  */
 export function startTimerInternal() {
     if (timerInterval) clearInterval(timerInterval);
 
-    if (targetEndTime <= Date.now() && timeLeftVisual > 0) {
-        targetEndTime = Date.now() + timeLeftVisual * 1000;
-        console.log(
-            `Таймер запускается/возобновляется. Новое targetEndTime: ${new Date(
-                targetEndTime,
-            ).toLocaleTimeString()}`,
-        );
-    } else if (timeLeftVisual <= 0) {
+    if (timeLeftVisual <= 0) {
         console.log('Попытка запуска таймера с нулевым временем. Вызов handleTimerEnd.');
         handleTimerEnd();
         return;
     }
+    // Всегда привязываем targetEndTime к текущему timeLeftVisual при старте/возобновлении,
+    // чтобы после паузы таймер продолжал с той же секунды, а не терял прошедшее время.
+    targetEndTime = Date.now() + timeLeftVisual * 1000;
+    console.log(
+        `Таймер запускается/возобновляется. Новое targetEndTime: ${new Date(
+            targetEndTime,
+        ).toLocaleTimeString()}`,
+    );
 
     isTimerRunning = true;
+    lastTimerTickAt = Date.now();
 
     timerInterval = setInterval(() => {
         const now = Date.now();
+        lastTimerTickAt = now;
         const newTimeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
 
         if (newTimeLeftVisual !== timeLeftVisual) {
@@ -625,6 +654,8 @@ export function startTimerInternal() {
     }
     updateTimerDisplay();
     saveTimerState();
+    if (timerRafId) cancelAnimationFrame(timerRafId);
+    timerRafId = requestAnimationFrame(scheduleTimerDisplayRaf);
     console.log(
         'Таймер запущен (внутренний интервал). targetEndTime:',
         new Date(targetEndTime).toLocaleTimeString(),
@@ -639,6 +670,10 @@ export function pauseTimer() {
     isTimerRunning = false;
     if (timerInterval) clearInterval(timerInterval);
     timerInterval = null;
+    if (timerRafId) {
+        cancelAnimationFrame(timerRafId);
+        timerRafId = null;
+    }
 
     updateTimerDisplay();
     saveTimerState();
@@ -795,12 +830,12 @@ export function switchToEditMode(unitSpanElement, _unitType) {
     input.style.textAlign = 'center';
     input.style.fontFamily = 'monospace';
     input.style.fontSize = 'inherit';
-    input.style.border = '1px solid var(--color-primary, #9333ea)';
+    input.style.border = '1px solid var(--color-primary)';
     input.style.borderRadius = '3px';
     input.style.padding = '0 2px';
     input.style.boxSizing = 'border-box';
-    input.style.backgroundColor = 'var(--input-bg-color, #fff)';
-    input.style.color = 'var(--input-text-color, #000)';
+    input.style.backgroundColor = 'var(--color-input-bg)';
+    input.style.color = 'var(--color-text-primary)';
 
     input.maxLength = 2;
     input.value = String(currentValue).padStart(2, '0');
@@ -928,9 +963,41 @@ export function cancelTimerEdit() {
 }
 
 /**
+ * Ensure timer DOM refs are valid and bound to the live document.
+ * If elements were detached (e.g. re-render), re-resolve by id so updates hit visible UI.
+ */
+function ensureTimerDOMRefs() {
+    const inDoc = (el) => el && typeof document.contains === 'function' && document.contains(el);
+    if (timerDisplayElement && !inDoc(timerDisplayElement)) {
+        timerDisplayElement = null;
+        State.timerElements.minutesSpan = null;
+        State.timerElements.secondsSpan = null;
+        State.timerElements.colonSpan = null;
+    }
+    if (!timerDisplayElement) {
+        timerDisplayElement = document.getElementById('timerDisplay');
+    }
+    if (timerDisplayElement && (!State.timerElements.minutesSpan || !inDoc(State.timerElements.minutesSpan))) {
+        State.timerElements.minutesSpan = document.getElementById('timerMinutesDisplay');
+        State.timerElements.secondsSpan = document.getElementById('timerSecondsDisplay');
+        State.timerElements.colonSpan = timerDisplayElement && timerDisplayElement.querySelector('.timer-colon');
+    }
+    if (timerToggleButton && !inDoc(timerToggleButton)) timerToggleButton = null;
+    if (!timerToggleButton) {
+        timerToggleButton = document.getElementById('timerToggleButton');
+    }
+    if (timerToggleButton) {
+        const icon = timerToggleButton.querySelector('i');
+        if (icon) timerToggleIcon = icon;
+    }
+}
+
+/**
  * Update timer display
  */
 export function updateTimerDisplay() {
+    ensureTimerDOMRefs();
+
     if (
         !timerDisplayElement ||
         !timerToggleIcon ||
@@ -1168,9 +1235,28 @@ export function initTimerSystem() {
                 }
             } else if (timeLeftVisual <= 0 && targetEndTime <= now) {
                 handleTimerEnd();
+            } else if (!timerInterval) {
+                startTimerInternal();
             }
         }
     });
+
+    timerWatchdogId = setInterval(() => {
+        if (
+            document.hidden ||
+            !isTimerRunning ||
+            timerInterval == null ||
+            Date.now() - lastTimerTickAt <= TIMER_STALL_THRESHOLD_MS
+        ) {
+            return;
+        }
+        console.warn(
+            'Таймер: интервал не срабатывал >2.5с при видимой вкладке. Перезапуск интервала.',
+        );
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
+        startTimerInternal();
+    }, TIMER_WATCHDOG_INTERVAL_MS);
 
     console.log('Система таймера инициализирована (v_editable_compact_css_driven).');
 }

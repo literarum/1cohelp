@@ -41,7 +41,7 @@ export async function handleBookmarkFormSubmit(event) {
             'handleBookmarkFormSubmit v6: CRITICAL - Could not find parent modal #bookmarkModal.',
         );
         if (typeof showNotification === 'function')
-            showNotification('Критическая ошибка интерфейса: не найдено модальное окно.', 'error');
+            showNotification('Критическая ошибка интерфейса: окно не найдено.', 'error');
         if (saveButton) saveButton.disabled = false;
         return;
     }

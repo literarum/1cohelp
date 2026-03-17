@@ -1,6 +1,6 @@
 'use strict';
 
-import { escapeHtml, truncateText } from '../utils/html.js';
+import { escapeHtml, linkify, truncateText } from '../utils/html.js';
 import { getAllFromIndexedDB, getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 import { CARD_CONTAINER_CLASSES, LIST_CONTAINER_CLASSES, SECTION_GRID_COLS } from '../config.js';
 import { ARCHIVE_FOLDER_ID, ARCHIVE_FOLDER_NAME } from '../constants.js';
@@ -275,13 +275,14 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
 
     const safeTitle = escapeHtml(bookmark.title || 'Без названия');
     const safeDescription = escapeHtml(bookmark.description || '');
+    const descriptionLinked = linkify(bookmark.description || '');
 
     if (viewMode === 'cards') {
         bookmarkElement.className =
             'bookmark-item view-item group relative cursor-pointer bg-white dark:bg-gray-700 transition-shadow duration-200 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
 
-        const descriptionHTML = safeDescription
-            ? `<p class="bookmark-description text-gray-600 dark:text-gray-300 text-sm line-clamp-3" title="${safeDescription}">${safeDescription}</p>`
+        const descriptionHTML = descriptionLinked
+            ? `<p class="bookmark-description text-gray-600 dark:text-gray-300 text-sm line-clamp-3" title="${safeDescription}">${descriptionLinked}</p>`
             : bookmark.url
               ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>'
               : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>';
@@ -313,10 +314,17 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
             ? '<i class="fas fa-link text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>'
             : '<i class="fas fa-sticky-note text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>';
 
-        const listDescText = safeDescription
-            ? truncateText(safeDescription, 70)
+        const listDescContent = safeDescription
+            ? linkify(truncateText(bookmark.description || '', 70))
             : bookmark.url
-              ? escapeHtml(bookmark.url)
+              ? (() => {
+                    const u = String(bookmark.url).trim();
+                    if (/^https?:\/\//i.test(u)) {
+                        const safeHref = u.replace(/"/g, '&quot;');
+                        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline truncate inline-block max-w-full" onclick="event.stopPropagation()">${escapeHtml(u)}</a>`;
+                    }
+                    return escapeHtml(u);
+                })()
               : 'Текстовая заметка';
 
         const mainContentHTML = `
@@ -328,7 +336,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                     </div>
                     <p class="bookmark-description text-sm text-gray-500 dark:text-gray-400 truncate" title="${
                         safeDescription || (bookmark.url ? escapeHtml(bookmark.url) : '')
-                    }">${listDescText}</p>
+                    }">${listDescContent}</p>
                 </div>
             </div>`;
         bookmarkElement.innerHTML = mainContentHTML + actionsHTML;

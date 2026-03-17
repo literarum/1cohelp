@@ -78,20 +78,20 @@ body.modal-open {
     padding: 0.5rem 0.75rem !important;
 }
 #algorithmModal {
-    padding: 1rem;
+    padding: var(--safe-area-top) max(var(--content-padding-inline), var(--safe-area-right)) var(--safe-area-bottom) max(var(--content-padding-inline), var(--safe-area-left));
     box-sizing: border-box;
 }
 
-/* Единые ограничения по viewport для всех модалок с .modal-inner-container */
+/* Единые ограничения по viewport для всех модалок с .modal-inner-container; учёт safe area и адаптивных отступов (layout/responsive.css) */
 .modal-inner-container {
     max-height: min(90vh, calc(100vh - 96px));
-    max-width: min(920px, calc(100vw - 48px));
+    max-width: min(920px, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)));
     box-sizing: border-box;
 }
 @media (max-width: 640px) {
     .modal-inner-container {
         max-height: calc(100vh - 64px);
-        max-width: calc(100vw - 32px);
+        max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline));
     }
 }
 @media (max-height: 480px) {
@@ -102,14 +102,14 @@ body.modal-open {
 
 #customizeUIModal .modal-inner-container {
     max-height: calc(100vh - 96px);
-    max-width: min(920px, calc(100vw - 96px));
+    max-width: min(920px, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)));
     display: flex;
     flex-direction: column;
 }
 @media (max-width: 640px) {
     #customizeUIModal .modal-inner-container {
         max-height: calc(100vh - 64px);
-        max-width: calc(100vw - 32px);
+        max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline));
     }
 }
 
@@ -166,6 +166,13 @@ body.modal-open {
     white-space: nowrap;
 }
 
+/* Сетка модалки: левая колонка чуть шире, чтобы кнопки внизу не требовали горизонтальной прокрутки */
+@media (min-width: 768px) {
+    #customizeUIModal .p-content.overflow-y-auto > .grid {
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    }
+}
+
 /* Первая колонка (вкладки): разделитель справа на md+ */
 #customizeUIModal .settings-modal-tabs-column {
     padding-right: 0;
@@ -189,15 +196,23 @@ body.modal-open {
     overflow: auto;
 }
 
-/* Блок «Недавно удаленные» и «Повторить онбординг-тур» под подсказкой про перетаскивание */
+/* Блок «Недавно удаленные», «Повторить онбординг-тур», «Кастомизация» — в один ряд, без переноса; при нехватке места горизонтальная прокрутка */
 #customizeUIModal .settings-modal-extra-actions {
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid var(--color-border);
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+#customizeUIModal .settings-modal-extra-actions > button {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 div:has(> #clearClientDataBtn) {

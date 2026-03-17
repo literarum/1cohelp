@@ -1,5 +1,7 @@
 'use strict';
 
+import { linkify } from '../utils/html.js';
+
 let deps = {
     getVisibleModals: null,
     getFromIndexedDB: null,
@@ -14,6 +16,7 @@ let deps = {
     bookmarkDetailModalConfig: null,
     wireBookmarkDetailModalCloseHandler: null,
     renderPdfAttachmentsSection: null,
+    removePdfSectionsFromContainer: null,
     exportSingleBookmarkToPdf: null,
 };
 
@@ -194,10 +197,11 @@ export async function showBookmarkDetailModal(bookmarkId) {
     deps.wireBookmarkDetailModalCloseHandler?.('bookmarkDetailModal');
     modal.dataset.currentBookmarkId = String(bookmarkId);
 
-    const pdfHost =
-        modal.querySelector('#bookmarkDetailOuterContent') ||
-        modal.querySelector('.flex-1.overflow-y-auto');
+    const pdfHost = modal.querySelector('#bookmarkDetailPdfContainer');
     if (pdfHost && typeof deps.renderPdfAttachmentsSection === 'function') {
+        if (typeof deps.removePdfSectionsFromContainer === 'function') {
+            deps.removePdfSectionsFromContainer(pdfHost);
+        }
         deps.renderPdfAttachmentsSection(pdfHost, 'bookmark', String(bookmarkId));
     }
     titleEl.textContent = 'Загрузка...';
@@ -217,12 +221,12 @@ export async function showBookmarkDetailModal(bookmarkId) {
 
         if (bookmark) {
             titleEl.textContent = bookmark.title || 'Без названия';
-            const preElement = document.createElement('pre');
-            preElement.className = 'whitespace-pre-wrap break-words text-sm font-sans';
-            preElement.style.fontSize = '102%';
-            preElement.textContent = bookmark.description || 'Нет описания.';
+            const descWrap = document.createElement('div');
+            descWrap.className = 'whitespace-pre-wrap break-words text-sm font-sans';
+            descWrap.style.fontSize = '102%';
+            descWrap.innerHTML = linkify(bookmark.description || 'Нет описания.');
             textContentEl.innerHTML = '';
-            textContentEl.appendChild(preElement);
+            textContentEl.appendChild(descWrap);
 
             editButton.classList.remove('hidden');
             exportButton.classList.remove('hidden');

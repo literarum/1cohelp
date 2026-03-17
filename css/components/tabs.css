@@ -8,7 +8,7 @@
 /* Контейнер навигационной панели - только разделительная линия внизу */
 #staticHeaderWrapper > div.mb-3.border-b {
     background-color: transparent !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+    border-bottom: 1px solid var(--color-border) !important;
     padding-left: 0;
     padding-right: 0;
     margin-left: 0;
@@ -47,18 +47,18 @@
         color 0.2s ease-in-out,
         border-color 0.2s ease-in-out;
     position: relative;
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 @media (pointer: coarse) and (max-width: 1024px) {
     #staticHeaderWrapper .tab-btn {
-        min-height: 44px;
+        min-height: var(--touch-target-min);
         padding: 0.5rem 0.75rem;
     }
 }
 
 .tab-btn i,
 .tab-btn svg {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 #clientNotes.custom-scrollbar::-webkit-scrollbar {
@@ -69,17 +69,17 @@
 }
 
 .tab-btn.tab-active {
-    color: #9955ff !important;
-    border-bottom-color: #9955ff !important;
+    color: var(--color-primary) !important;
+    border-bottom-color: var(--color-primary) !important;
 }
 
 .tab-btn.tab-active > * {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 .tab-btn.tab-active i,
 .tab-btn.tab-active svg {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 #moreTabsDropdown a,
@@ -105,21 +105,21 @@
 }
 
 .tab-btn:hover:not(.tab-active) {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 .tab-btn:hover:not(.tab-active) i,
 .tab-btn:hover:not(.tab-active) svg {
-    color: #b0b0b0 !important;
+    color: var(--color-text-secondary) !important;
 }
 
 .tab-btn.tab-active:hover {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 .tab-btn.tab-active:hover i,
 .tab-btn.tab-active:hover svg {
-    color: #9955ff !important;
+    color: var(--color-primary) !important;
 }
 
 @media (min-width: 640px) {

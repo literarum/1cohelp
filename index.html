@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="ru" style="background-color:#030308">
+<html lang="ru" style="background-color: var(--color-initial-bg)">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
         <script type="text/javascript">
             (function bootstrapEngineeringConsole() {
@@ -73,8 +73,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260316-232307-93b652f"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260316-232307-93b652f"></script>
+        <script src="js/vendor-config.js?v=legacy-20260317-233039-f29c985"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260317-233039-f29c985"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -98,9 +98,9 @@
                             theme: {
                                 extend: {
                                     colors: {
-                                        primary: 'var(--color-primary, #9933FF)',
-                                        secondary: 'var(--color-secondary, #7B2FDF)',
-                                        blue: { DEFAULT: 'var(--color-primary, #5D5CDE)' },
+                                        primary: 'var(--color-primary)',
+                                        secondary: 'var(--color-secondary)',
+                                        blue: { DEFAULT: 'var(--color-primary)' },
                                     },
                                     borderRadius: {
                                         none: '0px',
@@ -140,11 +140,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260316-232307-93b652f"
+            href="css/tailwind.generated.css?v=legacy-20260317-233039-f29c985"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260316-232307-93b652f" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260317-233039-f29c985" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -1827,16 +1827,14 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-col md:flex-row items-center gap-4 mb-4">
-                        <div class="relative flex-grow w-full">
-                            <label for="bookmarkSearchInput" class="sr-only"
-                                >Поиск по закладкам</label
-                            >
+                    <div class="flex flex-nowrap items-center gap-3 mb-4 h-10 overflow-x-auto">
+                        <div class="relative flex-1 min-w-0">
+                            <label for="bookmarkSearchInput" class="sr-only">Поиск по закладкам</label>
                             <input
                                 type="text"
                                 id="bookmarkSearchInput"
-                                placeholder="Поиск по закладкам..."
-                                class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                                placeholder="Поиск..."
+                                class="w-full min-w-0 h-10 px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                             />
                             <button
                                 id="clearBookmarkSearchBtn"
@@ -1847,13 +1845,12 @@
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
-                        <div class="relative w-full md:w-auto">
-                            <label for="bookmarkFolderFilter" class="sr-only"
-                                >Фильтр по папкам</label
-                            >
+                        <div class="relative flex-shrink-0 w-28 flex items-stretch" style="min-height: 2.5rem;">
+                            <label for="bookmarkFolderFilter" class="sr-only">Фильтр по папкам</label>
                             <select
                                 id="bookmarkFolderFilter"
-                                class="w-full md:w-auto pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 appearance-none"
+                                style="min-height: 2.5rem; height: 2.5rem; box-sizing: border-box;"
+                                class="w-full py-2 pl-2 pr-7 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 appearance-none"
                             >
                                 <option value="">Все папки</option>
                             </select>
@@ -1870,32 +1867,32 @@
                             <button
                                 type="button"
                                 id="sortBookmarksByDate"
-                                class="bookmarks-sort-btn h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                class="bookmarks-sort-btn h-10 max-h-10 px-2.5 leading-none text-xs font-medium rounded-md transition inline-flex items-center justify-center gap-1 whitespace-nowrap border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600"
                                 data-sort="date"
                                 title="Сортировка по дате добавления"
                             >
-                                <span class="btn-label">По дате</span>
-                                <i class="sort-icon fas ml-1 w-3 opacity-0"></i>
+                                <span class="btn-label">Дата</span>
+                                <i class="sort-icon fas w-3 opacity-0"></i>
                             </button>
                             <button
                                 type="button"
                                 id="sortBookmarksByTitle"
-                                class="bookmarks-sort-btn h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                class="bookmarks-sort-btn h-10 max-h-10 px-2.5 leading-none text-xs font-medium rounded-md transition inline-flex items-center justify-center gap-1 whitespace-nowrap border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600"
                                 data-sort="title"
                                 title="Сортировка по названию"
                             >
-                                <span class="btn-label">По названию</span>
-                                <i class="sort-icon fas ml-1 w-3 opacity-0"></i>
+                                <span class="btn-label">Назв.</span>
+                                <i class="sort-icon fas w-3 opacity-0"></i>
                             </button>
                             <button
                                 type="button"
                                 id="sortBookmarksByFolder"
-                                class="bookmarks-sort-btn h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                class="bookmarks-sort-btn h-10 max-h-10 px-2.5 leading-none text-xs font-medium rounded-md transition inline-flex items-center justify-center gap-1 whitespace-nowrap border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600"
                                 data-sort="folder"
                                 title="Сортировка по папке (цвет)"
                             >
-                                <span class="btn-label">По папке</span>
-                                <i class="sort-icon fas ml-1 w-3 opacity-0"></i>
+                                <span class="btn-label">Папка</span>
+                                <i class="sort-icon fas w-3 opacity-0"></i>
                             </button>
                         </div>
                     </div>
@@ -2465,7 +2462,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно Редактирование -->
+            <!-- Окно Редактирование -->
             <div
                 id="editModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
@@ -2649,7 +2646,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно Настройки UI -->
+            <!-- Окно Настройки UI -->
             <div
                 id="customizeUIModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center hidden"
@@ -2922,7 +2919,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно Кастомизация (тема, цвета, скругление, отступы, фон) -->
+            <!-- Окно Кастомизация (тема, цвета, скругление, отступы, фон) -->
             <div
                 id="appCustomizationModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 overflow-y-auto flex items-center justify-center"
@@ -2977,7 +2974,7 @@
                                 </div>
                                 <div>
                                     <h3 class="text-lg font-semibold mb-content-sm text-gray-900 dark:text-gray-100">
-                                        Настройка цветов элементов (БЕТА)
+                                        Настройка цветов элементов
                                     </h3>
                                     <div
                                         class="flex justify-between flex-wrap space-x-4"
@@ -3168,7 +3165,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно полного отчёта о состоянии здоровья приложения -->
+            <!-- Окно полного отчёта о состоянии здоровья приложения -->
             <style id="health-report-modal-inline">
                 #healthReportModal {
                     overflow: hidden !important;
@@ -3186,7 +3183,7 @@
                     box-sizing: border-box;
                 }
             </style>
-            <!-- Модальное окно слияния баз данных -->
+            <!-- Окно слияния баз данных -->
             <div
                 id="dbMergeModal"
                 class="fixed inset-0 bg-black/50 hidden z-[65] p-4 flex items-center justify-center"
@@ -3704,7 +3701,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно подтверждения очистки данных -->
+            <!-- Окно подтверждения очистки данных -->
             <div
                 id="confirmClearDataModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 overflow-y-auto"
@@ -3778,7 +3775,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно подтверждения выхода без сохранения -->
+            <!-- Окно подтверждения выхода без сохранения -->
             <div
                 id="unsavedConfirmModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 overflow-y-auto"
@@ -3830,7 +3827,7 @@
                 </div>
             </div>
 
-            <!-- Универсальное модальное окно подтверждения/алерта (в стилистике приложения) -->
+            <!-- Универсальное окно подтверждения/алерта (в стилистике приложения) -->
             <div
                 id="appConfirmModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 overflow-y-auto"
@@ -3875,7 +3872,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно "Вернись к клиенту" (таймер): большое, пульсирующий неоново-красный стиль -->
+            <!-- Окно "Вернись к клиенту" (таймер): большое, пульсирующий неоново-красный стиль -->
             <div
                 id="timerReturnToClientModal"
                 class="fixed inset-0 bg-black bg-opacity-60 hidden z-[75] p-4 overflow-y-auto timer-return-to-client-modal"
@@ -3906,7 +3903,7 @@
                 </div>
             </div>
 
-            <!-- Модальное окно Ссылки 1С -->
+            <!-- Окно Ссылки 1С -->
             <div
                 id="cibLinkModal"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
@@ -4050,7 +4047,7 @@
             </div>
         </div>
 
-        <!-- Модальное окно Горячие клавиши -->
+        <!-- Окно Горячие клавиши -->
         <div
             id="hotkeysModal"
             class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto"
@@ -4400,7 +4397,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260316-232307-93b652f"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260316-232307-93b652f"></script>
+        <script type="module" src="./script.js?v=legacy-20260317-233039-f29c985"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260317-233039-f29c985"></script>
     </body>
 </html>

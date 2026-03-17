@@ -1,6 +1,6 @@
 'use strict';
 
-import { escapeHtml } from '../utils/html.js';
+import { linkify as linkifyFn } from '../utils/html.js';
 
 // ============================================================================
 // СТИЛИ ДЛЯ УВЕДОМЛЕНИЙ БЕЗ ИКОНОК
@@ -139,9 +139,7 @@ export const NotificationService = {
             const messageSpan = existing.element.querySelector('.notification-message-span');
             if (messageSpan) {
                 const formattedMessage =
-                    typeof window.linkify === 'function'
-                        ? window.linkify(message)
-                        : escapeHtml(message);
+                    linkifyFn(message);
                 if (messageSpan.innerHTML !== formattedMessage) {
                     messageSpan.innerHTML = formattedMessage;
                 }
@@ -414,7 +412,7 @@ export const NotificationService = {
         const messageSpan = document.createElement('span');
         messageSpan.className = 'notification-message-span flex-1 text-sm break-words';
         messageSpan.innerHTML =
-            typeof window.linkify === 'function' ? window.linkify(message) : escapeHtml(message);
+            linkifyFn(message);
         contentWrapper.appendChild(messageSpan);
 
         notificationElement.appendChild(contentWrapper);

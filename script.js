@@ -2663,6 +2663,7 @@ document.addEventListener('click', (event) => {
 function linkify(text) {
     return linkifyModule(text);
 }
+window.linkify = linkify;
 
 // initFullscreenToggles уже определена выше на строке 965
 // Вызываем её с конфигами модальных окон при необходимости
@@ -3047,10 +3048,9 @@ async function showBookmarkDetailModal(bookmarkId) {
     wireBookmarkDetailModalCloseHandler('bookmarkDetailModal');
     modal.dataset.currentBookmarkId = String(bookmarkId);
 
-    const pdfHost =
-        modal.querySelector('#bookmarkDetailOuterContent') ||
-        modal.querySelector('.flex-1.overflow-y-auto');
+    const pdfHost = modal.querySelector('#bookmarkDetailPdfContainer');
     if (pdfHost) {
+        window.removePdfSectionsFromContainer?.(pdfHost);
         window.renderPdfAttachmentsSection?.(pdfHost, 'bookmark', String(bookmarkId));
     }
     titleEl.textContent = 'Загрузка...';

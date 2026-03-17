@@ -1,8 +1,10 @@
 'use strict';
 
+import { THEME_DEFAULTS } from '../../config.js';
+
 /**
  * Константы оверлея загрузки.
- * Единый источник ключей и значений по умолчанию для раннего скрипта в index.html и модулей приложения.
+ * Единый источник ключей; значения фона синхронизированы с THEME_DEFAULTS (config.js) и css/theme/variables.css.
  * При первом входе (нет сохранённой темы) везде используется тёмная тема.
  */
 
@@ -18,11 +20,11 @@ export const OVERLAY_SNAPSHOT_KEY = 'copilot.loading-overlay.snapshot';
 /** Тема по умолчанию при первом входе пользователя (без сохранённых настроек) */
 export const DEFAULT_THEME = 'dark';
 
-/** Фон оверлея в тёмной теме */
+/** Фон оверлея в тёмной теме (альтернативный, чуть светлее) */
 export const OVERLAY_BG_DARK = '#0a0a1a';
 
-/** Фон оверлея в светлой теме */
-export const OVERLAY_BG_LIGHT = '#f8fafc';
+/** Фон оверлея в светлой теме (из единого ядра темы) */
+export const OVERLAY_BG_LIGHT = THEME_DEFAULTS.backgroundLight;
 
-/** Более глубокий фон для тёмной темы (частицы лучше выделяются) */
-export const OVERLAY_BG_DARK_DEEP = '#030308';
+/** Более глубокий фон для тёмной темы (из единого ядра темы) */
+export const OVERLAY_BG_DARK_DEEP = THEME_DEFAULTS.backgroundDark;

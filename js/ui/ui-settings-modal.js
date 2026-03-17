@@ -1,5 +1,7 @@
 'use strict';
 
+import { THEME_DEFAULTS } from '../config.js';
+
 /**
  * Модуль работы с модальным окном настроек UI
  * Вынесено из script.js
@@ -90,7 +92,7 @@ export function populateCustomizationModalControls(settings) {
             settings.primaryColor ||
             (State?.currentPreviewSettings?.primaryColor) ||
             DEFAULT_UI_SETTINGS?.primaryColor;
-        setColorPickerStateFromHex(hex || '#9933FF');
+        setColorPickerStateFromHex(hex || THEME_DEFAULTS.primary);
     }
 }
 

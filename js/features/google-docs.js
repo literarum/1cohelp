@@ -435,7 +435,7 @@ function renderParagraphs(container, data) {
         container.innerHTML = '<p>Содержимое не найдено.</p>';
         return;
     }
-    container.innerHTML = data.map((p) => `<div>${escapeHtml(p)}</div>`).join('');
+    container.innerHTML = data.map((p) => `<div>${linkify(p)}</div>`).join('');
 }
 
 /**

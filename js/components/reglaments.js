@@ -238,7 +238,7 @@ export function createCategoryElement(categoryId, title, iconClass = 'fa-folder'
     };
 
     const iconColorClass = iconColorMap[color] || iconColorMap['default'];
-    const titleBaseColorClass = 'text-gray-100';
+    const titleBaseColorClass = 'card-title-text';
     const titleHoverColorClass = 'group-hover:text-primary';
 
     categoryElement.innerHTML = `
@@ -342,7 +342,7 @@ export async function showReglamentsForCategory(categoryId) {
 
             reglamentElement.innerHTML = `
                 <div class="flex flex-col justify-center h-full min-h-[3rem] sm:min-h-[3.5rem] pt-10 w-full" data-action="view">
-                    <h4 class="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-primary truncate w-full" title="${escapeHtml(
+                    <h4 class="font-semibold card-title-text group-hover:text-primary dark:group-hover:text-primary truncate w-full" title="${escapeHtml(
                         reglament.title,
                     )}">
                         ${escapeHtml(reglament.title)}
@@ -1134,7 +1134,7 @@ export async function editReglament(id) {
         const modal = document.getElementById('reglamentModal');
         if (!modal) {
             console.error(
-                'Модальное окно регламента не найдено после вызова showAddReglamentModal в editReglament.',
+                'Окно регламента не найдено после вызова showAddReglamentModal в editReglament.',
             );
             return;
         }

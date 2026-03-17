@@ -1,5 +1,6 @@
 'use strict';
 
+import { THEME_DEFAULTS } from '../../config.js';
 import {
     THEME_HINT_KEY,
     THEME_RESOLVED_KEY,
@@ -68,7 +69,11 @@ function parseHexToRgb(hex) {
 
 function toRgba(hex, alpha) {
     const rgb = parseHexToRgb(hex);
-    if (!rgb) return `rgba(138, 43, 226, ${alpha})`;
+    if (!rgb) {
+        const fallback = parseHexToRgb(THEME_DEFAULTS.primary);
+        if (fallback) return `rgba(${fallback.r}, ${fallback.g}, ${fallback.b}, ${alpha})`;
+        return `rgba(138, 43, 226, ${alpha})`;
+    }
     return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
@@ -92,14 +97,14 @@ export function applyLoadingOverlayThemeVars(theme, snapshot, opts = {}) {
         snapshot && typeof snapshot.primary === 'string'
             ? snapshot.primary
             : isDarkTone
-              ? '#8a2be2'
-              : '#4f46e5';
+              ? THEME_DEFAULTS.primaryDark
+              : THEME_DEFAULTS.primaryLight;
     const secondary =
         snapshot && typeof snapshot.secondary === 'string'
             ? snapshot.secondary
             : isDarkTone
-              ? '#a020f0'
-              : '#06b6d4';
+              ? THEME_DEFAULTS.secondaryDark
+              : THEME_DEFAULTS.secondaryLight;
     const background =
         snapshot && typeof snapshot.background === 'string'
             ? snapshot.background

@@ -990,7 +990,7 @@ export async function handleGlobalHotkey(event) {
                         if (customizeUIModal && customizeUIModal.classList.contains('hidden')) {
                             customizeUIBtn.click();
                         } else if (!customizeUIModal) {
-                            console.warn('Alt+I: Модальное окно настроек не найдено.');
+                            console.warn('Alt+I: Окно настроек не найдено.');
                             if (typeof showNotification === 'function') {
                                 showNotification('Окно настроек не найдено.', 'error');
                             }

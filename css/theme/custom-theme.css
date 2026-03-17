@@ -32,11 +32,11 @@ body.custom-background-active .tab-btn.tab-active > *,
 
 #showFavoritesHeaderBtn,
 #showFavoritesHeaderBtn i {
-    color: var(--color-favorites-icon, #eab308) !important;
+    color: var(--color-favorites-icon) !important;
 }
 #showFavoritesHeaderBtn:hover,
 #showFavoritesHeaderBtn:hover i {
-    color: var(--color-favorites-icon-hover, #facc15) !important;
+    color: var(--color-favorites-icon-hover) !important;
 }
 #timerToggleButton,
 #timerResetButton,
@@ -119,7 +119,8 @@ body.custom-background-active
         .text-gray-600,
         .dark\:text-gray-100,
         .dark\:text-gray-200,
-        .dark\:text-gray-300
+        .dark\:text-gray-300,
+        .card-title-text
     ) {
     color: var(--color-text-primary) !important;
 }
@@ -377,12 +378,12 @@ body.custom-background-active
 }
 
 #resetUiBtn:hover {
-    background-color: rgba(220, 38, 38, 0.15);
+    background-color: var(--color-red-bg-subtle);
     transition: background-color ease 0.3s;
 }
 
 #clearAllDataBtn {
-    background-color: rgba(220, 38, 38, 0.25);
+    background-color: var(--color-red-bg-medium);
     padding: 0 1rem;
     border: 1px solid var(--color-red-text);
     transition:
@@ -391,7 +392,7 @@ body.custom-background-active
 }
 
 #clearAllDataBtn:hover {
-    background-color: #ef4444;
+    background-color: var(--color-red-solid);
     border-color: var(--color-red-text);
     transition:
         background-color ease 0.3s,
@@ -476,30 +477,30 @@ body.custom-background-active #resetUiBtn {
 }
 
 body.custom-background-active #resetUiBtn:hover {
-    background-color: rgba(220, 38, 38, 0.15) !important;
+    background-color: var(--color-red-bg-subtle) !important;
     border-color: var(--color-red-text) !important;
 }
 
 body.custom-background-active #clearAllDataBtn {
-    background-color: rgba(220, 38, 38, 0.25) !important;
+    background-color: var(--color-red-bg-medium) !important;
     border: 1px solid var(--color-red-text) !important;
 }
 
 body.custom-background-active #clearAllDataBtn:hover {
-    background-color: #ef4444 !important;
+    background-color: var(--color-red-solid) !important;
     border-color: var(--color-red-text) !important;
 }
 
 /* ===== Спец-исключения для модалки очистки данных ===== */
 body.custom-background-active #confirmClearDataModal #clearDataWarningBox {
-    background-color: #fffbeb !important;
-    border-color: #fde68a !important;
-    color: #92400e !important;
+    background-color: var(--hint-bg) !important;
+    border-color: var(--hint-border) !important;
+    color: var(--hint-text) !important;
 }
 html.dark body.custom-background-active #confirmClearDataModal #clearDataWarningBox {
-    background-color: rgba(120, 53, 15, 0.5) !important;
-    border-color: #92400e !important;
-    color: #fde68a !important;
+    background-color: var(--hint-bg-strong) !important;
+    border-color: var(--hint-border) !important;
+    color: var(--hint-text) !important;
 }
 
 body.custom-background-active #confirmClearDataModal #clearDataWarningBox #exportBeforeClearBtn,
@@ -517,28 +518,28 @@ body.custom-background-active
     #confirmClearDataModal
     #clearDataWarningBox
     #exportBeforeClearBtn:hover {
-    color: #7c2d12 !important;
+    color: var(--hint-action) !important;
 }
 html.dark
     body.custom-background-active
     #confirmClearDataModal
     #clearDataWarningBox
     #exportBeforeClearBtn:hover {
-    color: #fde68a !important;
+    color: var(--hint-text) !important;
 }
 body.custom-background-active
     #confirmClearDataModal
     :is(h2 .fa-exclamation-triangle, .text-red-600, .dark\:text-red-500) {
-    color: var(--color-red-text, #dc2626) !important;
+    color: var(--color-red-text) !important;
 }
 body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn {
-    background-color: var(--color-red-text, #dc2626) !important;
+    background-color: var(--color-red-text) !important;
     color: var(--color-text-on-primary) !important;
-    border-color: var(--color-red-text, #dc2626) !important;
+    border-color: var(--color-red-text) !important;
 }
 body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn:hover {
-    background-color: var(--color-red-hover-bg, #ef4444) !important;
-    border-color: var(--color-red-text, #dc2626) !important;
+    background-color: var(--color-red-solid) !important;
+    border-color: var(--color-red-text) !important;
 }
 body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {
     background-color: var(--color-surface-1) !important;
@@ -685,7 +686,7 @@ body.custom-background-active .shablony-block.copyable-block:hover {
 body.custom-background-active :is(nav, div):has(> .tab-btn) {
     background-color: transparent !important;
     box-shadow: none !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-bottom: 1px solid var(--color-border-subtle) !important;
 }
 
 body.custom-background-active .tab-btn {

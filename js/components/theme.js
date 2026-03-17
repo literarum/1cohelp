@@ -1,5 +1,6 @@
 'use strict';
 
+import { THEME_DEFAULTS } from '../config.js';
 import { State } from '../app/state.js';
 import {
     THEME_HINT_KEY as LOADING_THEME_HINT_KEY,
@@ -101,10 +102,10 @@ function buildLoadingOverlaySnapshot(isDarkTheme) {
         background: backgroundRgb
             ? rgbToHex(backgroundRgb)
             : tone === 'dark'
-              ? '#030308'
-              : '#f8fafc',
-        primary: primaryRgb ? rgbToHex(primaryRgb) : tone === 'dark' ? '#8a2be2' : '#4f46e5',
-        secondary: secondaryRgb ? rgbToHex(secondaryRgb) : tone === 'dark' ? '#a020f0' : '#06b6d4',
+              ? THEME_DEFAULTS.backgroundDark
+              : THEME_DEFAULTS.backgroundLight,
+        primary: primaryRgb ? rgbToHex(primaryRgb) : tone === 'dark' ? THEME_DEFAULTS.primaryDark : THEME_DEFAULTS.primaryLight,
+        secondary: secondaryRgb ? rgbToHex(secondaryRgb) : tone === 'dark' ? THEME_DEFAULTS.secondaryDark : THEME_DEFAULTS.secondaryLight,
     };
 }
 

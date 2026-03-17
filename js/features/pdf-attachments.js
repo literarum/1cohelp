@@ -406,6 +406,24 @@ async function refreshPdfList(section, parentType, parentId) {
 }
 
 /**
+ * Remove all PDF sections mounted inside a container and clear them from cache.
+ * Use before re-rendering (e.g. when switching bookmark in detail modal) to avoid
+ * multiple sections from different parents showing in the same view.
+ */
+export function removePdfSectionsFromContainer(container) {
+    if (!container) return;
+    const sections = container.querySelectorAll?.('.pdf-attachments-section') || [];
+    sections.forEach((section) => {
+        const pt = section.dataset?.parentType;
+        const pid = section.dataset?.parentId;
+        if (pt != null && pid != null) {
+            mountedPdfSections.delete(`${pt}:${pid}`);
+        }
+        section.remove();
+    });
+}
+
+/**
  * Render PDF attachments section
  */
 export function renderPdfAttachmentsSection(container, parentType, parentId) {
@@ -652,6 +670,7 @@ if (typeof window !== 'undefined') {
     window.downloadPdfBlob = downloadPdfBlob;
     window.mountPdfSection = mountPdfSection;
     window.renderPdfAttachmentsSection = renderPdfAttachmentsSection;
+    window.removePdfSectionsFromContainer = removePdfSectionsFromContainer;
     window.initPdfAttachmentSystem = initPdfAttachmentSystem;
     window.attachAlgorithmAddPdfHandlers = attachAlgorithmAddPdfHandlers;
     window.attachBookmarkPdfHandlers = attachBookmarkPdfHandlers;

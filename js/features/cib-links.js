@@ -5,6 +5,7 @@
  * Содержит логику работы со ссылками 1С: добавление, редактирование, удаление, отображение
  */
 
+import { escapeHtml, linkify } from '../utils/html.js';
 import { State } from '../app/state.js';
 import {
     getAllFromIndexedDB,
@@ -232,6 +233,7 @@ export function handleLinkActionClick(event) {
     }
 
     const codeElement = linkItem.querySelector('code');
+    const linkValueToCopy = linkItem.dataset.linkValue ?? codeElement?.textContent ?? '';
 
     if (buttonOrAnchor) {
         event.stopPropagation();
@@ -239,13 +241,13 @@ export function handleLinkActionClick(event) {
 
         switch (action) {
             case 'copy':
-                if (codeElement && deps.copyToClipboard) {
-                    deps.copyToClipboard(codeElement.textContent, 'Ссылка 1С скопирована!');
+                if (linkValueToCopy && deps.copyToClipboard) {
+                    deps.copyToClipboard(linkValueToCopy, 'Ссылка 1С скопирована!');
                 }
                 break;
             case 'open-cib-link':
-                if (codeElement && deps.copyToClipboard) {
-                    deps.copyToClipboard(codeElement.textContent, 'Ссылка 1С скопирована!');
+                if (linkValueToCopy && deps.copyToClipboard) {
+                    deps.copyToClipboard(linkValueToCopy, 'Ссылка 1С скопирована!');
                 }
                 break;
             case 'edit':
@@ -264,8 +266,8 @@ export function handleLinkActionClick(event) {
                 console.warn(`Неизвестное действие '${action}' для ссылки 1С.`);
         }
     } else {
-        if (codeElement && deps.copyToClipboard) {
-            deps.copyToClipboard(codeElement.textContent, 'Ссылка 1С скопирована!');
+        if (linkValueToCopy && deps.copyToClipboard) {
+            deps.copyToClipboard(linkValueToCopy, 'Ссылка 1С скопирована!');
         }
     }
 }
@@ -410,6 +412,24 @@ export async function renderCibLinks(links) {
 
     const fragment = document.createDocumentFragment();
 
+    function linkValueHtml(linkUrl) {
+        const raw = String(linkUrl || '').trim();
+        if (/^https?:\/\//i.test(raw)) {
+            const safeHref = raw.replace(/"/g, '&quot;');
+            return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all" onclick="event.stopPropagation()">${escapeHtml(raw)}</a>`;
+        }
+        return `<code class="text-xs text-gray-500 dark:text-gray-400 truncate block">${escapeHtml(raw)}</code>`;
+    }
+
+    function linkValueHtmlCard(linkUrl) {
+        const raw = String(linkUrl || '').trim();
+        if (/^https?:\/\//i.test(raw)) {
+            const safeHref = raw.replace(/"/g, '&quot;');
+            return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline break-all inline-block w-full" onclick="event.stopPropagation()">${escapeHtml(raw)}</a>`;
+        }
+        return `<code class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded break-all inline-block w-full">${escapeHtml(raw)}</code>`;
+    }
+
     links.forEach((link) => {
         if (!link || typeof link.id === 'undefined') {
             console.warn('Пропуск невалидной ссылки 1С при рендеринге:', link);
@@ -418,6 +438,7 @@ export async function renderCibLinks(links) {
 
         const linkElement = document.createElement('div');
         linkElement.dataset.id = link.id;
+        if (link.link) linkElement.dataset.linkValue = link.link;
 
         const buttonsHTML = `
             <button data-action="copy" class="copy-cib-link p-1.5 text-gray-500 hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Копировать ссылку">
@@ -431,6 +452,12 @@ export async function renderCibLinks(links) {
             </button>
         `;
 
+        const linkDisplay = linkValueHtml(link.link);
+        const linkDisplayCard = linkValueHtmlCard(link.link);
+        const descHtml = link.description
+            ? linkify(link.description)
+            : '';
+
         if (currentView === 'list') {
             linkElement.className =
                 'cib-link-item view-item group flex items-center p-content-sm rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 cursor-pointer';
@@ -439,7 +466,7 @@ export async function renderCibLinks(links) {
                     <i class="fas fa-link text-gray-400 dark:text-gray-500 mr-4 flex-shrink-0"></i>
                     <div class="min-w-0 flex-1">
                         <h3 class="font-medium text-gray-900 dark:text-gray-100 truncate" title="${(link.title || '').replace(/"/g, '&quot;')}">${link.title || 'Без названия'}</h3>
-                        <code class="text-xs text-gray-500 dark:text-gray-400 truncate block">${(link.link || '').replace(/</g, '&lt;')}</code>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate block">${linkDisplay}</div>
                     </div>
                 </div>
                 <div class="cib-link-actions flex-shrink-0 ml-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -455,10 +482,8 @@ export async function renderCibLinks(links) {
                 </div>
                 <div class="p-4 flex flex-col h-full pt-10">
                     <h3 class="font-semibold text-base text-gray-900 dark:text-gray-100 mb-1 truncate w-full" title="${(link.title || '').replace(/"/g, '&quot;')}">${link.title || 'Без названия'}</h3>
-                    <div class="mb-2">
-                        <code class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded break-all inline-block w-full">${(link.link || '').replace(/</g, '&lt;')}</code>
-                    </div>
-                    ${link.description ? `<p class="text-gray-500 dark:text-gray-400 text-sm mt-auto flex-grow">${link.description.replace(/</g, '&lt;')}</p>` : '<div class="flex-grow"></div>'}
+                    <div class="mb-2">${linkDisplayCard}</div>
+                    ${descHtml ? `<p class="text-gray-500 dark:text-gray-400 text-sm mt-auto flex-grow">${descHtml}</p>` : '<div class="flex-grow"></div>'}
                 </div>
             `;
         }

@@ -1,0 +1,38 @@
+/* =================================================================== */
+/*    АДАПТИВНОСТЬ (Responsive System)                               */
+/*    Единые брейкпоинты, safe area, адаптивные отступы              */
+/*    Использовать в @media литералы ниже; Tailwind sync в config     */
+/* =================================================================== */
+/*
+  Breakpoints (reference only; CSS does not support var() in @media):
+  xs:  360px   — очень малые телефоны
+  sm:  640px   — телефоны landscape / большие телефоны
+  md:  768px   — планшеты portrait
+  lg:  1024px  — планшеты landscape / малые ноутбуки
+  xl:  1280px  — десктоп
+  2xl: 1536px  — большие мониторы
+  3xl: 1920px  — широкие экраны
+*/
+
+:root {
+    /* Safe area insets (notch, Dynamic Island, home indicator). Fallback 0 for desktop. */
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+
+    /* Адаптивные отступы контента: меньше на узких экранах, комфортно на широких */
+    --content-padding-inline: clamp(0.75rem, 4vw, 1.5rem);
+    --content-padding-block: clamp(0.5rem, 2vw, 1rem);
+
+    /* Отступы для модалок от краёв viewport (с учётом safe area через компоненты) */
+    --modal-margin-inline: clamp(1rem, 5vw, 3rem);
+    --modal-margin-block: clamp(1rem, 4vh, 2rem);
+
+    /* Fluid типографика для главного заголовка приложения */
+    --text-fluid-title: clamp(1.25rem, 2.5vw + 1rem, 1.75rem);
+    --text-fluid-subtitle: clamp(0.75rem, 1.5vw + 0.5rem, 0.875rem);
+
+    /* Минимальный размер touch-цели (Apple HIG, WCAG); использовать для кнопок на тач-устройствах */
+    --touch-target-min: 44px;
+}

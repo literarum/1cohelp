@@ -55,6 +55,7 @@
     --color-surface-2: var(--override-surface-2-light, var(--default-surface-2-light));
     --color-surface-3: var(--override-surface-3-light, var(--default-surface-3-light));
     --color-border: var(--override-border-light, var(--default-border-light));
+    --color-border-subtle: rgba(0, 0, 0, 0.08);
     --color-border-interactive: var(
         --override-border-interactive-light,
         var(--default-border-interactive-light)
@@ -92,6 +93,7 @@ html.dark {
     --color-surface-2: var(--override-surface-2-dark, var(--default-surface-2-dark));
     --color-surface-3: var(--override-surface-3-dark, var(--default-surface-3-dark));
     --color-border: var(--override-border-dark, var(--default-border-dark));
+    --color-border-subtle: rgba(255, 255, 255, 0.2);
     --color-border-interactive: var(
         --override-border-interactive-dark,
         var(--default-border-interactive-dark)
@@ -109,12 +111,22 @@ html.dark {
 /*         1.1. CSS Переменные         */
 /* ----------------------------------- */
 :root {
+    /* Фон первого кадра до загрузки темы (совпадает с тёмной темой по умолчанию) */
+    --color-initial-bg: #030308;
+
     --color-primary-default: #9933ff;
+    --color-secondary-default: #7b2fdf;
+    --color-primary: var(--color-primary-default);
+    --color-secondary: var(--color-secondary-default);
+
+    --color-favorites-icon: #eab308;
+    --color-favorites-icon-hover: #facc15;
+
     --scrollbar-thumb-bg: var(--override-scrollbar-thumb-light, var(--color-border));
     --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border));
-    --color-primary: var(--color-primary-default);
 
     --modal-backdrop-blur: 8px;
+    --shadow-overlay: 0 0 25px rgba(0, 0, 0, 0.5);
 
     /* Отступы модалок и панелей (единые по приложению) */
     --cockpit-padding-inline: 1.25rem;
@@ -140,6 +152,10 @@ html.dark {
     --color-red-text: #dc2626;
     --color-red-border: #fca5a5;
     --color-red-hover-bg: rgba(220, 38, 38, 0.1);
+    --color-red-bg-subtle: rgba(220, 38, 38, 0.15);
+    --color-red-bg-medium: rgba(220, 38, 38, 0.25);
+    --color-red-bg-urgent: rgba(220, 38, 38, 0.2);
+    --color-red-solid: #ef4444;
 
     --search-highlight-text-bg-light: #fff352;
     --search-highlight-text-color-light: #333333;
@@ -200,6 +216,7 @@ html.dark {
     --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border-interactive));
 
     --hint-bg: rgba(120, 53, 15, 0.3);
+    --hint-bg-strong: rgba(120, 53, 15, 0.5);
     --hint-border: rgba(180, 83, 9, 0.6);
     --hint-text: #fde68a;
     --hint-action: #fcd34d;
@@ -209,5 +226,24 @@ html.dark {
 html:not(.dark) #appContent .bg-white,
 html:not(.dark) #appContent .bg-gray-50,
 html:not(.dark) .modal-inner-container {
+    color: var(--color-text-primary);
+}
+
+/* Карточки (view-item): текст всегда из токена темы — устраняет белый текст на белом в светлой теме */
+html:not(.dark) #appContent .view-item.bg-white,
+html:not(.dark) #appContent .view-item.bg-white h1,
+html:not(.dark) #appContent .view-item.bg-white h2,
+html:not(.dark) #appContent .view-item.bg-white h3,
+html:not(.dark) #appContent .view-item.bg-white h4 {
+    color: var(--color-text-primary);
+}
+
+/* Карточки категорий регламентов: у них снимается .bg-white в view-manager — явно задаём цвет заголовка */
+html:not(.dark) #appContent .reglament-category .category-title {
+    color: var(--color-text-primary);
+}
+
+/* Семантический класс заголовка карточки (регламенты, закладки, ссылки и т.д.) — централизованное управление */
+.card-title-text {
     color: var(--color-text-primary);
 }

@@ -5,6 +5,7 @@
  * Вынесено из script.js
  */
 
+import { THEME_DEFAULTS } from '../config.js';
 import { USER_PREFERENCES_KEY } from '../constants.js';
 import { getFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 
@@ -43,7 +44,7 @@ export async function loadUserPreferences() {
         );
         DEFAULT_UI_SETTINGS = {
             themeMode: 'dark',
-            primaryColor: '#9933FF',
+            primaryColor: THEME_DEFAULTS.primary,
             fontSize: 80,
             borderRadius: 2,
             contentDensity: 3,
@@ -78,7 +79,7 @@ export async function loadUserPreferences() {
 
     const defaultPreferences = {
         theme: DEFAULT_UI_SETTINGS.themeMode || 'dark',
-        primaryColor: DEFAULT_UI_SETTINGS.primaryColor || '#9933FF',
+        primaryColor: DEFAULT_UI_SETTINGS.primaryColor || THEME_DEFAULTS.primary,
         fontSize: DEFAULT_UI_SETTINGS.fontSize || 80,
         borderRadius: DEFAULT_UI_SETTINGS.borderRadius || 2,
         contentDensity: DEFAULT_UI_SETTINGS.contentDensity || 3,

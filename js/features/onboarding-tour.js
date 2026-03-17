@@ -23,8 +23,10 @@ const TRANSIENT_MODAL_SELECTORS = [
     '#hotkeysModal',
     '#dbMergeModal',
     '#recentlyDeletedModal',
+    '#appCustomizationModal',
 ];
 const TOUR_MODAL_ID_HINT = 'Modal';
+const TOUR_HIGHLIGHT_PROXY_ID = 'onboardingTourHighlightProxy';
 
 const TOUR_STEP_BLUEPRINTS = [
     {
@@ -79,7 +81,7 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Экспорт базы (как использовать)',
         description:
             'Кнопка экспорта создает резервную копию базы данных. На этом шаге показываем только расположение и назначение кнопки, без запуска диалогов.',
-        selectors: ['#dataTransferControls', '#exportDataBtn'],
+        selectors: ['#exportDataBtn'],
         side: 'bottom',
         align: 'center',
     },
@@ -87,7 +89,15 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Импорт базы (как использовать)',
         description:
             'Кнопка импорта загружает файл резервной копии. На этом шаге показываем только интерфейс импорта, без открытия проводника.',
-        selectors: ['#dataTransferControls', '#importDataBtn'],
+        selectors: ['#importDataBtn'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Кнопка слияния баз',
+        description:
+            'Кнопка открывает мастер слияния баз данных. Следующим шагом будет показано само окно мастера.',
+        selectors: ['#mergeDataBtn'],
         side: 'bottom',
         align: 'center',
     },
@@ -101,15 +111,15 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'Горячие клавиши и настройки',
+        title: 'Горячие клавиши',
         description:
-            'Отсюда открываются справка по горячим клавишам и модальное окно настройки интерфейса.',
+            'Отсюда открывается справка по горячим клавишам.',
         selectors: ['#showHotkeysBtn', '#customizeUIBtn'],
         side: 'bottom',
         align: 'center',
     },
     {
-        title: 'Горячие клавиши (модальное окно)',
+        title: 'Горячие клавиши (окно)',
         description:
             'Справка по горячим клавишам помогает быстрее работать без мыши в повседневных сценариях.',
         openSelectors: ['#showHotkeysBtn'],
@@ -118,16 +128,38 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'Настройка интерфейса (модальное окно)',
+        title: 'Кнопка настроек приложения',
         description:
-            'В этом окне можно менять тему, плотность, шрифт, поведение импорта, запускать диагностику и повторно запускать тур.',
+            'Отсюда открывается окно настроек: тема, плотность, шрифт, порядок вкладок и другие параметры. Следующим шагом будет показано само окно.',
+        selectors: ['#customizeUIBtn'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Настройки приложения',
+        description:
+            'В этом окне можно менять тему, плотность, шрифт, поведение импорта. Ниже — блоки «Включение и порядок разделов», корзина и кастомизация.',
         openSelectors: ['#customizeUIBtn'],
-        selectors: [
-            '#customizeUIModal',
-            '#runManualHealthCheckBtn',
-            '#restartOnboardingTourBtn',
-            '#customizeUIBtn',
-        ],
+        skipOpenSelectorsWhenVisible: { '#customizeUIBtn': '#customizeUIModal' },
+        selectors: ['#customizeUIModal', '#customizeUIBtn'],
+        side: 'left',
+        align: 'center',
+    },
+    {
+        title: 'Проверка здоровья приложения',
+        description:
+            'Кнопка «Запустить проверку систем» запускает диагностику: проверяет доступность ключевых модулей и данных приложения.',
+        preserveModals: ['#customizeUIModal'],
+        selectors: ['#runManualHealthCheckBtn', '#customizeUIModal'],
+        side: 'left',
+        align: 'center',
+    },
+    {
+        title: 'Повторный тур',
+        description:
+            'Кнопка «Повторить онбординг-тур» снова запускает этот пошаговый тур по интерфейсу. Удобно, если нужно освежить подсказки.',
+        preserveModals: ['#customizeUIModal'],
+        selectors: ['#restartOnboardingTourBtn', '#customizeUIModal'],
         side: 'left',
         align: 'center',
     },
@@ -135,8 +167,19 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Включение и порядок разделов',
         description:
             'При первом запуске часть разделов может быть скрыта. Здесь можно включить все вкладки, поменять порядок и сразу увидеть, где они находятся.',
+        preserveModals: ['#customizeUIModal'],
         openSelectors: ['#customizeUIBtn'],
-        selectors: ['#customizeUIModal', '#panelSortContainer', '#customizeUIBtn'],
+        skipOpenSelectorsWhenVisible: { '#customizeUIBtn': '#customizeUIModal' },
+        selectors: ['#panelSortContainer', '#customizeUIModal', '#customizeUIBtn'],
+        side: 'left',
+        align: 'center',
+    },
+    {
+        title: 'Кнопка «Недавно удаленные»',
+        description:
+            'В окне настроек эта кнопка открывает корзину удаленных записей. Следующим шагом будет показано само окно корзины.',
+        preserveModals: ['#customizeUIModal'],
+        selectors: ['#openRecentlyDeletedBtn', '#customizeUIModal'],
         side: 'left',
         align: 'center',
     },
@@ -144,7 +187,9 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Недавно удаленные',
         description:
             'Из окна настроек доступна корзина: отсюда можно восстановить удаленные записи или очистить их окончательно.',
+        preserveModals: ['#customizeUIModal'],
         openSelectors: ['#customizeUIBtn', '#openRecentlyDeletedBtn'],
+        skipOpenSelectorsWhenVisible: { '#customizeUIBtn': '#customizeUIModal' },
         selectors: [
             '#recentlyDeletedModal',
             '#recentlyDeletedList',
@@ -155,10 +200,60 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'Таймер',
+        title: 'Кнопка «Кастомизация»',
         description:
-            'Таймер помогает держать фокус по времени клиента: запуск, пауза и быстрый сброс доступны прямо в шапке.',
-        selectors: ['#appTimer', '#timerToggleButton', '#timerResetButton'],
+            'Открывает окно кастомизации: тема, цвета, скругление, отступы, фон. Следующим шагом будет показано само окно.',
+        preserveModals: ['#customizeUIModal'],
+        selectors: ['#openAppCustomizationModalBtn', '#customizeUIModal'],
+        side: 'left',
+        align: 'center',
+    },
+    {
+        title: 'Окно кастомизации',
+        description:
+            'Здесь настраиваются тема, цвета, скругление, отступы и фон интерфейса. Изменения можно сразу оценить в превью.',
+        preserveModals: ['#customizeUIModal'],
+        openSelectors: ['#openAppCustomizationModalBtn'],
+        skipOpenSelectorsWhenVisible: { '#openAppCustomizationModalBtn': '#appCustomizationModal' },
+        selectors: [
+            '#appCustomizationModal',
+            '#appCustomizationModalTitle',
+            '#closeAppCustomizationModalBtn',
+            '#openAppCustomizationModalBtn',
+        ],
+        side: 'left',
+        align: 'center',
+    },
+    {
+        title: 'Таймер: запуск и пауза',
+        description:
+            'Кнопка запускает и ставит на паузу отсчет таймера. Управляется также сочетанием клавиш из палитры команд.',
+        selectors: ['#appTimer', '#timerToggleButton'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Таймер: сброс',
+        description:
+            'Сброс возвращает таймер к значению по умолчанию (01:50). Удобно начать новый интервал без ручного ввода.',
+        selectors: ['#timerResetButton'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Таймер: поле отображения и ввода',
+        description:
+            'Здесь отображается текущее время. Можно кликнуть и ввести значение вручную в формате ММ:СС (например 05:00).',
+        selectors: ['#timerDisplay'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Таймер: прибавить и убавить',
+        description:
+            'Кнопки увеличивают и уменьшают время на 1 минуту. Управляются также шорткатами из справки по горячим клавишам.',
+        highlightGroupSelectors: ['#timerDecreaseButton', '#timerIncreaseButton'],
+        selectors: ['#timerDecreaseButton', '#timerIncreaseButton'],
         side: 'bottom',
         align: 'center',
     },
@@ -173,15 +268,15 @@ const TOUR_STEP_BLUEPRINTS = [
     {
         title: 'Панель вкладок',
         description:
-            'Основные разделы приложения собраны в панели вкладок. Если вкладок много, часть будет скрыта в меню "Еще".',
+            'Основные разделы приложения собраны в панели вкладок. Переключайтесь между разделами одним кликом.',
         selectors: ['header + .border-b nav.flex.flex-wrap', '#moreTabsBtn'],
         side: 'bottom',
         align: 'center',
     },
     {
-        title: 'Скрытые вкладки и меню "Еще"',
+        title: 'Скрытые вкладки и меню «Еще»',
         description:
-            'Если часть разделов не помещается или скрыта, используйте кнопку "Еще". Там доступны дополнительные вкладки и быстрый переход к ним.',
+            'Если вкладок много, часть будет скрыта в меню «Еще». Там доступны дополнительные вкладки и быстрый переход к ним.',
         selectors: ['#moreTabsBtn', '#moreTabsDropdown'],
         side: 'bottom',
         align: 'center',
@@ -249,7 +344,7 @@ const TOUR_STEP_BLUEPRINTS = [
     {
         title: 'Web-регистратор',
         description:
-            'Вкладка для веб-регламентов и соответствующих алгоритмов по внешним рабочим процессам.',
+            'Вкладка для алгоритмов по работе с веб-регистратором.',
         tabId: 'webReg',
         selectors: ['#webRegAlgorithms', '#addWebRegAlgorithmBtn', '#webRegTab'],
         side: 'right',
@@ -260,6 +355,7 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'Каталог рабочих ссылок 1С с поиском и быстрым добавлением карточек.',
         tabId: 'links',
+        scrollToTop: true,
         selectors: ['#linksContainer', '#addLinkBtn', '#linkSearchInput', '#linksTab'],
         side: 'right',
         align: 'start',
@@ -283,12 +379,48 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'Закладки',
+        title: 'Вкладка «Закладки»',
         description:
-            'Персональные закладки с папками, сортировкой, фильтрами и экспортом в PDF.',
+            'Раздел персональных закладок: папки, сортировка, фильтры и экспорт в PDF. Перейдите на вкладку, чтобы увидеть элементы ниже.',
         tabId: 'bookmarks',
-        selectors: ['#bookmarksTab', '#bookmarksContainer', '#addBookmarkBtn', '#bookmarkSearchInput'],
+        selectors: ['#bookmarksTab'],
         side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Закладки: экспорт и добавление',
+        description:
+            'Кнопки «Экспорт всех» (в PDF) и «Добавить» для создания новой закладки. Действия доступны в контексте раздела.',
+        tabId: 'bookmarks',
+        selectors: ['#exportAllBookmarksToPdfBtn', '#addBookmarkBtn'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Закладки: поиск и фильтр по папкам',
+        description:
+            'Поле поиска по закладкам и выпадающий фильтр по папкам. Помогают быстро найти нужную запись.',
+        tabId: 'bookmarks',
+        selectors: ['#bookmarkSearchInput', '#bookmarkFolderFilter'],
+        side: 'bottom',
+        align: 'start',
+    },
+    {
+        title: 'Закладки: сортировка',
+        description:
+            'Сортировка по дате добавления, по названию или по папке. Переключайте режим по клику на кнопку.',
+        tabId: 'bookmarks',
+        selectors: ['#bookmarksSortControls', '#sortBookmarksByDate', '#sortBookmarksByTitle', '#sortBookmarksByFolder'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Закладки: список и карточки',
+        description:
+            'Здесь отображаются закладки в виде карточек или списка. Клик по карточке открывает детали и действия.',
+        tabId: 'bookmarks',
+        selectors: ['#bookmarksContainer'],
+        side: 'top',
         align: 'center',
     },
     {
@@ -479,6 +611,54 @@ function forceShowTabContent(tabId) {
     content.style.pointerEvents = 'auto';
 }
 
+function removeTourHighlightProxy() {
+    if (typeof document.getElementById !== 'function') return;
+    const existing = document.getElementById(TOUR_HIGHLIGHT_PROXY_ID);
+    existing?.remove();
+}
+
+function buildHighlightProxyForSelectors(selectors, padding = 6) {
+    if (
+        typeof document.querySelector !== 'function' ||
+        typeof document.getElementById !== 'function' ||
+        typeof document.createElement !== 'function' ||
+        !document.body
+    ) {
+        return null;
+    }
+    if (!Array.isArray(selectors) || selectors.length === 0) return null;
+    const rects = selectors
+        .map((selector) => document.querySelector(selector))
+        .filter(Boolean)
+        .map((el) => (typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null))
+        .filter((rect) => rect && rect.width > 0 && rect.height > 0);
+
+    if (rects.length === 0) return null;
+
+    const minLeft = Math.min(...rects.map((rect) => rect.left)) - padding;
+    const minTop = Math.min(...rects.map((rect) => rect.top)) - padding;
+    const maxRight = Math.max(...rects.map((rect) => rect.right)) + padding;
+    const maxBottom = Math.max(...rects.map((rect) => rect.bottom)) + padding;
+
+    let proxy = document.getElementById(TOUR_HIGHLIGHT_PROXY_ID);
+    if (!proxy) {
+        proxy = document.createElement('div');
+        proxy.id = TOUR_HIGHLIGHT_PROXY_ID;
+        proxy.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(proxy);
+    }
+
+    proxy.style.position = 'fixed';
+    proxy.style.pointerEvents = 'none';
+    proxy.style.opacity = '0';
+    proxy.style.left = `${Math.max(minLeft, 0)}px`;
+    proxy.style.top = `${Math.max(minTop, 0)}px`;
+    proxy.style.width = `${Math.max(maxRight - minLeft, 1)}px`;
+    proxy.style.height = `${Math.max(maxBottom - minTop, 1)}px`;
+
+    return proxy;
+}
+
 function ensureBlueprintTargetsVisible(blueprint) {
     if (blueprint.tabId) {
         forceShowTabContent(blueprint.tabId);
@@ -501,16 +681,26 @@ function hideElementBySelector(selector) {
     }
 }
 
-function closeTransientModalsForTour() {
-    if (typeof window.closeRecentlyDeletedModal === 'function') {
+/**
+ * Закрывает модальные окна тура, кроме переданного списка селекторов (для шагов внутри уже открытой модалки).
+ * @param {string[]} [preserveSelectors] — селекторы модалок, которые не закрывать (например ['#customizeUIModal']).
+ */
+function closeTransientModalsForTour(preserveSelectors = []) {
+    const preserveSet = new Set(Array.isArray(preserveSelectors) ? preserveSelectors : []);
+    if (typeof window.closeRecentlyDeletedModal === 'function' && !preserveSet.has('#recentlyDeletedModal')) {
         try {
             window.closeRecentlyDeletedModal();
         } catch (error) {
             console.warn('[onboarding-tour] Не удалось закрыть recentlyDeleted modal:', error);
         }
     }
-    TRANSIENT_MODAL_SELECTORS.forEach(hideElementBySelector);
-    document.body.classList.remove('modal-open', 'overflow-hidden');
+    TRANSIENT_MODAL_SELECTORS.forEach((sel) => {
+        if (preserveSet.has(sel)) return;
+        hideElementBySelector(sel);
+    });
+    if (preserveSet.size === 0) {
+        document.body.classList.remove('modal-open', 'overflow-hidden');
+    }
 }
 
 function activateTourTab(tabId) {
@@ -519,6 +709,22 @@ function activateTourTab(tabId) {
     Promise.resolve(deps.setActiveTab(tabId, bypassWarning)).catch((error) => {
         console.warn('[onboarding-tour] Не удалось переключить вкладку для шага тура:', tabId, error);
     });
+
+    if (tabId === 'links') {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                try {
+                    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                } catch (_) {
+                    window.scrollTo(0, 0);
+                }
+                const linksContent = document.getElementById('linksContent');
+                const linksContainer = document.getElementById('linksContainer');
+                if (linksContent) linksContent.scrollTop = 0;
+                if (linksContainer) linksContainer.scrollTop = 0;
+            });
+        });
+    }
 }
 
 function buildTourSteps() {
@@ -538,15 +744,42 @@ function buildTourSteps() {
 
         if (Array.isArray(blueprint.selectors) && blueprint.selectors.length > 0) {
             step.element = () => {
-                closeTransientModalsForTour();
+                removeTourHighlightProxy();
+                const preserveModals = blueprint.preserveModals || [];
+                closeTransientModalsForTour(preserveModals);
                 if (blueprint.tabId) activateTourTab(blueprint.tabId);
-                clickSelectorsInOrder(blueprint.openSelectors);
+
+                const openSelectors = blueprint.openSelectors || [];
+                if (blueprint.skipOpenSelectorsWhenVisible && typeof blueprint.skipOpenSelectorsWhenVisible === 'object') {
+                    const toOpen = openSelectors.filter((sel) => {
+                        const modalSel = blueprint.skipOpenSelectorsWhenVisible[sel];
+                        if (!modalSel) return true;
+                        const modal = document.querySelector(modalSel);
+                        return !modal || modal.classList.contains('hidden');
+                    });
+                    clickSelectorsInOrder(toOpen);
+                } else {
+                    clickSelectorsInOrder(openSelectors);
+                }
                 ensureBlueprintTargetsVisible(blueprint);
+
+                if (blueprint.scrollToTop) {
+                    try {
+                        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                    } catch (_) {
+                        window.scrollTo(0, 0);
+                    }
+                }
+
+                const highlightGroupTarget = buildHighlightProxyForSelectors(
+                    blueprint.highlightGroupSelectors,
+                );
+                if (highlightGroupTarget) return highlightGroupTarget;
 
                 const target = resolveFirstAvailableElement(blueprint.selectors);
                 if (target) return target;
 
-                const openTrigger = resolveFirstAvailableElement(blueprint.openSelectors || []);
+                const openTrigger = resolveFirstAvailableElement(openSelectors);
                 if (openTrigger) return openTrigger;
 
                 return resolveFirstAvailableElement(['#mainTab', '#searchInput', '#openCommandPaletteBtn']);
@@ -568,6 +801,100 @@ async function markTourCompleted() {
             console.warn('[onboarding-tour] Не удалось сохранить настройки после тура:', error);
         }
     }
+}
+
+/** Размер стрелки (бордер 5px × 2). Совпадает с driver.css. */
+const POPOVER_ARROW_SIZE = 10;
+/** Минимальный отступ стрелки от края поповера при кастомном выравнивании. */
+const POPOVER_ARROW_EDGE_PADDING = 15;
+/** Длительность пост-стабилизации стрелки после highlight (гонки с smoothScroll/resize). */
+const POPOVER_ARROW_STABILIZE_MS = 500;
+
+/**
+ * Синхронизирует стрелку поповера с подсвеченным элементом: определяет фактическую
+ * сторону поповера относительно элемента и позиционирует стрелку так, чтобы она
+ * указывала на центр элемента. Устраняет рассинхрон из-за автокоррекции Driver.js
+ * (viewport) и фиксированных align start/center/end.
+ */
+function detectPopoverSide(elementRect, popoverRect) {
+    if (popoverRect.bottom <= elementRect.top) return 'top';
+    if (popoverRect.top >= elementRect.bottom) return 'bottom';
+    if (popoverRect.right <= elementRect.left) return 'left';
+    if (popoverRect.left >= elementRect.right) return 'right';
+
+    const elementCenterX = elementRect.left + elementRect.width / 2;
+    const elementCenterY = elementRect.top + elementRect.height / 2;
+    const popoverCenterX = popoverRect.left + popoverRect.width / 2;
+    const popoverCenterY = popoverRect.top + popoverRect.height / 2;
+    const deltaX = popoverCenterX - elementCenterX;
+    const deltaY = popoverCenterY - elementCenterY;
+
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+        return deltaX >= 0 ? 'right' : 'left';
+    }
+    return deltaY >= 0 ? 'bottom' : 'top';
+}
+
+function syncPopoverArrowToElement(highlightedElement = null) {
+    const element =
+        highlightedElement && typeof highlightedElement.getBoundingClientRect === 'function'
+            ? highlightedElement
+            : document.querySelector('.driver-active-element');
+    const popoverEl = document.querySelector('.driver-popover.onboarding-tour-popover') || document.querySelector('.driver-popover');
+    if (!element || !popoverEl) return;
+    const wrapper = popoverEl;
+    const arrow = popoverEl.querySelector('.driver-popover-arrow');
+    if (!wrapper || !arrow) return;
+
+    const er = element.getBoundingClientRect();
+    const wr = wrapper.getBoundingClientRect();
+    const ecx = er.left + er.width / 2;
+    const ecy = er.top + er.height / 2;
+    const side = detectPopoverSide(er, wr);
+
+    arrow.className = 'driver-popover-arrow';
+    arrow.classList.add(`driver-popover-arrow-side-${side}`);
+    arrow.classList.add('driver-popover-arrow-align-custom');
+
+    const pad = POPOVER_ARROW_EDGE_PADDING;
+    const size = POPOVER_ARROW_SIZE;
+    arrow.removeAttribute('style');
+
+    if (side === 'top' || side === 'bottom') {
+        const leftPx = ecx - wr.left - size / 2;
+        const clamped = Math.max(pad, Math.min(wr.width - pad - size, leftPx));
+        arrow.style.left = `${clamped}px`;
+        arrow.style.right = 'auto';
+        arrow.style.marginLeft = '0';
+    } else {
+        const topPx = ecy - wr.top - size / 2;
+        const clamped = Math.max(pad, Math.min(wr.height - pad - size, topPx));
+        arrow.style.top = `${clamped}px`;
+        arrow.style.bottom = 'auto';
+        arrow.style.marginTop = '0';
+    }
+
+    popoverEl.classList?.remove('onboarding-arrow-pending');
+}
+
+function stabilizePopoverArrow(highlightedElement) {
+    const startTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    const tick = () => {
+        const nowTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const popoverEl =
+            document.querySelector('.driver-popover.onboarding-tour-popover') ||
+            document.querySelector('.driver-popover');
+        if (!popoverEl) return;
+
+        syncPopoverArrowToElement(highlightedElement);
+
+        if (nowTs - startTs < POPOVER_ARROW_STABILIZE_MS) {
+            requestAnimationFrame(tick);
+        }
+    };
+
+    requestAnimationFrame(tick);
 }
 
 function applyPopoverAccessibility(popover) {
@@ -621,13 +948,24 @@ export async function startOnboardingTour() {
             popoverClass: 'onboarding-tour-popover',
             onPopoverRender: (popover) => {
                 applyPopoverAccessibility(popover);
+                popover.wrapper?.classList.add('onboarding-arrow-pending');
             },
             onHighlightStarted: (_element, step) => {
                 if (step?.tabId) {
                     activateTourTab(step.tabId);
                 }
             },
+            onHighlighted: (highlightedElement, step) => {
+                const side = step?.popover?.side;
+                if (!highlightedElement || side === 'over') return;
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        stabilizePopoverArrow(highlightedElement);
+                    });
+                });
+            },
             onDestroyed: () => {
+                removeTourHighlightProxy();
                 void markTourCompleted();
                 if (previouslyFocused && document.contains(previouslyFocused)) {
                     previouslyFocused.focus();
@@ -669,4 +1007,7 @@ export const __onboardingTourInternals = {
     TOUR_STEP_BLUEPRINTS,
     buildTourSteps,
     activateTourTab,
+    detectPopoverSide,
+    stabilizePopoverArrow,
+    syncPopoverArrowToElement,
 };

@@ -55,41 +55,41 @@
 
 .timer-segment:hover,
 .timer-segment:focus {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: var(--color-hover-subtle);
 }
 
 .dark .timer-segment:hover,
 .dark .timer-segment:focus {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--color-hover-subtle);
 }
 
 input.timer-input-active {
     text-align: center;
-    border: 1px solid var(--color-primary, #5d5cde);
+    border: 1px solid var(--color-primary);
     border-radius: 3px;
     padding: 0;
     min-width: 2ch;
     width: 2.1ch;
     box-sizing: border-box;
-    background-color: var(--input-bg-color, #fff);
-    color: var(--input-text-color, #000);
+    background-color: var(--color-input-bg);
+    color: var(--color-text-primary);
     vertical-align: baseline;
 }
 
 .dark input.timer-input-active {
-    background-color: var(--input-bg-color-dark, #374151);
-    color: var(--input-text-color-dark, #e5e7eb);
+    background-color: var(--color-input-bg);
+    color: var(--color-text-primary);
 }
 
 /* Осталось ≤10 сек: сильная пульсация, ярче, неоновое свечение */
 #timerDisplay.timer-urgent,
 #timerDisplay.timer-urgent .timer-segment,
 #timerDisplay.timer-urgent .timer-colon {
-    color: #f87171 !important;
-    background-color: rgba(220, 38, 38, 0.25) !important;
+    color: var(--color-red-border) !important;
+    background-color: var(--color-red-bg-medium) !important;
     box-shadow:
-        0 0 12px rgba(248, 113, 113, 0.6),
-        0 0 24px rgba(220, 38, 38, 0.35);
+        0 0 12px color-mix(in srgb, var(--color-red-text) 60%, transparent),
+        0 0 24px color-mix(in srgb, var(--color-red-text) 35%, transparent);
     animation: timer-urgent-pulse 0.8s ease-in-out infinite;
 }
 @keyframes timer-urgent-pulse {
@@ -97,21 +97,21 @@ input.timer-input-active {
     100% {
         opacity: 1;
         box-shadow:
-            0 0 12px rgba(248, 113, 113, 0.6),
-            0 0 24px rgba(220, 38, 38, 0.35);
+            0 0 12px color-mix(in srgb, var(--color-red-text) 60%, transparent),
+            0 0 24px color-mix(in srgb, var(--color-red-text) 35%, transparent);
     }
     50% {
         opacity: 1;
         box-shadow:
-            0 0 20px rgba(248, 113, 113, 0.9),
-            0 0 40px rgba(220, 38, 38, 0.5);
+            0 0 20px color-mix(in srgb, var(--color-red-text) 90%, transparent),
+            0 0 40px color-mix(in srgb, var(--color-red-text) 50%, transparent);
     }
 }
 /* Таймер на нуле: красное свечение и красные цифры остаются */
 #timerDisplay.timer-zero,
 #timerDisplay.timer-zero .timer-segment,
 #timerDisplay.timer-zero .timer-colon {
-    color: #dc2626 !important;
-    background-color: rgba(220, 38, 38, 0.2) !important;
-    box-shadow: 0 0 16px rgba(220, 38, 38, 0.7);
+    color: var(--color-red-text) !important;
+    background-color: var(--color-red-bg-urgent) !important;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--color-red-text) 70%, transparent);
 }

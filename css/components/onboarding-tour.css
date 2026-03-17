@@ -9,7 +9,7 @@
     border-radius: var(--tour-popover-radius);
     box-shadow: var(--tour-popover-shadow);
     max-width: var(--tour-popover-max-width);
-    width: min(var(--tour-popover-max-width), calc(100vw - 24px));
+    width: min(var(--tour-popover-max-width), calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline)));
     padding: var(--tour-popover-padding-block) var(--tour-popover-padding-inline)
         calc(var(--tour-popover-padding-block) - 2px);
     box-sizing: border-box;
@@ -108,4 +108,31 @@
 
 .driver-popover.onboarding-tour-popover .driver-popover-navigation-btns button + button {
     margin-left: 0;
+}
+
+/* Убираем "прыжок" стрелки на первом кадре: показываем её только после syncPopoverArrowToElement. */
+.driver-popover.onboarding-tour-popover.onboarding-arrow-pending .driver-popover-arrow {
+    opacity: 0;
+}
+
+/* Стрелка поповера: принудительно показывать, когда задана сторона (библиотека часто вешает arrow-none из-за расчёта позиции). */
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-left,
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-right,
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-top,
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-bottom {
+    display: block !important;
+}
+
+/* Цвет только у видимой стороны (треугольник), иначе стрелка сливается с фоном. */
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-left {
+    border-left-color: var(--color-surface-2) !important;
+}
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-right {
+    border-right-color: var(--color-surface-2) !important;
+}
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-top {
+    border-top-color: var(--color-surface-2) !important;
+}
+.driver-popover.onboarding-tour-popover .driver-popover-arrow-side-bottom {
+    border-bottom-color: var(--color-surface-2) !important;
 }
