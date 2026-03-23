@@ -104,16 +104,38 @@ export function deactivateModalFocus(modal) {
 // ============================================================================
 
 /**
+ * Учитывает скрытие предком (например оверлей с .hidden, внутри которого лежит #xmlAnalyzerCertModal).
+ * Иначе getComputedStyle у потомка может не отражать display:none родителя, и getVisibleModals()
+ * ложно считает модалку открытой — body.modal-open не снимается и пропадает прокрутка страницы.
+ */
+function isModalElementActuallyVisible(modal) {
+    if (!modal || modal.id === 'commandPaletteModal') return false;
+    if (modal.classList.contains('hidden')) return false;
+
+    if (typeof modal.checkVisibility === 'function') {
+        try {
+            return modal.checkVisibility({
+                checkOpacity: false,
+                checkVisibilityCSS: true,
+                contentVisibilityAuto: true,
+            });
+        } catch {
+            /* старые движки — ниже */
+        }
+    }
+
+    const style = window.getComputedStyle(modal);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    return modal.getClientRects().length > 0;
+}
+
+/**
  * Получает видимые модальные окна
  * @returns {HTMLElement[]} Массив видимых модальных окон
  */
 export function getVisibleModals() {
-    const modals = document.querySelectorAll('[id$="Modal"]:not(.hidden)');
-    return Array.from(modals).filter((modal) => {
-        if (modal.id === 'commandPaletteModal') return false;
-        const style = window.getComputedStyle(modal);
-        return style.display !== 'none' && style.visibility !== 'hidden';
-    });
+    const modals = document.querySelectorAll('[id$="Modal"]');
+    return Array.from(modals).filter((modal) => isModalElementActuallyVisible(modal));
 }
 
 /**

@@ -56,6 +56,12 @@ async function buildAlgorithmSectionExport(sectionKey) {
     title.textContent = `Алгоритмы: ${getSectionName(sectionKey)}`;
     wrapper.appendChild(title);
 
+    const sectionNote = document.createElement('p');
+    sectionNote.className = 'pdf-caption';
+    sectionNote.textContent =
+        'Текст шагов экспортируется как есть. Снимки экрана подставляются в PDF только если они сохранены в приложении; подписи к шагам выводятся мелким шрифтом.';
+    wrapper.appendChild(sectionNote);
+
     for (let index = 0; index < sectionAlgorithms.length; index++) {
         const algorithm = sectionAlgorithms[index];
         if (!algorithm) continue;
@@ -104,7 +110,7 @@ async function buildAlgorithmSectionExport(sectionKey) {
                 if (step.additionalInfoText) {
                     const caption = document.createElement('div');
                     caption.className = 'pdf-caption';
-                    caption.textContent = step.additionalInfoText;
+                    caption.textContent = stripHtmlForPdf(String(step.additionalInfoText));
                     stepCard.appendChild(caption);
                 }
                 let screenshots = [];
@@ -135,22 +141,41 @@ async function buildAlgorithmSectionExport(sectionKey) {
                     }
                 }
                 if (screenshots.length > 0) {
+                    const shotsLabel = document.createElement('div');
+                    shotsLabel.className = 'pdf-caption';
+                    shotsLabel.textContent = 'Снимки экрана к этому шагу:';
+                    stepCard.appendChild(shotsLabel);
+
                     const container = document.createElement('div');
                     container.className = 'export-pdf-image-container';
                     for (const sc of screenshots) {
-                        if (sc.blob instanceof Blob) {
+                        const blob = sc && sc.blob instanceof Blob ? sc.blob : null;
+                        if (blob && blob.size > 0) {
                             try {
-                                const dataUrl = await blobToDataUrl(sc.blob);
-                                const img = document.createElement('img');
-                                img.src = dataUrl;
-                                img.alt = '';
-                                container.appendChild(img);
+                                const dataUrl = await blobToDataUrl(blob);
+                                if (
+                                    typeof dataUrl === 'string' &&
+                                    dataUrl.startsWith('data:image/')
+                                ) {
+                                    const img = document.createElement('img');
+                                    img.src = dataUrl;
+                                    img.alt = '';
+                                    container.appendChild(img);
+                                }
                             } catch {
                                 /* ignore */
                             }
                         }
                     }
-                    if (container.children.length) stepCard.appendChild(container);
+                    if (container.children.length) {
+                        stepCard.appendChild(container);
+                    } else {
+                        const miss = document.createElement('div');
+                        miss.className = 'pdf-caption';
+                        miss.textContent =
+                            'Снимки для шага указаны, но файлы недоступны или повреждены.';
+                        stepCard.appendChild(miss);
+                    }
                 }
                 wrapper.appendChild(stepCard);
             }

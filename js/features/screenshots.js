@@ -6,7 +6,7 @@
  */
 
 import { State } from '../app/state.js';
-import { getAllFromIndex, getFromIndexedDB } from '../db/indexeddb.js';
+import { getAllFromIndexWithKeyVariants, getFromIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setScreenshotsDependencies)
@@ -109,30 +109,35 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
         modal.className =
             'fixed inset-0 bg-black bg-opacity-75 hidden z-[80] p-4 flex items-center justify-center';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex justify-between items-center">
-                        <h2 id="screenshotViewerTitle" class="text-xl font-bold text-gray-900 dark:text-gray-100 truncate pr-4">Скриншоты</h2>
-                        <div class="flex items-center flex-shrink-0">
-                             <div class="mr-4 hidden sm:inline-flex rounded-md shadow-sm" role="group">
-                                 <button type="button" id="screenshotViewToggleGrid" class="px-3 py-1.5 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 hover:text-primary focus:z-10 focus:ring-2 focus:ring-primary focus:text-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-primary dark:focus:text-white" title="Вид сеткой">
-                                     <i class="fas fa-th-large"></i>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="flex-shrink-0 px-5 py-4 sm:px-6 border-b border-gray-100 dark:border-gray-700/80">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="min-w-0 pr-2">
+                            <h2 id="screenshotViewerTitle" class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 truncate">Скриншоты</h2>
+                            <p id="screenshotViewerSubtitle" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate" aria-live="polite"></p>
+                        </div>
+                        <div class="flex items-center justify-end gap-2 flex-shrink-0">
+                             <div class="inline-flex rounded-xl bg-gray-100 p-0.5 dark:bg-gray-900/80" role="group" aria-label="Вид отображения">
+                                 <button type="button" id="screenshotViewToggleGrid" class="rounded-[0.65rem] px-3 py-1.5 text-sm font-medium text-gray-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-gray-400" title="Сетка">
+                                     <i class="fas fa-th-large" aria-hidden="true"></i>
+                                     <span class="hidden sm:inline sm:ml-1.5">Сетка</span>
                                  </button>
-                                 <button type="button" id="screenshotViewToggleList" class="px-3 py-1.5 text-sm font-medium text-gray-900 bg-white border-t border-b border-r border-gray-200 rounded-r-lg hover:bg-gray-100 hover:text-primary focus:z-10 focus:ring-2 focus:ring-primary focus:text-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-primary dark:focus:text-white" title="Вид списком">
-                                     <i class="fas fa-list"></i>
+                                 <button type="button" id="screenshotViewToggleList" class="rounded-[0.65rem] px-3 py-1.5 text-sm font-medium text-gray-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-gray-400" title="Список">
+                                     <i class="fas fa-list" aria-hidden="true"></i>
+                                     <span class="hidden sm:inline sm:ml-1.5">Список</span>
                                  </button>
                              </div>
-                            <button type="button" id="screenshotViewerCloseXBtn" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Закрыть (Esc)">
-                                <i class="fas fa-times text-xl"></i>
+                            <button type="button" id="screenshotViewerCloseXBtn" class="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Закрыть (Esc)">
+                                <i class="fas fa-times text-lg" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
                 </div>
-                <div id="screenshotContentArea" class="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-700">
-                    <p class="text-center text-gray-500 dark:text-gray-400 p-6">Загрузка скриншотов...</p>
+                <div id="screenshotContentArea" class="flex-1 overflow-y-auto bg-white dark:bg-gray-800">
+                    <p class="text-center text-sm text-gray-500 dark:text-gray-400 py-12 px-6">Загрузка…</p>
                 </div>
-                <div class="flex-shrink-0 px-6 py-4 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex justify-end">
-                    <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition text-sm font-medium">
+                <div class="flex-shrink-0 px-5 py-3 sm:px-6 border-t border-gray-100 dark:border-gray-700/80 flex justify-end bg-gray-50/80 dark:bg-gray-900/30">
+                    <button type="button" class="cancel-modal px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                         Закрыть
                     </button>
                 </div>
@@ -145,6 +150,7 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
     modalState.closeModalFunction = closeModalFunction;
 
     modalState.titleEl = modal.querySelector('#screenshotViewerTitle');
+    modalState.subtitleEl = modal.querySelector('#screenshotViewerSubtitle');
     modalState.contentArea = modal.querySelector('#screenshotContentArea');
     modalState.gridBtn = modal.querySelector('#screenshotViewToggleGrid');
     modalState.listBtn = modal.querySelector('#screenshotViewToggleList');
@@ -189,8 +195,11 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
     const defaultTitle = `Скриншоты для ${algorithmId}`;
     modalState.titleEl.textContent = `${algorithmTitle || defaultTitle}`;
     modalState.titleEl.title = modalState.titleEl.textContent;
+    if (modalState.subtitleEl) {
+        modalState.subtitleEl.textContent = '';
+    }
     modalState.contentArea.innerHTML =
-        '<p class="text-center text-gray-500 dark:text-gray-400 p-6">Загрузка...</p>';
+        '<p class="text-center text-sm text-gray-500 dark:text-gray-400 py-12 px-6">Загрузка…</p>';
     document.body.classList.add('overflow-hidden');
     modal.classList.remove('hidden');
 
@@ -199,19 +208,15 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
     const updateViewButtons = () => {
         if (!modalState.gridBtn || !modalState.listBtn) return;
         const isGrid = currentView === 'grid';
-        modalState.gridBtn.classList.toggle('bg-primary', isGrid);
-        modalState.gridBtn.classList.toggle('text-white', isGrid);
-        modalState.gridBtn.classList.toggle('bg-white', !isGrid);
-        modalState.gridBtn.classList.toggle('dark:bg-gray-700', !isGrid);
-        modalState.gridBtn.classList.toggle('text-gray-900', !isGrid);
-        modalState.gridBtn.classList.toggle('dark:text-white', !isGrid);
-
-        modalState.listBtn.classList.toggle('bg-primary', !isGrid);
-        modalState.listBtn.classList.toggle('text-white', !isGrid);
-        modalState.listBtn.classList.toggle('bg-white', isGrid);
-        modalState.listBtn.classList.toggle('dark:bg-gray-700', isGrid);
-        modalState.listBtn.classList.toggle('text-gray-900', isGrid);
-        modalState.listBtn.classList.toggle('dark:text-white', isGrid);
+        const active =
+            'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100';
+        const idle = 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
+        modalState.gridBtn.className =
+            `rounded-[0.65rem] px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isGrid ? active : idle}`;
+        modalState.listBtn.className =
+            `rounded-[0.65rem] px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${!isGrid ? active : idle}`;
+        modalState.gridBtn.setAttribute('aria-pressed', isGrid ? 'true' : 'false');
+        modalState.listBtn.setAttribute('aria-pressed', !isGrid ? 'true' : 'false');
     };
 
     const renderContent = () => {
@@ -232,11 +237,22 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
         modalState.contentArea.innerHTML = '';
 
         if (!screenshots || !Array.isArray(screenshots) || screenshots.length === 0) {
-            modalState.contentArea.innerHTML =
-                '<p class="text-center text-gray-500 dark:text-gray-400 p-6">Нет скриншотов для отображения.</p>';
+            if (modalState.subtitleEl) modalState.subtitleEl.textContent = '';
+            modalState.contentArea.innerHTML = `
+                <div class="flex flex-col items-center justify-center gap-2 py-16 px-6 text-center">
+                  <span class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500" aria-hidden="true">
+                    <i class="far fa-images text-2xl"></i>
+                  </span>
+                  <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Нет изображений</p>
+                  <p class="max-w-xs text-xs text-gray-400 dark:text-gray-500">Для этого шага или алгоритма скриншоты ещё не добавлены.</p>
+                </div>`;
             return;
         }
         const sortedScreenshots = [...screenshots].sort((a, b) => (a.id || 0) - (b.id || 0));
+        if (modalState.subtitleEl) {
+            const n = sortedScreenshots.length;
+            modalState.subtitleEl.textContent = n === 1 ? '1 изображение' : `${n} изображений`;
+        }
         const openLightboxHandler = (blobs, index) => {
             if (deps.openLightbox) {
                 deps.openLightbox(blobs, index);
@@ -253,6 +269,7 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
                 sortedScreenshots,
                 openLightboxHandler,
                 modalState,
+                {},
             );
         } else {
             renderScreenshotList(
@@ -299,6 +316,7 @@ export function renderScreenshotThumbnails(
     screenshots,
     onOpenLightbox,
     _modalState = null,
+    uiOpts = {},
 ) {
     if (!container) {
         console.error('[renderScreenshotThumbnails] Контейнер не предоставлен.');
@@ -334,11 +352,16 @@ export function renderScreenshotThumbnails(
     });
 
     container.innerHTML = '';
-    container.className =
-        'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-4';
+    const embedded = Boolean(uiOpts && uiOpts.embeddedInDetail);
+    container.className = embedded
+        ? 'grid grid-cols-2 sm:grid-cols-3 gap-3 p-1 sm:p-2'
+        : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-4';
 
     const fragment = document.createDocumentFragment();
     const allBlobs = screenshots.map((s) => s?.blob).filter((blob) => blob instanceof Blob);
+    const total = screenshots.filter(
+        (s) => s && s.blob instanceof Blob && typeof s.id !== 'undefined',
+    ).length;
 
     screenshots.forEach((screenshot, index) => {
         if (
@@ -354,10 +377,18 @@ export function renderScreenshotThumbnails(
         }
 
         const item = document.createElement('div');
-        item.className =
-            'view-item group relative aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow transition cursor-pointer border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-900';
+        item.className = embedded
+            ? 'view-item group relative aspect-video cursor-pointer overflow-hidden rounded-xl bg-gray-100 ring-1 ring-black/[0.06] transition hover:ring-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:bg-gray-800/90 dark:ring-white/[0.08] dark:hover:ring-white/15 dark:focus-visible:ring-offset-gray-900'
+            : 'view-item group relative aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow transition cursor-pointer border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-900';
         item.tabIndex = 0;
-        item.title = `Скриншот ${screenshot.id || index + 1}`;
+        const posAmongValid =
+            screenshots.slice(0, index).filter(
+                (s) => s && s.blob instanceof Blob && typeof s.id !== 'undefined',
+            ).length + 1;
+        item.title = embedded
+            ? `Открыть изображение (${posAmongValid} из ${total}). Клавиша Enter.`
+            : `Скриншот ${screenshot.id || index + 1}`;
+        item.setAttribute('role', 'button');
 
         const img = document.createElement('img');
         img.className = 'w-full h-full object-contain';
@@ -405,14 +436,15 @@ export function renderScreenshotThumbnails(
             item.classList.add('bg-red-100', 'border-red-500');
         }
 
-        const caption = document.createElement('div');
-        caption.className =
-            'absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate hidden group-hover:block';
-        caption.textContent = `ID: ${screenshot.id}`;
-
         if (objectURL && !item.querySelector('div.text-red-500')) {
             item.appendChild(img);
-            item.appendChild(caption);
+            if (!embedded) {
+                const caption = document.createElement('div');
+                caption.className =
+                    'absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate hidden group-hover:block';
+                caption.textContent = `ID: ${screenshot.id}`;
+                item.appendChild(caption);
+            }
 
             const currentBlobIndex = allBlobs.findIndex((b) => b === screenshot.blob);
 
@@ -488,14 +520,14 @@ export function renderScreenshotList(
     }
 
     container.innerHTML = '';
-    container.className = 'flex flex-col space-y-1 p-4';
+    container.className = 'flex flex-col divide-y divide-gray-100 dark:divide-gray-700/80 p-2 sm:p-3';
     console.log(
         `[renderScreenshotList] Начало рендеринга. Передано скриншотов: ${screenshots.length}.`,
     );
 
     if (screenshots.length === 0) {
         container.innerHTML =
-            '<div class="p-4 text-gray-500 dark:text-gray-400 text-center">Список скриншотов пуст.</div>';
+            '<div class="py-12 px-4 text-center text-sm text-gray-500 dark:text-gray-400">Список изображений пуст.</div>';
         console.log('[renderScreenshotList] Список скриншотов пуст.');
         return;
     }
@@ -522,7 +554,7 @@ export function renderScreenshotList(
         const item = document.createElement('div');
         item.dataset.screenshotId = screenshot.id;
         item.className =
-            'group flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 rounded transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 dark:focus:ring-offset-gray-900';
+            'group flex items-center justify-between gap-3 px-3 py-3 sm:px-4 rounded-xl transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900';
         item.tabIndex = 0;
         item.setAttribute('role', 'button');
         item.setAttribute('aria-label', `Информация о скриншоте ${screenshot.id}`);
@@ -543,8 +575,8 @@ export function renderScreenshotList(
         const viewButton = document.createElement('button');
         viewButton.type = 'button';
         viewButton.className =
-            'ml-4 px-3 py-1 bg-primary text-white text-xs font-medium rounded shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition';
-        viewButton.textContent = 'Просмотр';
+            'flex-shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700';
+        viewButton.innerHTML = '<i class="far fa-eye text-[11px] opacity-80" aria-hidden="true"></i> Просмотр';
         viewButton.setAttribute('aria-label', `Просмотреть скриншот ${screenshot.id}`);
 
         const blobIndexForLightbox = validBlobsForLightbox.findIndex((b) => b === screenshot.blob);
@@ -652,7 +684,11 @@ export async function handleViewScreenshotClick(event) {
         console.log(
             `[handleViewScreenshotClick v2] Запрос скриншотов из индекса 'parentId' со значением: ${algorithmId}`,
         );
-        const allParentScreenshots = await getAllFromIndex('screenshots', 'parentId', algorithmId);
+        const allParentScreenshots = await getAllFromIndexWithKeyVariants(
+            'screenshots',
+            'parentId',
+            algorithmId,
+        );
         const algorithmScreenshots = allParentScreenshots.filter(
             (s) => s.parentType === 'algorithm',
         );
@@ -1070,34 +1106,38 @@ export function renderScreenshotIcon(algorithmId, stepIndex, hasScreenshots = fa
 
     const isDisabled = !hasScreenshots;
     const titleAttributeText = isDisabled
-        ? 'Нет изображений для этого шага'
-        : 'Просмотреть изображения для этого алгоритма';
-    const iconHtml = '<i class="fas fa-images mr-1"></i>';
-    const buttonText = 'Визуальные шаги';
-    const disabledClasses = isDisabled
-        ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-600'
-        : 'hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/60 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700';
+        ? 'Для этого шага нет сохранённых изображений'
+        : 'Открыть изображения к шагу в полноэкранном просмотре';
+    const buttonText = 'Изображения';
+
+    const enabledClasses = isDisabled
+        ? 'opacity-45 cursor-not-allowed border-gray-200/90 bg-gray-50 text-gray-400 dark:border-gray-600 dark:bg-gray-800/50 dark:text-gray-500'
+        : 'border-gray-200/90 bg-white text-gray-700 shadow-sm hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:bg-gray-700/90';
 
     const buttonClasses = `
                                     view-screenshot-btn
-                                    ml-2 px-2 py-1
-                                    text-sm font-medium
-                                    rounded-md border
-                                    transition-colors duration-150 ease-in-out
-                                    inline-flex items-center align-middle
-                                    focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500
-                                    ${disabledClasses}
-                                `;
+                                    ml-2 inline-flex items-center gap-2 align-middle
+                                    rounded-xl border px-3 py-1.5
+                                    text-xs sm:text-sm font-medium
+                                    transition-colors duration-150 ease-out
+                                    focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900
+                                    ${enabledClasses}
+                                `.replace(/\s+/g, ' ').trim();
+
+    const iconWrapClass = isDisabled
+        ? 'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gray-200/60 text-gray-400 dark:bg-gray-700/80 dark:text-gray-500'
+        : 'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400';
 
     return `
                     <button type="button"
-                            class="${buttonClasses.replace(/\s+/g, ' ').trim()}"
+                            class="${buttonClasses}"
                             data-algorithm-id="${safeAlgorithmId}"
                             data-step-index="${safeStepIndex}"
                             title="${titleAttributeText}"
+                            aria-label="${isDisabled ? titleAttributeText : `${buttonText}: ${titleAttributeText}`}"
                             ${isDisabled ? 'disabled' : ''}>
-                        ${iconHtml}
-                        <span>${buttonText}</span>
+                        <span class="${iconWrapClass}" aria-hidden="true"><i class="far fa-images text-sm"></i></span>
+                        <span class="whitespace-nowrap">${buttonText}</span>
                     </button>
                 `;
 }

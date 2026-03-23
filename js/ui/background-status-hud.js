@@ -1,5 +1,7 @@
 'use strict';
 
+import { getRuntimeHubIssuesForHealth } from '../features/runtime-issue-hub.js';
+
 export function initBackgroundStatusHUD() {
     const STATE = {
         tasks: new Map(),
@@ -287,8 +289,8 @@ export function initBackgroundStatusHUD() {
         return (acc / totalWeight) * 100;
     }
 
-    // HUD скрывается ТОЛЬКО при взаимодействии пользователя (курсор, клавиша, прокрутка).
-    // Принудительный таймаут убран — HUD висит до последнего без активности.
+    // При успешной самопроверке HUD после «Готово» скрывается после активности пользователя.
+    // При ошибках самопроверки (или watchdog ERROR) автоскрытия нет — только кнопка ✕.
 
     function tick() {
         const target = aggregatePercent();
@@ -305,8 +307,10 @@ export function initBackgroundStatusHUD() {
                 STATE.animatingToComplete = false;
                 STATE.rafId = null;
                 setTimeout(() => {
-                    showCompletionCard();
-                    scheduleDismissAfterActivity();
+                    if (!shouldBlockHudSuccessAndAutoDismiss()) {
+                        showCompletionCard();
+                        scheduleDismissAfterActivity();
+                    }
                 }, 200);
                 return;
             }
@@ -405,7 +409,9 @@ export function initBackgroundStatusHUD() {
         const active = [...STATE.tasks.values()];
         if (!STATE.titleEl) return;
         if (active.length === 0) {
-            STATE.titleEl.textContent = 'Готово';
+            STATE.titleEl.textContent = shouldBlockHudSuccessAndAutoDismiss()
+                ? 'Обнаружены ошибки самопроверки'
+                : 'Готово';
             STATE.animatingToComplete = true;
             if (!STATE.rafId) STATE.rafId = requestAnimationFrame(tick);
             return;
@@ -419,6 +425,7 @@ export function initBackgroundStatusHUD() {
 
     function showCompletionCard() {
         if (!STATE.container || STATE.hasShownCompletion || STATE.completionCardEl) return;
+        if (shouldBlockHudSuccessAndAutoDismiss()) return;
         STATE.hasShownCompletion = true;
         const card = document.createElement('div');
         card.className = 'hud-completion-card';
@@ -430,9 +437,33 @@ export function initBackgroundStatusHUD() {
         STATE.completionCardEl = card;
     }
 
+    function effectiveDiagnosticErrors() {
+        const base = STATE.diagnostics.errors || [];
+        const rt = getRuntimeHubIssuesForHealth(40);
+        if (!rt.length) return base;
+        return [...rt, ...base];
+    }
+
+    /** Ошибки самопроверки (включая буфер рантайма) или критический watchdog — без «всё ок» и без автоскрытия. */
+    function shouldBlockHudSuccessAndAutoDismiss() {
+        if (effectiveDiagnosticErrors().length > 0) return true;
+        if (STATE.watchdog.severity === 'error') return true;
+        return false;
+    }
+
+    /** Снять отложенное скрытие по активности и убрать карточку «полностью загружено», если есть ошибки. */
+    function suppressCompletionUiWhenErrors() {
+        if (!shouldBlockHudSuccessAndAutoDismiss()) return;
+        removeActivityListeners();
+        if (STATE.completionCardEl?.parentNode) {
+            STATE.completionCardEl.remove();
+            STATE.completionCardEl = null;
+        }
+    }
+
     function updateDetailsButton() {
         const hasIssues =
-            (STATE.diagnostics.errors?.length || 0) > 0 ||
+            effectiveDiagnosticErrors().length > 0 ||
             (STATE.diagnostics.warnings?.length || 0) > 0;
         const footer = STATE.container?.querySelector('.hud-footer');
         if (!footer) return;
@@ -499,7 +530,8 @@ export function initBackgroundStatusHUD() {
     }
 
     function openDiagnosticsModal() {
-        const { errors, warnings, checks, updatedAt } = STATE.diagnostics;
+        const { warnings, checks, updatedAt } = STATE.diagnostics;
+        const errors = effectiveDiagnosticErrors();
 
         // Если доступна полноразмерная модалка «Состояние здоровья», используем её,
         // чтобы поведение и размеры были идентичны ручному прогону из настроек.
@@ -727,6 +759,8 @@ export function initBackgroundStatusHUD() {
                 updatedAt: payload.updatedAt || null,
             };
             updateDetailsButton();
+            suppressCompletionUiWhenErrors();
+            updateTitle();
         },
         setWatchdogStatus(payload = {}) {
             STATE.watchdog = {
@@ -734,9 +768,17 @@ export function initBackgroundStatusHUD() {
                 ...payload,
             };
             renderWatchdogInfo();
+            suppressCompletionUiWhenErrors();
+            updateTitle();
         },
         setWatchdogRunNowHandler(handler) {
             STATE.watchdogRunNowHandler = typeof handler === 'function' ? handler : null;
+        },
+        /** Вызывается из runtime-issue-hub при новой записи в буфере */
+        touchRuntimeIssues() {
+            updateDetailsButton();
+            suppressCompletionUiWhenErrors();
+            updateTitle();
         },
     };
 

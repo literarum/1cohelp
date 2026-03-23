@@ -5,6 +5,15 @@ import { REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER } from '../config/revocation-s
 import { REVOCATION_API_BASE_URL } from '../config.js';
 import { probeHelperAvailability } from './revocation-helper-probe.js';
 import { runSearchAndIndexHealthTests } from './search-health-tests.js';
+import {
+    getRuntimeHubIssueCount,
+    getRuntimeHubIssuesForHealth,
+    getRuntimeHubPerformanceSignalCount,
+} from './runtime-issue-hub.js';
+import {
+    collectPlatformHealthProbeRows,
+    runPlatformHealthProbeSuite,
+} from './platform-health-probes.js';
 
 let deps = {};
 const WATCHDOG_INTERVAL_MS = 60000;
@@ -24,6 +33,12 @@ export function setBackgroundHealthTestsDependencies(nextDeps) {
 
 function nowLabel() {
     return new Date().toLocaleString('ru-RU');
+}
+
+function mergeRuntimeHubErrorsForReport(errors) {
+    const rt = getRuntimeHubIssuesForHealth(40);
+    if (!rt.length) return [...errors];
+    return [...rt.map((e) => ({ title: e.title, message: e.message })), ...errors];
 }
 
 function runWithTimeout(promise, ms) {
@@ -48,6 +63,49 @@ function waitUntilAppAvailable(timeoutMs = 10000) {
         };
         tick();
     });
+}
+
+/**
+ * Проверка записей закладок на поля, от которых падает UI (createBookmarkElement и т.д.).
+ * @returns {{ level: 'error'|'warn'|'info', title: string, message: string }}
+ */
+async function auditBookmarksUiCompatibility(performDBOperation, runWithTimeoutFn) {
+    const title = 'Закладки (целостность)';
+    if (typeof performDBOperation !== 'function') {
+        return { level: 'warn', title, message: 'performDBOperation недоступен, проверка пропущена.' };
+    }
+    const allBm = await runWithTimeoutFn(
+        performDBOperation('bookmarks', 'readonly', (store) => store.getAll()),
+        10000,
+    );
+    const list = Array.isArray(allBm) ? allBm : [];
+    const corrupt = [];
+    for (const bm of list) {
+        const id = bm?.id != null ? String(bm.id) : '?';
+        if (bm == null || typeof bm !== 'object') {
+            corrupt.push(`${id}: не объект`);
+            continue;
+        }
+        if (bm.screenshotIds != null && !Array.isArray(bm.screenshotIds)) {
+            corrupt.push(`${id}: screenshotIds должен быть массивом или отсутствовать`);
+        }
+    }
+    if (corrupt.length > 0) {
+        const sample = corrupt.slice(0, 8).join('; ');
+        const more = corrupt.length > 8 ? ` … (+${corrupt.length - 8})` : '';
+        return {
+            level: 'error',
+            title,
+            message: `Некорректные записи (${corrupt.length}): ${sample}${more}. Исправьте данные или пересохраните закладки.`,
+        };
+    }
+    return {
+        level: 'info',
+        title,
+        message: list.length
+            ? `Проверено ${list.length} записей: поля, влияющие на список/карточки, допустимы.`
+            : 'Закладок нет — проверка не требуется.',
+    };
 }
 
 export function initBackgroundHealthTestsSystem() {
@@ -295,6 +353,47 @@ export function initBackgroundHealthTestsSystem() {
                 }
             }
 
+            // Watchdog 4: целостность полей закладок (несовместимые типы ломают список/карточки)
+            try {
+                const br = await auditBookmarksUiCompatibility(deps.performDBOperation, runWithTimeout);
+                addCheck(br.level, 'Watchdog / Закладки (целостность)', br.message);
+            } catch (err) {
+                addCheck(
+                    'error',
+                    'Watchdog / Закладки (целостность)',
+                    err?.message || String(err),
+                );
+            }
+
+            // Watchdog 5: центральный буфер необработанных ошибок и отклонённых промисов
+            const rtCount = getRuntimeHubIssueCount();
+            if (rtCount > 0) {
+                const sample = getRuntimeHubIssuesForHealth(3)
+                    .map((i) => i.message.replace(/\s+/g, ' ').slice(0, 140))
+                    .join(' · ');
+                addCheck(
+                    'error',
+                    'Watchdog / Необработанные ошибки выполнения',
+                    `В буфере ${rtCount} сбоев (window.error, console.error, unhandledrejection и т.д.; perf.longtask не входит). Примеры: ${sample}`,
+                );
+            }
+
+            // Watchdog 6: независимый контур зондов среды (дублирует стартовые тесты 1.x + память, вкладка, SW)
+            try {
+                const envRows = await collectPlatformHealthProbeRows(runWithTimeout, {
+                    probeTag: 'watchdog',
+                });
+                for (const r of envRows) {
+                    addCheck(r.level, `Watchdog / ${r.title}`, r.message);
+                }
+            } catch (err) {
+                addCheck(
+                    'warn',
+                    'Watchdog / Среда исполнения',
+                    `Пакет зондов не выполнен: ${err?.message || err}.`,
+                );
+            }
+
             // Обновляем диагностику, добавляя watchdog-результаты к уже собранным.
             if (hud?.setDiagnostics) {
                 const mergedChecks = [
@@ -371,107 +470,8 @@ export function initBackgroundHealthTestsSystem() {
 
         (async () => {
             try {
-                // Тест 1: localStorage доступен
-                try {
-                    const key = 'health-check';
-                    localStorage.setItem(key, 'ok');
-                    const value = localStorage.getItem(key);
-                    if (value !== 'ok') {
-                        report('warn', 'localStorage', 'Не удалось проверить запись/чтение.');
-                    } else {
-                        report('info', 'localStorage', 'Запись и чтение доступны.');
-                    }
-                    localStorage.removeItem(key);
-                } catch (err) {
-                    report('error', 'localStorage', err.message);
-                }
-
-                // Тест 1.1: Secure context (HTTPS)
-                if (!window.isSecureContext) {
-                    report(
-                        'warn',
-                        'Безопасный контекст',
-                        'Страница загружена не по HTTPS. Некоторые API (clipboard, storage) недоступны.',
-                    );
-                } else {
-                    report('info', 'Безопасный контекст', 'Страница загружена по HTTPS.');
-                }
-
-                // Тест 1.2: сетевое подключение
-                if (!navigator.onLine) {
-                    report('info', 'Сеть', 'Офлайн. API проверки сертификатов недоступны.');
-                } else {
-                    report('info', 'Сеть', 'Подключение к сети есть.');
-                }
-
-                // Тест 1.3: sessionStorage (dbJustUpgraded и др.)
-                try {
-                    const sk = 'health-session';
-                    sessionStorage.setItem(sk, 'ok');
-                    const sv = sessionStorage.getItem(sk);
-                    sessionStorage.removeItem(sk);
-                    if (sv !== 'ok') {
-                        report('warn', 'sessionStorage', 'Не удалось проверить запись/чтение.');
-                    } else {
-                        report('info', 'sessionStorage', 'Запись и чтение доступны.');
-                    }
-                } catch (err) {
-                    report('warn', 'sessionStorage', err.message);
-                }
-
-                // Тест 1.4: квота хранилища (Storage API)
-                if (navigator.storage?.estimate) {
-                    try {
-                        const { usage, quota } = await runWithTimeout(
-                            navigator.storage.estimate(),
-                            3000,
-                        );
-                        const usageMb = Math.round(usage / 1024 / 1024);
-                        const quotaMb = quota ? Math.round(quota / 1024 / 1024) : 0;
-                        const percent = quota > 0 ? (usage / quota) * 100 : 0;
-                        const percentLabel =
-                            percent >= 1
-                                ? `~${Math.round(percent)}%`
-                                : percent > 0 || usage > 0
-                                  ? '<1%'
-                                  : '0%';
-                        if (percent > 90) {
-                            report(
-                                'warn',
-                                'Хранилище',
-                                `Занято ${percentLabel}. Возможны сбои сохранения.`,
-                            );
-                        } else {
-                            report(
-                                'info',
-                                'Хранилище',
-                                quotaMb > 0
-                                    ? `Занято ${percentLabel} (${usageMb} МБ / ${quotaMb} МБ).`
-                                    : `Использовано ${usageMb} МБ (квота недоступна).`,
-                            );
-                        }
-                    } catch (err) {
-                        report('info', 'Хранилище', `Оценка квоты недоступна: ${err.message}.`);
-                    }
-                }
-
-                // Тест 1.5: persistence (риск очистки при нехватке места)
-                if (navigator.storage?.persisted) {
-                    try {
-                        const persisted = await runWithTimeout(navigator.storage.persisted(), 2000);
-                        if (!persisted) {
-                            report(
-                                'info',
-                                'Хранилище',
-                                'Данные могут быть очищены при нехватке места (persistence не гарантирована).',
-                            );
-                        } else {
-                            report('info', 'Хранилище', 'Persistent storage включён.');
-                        }
-                    } catch {
-                        report('info', 'Хранилище', 'Проверка persistence недоступна.');
-                    }
-                }
+                // Тесты 1–1.5: среда исполнения (единый модуль; второй контур дублируется в watchdog)
+                await runPlatformHealthProbeSuite(runWithTimeout, report, { probeTag: 'startup' });
 
                 updateHud(20);
 
@@ -636,6 +636,40 @@ export function initBackgroundHealthTestsSystem() {
                         report('info', label, `Записей: ${count}.`);
                     } catch (err) {
                         report('warn', storeName, err.message);
+                    }
+                }
+                // Тест 5.4.2: поля закладок, от которых падает рендер UI
+                try {
+                    const br = await auditBookmarksUiCompatibility(
+                        deps.performDBOperation,
+                        runWithTimeout,
+                    );
+                    if (br.level === 'error') report('error', br.title, br.message);
+                    else if (br.level === 'warn') report('warn', br.title, br.message);
+                    else report('info', br.title, br.message);
+                } catch (err) {
+                    report('error', 'Закладки (целостность)', err?.message || String(err));
+                }
+                // Тест 5.4.3: буфер сбоев (не включает perf.longtask — это signalOnly)
+                {
+                    const n = getRuntimeHubIssueCount();
+                    const perfN = getRuntimeHubPerformanceSignalCount();
+                    if (n > 0) {
+                        report(
+                            'error',
+                            'Глобальные ошибки выполнения',
+                            `В буфере ${n} сбоев с момента загрузки. См. HUD «Подробнее» или инженерный кокпит.`,
+                        );
+                    } else {
+                        const perfHint =
+                            perfN > 0
+                                ? ` Сигналы производительности (long task): ${perfN} — не считаются ошибкой.`
+                                : '';
+                        report(
+                            'info',
+                            'Глобальные ошибки выполнения',
+                            `Сбоев в буфере нет.${perfHint}`,
+                        );
                     }
                 }
                 // Тест 5.4.1: links, bookmarkFolders, extLinkCategories, pdfFiles, screenshots
@@ -903,7 +937,9 @@ export function initBackgroundHealthTestsSystem() {
                 updateHud(100);
                 // Задача watchdog-first: HUD не показывает completion до завершения первого цикла
                 hud?.startTask?.('watchdog-first', 'Watchdog', { weight: 0.1, total: 100 });
-                finishHud(results.errors.length === 0);
+                finishHud(
+                    results.errors.length === 0 && getRuntimeHubIssueCount() === 0,
+                );
 
                 // После стартовой диагностики запускаем постоянный watchdog.
                 runWatchdogCycle('startup')
@@ -938,97 +974,8 @@ export function initBackgroundHealthTestsSystem() {
 
         const startedAt = nowLabel();
         try {
-            // Тест 1: localStorage
-            try {
-                const key = 'health-check-manual';
-                localStorage.setItem(key, 'ok');
-                const value = localStorage.getItem(key);
-                if (value !== 'ok') {
-                    report('warn', 'localStorage', 'Не удалось проверить запись/чтение.');
-                } else {
-                    report('info', 'localStorage', 'Запись и чтение доступны.');
-                }
-                localStorage.removeItem(key);
-            } catch (err) {
-                report('error', 'localStorage', err.message);
-            }
-
-            // Тест 1.1: Secure context, сеть, sessionStorage, квота, persistence
-            if (!window.isSecureContext) {
-                report(
-                    'warn',
-                    'Безопасный контекст',
-                    'Страница загружена не по HTTPS. Некоторые API (clipboard, storage) недоступны.',
-                );
-            } else {
-                report('info', 'Безопасный контекст', 'Страница загружена по HTTPS.');
-            }
-            if (!navigator.onLine) {
-                report('info', 'Сеть', 'Офлайн. API проверки сертификатов недоступны.');
-            } else {
-                report('info', 'Сеть', 'Подключение к сети есть.');
-            }
-            try {
-                const sk = 'health-session-manual';
-                sessionStorage.setItem(sk, 'ok');
-                const sv = sessionStorage.getItem(sk);
-                sessionStorage.removeItem(sk);
-                report(
-                    sv === 'ok' ? 'info' : 'warn',
-                    'sessionStorage',
-                    sv === 'ok' ? 'Доступен.' : 'Не удалось проверить.',
-                );
-            } catch (err) {
-                report('warn', 'sessionStorage', err.message);
-            }
-            if (navigator.storage?.estimate) {
-                try {
-                    const { usage, quota } = await runWithTimeout(
-                        navigator.storage.estimate(),
-                        3000,
-                    );
-                    const usageMb = Math.round(usage / 1024 / 1024);
-                    const quotaMb = quota ? Math.round(quota / 1024 / 1024) : 0;
-                    const percent = quota > 0 ? (usage / quota) * 100 : 0;
-                    const percentLabel =
-                        percent >= 1
-                            ? `~${Math.round(percent)}%`
-                            : percent > 0 || usage > 0
-                              ? '<1%'
-                              : '0%';
-                    if (percent > 90) {
-                        report(
-                            'warn',
-                            'Хранилище',
-                            `Занято ${percentLabel}. Возможны сбои сохранения.`,
-                        );
-                    } else {
-                        report(
-                            'info',
-                            'Хранилище',
-                            quotaMb > 0
-                                ? `Занято ${percentLabel} (${usageMb} МБ / ${quotaMb} МБ).`
-                                : `Использовано ${usageMb} МБ (квота недоступна).`,
-                        );
-                    }
-                } catch {
-                    report('info', 'Хранилище', 'Оценка квоты недоступна.');
-                }
-            }
-            if (navigator.storage?.persisted) {
-                try {
-                    const persisted = await runWithTimeout(navigator.storage.persisted(), 2000);
-                    report(
-                        'info',
-                        'Хранилище',
-                        persisted
-                            ? 'Persistent storage включён.'
-                            : 'Данные могут быть очищены при нехватке места.',
-                    );
-                } catch {
-                    report('info', 'Хранилище', 'Проверка persistence недоступна.');
-                }
-            }
+            // Тесты 1–1.5: среда исполнения (см. platform-health-probes.js)
+            await runPlatformHealthProbeSuite(runWithTimeout, report, { probeTag: 'manual' });
 
             // Тест 2: IndexedDB запись/чтение
             const testId = `health-manual-${Date.now()}`;
@@ -1166,6 +1113,40 @@ export function initBackgroundHealthTestsSystem() {
                     report('info', label, `Записей: ${count}.`);
                 } catch (err) {
                     report('warn', storeName, err.message);
+                }
+            }
+            // Тест 5.4.2: поля закладок для UI
+            try {
+                const br = await auditBookmarksUiCompatibility(
+                    deps.performDBOperation,
+                    runWithTimeout,
+                );
+                if (br.level === 'error') report('error', br.title, br.message);
+                else if (br.level === 'warn') report('warn', br.title, br.message);
+                else report('info', br.title, br.message);
+            } catch (err) {
+                report('error', 'Закладки (целостность)', err?.message || String(err));
+            }
+            // Тест 5.4.3: буфер сбоев (perf.longtask не входит)
+            {
+                const n = getRuntimeHubIssueCount();
+                const perfN = getRuntimeHubPerformanceSignalCount();
+                if (n > 0) {
+                    report(
+                        'error',
+                        'Глобальные ошибки выполнения',
+                        `В буфере ${n} сбоев с момента загрузки. См. HUD «Подробнее» или инженерный кокпит.`,
+                    );
+                } else {
+                    const perfHint =
+                        perfN > 0
+                            ? ` Сигналы производительности (long task): ${perfN} — не считаются ошибкой.`
+                            : '';
+                    report(
+                        'info',
+                        'Глобальные ошибки выполнения',
+                        `Сбоев в буфере нет.${perfHint}`,
+                    );
                 }
             }
             // Тест 5.4.1: links, bookmarkFolders, extLinkCategories, pdfFiles, screenshots
@@ -1408,18 +1389,20 @@ export function initBackgroundHealthTestsSystem() {
                 updatedAt: finishedAt,
             });
 
+            const mergedErrs = mergeRuntimeHubErrorsForReport(results.errors);
             return {
-                errors: [...results.errors],
+                errors: mergedErrs,
                 warnings: [...results.warnings],
                 checks: [...results.checks],
                 startedAt,
                 finishedAt,
-                success: results.errors.length === 0,
+                success: mergedErrs.length === 0,
             };
         } catch (err) {
             report('error', 'Ручной прогон', err.message);
+            const mergedErrs = mergeRuntimeHubErrorsForReport(results.errors);
             return {
-                errors: [...results.errors],
+                errors: mergedErrs,
                 warnings: [...results.warnings],
                 checks: [...results.checks],
                 startedAt,

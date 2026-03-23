@@ -528,3 +528,51 @@ export async function getAllFromIndex(storeName, indexName, indexValue) {
         return index.getAll(indexValue);
     });
 }
+
+/**
+ * IndexedDB index lookups use strict key equality (e.g. parentId 5 vs "5" are different).
+ * Queries numeric and string variants, merges and dedupes by record id when present.
+ */
+export async function getAllFromIndexWithKeyVariants(storeName, indexName, indexValue) {
+    const variants = new Set();
+    if (indexValue !== null && indexValue !== undefined && indexValue !== '') {
+        variants.add(indexValue);
+        if (typeof indexValue === 'number' && Number.isFinite(indexValue)) {
+            variants.add(String(indexValue));
+        } else if (typeof indexValue === 'string') {
+            const trimmed = indexValue.trim();
+            if (trimmed !== '') {
+                const asNum = Number(trimmed);
+                if (Number.isFinite(asNum) && String(asNum) === trimmed) {
+                    variants.add(asNum);
+                }
+            }
+        }
+    }
+
+    const seen = new Set();
+    const out = [];
+
+    for (const v of variants) {
+        try {
+            const rows = await getAllFromIndex(storeName, indexName, v);
+            if (!Array.isArray(rows)) continue;
+            for (const row of rows) {
+                if (!row) continue;
+                const dedupeKey =
+                    row.id !== null && row.id !== undefined ? `id:${row.id}` : `fallback:${out.length}`;
+                if (!seen.has(dedupeKey)) {
+                    seen.add(dedupeKey);
+                    out.push(row);
+                }
+            }
+        } catch (err) {
+            console.warn(
+                `[getAllFromIndexWithKeyVariants] ${storeName}/${indexName} key=${String(v)}:`,
+                err,
+            );
+        }
+    }
+
+    return out;
+}

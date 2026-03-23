@@ -1,5 +1,7 @@
 'use strict';
 
+import { getAllFromIndexWithKeyVariants } from '../db/indexeddb.js';
+
 // ============================================================================
 // BOOKMARKS PDF EXPORT (одна закладка / все закладки)
 // ============================================================================
@@ -79,10 +81,46 @@ function formatUrlForDisplay(url) {
     return String(url).trim();
 }
 
-function formatSizeKb(bytes) {
-    if (!bytes || bytes <= 0) return '0 KB';
-    const kb = Math.max(1, Math.round(bytes / 1024));
-    return `${kb} KB`;
+/** Размер вложения для текста экспорта PDF (КБ/МБ, согласовано с UI вложений). */
+function formatPdfExportSize(bytes) {
+    const n = typeof bytes === 'number' && bytes > 0 ? bytes : 0;
+    if (n < 1024) return `${n} Б`;
+    if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} КБ`;
+    const mb = n / (1024 * 1024);
+    return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)} МБ`;
+}
+
+/**
+ * Заголовок, поясняющая подпись и маркированный список вложений для extractPdfContent.
+ */
+function appendBookmarkPdfExportSection(host, pdfFiles) {
+    if (!host || !Array.isArray(pdfFiles) || pdfFiles.length === 0) return;
+
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Прикреплённые PDF';
+    host.appendChild(h3);
+
+    const caption = document.createElement('p');
+    caption.className = 'pdf-caption';
+    caption.textContent =
+        'Перечень имён и размеров файлов. Содержимое PDF в этот документ не встраивается.';
+    host.appendChild(caption);
+
+    const listEl = document.createElement('ul');
+    listEl.className = 'bookmark-pdf-summary-list';
+
+    pdfFiles.forEach((pdf) => {
+        const li = document.createElement('li');
+        const name =
+            typeof pdf?.filename === 'string' && pdf.filename.trim()
+                ? pdf.filename.trim()
+                : 'file.pdf';
+        const sizeLabel = formatPdfExportSize(pdf?.size || (pdf?.blob && pdf.blob.size) || 0);
+        li.textContent = `${name} — ${sizeLabel}`;
+        listEl.appendChild(li);
+    });
+
+    host.appendChild(listEl);
 }
 
 function toFolderKey(value) {
@@ -147,12 +185,11 @@ function blobToDataUrl(blob) {
 }
 
 async function loadBookmarkScreenshots(bookmarkId) {
-    if (!deps.getAllFromIndex) return [];
     try {
-        const allForParent = await deps.getAllFromIndex(
+        const allForParent = await getAllFromIndexWithKeyVariants(
             'screenshots',
             'parentId',
-            String(bookmarkId),
+            bookmarkId,
         );
         if (!Array.isArray(allForParent)) return [];
         return allForParent.filter((s) => s && s.parentType === 'bookmark');
@@ -273,30 +310,10 @@ async function buildSingleBookmarkExportElement(bookmark, screenshots, pdfFiles)
         root.appendChild(screenshotsWrapper);
     }
 
-    // Список PDF-файлов (если есть).
     if (Array.isArray(pdfFiles) && pdfFiles.length > 0) {
         const pdfWrapper = document.createElement('div');
         pdfWrapper.className = 'bookmark-pdf-summary';
-
-        const pdfTitle = document.createElement('h2');
-        pdfTitle.textContent = 'PDF-файлы';
-        pdfWrapper.appendChild(pdfTitle);
-
-        const listEl = document.createElement('ul');
-        listEl.className = 'bookmark-pdf-summary-list';
-
-        pdfFiles.forEach((pdf) => {
-            const li = document.createElement('li');
-            const name =
-                typeof pdf?.filename === 'string' && pdf.filename.trim()
-                    ? pdf.filename.trim()
-                    : 'file.pdf';
-            const sizeLabel = formatSizeKb(pdf?.size || (pdf?.blob && pdf.blob.size) || 0);
-            li.textContent = `${name} (${sizeLabel})`;
-            listEl.appendChild(li);
-        });
-
-        pdfWrapper.appendChild(listEl);
+        appendBookmarkPdfExportSection(pdfWrapper, pdfFiles);
         root.appendChild(pdfWrapper);
     }
 
@@ -408,19 +425,7 @@ function buildAllBookmarksExportElement(bookmarks, pdfsByBookmarkId, folderNameB
 
         const pdfList = pdfsByBookmarkId.get(String(bookmark.id)) || [];
         if (pdfList.length > 0) {
-            const ul = document.createElement('ul');
-            ul.className = 'bookmark-pdf-summary-list';
-            pdfList.forEach((pdf) => {
-                const li = document.createElement('li');
-                const name =
-                    typeof pdf?.filename === 'string' && pdf.filename.trim()
-                        ? pdf.filename.trim()
-                        : 'file.pdf';
-                const sizeLabel = formatSizeKb(pdf?.size || (pdf?.blob && pdf.blob.size) || 0);
-                li.textContent = `${name} (${sizeLabel})`;
-                ul.appendChild(li);
-            });
-            root.appendChild(ul);
+            appendBookmarkPdfExportSection(root, pdfList);
         }
     });
 

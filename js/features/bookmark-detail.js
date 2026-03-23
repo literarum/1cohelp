@@ -1,6 +1,7 @@
 'use strict';
 
 import { linkify } from '../utils/html.js';
+import { getAllFromIndexWithKeyVariants } from '../db/indexeddb.js';
 
 let deps = {
     getVisibleModals: null,
@@ -35,40 +36,42 @@ export async function showBookmarkDetailModal(bookmarkId) {
         modal.className =
             'fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center';
         modal.innerHTML = `
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                            <div class="flex justify-between items-center">
-                                <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100" id="bookmarkDetailTitle">Детали закладки</h2>
-                                <div class="flex items-center flex-shrink-0">
-                                    <div class="fav-btn-placeholder-modal-bookmark mr-1"></div>
-                                    <button id="${deps.bookmarkDetailModalConfig?.buttonId || 'toggleFullscreenBookmarkDetailBtn'}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
-                                        <i class="fas fa-expand"></i>
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                        <div class="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700/80 flex-shrink-0">
+                            <div class="flex justify-between items-center gap-3 min-h-[2.25rem]">
+                                <h2 class="text-lg font-semibold leading-tight tracking-tight text-gray-900 dark:text-gray-100 min-w-0 flex items-center self-center" id="bookmarkDetailTitle">Детали закладки</h2>
+                                <div class="flex items-center flex-shrink-0 gap-0.5 h-9 self-center">
+                                    <div class="fav-btn-placeholder-modal-bookmark mr-1 flex items-center justify-center h-9"></div>
+                                    <button id="${deps.bookmarkDetailModalConfig?.buttonId || 'toggleFullscreenBookmarkDetailBtn'}" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Развернуть на весь экран">
+                                        <i class="fas fa-expand text-sm"></i>
                                     </button>
-                                    <button type="button" class="close-modal ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Закрыть (Esc)">
-                                        <i class="fas fa-times text-xl"></i>
+                                    <button type="button" class="close-modal inline-flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Закрыть (Esc)">
+                                        <i class="fas fa-times text-base"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        <div class="pt-6 pl-6 pr-6 pb-2 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
-                            <div class="prose dark:prose-invert max-w-none mb-6" id="bookmarkDetailTextContent">
+                        <div class="pt-5 px-5 sm:px-6 pb-4 overflow-y-auto flex-1" id="bookmarkDetailOuterContent">
+                            <div class="prose dark:prose-invert max-w-none prose-p:leading-relaxed mb-8" id="bookmarkDetailTextContent">
                                 <p>Загрузка...</p>
                             </div>
-                            <div id="bookmarkDetailScreenshotsContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
-                                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">Скриншоты:</h4>
-                                <div id="bookmarkDetailScreenshotsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                            <section id="bookmarkDetailScreenshotsContainer" class="bookmark-detail-shots mt-8 pt-8 border-t border-gray-100 dark:border-gray-700/80 hidden" aria-labelledby="bookmarkDetailScreenshotsHeading">
+                                <div class="flex items-baseline justify-between gap-3 mb-4">
+                                    <h3 id="bookmarkDetailScreenshotsHeading" class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Изображения</h3>
+                                    <span id="bookmarkDetailScreenshotsBadge" class="hidden text-xs font-medium tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true"></span>
                                 </div>
-                                <div id="bookmarkDetailPdfContainer" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4"></div>
-                            </div>
+                                <div id="bookmarkDetailScreenshotsGrid"></div>
+                            </section>
+                            <div id="bookmarkDetailPdfContainer" class="mt-0"></div>
                         </div>
-                        <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end gap-2">
-                            <button type="button" id="editBookmarkFromDetailBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
-                                <i class="fas fa-edit mr-1"></i> Редактировать
+                        <div class="p-4 sm:p-5 border-t border-gray-100 dark:border-gray-700/80 flex-shrink-0 flex flex-wrap justify-end gap-2 bg-gray-50/80 dark:bg-gray-900/25">
+                            <button type="button" id="editBookmarkFromDetailBtn" title="Редактировать эту закладку" class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium shadow-sm hover:opacity-95 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                                <i class="fas fa-edit text-xs opacity-90"></i> Редактировать
                             </button>
-                            <button type="button" id="exportBookmarkToPdfBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition">
-                                <i class="far fa-file-pdf mr-1"></i> Экспорт в PDF
+                            <button type="button" id="exportBookmarkToPdfBtn" title="Сохранить детали закладки в PDF-файл" class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-medium hover:bg-emerald-100/90 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30">
+                                <i class="far fa-file-pdf text-sm"></i> Экспорт в PDF
                             </button>
-                            <button type="button" class="cancel-modal px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition">
+                            <button type="button" title="Закрыть окно (Esc)" class="cancel-modal inline-flex items-center justify-center px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 transition">
                                 Закрыть
                             </button>
                         </div>
@@ -208,6 +211,11 @@ export async function showBookmarkDetailModal(bookmarkId) {
     textContentEl.innerHTML = '<p>Загрузка...</p>';
     screenshotsGridEl.innerHTML = '';
     screenshotsContainer.classList.add('hidden');
+    const shotsBadgeInit = modal.querySelector('#bookmarkDetailScreenshotsBadge');
+    if (shotsBadgeInit) {
+        shotsBadgeInit.textContent = '';
+        shotsBadgeInit.classList.add('hidden');
+    }
     editButton.classList.add('hidden');
     exportButton.classList.add('hidden');
     favoriteButtonContainer.innerHTML = '';
@@ -246,10 +254,10 @@ export async function showBookmarkDetailModal(bookmarkId) {
             if (bookmark.screenshotIds && bookmark.screenshotIds.length > 0) {
                 screenshotsContainer.classList.remove('hidden');
                 screenshotsGridEl.innerHTML =
-                    '<p class="col-span-full text-xs text-gray-500">Загрузка скриншотов...</p>';
+                    '<p class="col-span-full text-center text-sm text-gray-400 dark:text-gray-500 py-6">Загрузка изображений…</p>';
 
                 try {
-                    const allParentScreenshots = await deps.getAllFromIndex?.(
+                    const allParentScreenshots = await getAllFromIndexWithKeyVariants(
                         'screenshots',
                         'parentId',
                         bookmarkId,
@@ -266,10 +274,23 @@ export async function showBookmarkDetailModal(bookmarkId) {
                             screenshotsGridEl,
                             bookmarkScreenshots,
                             deps.openLightbox,
+                            null,
+                            { embeddedInDetail: true },
                         );
+                        const badge = modal.querySelector('#bookmarkDetailScreenshotsBadge');
+                        if (badge) {
+                            const n = bookmarkScreenshots.length;
+                            badge.textContent = n === 1 ? '1 файл' : `${n} файлов`;
+                            badge.classList.remove('hidden');
+                        }
                     } else {
                         screenshotsGridEl.innerHTML = '';
                         screenshotsContainer.classList.add('hidden');
+                        const b = modal.querySelector('#bookmarkDetailScreenshotsBadge');
+                        if (b) {
+                            b.textContent = '';
+                            b.classList.add('hidden');
+                        }
                     }
                 } catch (screenshotError) {
                     console.error(
@@ -277,12 +298,17 @@ export async function showBookmarkDetailModal(bookmarkId) {
                         screenshotError,
                     );
                     screenshotsGridEl.innerHTML =
-                        '<p class="col-span-full text-red-500 text-xs">Ошибка загрузки скриншотов.</p>';
+                        '<p class="col-span-full text-center text-sm text-red-600 dark:text-red-400 py-6">Не удалось загрузить изображения.</p>';
                     screenshotsContainer.classList.remove('hidden');
                 }
             } else {
                 screenshotsGridEl.innerHTML = '';
                 screenshotsContainer.classList.add('hidden');
+                const b0 = modal.querySelector('#bookmarkDetailScreenshotsBadge');
+                if (b0) {
+                    b0.textContent = '';
+                    b0.classList.add('hidden');
+                }
             }
         } else {
             titleEl.textContent = 'Ошибка';
@@ -291,6 +317,12 @@ export async function showBookmarkDetailModal(bookmarkId) {
             editButton.classList.add('hidden');
             exportButton.classList.add('hidden');
             screenshotsContainer.classList.add('hidden');
+            const b1 = modal.querySelector('#bookmarkDetailScreenshotsBadge');
+            if (b1) {
+                b1.textContent = '';
+                b1.classList.add('hidden');
+            }
+            if (pdfHost) deps.removePdfSectionsFromContainer?.(pdfHost);
         }
     } catch (error) {
         console.error('Ошибка при загрузке деталей закладки:', error);
@@ -301,6 +333,12 @@ export async function showBookmarkDetailModal(bookmarkId) {
         editButton.classList.add('hidden');
         exportButton.classList.add('hidden');
         screenshotsContainer.classList.add('hidden');
+        const b2 = modal.querySelector('#bookmarkDetailScreenshotsBadge');
+        if (b2) {
+            b2.textContent = '';
+            b2.classList.add('hidden');
+        }
+        if (pdfHost) deps.removePdfSectionsFromContainer?.(pdfHost);
     }
 
     if (exportButton && !exportButton.dataset.wired) {

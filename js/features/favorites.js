@@ -15,6 +15,10 @@ import {
     clearAllFavoritesDB,
 } from '../db/favorites.js';
 import { getFromIndexedDB } from '../db/indexeddb.js';
+import {
+    BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS,
+    BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS,
+} from '../config.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setFavoritesDependencies)
@@ -333,6 +337,7 @@ export function getFavoriteButtonHTML(
     title,
     description,
     isCurrentlyFavorite,
+    uiVariant = 'default',
 ) {
     const iconClass = isCurrentlyFavorite ? 'fas fa-star text-yellow-400' : 'far fa-star';
     const tooltip = isCurrentlyFavorite ? 'Удалить из избранного' : 'Добавить в избранное';
@@ -348,15 +353,21 @@ export function getFavoriteButtonHTML(
         typeof originalItemSection === 'string' ? escapeHtml(originalItemSection) : ''
     ).replace(/"/g, '&quot;');
 
+    const btnClass =
+        uiVariant === 'bookmark-list'
+            ? BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS
+            : BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS;
+
     return `
-        <button class="toggle-favorite-btn p-1.5 text-gray-500 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-primary dark:focus:ring-offset-gray-800 transition-colors"
+        <button class="${btnClass}"
                 title="${tooltip}"
+                aria-label="${tooltip}"
                 data-item-id="${originalItemId}"
                 data-item-type="${itemType}"
                 data-original-item-section="${safeOriginalItemSection}"
                 data-item-title="${safeTitle}"
                 data-item-description="${safeDescription}">
-            <i class="${iconClass}"></i>
+            <i class="${iconClass} text-sm" aria-hidden="true"></i>
         </button>
     `;
 }

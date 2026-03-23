@@ -262,6 +262,10 @@ export async function getPdfsForParent(parentType, parentId) {
  */
 export function downloadPdfBlob(blob, filename = 'file.pdf') {
     try {
+        if (!(blob instanceof Blob) || blob.size <= 0) {
+            showNotification('Файл недоступен для скачивания', 'error');
+            return;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -274,6 +278,28 @@ export function downloadPdfBlob(blob, filename = 'file.pdf') {
         console.error('[downloadPdfBlob] Error:', err);
         showNotification('Ошибка скачивания PDF', 'error');
     }
+}
+
+function formatPdfSize(bytes) {
+    const n = typeof bytes === 'number' && bytes > 0 ? bytes : 0;
+    if (n < 1024) return `${n} Б`;
+    if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} КБ`;
+    const mb = n / (1024 * 1024);
+    return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)} МБ`;
+}
+
+async function confirmPdfRemoval(displayName) {
+    const message = `Файл «${displayName}» будет удалён с устройства. Это действие нельзя отменить.`;
+    if (typeof window !== 'undefined' && typeof window.showAppConfirm === 'function') {
+        return window.showAppConfirm({
+            title: 'Удалить PDF?',
+            message,
+            confirmText: 'Удалить',
+            cancelText: 'Отмена',
+            confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
+        });
+    }
+    return typeof window !== 'undefined' && window.confirm ? window.confirm(message) : false;
 }
 
 // PDF section mounting cache
@@ -297,36 +323,37 @@ export function mountPdfSection(hostEl, parentType, parentId) {
     const section = document.createElement('div');
     section.className =
         parentType === 'algorithm'
-            ? 'pdf-attachments-section mt-5 mb-2 border-t pt-4'
-            : 'pdf-attachments-section mt-4 border-t pt-4 px-6 pb-4';
+            ? 'pdf-attachments-section mt-6 pt-6 border-t border-gray-100 dark:border-gray-700/80'
+            : 'pdf-attachments-section mt-6 pt-6 border-t border-gray-100 dark:border-gray-700/80';
     section.dataset.parentType = parentType;
     section.dataset.parentId = parentId;
 
+    const addMoreLabel =
+        parentType === 'bookmark'
+            ? 'Добавить ещё PDF к этой закладке'
+            : 'Добавить ещё PDF к этому алгоритму';
+
     section.innerHTML = `
-    <details class="pdf-collapse group" open>
-      <summary class="cursor-pointer select-none font-semibold text-sm text-gray-600 dark:text-gray-300 mb-2">
-        <i class="far fa-file-pdf mr-1"></i>PDF-файлы
-      </summary>
-      <div class="pdf-row flex items-start justify-between gap-3">
-        <ul class="pdf-list flex-1 space-y-1 text-sm"></ul>
-        <div class="shrink-0">
-          <input type="file" accept="application/pdf" multiple class="hidden pdf-input">
-          <button type="button" class="px-3 py-1.5 text-sm bg-primary text-white rounded hover:bg-secondary add-pdf-btn">
-            <i class="far fa-file-pdf mr-1"></i>Загрузить PDF
-          </button>
-        </div>
-      </div>
-    </details>`;
+    <input type="file" accept="application/pdf" multiple class="hidden pdf-input" aria-label="Выбрать PDF-файлы">
+    <div class="pdf-add-toolbar hidden border-t border-gray-100 pt-2 pb-1 dark:border-gray-700/80" role="region" aria-label="Добавление PDF">
+      <button type="button" class="pdf-add-more-btn inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-gray-600 shadow-sm transition hover:border-primary/50 hover:bg-gray-50 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-primary/40 dark:hover:bg-gray-700/50" aria-label="${addMoreLabel}">
+        <i class="fas fa-plus text-sm" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="pdf-list-shell pdf-drop-target mt-2 min-h-0 rounded-xl transition-colors"></div>`;
 
-    const row = section.querySelector('.pdf-row');
+    const shell = section.querySelector('.pdf-list-shell');
     const input = section.querySelector('.pdf-input');
-    const btn = section.querySelector('.add-pdf-btn');
-
-    btn?.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        input?.click();
-    });
+    const addToolbar = section.querySelector('.pdf-add-toolbar');
+    const addMoreBtn = section.querySelector('.pdf-add-more-btn');
+    if (addMoreBtn) {
+        addMoreBtn.title = addMoreLabel;
+        addMoreBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            input?.click();
+        });
+    }
 
     input?.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files || []);
@@ -336,10 +363,12 @@ export function mountPdfSection(hostEl, parentType, parentId) {
         refreshPdfList(section, parentType, parentId);
     });
 
-    setupPdfDragAndDrop(row, async (files) => {
-        await addPdfRecords(files, parentType, parentId);
-        refreshPdfList(section, parentType, parentId);
-    });
+    if (shell) {
+        setupPdfDragAndDrop(shell, async (files) => {
+            await addPdfRecords(files, parentType, parentId);
+            refreshPdfList(section, parentType, parentId);
+        });
+    }
 
     hostEl.appendChild(section);
     mountedPdfSections.set(bkey, section);
@@ -350,59 +379,136 @@ export function mountPdfSection(hostEl, parentType, parentId) {
  * Refresh the PDF list in a section
  */
 async function refreshPdfList(section, parentType, parentId) {
-    const list = section.querySelector('.pdf-list');
-    if (!list) return;
+    const shell = section.querySelector('.pdf-list-shell');
+    if (!shell) return;
 
     const pdfs = await getPdfsForParent(parentType, parentId);
 
+    const addToolbar = section.querySelector('.pdf-add-toolbar');
+    if (addToolbar) {
+        addToolbar.classList.toggle('hidden', pdfs.length === 0);
+    }
+
+    shell.innerHTML = '';
+    shell.className =
+        'pdf-list-shell pdf-drop-target mt-2 min-h-0 rounded-xl transition-colors border-2 border-dashed border-gray-200/90 bg-gray-50/40 px-1 py-0.5 dark:border-gray-600/70 dark:bg-gray-900/25';
+
     if (!pdfs.length) {
-        list.innerHTML = '<li class="text-gray-500">Нет PDF-файлов</li>';
+        const empty = document.createElement('div');
+        empty.className =
+            'pdf-empty-state flex flex-col items-center justify-center gap-0.5 py-2 px-2 text-center cursor-pointer rounded-lg outline-none transition-colors hover:bg-gray-100/60 dark:hover:bg-gray-800/25 focus-visible:ring-2 focus-visible:ring-primary/35';
+        empty.setAttribute('role', 'button');
+        empty.setAttribute('tabindex', '0');
+        empty.title =
+            'Нажмите, чтобы выбрать PDF, или перетащите файлы в эту область. Только PDF, хранение в браузере.';
+        empty.innerHTML = `
+          <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gray-200/70 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400" aria-hidden="true">
+            <i class="far fa-file-pdf text-sm"></i>
+          </span>
+          <p class="text-xs font-medium leading-snug text-gray-700 dark:text-gray-200">Нет прикреплённых PDF</p>
+          <p class="max-w-sm text-2xs leading-snug text-gray-500 dark:text-gray-400">Нажмите здесь, чтобы выбрать файлы, или перетащите PDF в эту область</p>
+          <p class="text-2xs text-gray-400 dark:text-gray-500">Только PDF · локально в браузере</p>`;
+        const pickFiles = () => {
+            const inp = section.querySelector('.pdf-input');
+            inp?.click();
+        };
+        empty.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            pickFiles();
+        });
+        empty.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                pickFiles();
+            }
+        });
+        shell.appendChild(empty);
         return;
     }
 
-    const frag = document.createDocumentFragment();
+    shell.className =
+        'pdf-list-shell pdf-drop-target mt-2 rounded-xl border border-gray-200/90 bg-white px-0 py-0 shadow-sm dark:border-gray-600/80 dark:bg-gray-800/40';
+
+    const ul = document.createElement('ul');
+    ul.className = 'pdf-list divide-y divide-gray-100 dark:divide-gray-700/80';
+    ul.setAttribute('role', 'list');
+
     pdfs.forEach((pdf) => {
         const li = document.createElement('li');
         li.className =
-            'flex items-center justify-between bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded';
+            'group flex items-center gap-3 px-3 py-3 sm:px-4 sm:py-3.5 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/30';
 
-        const sizeKb = Math.max(1, Math.round((pdf.size || 0) / 1024));
-        const safeName = (pdf.filename || 'file.pdf').replace(
-            /[<>&"']/g,
-            (s) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[s],
-        );
+        const displayName =
+            typeof pdf?.filename === 'string' && pdf.filename.trim() ? pdf.filename.trim() : 'file.pdf';
+        const sizeLabel = formatPdfSize(pdf?.size || (pdf?.blob && pdf.blob.size) || 0);
+        const iconWrap = document.createElement('div');
+        iconWrap.className =
+            'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/[0.08] text-red-600 dark:bg-red-400/10 dark:text-red-400';
+        iconWrap.setAttribute('aria-hidden', 'true');
+        iconWrap.innerHTML = '<i class="far fa-file-pdf text-lg"></i>';
 
-        li.innerHTML = `
-          <div class="truncate pr-2">
-            <i class="far fa-file-pdf mr-2"></i>
-            <span title="${safeName}">${safeName}</span>
-            <span class="text-gray-500">(${sizeKb} KB)</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <button class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200" data-act="dl">Скачать</button>
-            <button class="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200" data-act="rm">Удалить</button>
-          </div>`;
+        const meta = document.createElement('div');
+        meta.className = 'min-w-0 flex-1';
+        const nameEl = document.createElement('p');
+        nameEl.className =
+            'truncate text-sm font-medium text-gray-900 dark:text-gray-100';
+        nameEl.textContent = displayName;
+        nameEl.title = displayName;
+        const sizeEl = document.createElement('p');
+        sizeEl.className = 'mt-0.5 text-xs text-gray-500 dark:text-gray-400 tabular-nums';
+        sizeEl.textContent = sizeLabel;
+        meta.appendChild(nameEl);
+        meta.appendChild(sizeEl);
 
-        li.querySelector('[data-act="dl"]')?.addEventListener('click', () => {
-            if (pdf.blob) downloadPdfBlob(pdf.blob, pdf.filename);
+        const actions = document.createElement('div');
+        actions.className = 'flex flex-shrink-0 items-center gap-0.5 sm:gap-1';
+
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.className =
+            'rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100';
+        dlBtn.setAttribute('aria-label', `Скачать ${displayName}`);
+        dlBtn.title = `Скачать «${displayName}» на устройство`;
+        dlBtn.innerHTML = '<i class="fas fa-download text-sm" aria-hidden="true"></i>';
+        dlBtn.addEventListener('click', () => {
+            const blob = pdf?.blob instanceof Blob ? pdf.blob : null;
+            if (blob && blob.size > 0) {
+                downloadPdfBlob(blob, displayName);
+            } else {
+                showNotification('Файл повреждён или недоступен', 'error');
+            }
         });
 
-        li.querySelector('[data-act="rm"]')?.addEventListener('click', async () => {
+        const rmBtn = document.createElement('button');
+        rmBtn.type = 'button';
+        rmBtn.className =
+            'rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:hover:bg-red-950/40 dark:hover:text-red-400';
+        rmBtn.setAttribute('aria-label', `Удалить ${displayName}`);
+        rmBtn.title = `Удалить «${displayName}» из списка PDF`;
+        rmBtn.innerHTML = '<i class="far fa-trash-alt text-sm" aria-hidden="true"></i>';
+        rmBtn.addEventListener('click', async () => {
+            const ok = await confirmPdfRemoval(displayName);
+            if (!ok) return;
             try {
                 await deleteFromIndexedDB('pdfFiles', pdf.id);
-                refreshPdfList(section, parentType, parentId);
-                showNotification('PDF удален', 'success');
+                await refreshPdfList(section, parentType, parentId);
+                showNotification('PDF удалён', 'success');
             } catch (err) {
                 console.error('[refreshPdfList] Delete error:', err);
                 showNotification('Ошибка удаления PDF', 'error');
             }
         });
 
-        frag.appendChild(li);
+        actions.appendChild(dlBtn);
+        actions.appendChild(rmBtn);
+        li.appendChild(iconWrap);
+        li.appendChild(meta);
+        li.appendChild(actions);
+        ul.appendChild(li);
     });
 
-    list.innerHTML = '';
-    list.appendChild(frag);
+    shell.appendChild(ul);
 }
 
 /**
@@ -532,22 +638,29 @@ export function attachBookmarkPdfHandlers(form) {
     form.dataset.pdfDraftWired = '1';
 
     const block = document.createElement('div');
-    block.className = 'mt-4 mb-4';
+    block.className = 'mt-6 mb-4';
     block.innerHTML = `
-      <details class="pdf-collapse group" open>
-        <summary class="cursor-pointer select-none font-semibold text-sm text-gray-600 dark:text-gray-300 mb-2">
-          <i class="far fa-file-pdf mr-1"></i>PDF-файлы
-        </summary>
-        <div class="pdf-row flex items-start justify-between gap-3">
-          <ul class="pdf-draft-list flex-1 space-y-1 text-sm"></ul>
-          <div class="shrink-0">
-            <input type="file" accept="application/pdf" multiple class="hidden pdf-draft-input">
-            <button type="button" class="px-3 py-1.5 text-sm bg-primary text-white rounded hover:bg-secondary add-pdf-draft-btn">
-              <i class="far fa-file-pdf mr-1"></i>Загрузить PDF
+      <div class="pdf-draft-section rounded-2xl border border-gray-200/90 bg-gray-50/30 p-4 dark:border-gray-600/70 dark:bg-gray-900/20">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div class="flex min-w-0 flex-1 items-start gap-3">
+            <span class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-600 dark:bg-red-500/15 dark:text-red-400" aria-hidden="true">
+              <i class="far fa-file-pdf text-base"></i>
+            </span>
+            <div class="min-w-0">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">PDF-документы</h3>
+              <p class="mt-0.5 text-xs leading-relaxed text-gray-400 dark:text-gray-500">Будут сохранены вместе с закладкой. Только формат PDF.</p>
+            </div>
+          </div>
+          <div class="flex flex-shrink-0 items-center gap-2">
+            <input type="file" accept="application/pdf" multiple class="hidden pdf-draft-input" aria-label="Выбрать PDF для черновика закладки">
+            <button type="button" class="add-pdf-draft-btn inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-gray-500 dark:hover:bg-gray-700/80">
+              <i class="fas fa-plus text-xs opacity-80" aria-hidden="true"></i>
+              <span>Добавить</span>
             </button>
           </div>
         </div>
-      </details>`;
+        <div class="pdf-draft-shell mt-4 min-h-[4rem] rounded-xl border-2 border-dashed border-gray-200/90 bg-white/60 px-1 py-1 dark:border-gray-600/60 dark:bg-gray-800/30"></div>
+      </div>`;
 
     const screenshotsBlock = form
         .querySelector('#bookmarkScreenshotThumbnailsContainer')
@@ -558,13 +671,9 @@ export function attachBookmarkPdfHandlers(form) {
         form.appendChild(block);
     }
 
-    const detailsEl = block.querySelector('details');
-    const rowEl = block.querySelector('.pdf-row');
-    const list = block.querySelector('.pdf-draft-list');
+    const draftShell = block.querySelector('.pdf-draft-shell');
     const input = block.querySelector('.pdf-draft-input');
     const btn = block.querySelector('.add-pdf-draft-btn');
-
-    detailsEl.addEventListener('toggle', () => (block.dataset.userToggled = '1'));
 
     if (btn && btn.dataset.wired !== '1') {
         btn.dataset.wired = '1';
@@ -588,49 +697,75 @@ export function attachBookmarkPdfHandlers(form) {
         const files = Array.from(uniq.values());
         form._tempPdfFiles = files;
 
+        if (!draftShell) return;
+        draftShell.innerHTML = '';
+
         if (!files.length) {
-            list.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
-            if (!block.dataset.userToggled) detailsEl.open = true;
+            const empty = document.createElement('div');
+            empty.className =
+                'flex flex-col items-center justify-center gap-1.5 py-8 px-4 text-center text-xs text-gray-400 dark:text-gray-500';
+            empty.innerHTML =
+                '<span class="text-sm font-medium text-gray-500 dark:text-gray-400">Пока нет файлов</span><span>Добавьте PDF — они прикрепятся при сохранении закладки.</span>';
+            draftShell.appendChild(empty);
+            draftShell.className =
+                'pdf-draft-shell mt-4 min-h-[4rem] rounded-xl border-2 border-dashed border-gray-200/90 bg-white/60 px-1 py-1 dark:border-gray-600/60 dark:bg-gray-800/30';
             return;
         }
 
-        const frag = document.createDocumentFragment();
+        draftShell.className =
+            'pdf-draft-shell mt-4 min-h-[4rem] rounded-xl border border-gray-200/90 bg-white px-0 py-0 shadow-sm dark:border-gray-600/80 dark:bg-gray-800/40';
+
+        const ul = document.createElement('ul');
+        ul.className = 'divide-y divide-gray-100 dark:divide-gray-700/80';
+        ul.setAttribute('role', 'list');
+
         files.forEach((file, idx) => {
             const li = document.createElement('li');
             li.className =
-                'flex items-center justify-between bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded';
+                'flex items-center gap-3 px-3 py-3 sm:px-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/25';
 
             const displayName =
-                typeof file?.name === 'string' && file.name.trim() ? file.name : `PDF ${idx + 1}`;
-            const safe = displayName.replace(
-                /[<>&"']/g,
-                (s) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[s],
-            );
-            const sizeKb = Math.max(1, Math.round((file.size || 0) / 1024));
+                typeof file?.name === 'string' && file.name.trim() ? file.name.trim() : `PDF ${idx + 1}`;
+            const sizeLabel = formatPdfSize(file.size || 0);
 
-            li.innerHTML = `
-              <div class="truncate pr-2">
-                <i class="far fa-file-pdf mr-2"></i>
-                <span title="${safe}">${safe}</span>
-                <span class="text-gray-500">(${sizeKb} KB)</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <button class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300" data-act="rm">Удалить</button>
-              </div>`;
+            const iconWrap = document.createElement('div');
+            iconWrap.className =
+                'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/[0.08] text-red-600 dark:bg-red-400/10 dark:text-red-400';
+            iconWrap.setAttribute('aria-hidden', 'true');
+            iconWrap.innerHTML = '<i class="far fa-file-pdf"></i>';
 
-            li.querySelector('[data-act="rm"]').addEventListener('click', () => {
+            const meta = document.createElement('div');
+            meta.className = 'min-w-0 flex-1';
+            const nameEl = document.createElement('p');
+            nameEl.className = 'truncate text-sm font-medium text-gray-900 dark:text-gray-100';
+            nameEl.textContent = displayName;
+            nameEl.title = displayName;
+            const sizeEl = document.createElement('p');
+            sizeEl.className = 'mt-0.5 text-xs text-gray-500 dark:text-gray-400 tabular-nums';
+            sizeEl.textContent = sizeLabel;
+            meta.appendChild(nameEl);
+            meta.appendChild(sizeEl);
+
+            const rmBtn = document.createElement('button');
+            rmBtn.type = 'button';
+            rmBtn.className =
+                'rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:hover:bg-gray-700 dark:hover:text-gray-200';
+            rmBtn.setAttribute('aria-label', `Убрать из списка: ${displayName}`);
+            rmBtn.innerHTML = '<i class="fas fa-times text-sm" aria-hidden="true"></i>';
+            rmBtn.addEventListener('click', () => {
                 const curr = Array.from(form._tempPdfFiles || []);
                 curr.splice(idx, 1);
                 form._tempPdfFiles = curr;
                 refreshDraftList();
             });
 
-            frag.appendChild(li);
+            li.appendChild(iconWrap);
+            li.appendChild(meta);
+            li.appendChild(rmBtn);
+            ul.appendChild(li);
         });
 
-        list.innerHTML = '';
-        list.appendChild(frag);
-        detailsEl.open = true;
+        draftShell.appendChild(ul);
     };
 
     if (input && input.dataset.wired !== '1') {
@@ -647,9 +782,9 @@ export function attachBookmarkPdfHandlers(form) {
         });
     }
 
-    if (rowEl && !rowEl.dataset.dndWired) {
-        rowEl.dataset.dndWired = '1';
-        setupPdfDragAndDrop(rowEl, (files) => {
+    if (draftShell && !draftShell.dataset.dndWired) {
+        draftShell.dataset.dndWired = '1';
+        setupPdfDragAndDrop(draftShell, (files) => {
             const curr = Array.from(form._tempPdfFiles || []);
             const seen = new Set(curr.map(makeKey));
             const toAdd = Array.from(files || []).filter((f) => !seen.has(makeKey(f)));

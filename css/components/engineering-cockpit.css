@@ -1,24 +1,10 @@
 /* =================================================================== */
 /*    МАШИННОЕ ОТДЕЛЕНИЕ (Engineering Cockpit)                         */
-/*    Стили на базе theme/variables.css — централизованная палитра    */
+/*    Те же семантические токены, что и остальное приложение          */
 /* =================================================================== */
 
-/* Область модалки всегда в тёмной палитре (централизованная палитра из variables.css) */
 #engineeringCockpitModal .engineering-cockpit-shell {
-    --color-background: var(--palette-dark-bg);
-    --color-surface-1: var(--palette-dark-surface-1);
-    --color-surface-2: var(--palette-dark-surface-2);
-    --color-border: var(--palette-dark-border);
-    --color-border-interactive: var(--palette-dark-border);
-    --color-text-primary: var(--palette-dark-text);
-    --color-text-secondary: var(--palette-dark-text-secondary);
-    --color-input-bg: var(--palette-dark-input-bg);
-    --color-hover-subtle: var(--palette-dark-hover);
-    background-color: var(--color-background);
-    color: var(--color-text-primary);
-    border-color: var(--color-border);
     backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
-    /* Фиксированная высота с учётом safe area; контент не раздувает модалку, работает прокрутка */
     height: calc(92vh - var(--safe-area-top) - var(--safe-area-bottom));
     max-height: calc(92vh - var(--safe-area-top) - var(--safe-area-bottom));
     min-height: 0;
@@ -26,7 +12,6 @@
     flex-direction: column;
 }
 
-/* Компактный вид: только шапка + форма входа (до ввода пароля); на узких экранах — по ширине viewport с учётом safe area */
 #engineeringCockpitModal .engineering-cockpit-shell.engineering-cockpit-shell--compact {
     width: auto;
     max-width: min(28rem, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline)));
@@ -35,7 +20,6 @@
     max-height: 80vh;
 }
 
-/* В компактном режиме кнопку «Развернуть» не показываем */
 #engineeringCockpitModal .engineering-cockpit-shell.engineering-cockpit-shell--compact .engineering-cockpit-fullscreen-btn {
     display: none;
 }
@@ -77,7 +61,6 @@
     font-size: 1.25rem;
 }
 
-/* Блок авторизации */
 .engineering-cockpit-auth {
     padding: 1.5rem var(--cockpit-padding-inline);
     display: flex;
@@ -116,7 +99,7 @@
 }
 
 .engineering-cockpit-password-input::placeholder {
-    color: var(--color-text-secondary);
+    color: var(--color-text-placeholder);
 }
 
 .engineering-cockpit-password-input:focus {
@@ -148,12 +131,11 @@
 
 .engineering-cockpit-auth-message {
     font-size: 0.75rem;
-    color: var(--hint-action);
+    color: var(--color-text-secondary);
     min-height: 1.25rem;
     width: 100%;
 }
 
-/* Туллибар вкладок и кнопок */
 .engineering-cockpit-toolbar {
     padding: var(--cockpit-padding-block) var(--cockpit-padding-inline);
     border-bottom: 1px solid var(--color-border);
@@ -215,7 +197,52 @@
     outline-offset: 2px;
 }
 
-/* Контент и вкладки — единственная прокручиваемая область */
+/* Панель как у блока кода: копирование внутри, липкое сверху при прокрутке контента */
+.engineering-cockpit-panel {
+    border: 1px solid var(--color-border);
+    border-radius: var(--cockpit-radius-lg);
+    background-color: var(--color-surface-1);
+    overflow: hidden;
+}
+
+.engineering-cockpit-panel-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.3rem 0.4rem;
+    background-color: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.engineering-cockpit-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    border-radius: var(--cockpit-radius);
+    background-color: var(--color-surface-1);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    font-size: 0.875rem;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.engineering-cockpit-icon-btn:hover {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+}
+
+.engineering-cockpit-icon-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
 .engineering-cockpit-content {
     padding: var(--cockpit-padding-inline);
     flex: 1 1 0;
@@ -236,24 +263,23 @@
     margin: 0;
     padding: var(--cockpit-padding-inline);
     min-height: 0;
-    background-color: var(--color-surface-1);
+    background-color: transparent;
     color: var(--color-text-primary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--cockpit-radius-lg);
-    overflow: auto;
+    border: none;
+    border-radius: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
     font-size: 0.8125rem;
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-/* Полноэкранный режим: shell на весь экран (переопределяем 92vh) */
 #engineeringCockpitModal.is-fullscreen .engineering-cockpit-shell {
     height: 100vh;
     max-height: 100vh;
 }
 
-/* Workspace контейнер — забирает оставшуюся высоту, контент прокручивается */
 #engineeringCockpitWorkspace {
     display: flex;
     flex-direction: column;
@@ -262,28 +288,34 @@
     overflow: hidden;
 }
 
-/* Скроллбар внутри модалки — тёмный (модалка всегда тёмная) */
-#engineeringCockpitModal .engineering-cockpit-content,
-#engineeringCockpitModal .engineering-cockpit-pre {
+#engineeringCockpitModal .engineering-cockpit-content {
     scrollbar-width: thin;
-    scrollbar-color: var(--palette-dark-border) var(--scrollbar-track-color-dark);
+    scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-light);
 }
-#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar,
-#engineeringCockpitModal .engineering-cockpit-pre::-webkit-scrollbar {
+
+html.dark #engineeringCockpitModal .engineering-cockpit-content {
+    scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-dark);
+}
+
+#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
-#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-track,
-#engineeringCockpitModal .engineering-cockpit-pre::-webkit-scrollbar-track {
+
+#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-track {
+    background-color: var(--scrollbar-track-color-light);
+    border-radius: 4px;
+}
+
+html.dark #engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-track {
     background-color: var(--scrollbar-track-color-dark);
+}
+
+#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-bg);
     border-radius: 4px;
 }
-#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-thumb,
-#engineeringCockpitModal .engineering-cockpit-pre::-webkit-scrollbar-thumb {
-    background-color: var(--palette-dark-border);
-    border-radius: 4px;
-}
-#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-thumb:hover,
-#engineeringCockpitModal .engineering-cockpit-pre::-webkit-scrollbar-thumb:hover {
-    background-color: var(--palette-dark-hover);
+
+#engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover-bg, var(--color-border-interactive));
 }

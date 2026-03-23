@@ -73,8 +73,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260317-233039-f29c985"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260317-233039-f29c985"></script>
+        <script src="js/vendor-config.js?v=legacy-20260323-235811-fa1c389"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260323-235811-fa1c389"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -140,11 +140,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260317-233039-f29c985"
+            href="css/tailwind.generated.css?v=legacy-20260323-235811-fa1c389"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260317-233039-f29c985" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260323-235811-fa1c389" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -3559,7 +3559,7 @@
                 aria-labelledby="engineeringCockpitTitle"
             >
                 <div
-                    class="engineering-cockpit-shell rounded-xl border shadow-2xl w-full max-w-7xl max-h-[92vh] overflow-hidden flex flex-col"
+                    class="engineering-cockpit-shell bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 rounded-2xl border border-gray-200 shadow-2xl ring-1 ring-black/5 dark:border-gray-700 dark:ring-white/10 w-full max-w-7xl max-h-[92vh] overflow-hidden flex flex-col"
                 >
                     <div class="engineering-cockpit-header flex items-center justify-between">
                         <div>
@@ -3598,12 +3598,14 @@
                                 autocomplete="off"
                                 class="engineering-cockpit-password-input"
                                 placeholder="Пароль доступа"
+                                title="Введите пароль доступа к машинному отделению"
                                 aria-describedby="engineeringCockpitAuthMessage"
                             />
                             <button
                                 id="engineeringCockpitUnlockBtn"
                                 type="button"
                                 class="engineering-cockpit-unlock-btn"
+                                title="Войти в машинное отделение"
                             >
                                 Войти
                             </button>
@@ -3622,19 +3624,40 @@
                                 type="button"
                                 class="engineering-cockpit-tab-btn is-active"
                                 data-cockpit-tab="overview"
+                                title="Сводка системы и окружения"
                             >
                                 Сводка
                             </button>
-                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="logs">
+                            <button
+                                type="button"
+                                class="engineering-cockpit-tab-btn"
+                                data-cockpit-tab="logs"
+                                title="Буфер логов консоли"
+                            >
                                 Логи
                             </button>
-                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="errors">
+                            <button
+                                type="button"
+                                class="engineering-cockpit-tab-btn"
+                                data-cockpit-tab="errors"
+                                title="Ошибки runtime и необработанные сбои"
+                            >
                                 Ошибки
                             </button>
-                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="db">
+                            <button
+                                type="button"
+                                class="engineering-cockpit-tab-btn"
+                                data-cockpit-tab="db"
+                                title="Сводка по хранилищам IndexedDB"
+                            >
                                 База данных
                             </button>
-                            <button type="button" class="engineering-cockpit-tab-btn" data-cockpit-tab="state">
+                            <button
+                                type="button"
+                                class="engineering-cockpit-tab-btn"
+                                data-cockpit-tab="state"
+                                title="Снимок объекта State приложения"
+                            >
                                 State
                             </button>
                             <div class="engineering-cockpit-toolbar-actions">
@@ -3642,6 +3665,7 @@
                                     id="engineeringCockpitRefreshBtn"
                                     type="button"
                                     class="engineering-cockpit-toolbar-btn"
+                                    title="Обновить сводку и данные вкладок"
                                 >
                                     Обновить
                                 </button>
@@ -3649,6 +3673,7 @@
                                     id="engineeringCockpitClearLogsBtn"
                                     type="button"
                                     class="engineering-cockpit-toolbar-btn"
+                                    title="Очистить буферы логов и ошибок в отделении"
                                 >
                                     Очистить логи
                                 </button>
@@ -3656,6 +3681,7 @@
                                     id="engineeringCockpitCopySnapshotBtn"
                                     type="button"
                                     class="engineering-cockpit-toolbar-btn"
+                                    title="Скопировать полный snapshot в буфер обмена"
                                 >
                                     Копировать snapshot
                                 </button>
@@ -3667,34 +3693,99 @@
                                 class="engineering-cockpit-tab is-active"
                                 data-cockpit-tab="overview"
                             >
-                                <pre
-                                    id="engineeringCockpitOverview"
-                                    class="engineering-cockpit-pre"
-                                ></pre>
+                                <div class="engineering-cockpit-panel">
+                                    <div class="engineering-cockpit-panel-toolbar">
+                                        <button
+                                            type="button"
+                                            class="engineering-cockpit-icon-btn"
+                                            data-cockpit-copy="engineeringCockpitOverview"
+                                            title="Копировать текст сводки"
+                                            aria-label="Копировать сводку в буфер обмена"
+                                        >
+                                            <i class="far fa-copy" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <pre
+                                        id="engineeringCockpitOverview"
+                                        class="engineering-cockpit-pre"
+                                    ></pre>
+                                </div>
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="logs">
-                                <pre
-                                    id="engineeringCockpitLogs"
-                                    class="engineering-cockpit-pre"
-                                ></pre>
+                                <div class="engineering-cockpit-panel">
+                                    <div class="engineering-cockpit-panel-toolbar">
+                                        <button
+                                            type="button"
+                                            class="engineering-cockpit-icon-btn"
+                                            data-cockpit-copy="engineeringCockpitLogs"
+                                            title="Копировать все логи раздела"
+                                            aria-label="Копировать логи в буфер обмена"
+                                        >
+                                            <i class="far fa-copy" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <pre
+                                        id="engineeringCockpitLogs"
+                                        class="engineering-cockpit-pre"
+                                    ></pre>
+                                </div>
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="errors">
-                                <pre
-                                    id="engineeringCockpitErrors"
-                                    class="engineering-cockpit-pre"
-                                ></pre>
+                                <div class="engineering-cockpit-panel">
+                                    <div class="engineering-cockpit-panel-toolbar">
+                                        <button
+                                            type="button"
+                                            class="engineering-cockpit-icon-btn"
+                                            data-cockpit-copy="engineeringCockpitErrors"
+                                            title="Копировать все ошибки раздела"
+                                            aria-label="Копировать ошибки в буфер обмена"
+                                        >
+                                            <i class="far fa-copy" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <pre
+                                        id="engineeringCockpitErrors"
+                                        class="engineering-cockpit-pre"
+                                    ></pre>
+                                </div>
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="db">
-                                <pre
-                                    id="engineeringCockpitDb"
-                                    class="engineering-cockpit-pre"
-                                ></pre>
+                                <div class="engineering-cockpit-panel">
+                                    <div class="engineering-cockpit-panel-toolbar">
+                                        <button
+                                            type="button"
+                                            class="engineering-cockpit-icon-btn"
+                                            data-cockpit-copy="engineeringCockpitDb"
+                                            title="Копировать сводку по базам"
+                                            aria-label="Копировать сводку базы данных в буфер обмена"
+                                        >
+                                            <i class="far fa-copy" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <pre
+                                        id="engineeringCockpitDb"
+                                        class="engineering-cockpit-pre"
+                                    ></pre>
+                                </div>
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="state">
-                                <pre
-                                    id="engineeringCockpitState"
-                                    class="engineering-cockpit-pre"
-                                ></pre>
+                                <div class="engineering-cockpit-panel">
+                                    <div class="engineering-cockpit-panel-toolbar">
+                                        <button
+                                            type="button"
+                                            class="engineering-cockpit-icon-btn"
+                                            data-cockpit-copy="engineeringCockpitState"
+                                            title="Копировать текст State"
+                                            aria-label="Копировать State в буфер обмена"
+                                        >
+                                            <i class="far fa-copy" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <pre
+                                        id="engineeringCockpitState"
+                                        class="engineering-cockpit-pre"
+                                    ></pre>
+                                </div>
                             </section>
                         </div>
                     </div>
@@ -4375,9 +4466,19 @@
             window.addEventListener(
                 'error',
                 (event) => {
-                    console.error('Ошибка загрузки:', event);
-                    const filename = event.filename || event.target?.src || '';
+                    const t = event.target;
+                    if (t instanceof HTMLImageElement) {
+                        const src = (t.currentSrc || t.src || '').trim();
+                        console.warn(
+                            '[resource] Изображение не загрузилось:',
+                            t.id || t.className || 'img',
+                            src ? src.slice(0, 240) : '(нет src)',
+                        );
+                        return;
+                    }
+                    const filename = event.filename || (t && 'src' in t ? t.src : '') || '';
                     if (filename && (filename.includes('.js') || filename.includes('module'))) {
+                        console.error('Ошибка загрузки модуля/скрипта:', filename, event.error || event.message || '');
                         const appContent = document.getElementById('appContent');
                         if (appContent && appContent.classList.contains('hidden')) {
                             appContent.classList.remove('hidden');
@@ -4397,7 +4498,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260317-233039-f29c985"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260317-233039-f29c985"></script>
+        <script type="module" src="./script.js?v=legacy-20260323-235811-fa1c389"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260323-235811-fa1c389"></script>
     </body>
 </html>

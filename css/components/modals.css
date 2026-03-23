@@ -166,20 +166,28 @@ body.modal-open {
     white-space: nowrap;
 }
 
-/* Сетка модалки: левая колонка чуть шире, чтобы кнопки внизу не требовали горизонтальной прокрутки */
+/* Сетка модалки: левая колонка (вкладки) уже, правая шире — разделитель визуально ближе к центру */
 @media (min-width: 768px) {
     #customizeUIModal .p-content.overflow-y-auto > .grid {
-        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+        grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
     }
 }
 
+/* Ячейки сетки: min-width 0, чтобы контент не раздувал колонку и не ломал соседние блоки */
+#customizeUIModal .p-content.overflow-y-auto > .grid > * {
+    min-width: 0;
+}
+
 /* Первая колонка (вкладки): разделитель справа на md+ */
+/* min-width: 0 — иначе min-content колонки grid ломает адаптив и кнопки наслаиваются */
 #customizeUIModal .settings-modal-tabs-column {
     padding-right: 0;
+    min-width: 0;
 }
 @media (min-width: 768px) {
     #customizeUIModal .settings-modal-tabs-column {
-        padding-right: var(--content-lg, 1.5rem);
+        padding-right: 0.625rem;
+        margin-right: 0.75rem;
         border-right: 1px solid var(--color-border);
     }
 }
@@ -196,23 +204,43 @@ body.modal-open {
     overflow: auto;
 }
 
-/* Блок «Недавно удаленные», «Повторить онбординг-тур», «Кастомизация» — в один ряд, без переноса; при нехватке места горизонтальная прокрутка */
+/* Блок доп. действий: адаптивная сетка без наслоения (flex+nowrap ломался в узкой колонке ~360px) */
 #customizeUIModal .settings-modal-extra-actions {
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid var(--color-border);
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.25rem), 1fr));
     gap: 0.5rem;
+    align-items: stretch;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
+    width: 100%;
 }
 #customizeUIModal .settings-modal-extra-actions > button {
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.25;
+    padding: 0.45rem 0.5rem;
+    font-size: clamp(0.6875rem, 1.4vw + 0.55rem, 0.8125rem);
+    word-break: break-word;
+}
+#customizeUIModal .settings-modal-extra-actions > button i {
     flex-shrink: 0;
-    white-space: nowrap;
+    margin-right: 0;
+}
+@media (max-width: 380px) {
+    #customizeUIModal .settings-modal-extra-actions > button i {
+        display: none;
+    }
 }
 
 div:has(> #clearClientDataBtn) {

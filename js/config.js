@@ -375,6 +375,36 @@ export const SECTION_GRID_COLS = {
     default: ['grid-cols-1', 'md:grid-cols-2'],
 };
 
+// ---------------------------------------------------------------------------
+// Закладки: панель действий (карточка / список) — полные строки Tailwind JIT
+// ---------------------------------------------------------------------------
+/** Focus ring для клавиатуры на компактных кнопках списка. */
+export const BOOKMARK_ACTION_FOCUS_VISIBLE_CLASS =
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900';
+
+/** Кнопка 32×32 в строке списка закладок. */
+export const BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS =
+    'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-gray-200/90 bg-white text-gray-500 shadow-sm hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-100 transition-colors';
+
+/** Круглая иконка на карточке закладки (ссылка, архив, правка, удаление). */
+export const BOOKMARK_CARD_ICON_BUTTON_CLASS =
+    'p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
+
+/** «Звезда» избранного на карточке (не список). */
+export const BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS =
+    'toggle-favorite-btn p-1.5 text-gray-500 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-primary dark:focus:ring-offset-gray-800 transition-colors';
+
+/** «Звезда» избранного в строке списка закладок. */
+export const BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS = [
+    'toggle-favorite-btn inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl',
+    'border border-gray-200/90 bg-white text-gray-500 shadow-sm',
+    'hover:border-amber-200/80 hover:bg-amber-50/50 hover:text-yellow-600',
+    'dark:border-gray-600 dark:bg-gray-800',
+    'dark:hover:border-amber-700/50 dark:hover:bg-gray-700 dark:hover:text-yellow-300',
+    'transition-colors',
+    BOOKMARK_ACTION_FOCUS_VISIBLE_CLASS,
+].join(' ');
+
 // ============================================================================
 // КОНСТАНТЫ ТЕМЫ (единственный источник для JS; значения синхронизированы с css/theme/variables.css)
 // ============================================================================

@@ -1,8 +1,20 @@
 'use strict';
 
 import { escapeHtml, linkify, truncateText } from '../utils/html.js';
-import { getAllFromIndexedDB, getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
-import { CARD_CONTAINER_CLASSES, LIST_CONTAINER_CLASSES, SECTION_GRID_COLS } from '../config.js';
+import {
+    getAllFromIndexedDB,
+    getAllFromIndexWithKeyVariants,
+    getFromIndexedDB,
+    saveToIndexedDB,
+} from '../db/indexeddb.js';
+import {
+    BOOKMARK_ACTION_FOCUS_VISIBLE_CLASS,
+    BOOKMARK_CARD_ICON_BUTTON_CLASS,
+    BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS,
+    CARD_CONTAINER_CLASSES,
+    LIST_CONTAINER_CLASSES,
+    SECTION_GRID_COLS,
+} from '../config.js';
 import { ARCHIVE_FOLDER_ID, ARCHIVE_FOLDER_NAME } from '../constants.js';
 import { updateSearchIndex } from '../features/search.js';
 import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
@@ -180,6 +192,11 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
     let cardClickOpensUrl = false;
     let fixedUrl = '';
 
+    const listRow = viewMode !== 'cards';
+    const listIconBtnClass = BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS;
+    const listIconBtnFocusedClass = `${BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS} ${BOOKMARK_ACTION_FOCUS_VISIBLE_CLASS}`;
+    const cardIconBtnClass = BOOKMARK_CARD_ICON_BUTTON_CLASS;
+
     if (bookmark.url) {
         fixedUrl = String(bookmark.url)
             .trim()
@@ -192,9 +209,10 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
             cardClickOpensUrl = true;
             externalLinkIconHTML = `
                 <a href="${url.href}" data-action="open-link-icon" target="_blank" rel="noopener noreferrer"
-                   class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                   title="Открыть ссылку">
-                    <i class="fas fa-external-link-alt fa-fw"></i>
+                   class="${listRow ? listIconBtnClass : cardIconBtnClass}"
+                   title="Открыть ссылку"
+                   aria-label="Открыть ссылку в новой вкладке">
+                    <i class="fas fa-external-link-alt text-sm" aria-hidden="true"></i>
                 </a>`;
             urlHostnameHTML = `
                 <a href="${url.href}" data-action="open-link-hostname" target="_blank" rel="noopener noreferrer"
@@ -213,27 +231,36 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
         bookmarkElement.dataset.url = fixedUrl;
     }
 
-    const hasScreenshots =
-        bookmark.screenshotIds &&
-        Array.isArray(bookmark.screenshotIds) &&
-        bookmark.screenshotIds.length > 0;
+    const screenshotIds = Array.isArray(bookmark.screenshotIds) ? bookmark.screenshotIds : [];
+    const hasScreenshots = screenshotIds.length > 0;
+    const shotCount = screenshotIds.length;
     const screenshotButtonHTML = hasScreenshots
-        ? `
-        <button data-action="view-screenshots" class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Просмотреть скриншоты (${bookmark.screenshotIds.length})">
-            <i class="fas fa-images fa-fw"></i>
+        ? listRow
+          ? `
+        <button type="button" data-action="view-screenshots" class="${listIconBtnFocusedClass}" title="Изображения (${shotCount})" aria-label="Просмотреть изображения закладки, ${shotCount} шт.">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400" aria-hidden="true"><i class="far fa-images text-xs"></i></span>
+        </button>`
+          : `
+        <button type="button" data-action="view-screenshots" class="inline-flex h-9 min-w-[2.25rem] items-center justify-center gap-1.5 rounded-xl border border-gray-200/90 bg-white px-2 text-gray-600 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/90 dark:hover:text-gray-100" title="Просмотреть изображения (${shotCount})" aria-label="Просмотреть изображения закладки, ${shotCount} шт.">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400" aria-hidden="true"><i class="far fa-images text-xs"></i></span>
+            <span class="hidden sm:inline text-xs font-medium tabular-nums">${shotCount}</span>
         </button>`
         : '';
 
     let archiveButtonHTML = '';
     if (bookmark.folder === ARCHIVE_FOLDER_ID) {
         archiveButtonHTML = `
-            <button data-action="restore-from-archive" class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Восстановить из архива">
-                <i class="fas fa-box-open fa-fw"></i>
+            <button type="button" data-action="restore-from-archive" class="${
+                listRow ? listIconBtnClass : cardIconBtnClass
+            }" title="Восстановить из архива" aria-label="Восстановить из архива">
+                <i class="fas fa-box-open text-sm" aria-hidden="true"></i>
             </button>`;
     } else {
         archiveButtonHTML = `
-            <button data-action="move-to-archive" class="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Переместить в архив">
-                <i class="fas fa-archive fa-fw"></i>
+            <button type="button" data-action="move-to-archive" class="${
+                listRow ? listIconBtnClass : cardIconBtnClass
+            }" title="Переместить в архив" aria-label="Переместить в архив">
+                <i class="fas fa-archive text-sm" aria-hidden="true"></i>
             </button>`;
     }
 
@@ -251,25 +278,30 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                   bookmark.title,
                   bookmark.description,
                   isFav,
+                  listRow ? 'bookmark-list' : 'default',
               )
             : '';
 
+    const editDeleteClass = listRow ? listIconBtnFocusedClass : cardIconBtnClass;
+
     const actionsHTML = `
-        <div class="bookmark-actions flex items-center gap-0.5 ${
+        <div class="bookmark-actions flex items-center ${
+            listRow ? 'gap-1' : 'gap-0.5'
+        } ${
             viewMode === 'cards'
                 ? 'absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200'
                 : 'flex-shrink-0 ml-auto pl-2'
         }">
-            ${viewMode !== 'cards' ? folderBadgeHTML : ''}
+            ${!listRow ? '' : folderBadgeHTML}
             ${favButtonHTML}
             ${screenshotButtonHTML}
             ${externalLinkIconHTML}
             ${archiveButtonHTML}
-            <button data-action="edit" class="edit-bookmark p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Редактировать">
-                <i class="fas fa-edit fa-fw"></i>
+            <button type="button" data-action="edit" class="edit-bookmark ${editDeleteClass}" title="Редактировать" aria-label="Редактировать закладку">
+                <i class="fas fa-edit text-sm" aria-hidden="true"></i>
             </button>
-            <button data-action="delete" class="delete-bookmark p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Удалить">
-                <i class="fas fa-trash fa-fw"></i>
+            <button type="button" data-action="delete" class="delete-bookmark ${editDeleteClass}" title="Удалить" aria-label="Удалить закладку">
+                <i class="fas fa-trash text-sm" aria-hidden="true"></i>
             </button>
         </div>`;
 
@@ -311,8 +343,8 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
             'bookmark-item view-item group relative cursor-pointer flex items-center p-content-sm rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
 
         const listIconHTML = bookmark.url
-            ? '<i class="fas fa-link text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>'
-            : '<i class="fas fa-sticky-note text-gray-400 dark:text-gray-500 mr-3 text-sm"></i>';
+            ? `<span class="mr-3 flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200/90 bg-gray-50 text-gray-500 shadow-sm dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-400" aria-hidden="true" title="Закладка со ссылкой"><i class="fas fa-link text-xs"></i></span>`
+            : `<span class="mr-3 flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50/80 text-amber-700 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-400" aria-hidden="true" title="Текстовая заметка"><i class="fas fa-sticky-note text-xs"></i></span>`;
 
         const listDescContent = safeDescription
             ? linkify(truncateText(bookmark.description || '', 70))
@@ -1942,7 +1974,11 @@ export async function handleViewBookmarkScreenshots(bookmarkId) {
             return;
         }
 
-        const allParentScreenshots = await getAllFromIndex('screenshots', 'parentId', bookmarkId);
+        const allParentScreenshots = await getAllFromIndexWithKeyVariants(
+            'screenshots',
+            'parentId',
+            bookmarkId,
+        );
 
         const bookmarkScreenshots = allParentScreenshots.filter((s) => s.parentType === 'bookmark');
         console.log(
