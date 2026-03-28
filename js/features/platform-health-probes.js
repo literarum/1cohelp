@@ -10,6 +10,7 @@ import {
     getRuntimeTelemetrySupportSnapshot,
     RUNTIME_LONGTASK_RECORD_MIN_MS,
 } from './runtime-telemetry-observers.js';
+import { inferSystemFromTitle } from './health-report-format.js';
 
 /**
  * @param {number} bytes
@@ -23,7 +24,7 @@ function formatMb(bytes) {
 /**
  * @param {(p: Promise<unknown>, ms: number) => Promise<unknown>} runWithTimeout
  * @param {{ probeTag?: 'startup'|'manual'|'watchdog' }} [opts]
- * @returns {Promise<{ level: 'info'|'warn'|'error', title: string, message: string }[]>}
+ * @returns {Promise<{ level: 'info'|'warn'|'error', title: string, message: string, system?: string }[]>}
  */
 export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) {
     const tag = opts.probeTag === 'manual' || opts.probeTag === 'watchdog' ? opts.probeTag : 'startup';
@@ -260,6 +261,10 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
             : 'Тип longtask не в supportedEntryTypes (часто Safari/Firefox).',
     });
 
+    for (const row of rows) {
+        row.system = inferSystemFromTitle(row.title);
+    }
+
     return rows;
 }
 
@@ -271,6 +276,6 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
 export async function runPlatformHealthProbeSuite(runWithTimeout, report, opts = {}) {
     const rows = await collectPlatformHealthProbeRows(runWithTimeout, opts);
     for (const r of rows) {
-        report(r.level, r.title, r.message);
+        report(r.level, r.title, r.message, { system: r.system });
     }
 }

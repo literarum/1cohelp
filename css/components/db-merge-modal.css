@@ -1017,13 +1017,6 @@ html.dark #dbMergeModal .db-merge-risk-hint--aside {
     opacity: 0.92;
 }
 
-#dbMergeModal #dbMergeSelectFileBtn:focus-visible {
-    outline: none;
-    box-shadow:
-        0 0 0 2px var(--color-surface-2),
-        0 0 0 4px var(--color-primary);
-}
-
 /* Утилита: не переносить текст */
 #dbMergeModal .db-merge-nowrap {
     white-space: nowrap;

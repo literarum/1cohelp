@@ -165,6 +165,20 @@ export function ensureInnPreviewStyles() {
         padding: 0;
         margin: 0;
     }
+    .client-notes-preview .client-notes-inn-search-flash{
+        background-color: var(--search-highlight-text-bg-light, #fff352);
+        color: var(--search-highlight-text-color-light, #333333);
+        border-radius: 2px;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+        display: inline;
+        padding: 0;
+        margin: 0;
+    }
+    .dark .client-notes-preview .client-notes-inn-search-flash{
+        background-color: var(--search-highlight-text-bg-dark, #ffd700);
+        color: var(--search-highlight-text-color-dark, #1a1a1a);
+    }
  
   `;
     document.head.appendChild(style);

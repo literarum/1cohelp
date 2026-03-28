@@ -243,6 +243,25 @@ html:not(.dark) #appContent .reglament-category .category-title {
     color: var(--color-text-primary);
 }
 
+/* Заголовок и иконка категории: карточка с view-manager получает items-start — даём растягивание и ровную ось по центру */
+#appContent .reglament-category .category-content-wrapper {
+    align-self: stretch;
+}
+#appContent .reglament-category .category-header-info {
+    align-items: center;
+}
+#appContent .reglament-category .category-icon-wrap {
+    align-self: center;
+}
+#appContent .reglament-category .category-icon {
+    display: block;
+    line-height: 1;
+}
+#appContent .reglament-category .category-title {
+    margin: 0;
+    line-height: 1.35;
+}
+
 /* Семантический класс заголовка карточки (регламенты, закладки, ссылки и т.д.) — централизованное управление */
 .card-title-text {
     color: var(--color-text-primary);

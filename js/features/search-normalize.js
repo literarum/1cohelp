@@ -174,6 +174,24 @@ export function tokenizeNormalized(text, opts = {}) {
     return Array.from(tokens);
 }
 
+/**
+ * Токены для обхода searchIndex по строке запроса (после sanitize).
+ * Чисто цифровой запрос не раскладываем на префиксы 77, 770, 7707, … — иначе
+ * IDBKeyRange.bound('77','77\uffff') перебирает лавину ключей и поиск не доходит до подсказок по ИНН.
+ * @param {string} query
+ * @returns {string[]}
+ */
+export function indexQueryTokensFromUserQuery(query) {
+    if (typeof query !== 'string') return [];
+    const q = query.trim();
+    if (!q) return [];
+    if (/^\d+$/.test(q)) {
+        if (q.length <= 4) return [];
+        return [q];
+    }
+    return tokenizeNormalized(q).filter((word) => word.length >= 2);
+}
+
 /** Символы для подстановки при генерации вариантов с опечаткой (Левенштейн 1) */
 const TYPO_SUBSTITUTE_CHARS = 'аеоиуыэяёйь';
 

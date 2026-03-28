@@ -304,12 +304,7 @@ header button {
     }
 }
 
-button:focus-visible,
-a:focus-visible,
-[tabindex]:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-}
+/* Глобальное отключение фокус-контуров — см. конец css/inline-styles.css (последний в каскаде) */
 
 input:focus,
 input:focus-visible,

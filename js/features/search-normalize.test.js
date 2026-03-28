@@ -6,6 +6,7 @@ import {
     normalizeTextForIndex,
     tokenizeNormalized,
     suggestTokenVariants,
+    indexQueryTokensFromUserQuery,
 } from './search-normalize.js';
 
 describe('search-normalize stemWord', () => {
@@ -66,6 +67,30 @@ describe('search-normalize tokenizeNormalized', () => {
     it('пустая строка даёт пустой массив', () => {
         expect(tokenizeNormalized('')).toEqual([]);
         expect(tokenizeNormalized(null)).toEqual([]);
+    });
+});
+
+describe('indexQueryTokensFromUserQuery', () => {
+    it('для полного ИНН даёт один токен, без префиксов 77/770/…', () => {
+        const inn = '7707083893';
+        const got = indexQueryTokensFromUserQuery(inn);
+        expect(got).toEqual([inn]);
+        expect(tokenizeNormalized(inn).length).toBeGreaterThan(3);
+    });
+
+    it('короткие только-цифры (≤4) — пусто, чтобы не сканировать индекс по «77»', () => {
+        expect(indexQueryTokensFromUserQuery('77')).toEqual([]);
+        expect(indexQueryTokensFromUserQuery('7707')).toEqual([]);
+    });
+
+    it('5+ цифр подряд — один токен целиком', () => {
+        expect(indexQueryTokensFromUserQuery('77070')).toEqual(['77070']);
+    });
+
+    it('смешанный запрос — обычная токенизация', () => {
+        const got = indexQueryTokensFromUserQuery('инн 77070');
+        expect(got.length).toBeGreaterThan(0);
+        expect(got).not.toEqual(['инн 77070']);
     });
 });
 

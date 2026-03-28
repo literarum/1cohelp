@@ -1,5 +1,10 @@
 'use strict';
 
+import {
+    buildGroupedHealthListHtml,
+    buildHealthSubsystemSummaryHtml,
+} from '../features/health-report-format.js';
+
 let deps = {
     State: null,
     loadUISettings: null,
@@ -324,21 +329,6 @@ export function initUISettingsModalHandlers() {
             const body = modal.querySelector('#healthReportModalBody');
             if (!body) return;
             const esc = escapeHtml;
-            const buildSectionList = (items, itemIcon) => {
-                if (!items?.length) return '';
-                return items
-                    .map(
-                        (i) =>
-                            `<li class="health-report-item">
-                                <span class="health-report-item-icon">${itemIcon}</span>
-                                <div>
-                                    <div class="health-report-item-title">${esc(i.title)}</div>
-                                    <div class="health-report-item-message">${esc(i.message)}</div>
-                                </div>
-                            </li>`,
-                    )
-                    .join('');
-            };
             const summaryClass = report.success
                 ? 'health-report-summary-ok'
                 : 'health-report-summary-fail';
@@ -351,17 +341,26 @@ export function initUISettingsModalHandlers() {
             if (report.finishedAt) metaParts.push(`Окончание: ${esc(report.finishedAt)}`);
             const summaryMeta = metaParts.length ? metaParts.join(' · ') : '';
 
-            const errorsList = buildSectionList(
+            const subsystemSummary = buildHealthSubsystemSummaryHtml(
+                report.errors,
+                report.warnings,
+                report.checks,
+                esc,
+            );
+            const errorsList = buildGroupedHealthListHtml(
                 report.errors,
                 '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>',
+                esc,
             );
-            const warningsList = buildSectionList(
+            const warningsList = buildGroupedHealthListHtml(
                 report.warnings,
                 '<i class="fas fa-exclamation-triangle text-amber-500 dark:text-amber-400" aria-hidden="true"></i>',
+                esc,
             );
-            const checksList = buildSectionList(
+            const checksList = buildGroupedHealthListHtml(
                 report.checks,
                 '<i class="fas fa-check text-primary" aria-hidden="true"></i>',
+                esc,
             );
 
             body.innerHTML = `
@@ -373,6 +372,7 @@ export function initUISettingsModalHandlers() {
                                 ${summaryMeta ? `<div class="health-report-summary-meta">${summaryMeta}</div>` : ''}
                             </div>
                         </div>
+                        ${subsystemSummary}
                         <div class="health-report-section health-report-section-errors">
                             <div class="health-report-section-header health-report-section-errors">
                                 <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
@@ -380,7 +380,7 @@ export function initUISettingsModalHandlers() {
                             </div>
                             ${
                                 report.errors?.length
-                                    ? `<ul class="health-report-section-list">${errorsList}</ul>`
+                                    ? errorsList
                                     : `<div class="health-report-empty">Ошибок не обнаружено.</div>`
                             }
                         </div>
@@ -394,7 +394,7 @@ export function initUISettingsModalHandlers() {
                                 <div class="health-report-section-body-inner">
                                     ${
                                         report.warnings?.length
-                                            ? `<ul class="health-report-section-list">${warningsList}</ul>`
+                                            ? warningsList
                                             : `<div class="health-report-empty">Предупреждений нет.</div>`
                                     }
                                 </div>
@@ -403,14 +403,14 @@ export function initUISettingsModalHandlers() {
                         <div class="health-report-section health-report-section-checks health-report-section-collapsible is-collapsed">
                             <div class="health-report-section-header health-report-section-checks">
                                 <span class="health-report-section-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></span>
-                                <span>Проверки (${report.checks?.length ?? 0}) — слои, хранилища, надёжность данных</span>
+                                <span>Проверки (${report.checks?.length ?? 0}) — по подсистемам (многослойный контур)</span>
                                 <button type="button" class="health-report-section-toggle" aria-expanded="false" aria-label="Развернуть раздел" title="Развернуть">&#9654;</button>
                             </div>
                             <div class="health-report-section-body">
                                 <div class="health-report-section-body-inner">
                                     ${
                                         report.checks?.length
-                                            ? `<ul class="health-report-section-list">${checksList}</ul>`
+                                            ? checksList
                                             : `<div class="health-report-empty">Список проверок пуст.</div>`
                                     }
                                 </div>

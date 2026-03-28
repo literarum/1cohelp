@@ -52,11 +52,6 @@
     background-color: var(--color-surface-2);
 }
 
-.engineering-cockpit-close-btn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-}
-
 .engineering-cockpit-close-icon {
     font-size: 1.25rem;
 }
@@ -104,8 +99,8 @@
 
 .engineering-cockpit-password-input:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-color: var(--color-border);
+    box-shadow: none;
 }
 
 .engineering-cockpit-unlock-btn {
@@ -122,11 +117,6 @@
 
 .engineering-cockpit-unlock-btn:hover {
     opacity: 0.9;
-}
-
-.engineering-cockpit-unlock-btn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
 }
 
 .engineering-cockpit-auth-message {
@@ -166,11 +156,6 @@
     border-color: var(--color-primary);
 }
 
-.engineering-cockpit-tab-btn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-}
-
 .engineering-cockpit-toolbar-actions {
     margin-left: auto;
     display: flex;
@@ -190,11 +175,6 @@
 
 .engineering-cockpit-toolbar-btn:hover {
     background-color: var(--color-surface-2);
-}
-
-.engineering-cockpit-toolbar-btn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
 }
 
 /* Панель как у блока кода: копирование внутри, липкое сверху при прокрутке контента */
@@ -236,11 +216,6 @@
 .engineering-cockpit-icon-btn:hover {
     background-color: var(--color-background);
     color: var(--color-text-primary);
-}
-
-.engineering-cockpit-icon-btn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
 }
 
 .engineering-cockpit-content {

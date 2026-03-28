@@ -21,6 +21,7 @@ import {
 } from '../constants.js';
 import { base64ToBlob } from '../utils/helpers.js';
 import { appInit } from '../app/app-init.js';
+import { validateExportedBackupShapeForMerge } from './db-merge.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setImportExportDependencies)
@@ -2040,7 +2041,7 @@ export async function exportAllData(options = {}) {
 
     State.isExportOperationInProgress = true;
     let functionResult = false;
-    const { isForcedBackupMode = false } = options;
+    const { isForcedBackupMode = false, dryRunForHealth = false } = options;
 
     deps.NotificationService?.dismissImportant('export-cancelled-timeout');
     deps.NotificationService?.dismissImportant('export-cancelled-by-user-focus');
@@ -2178,6 +2179,23 @@ export async function exportAllData(options = {}) {
             results.forEach((result) => {
                 exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
             });
+
+            // Сухой прогон для диагностики: полный путь чтения + контракт слияния + сериализация без файла/диалога.
+            if (dryRunForHealth === true) {
+                const shape = validateExportedBackupShapeForMerge(exportData);
+                if (!shape.ok) {
+                    throw new Error(shape.message || 'Формат не совместим со слиянием.');
+                }
+                try {
+                    JSON.stringify(exportData);
+                } catch (serErr) {
+                    throw new Error(
+                        `Сериализация полного экспорта невозможна: ${serErr?.message || serErr}`,
+                    );
+                }
+                functionResult = true;
+                return true;
+            }
         } catch (dataPrepError) {
             console.error(
                 '[exportAllData] Ошибка при подготовке данных для экспорта:',

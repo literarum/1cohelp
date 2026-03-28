@@ -79,7 +79,7 @@ function sanitizeTextForPdf(text) {
  * @param {Element} root
  * @returns {{ type: string, level?: number, text: string, images?: string[] }[]}
  */
-function extractPdfContent(root) {
+export function extractPdfContent(root) {
     const blocks = [];
     if (!root || !root.querySelector) return blocks;
 
@@ -127,6 +127,21 @@ function extractPdfContent(root) {
         if (el.classList?.contains('pdf-caption')) {
             const text = (el.textContent || '').trim();
             if (text) blocks.push({ type: 'caption', text });
+            return;
+        }
+
+        // Скриншоты вне шагов алгоритма (например экспорт закладки): контейнер с <img data:...>.
+        // Раньше walk заходил в <img> без обработчика — изображения не попадали в PDF.
+        if (
+            el.classList?.contains('export-pdf-image-container') &&
+            !el.closest('.algorithm-step, .reglament-item')
+        ) {
+            const imgs = Array.from(el.querySelectorAll('img'))
+                .map((img) => img.src)
+                .filter((src) => src && (src.startsWith('data:') || src.startsWith('http')));
+            if (imgs.length) {
+                blocks.push({ type: 'block', text: '', images: imgs });
+            }
             return;
         }
 

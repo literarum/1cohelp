@@ -6,7 +6,7 @@
  */
 
 import { THEME_DEFAULTS } from '../config.js';
-import { USER_PREFERENCES_KEY } from '../constants.js';
+import { ONBOARDING_AUTO_OFFER_STORAGE_KEY, USER_PREFERENCES_KEY } from '../constants.js';
 import { getFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
@@ -25,6 +25,41 @@ export function setUserPreferencesDependencies(deps) {
     if (deps.defaultPanelOrder !== undefined) defaultPanelOrder = deps.defaultPanelOrder;
     if (deps.tabsConfig !== undefined) tabsConfig = deps.tabsConfig;
     if (deps.showNotification !== undefined) showNotification = deps.showNotification;
+}
+
+/**
+ * Исчерпан ли одноразовый автопоказ онбординга (миграция + признаки «уже пользовался приложением»).
+ * @param {Record<string, unknown>} prefs
+ * @param {Record<string, unknown>} defaults
+ */
+function inferOnboardingAutoPromptConsumed(prefs, defaults) {
+    if (!prefs || typeof prefs !== 'object') return false;
+    if (prefs.onboardingTourCompleted === true) return true;
+    if (prefs.onboardingTourAutoPromptConsumed === true) return true;
+    try {
+        if (
+            typeof localStorage !== 'undefined' &&
+            localStorage.getItem(ONBOARDING_AUTO_OFFER_STORAGE_KEY) === '1'
+        ) {
+            return true;
+        }
+    } catch {
+        /* ignore */
+    }
+    const ext = prefs.employeeExtension != null ? String(prefs.employeeExtension).trim() : '';
+    if (ext.length > 0) return true;
+    if (prefs.welcomeTextShownInitially === true) return true;
+    if (prefs.disableForcedBackupOnImport === true) return true;
+    if (prefs.staticHeader === true) return true;
+    if (prefs.showBlacklistUsageWarning === false) return true;
+    if (typeof prefs.fontSize === 'number' && prefs.fontSize !== (defaults.fontSize ?? 80)) {
+        return true;
+    }
+    if (prefs.theme && defaults.theme && prefs.theme !== defaults.theme) return true;
+    if (prefs.mainLayout && defaults.mainLayout && prefs.mainLayout !== defaults.mainLayout) {
+        return true;
+    }
+    return false;
 }
 
 // ============================================================================
@@ -93,6 +128,8 @@ export async function loadUserPreferences() {
         staticHeader: false,
         welcomeTextShownInitially: false,
         onboardingTourCompleted: false,
+        /** Автопоказ тура при старте уже использован (или отклонён) — не предлагать снова */
+        onboardingTourAutoPromptConsumed: false,
         clientNotesFontSize: 100,
         employeeExtension: '',
         textareaHeights: {},
@@ -204,6 +241,20 @@ export async function loadUserPreferences() {
         finalSettings.panelOrder = effectiveOrder;
         finalSettings.panelVisibility = effectiveVisibility;
 
+        finalSettings.onboardingTourAutoPromptConsumed = inferOnboardingAutoPromptConsumed(
+            finalSettings,
+            defaultPreferences,
+        );
+        if (finalSettings.onboardingTourAutoPromptConsumed) {
+            try {
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem(ONBOARDING_AUTO_OFFER_STORAGE_KEY, '1');
+                }
+            } catch {
+                /* ignore */
+            }
+        }
+
         State.userPreferences = { ...finalSettings };
         // Вызываем saveUserPreferences напрямую из модуля
         await saveUserPreferences();
@@ -249,10 +300,19 @@ export async function saveUserPreferences() {
             'staticHeader',
             'welcomeTextShownInitially',
             'onboardingTourCompleted',
+            'onboardingTourAutoPromptConsumed',
             'clientNotesFontSize',
             'employeeExtension',
             'textareaHeights',
         ];
+        const booleanPreferenceFields = new Set([
+            'showBlacklistUsageWarning',
+            'disableForcedBackupOnImport',
+            'staticHeader',
+            'welcomeTextShownInitially',
+            'onboardingTourCompleted',
+            'onboardingTourAutoPromptConsumed',
+        ]);
         fields.forEach((field) => {
             if (typeof State.userPreferences[field] === 'undefined') {
                 console.warn(
@@ -260,9 +320,10 @@ export async function saveUserPreferences() {
                 );
                 if (field === 'textareaHeights') {
                     State.userPreferences[field] = {};
+                } else if (booleanPreferenceFields.has(field)) {
+                    State.userPreferences[field] = false;
                 } else {
-                    State.userPreferences[field] =
-                        typeof State.userPreferences[field] === 'boolean' ? false : '';
+                    State.userPreferences[field] = '';
                 }
             }
         });

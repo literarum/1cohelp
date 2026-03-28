@@ -37,12 +37,6 @@ body.modal-open {
     transform: translateY(-20vh);
 }
 
-/* Кнопка закрытия (крестик): без фокус-бордера */
-#appConfirmModalCloseBtn:focus,
-#appConfirmModalCloseBtn:focus-visible {
-    outline: none;
-    box-shadow: none;
-}
 #algorithmModal #algorithmSteps,
 #algorithmModal [id='algorithmSteps'] {
     padding: 1rem 1.25rem !important;
@@ -210,9 +204,10 @@ body.modal-open {
     padding-top: 1rem;
     border-top: 1px solid var(--color-border);
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.25rem), 1fr));
-    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.25rem), 1fr));
+    gap: clamp(0.375rem, 1.25vw + 0.2rem, 0.5rem);
     align-items: stretch;
+    justify-items: center;
     min-width: 0;
     width: 100%;
 }
@@ -224,7 +219,7 @@ body.modal-open {
     justify-content: center;
     gap: 0.35rem;
     min-width: 0;
-    width: 100%;
+    width: min(100%, 11.75rem);
     max-width: 100%;
     text-align: center;
     white-space: normal;
@@ -232,6 +227,16 @@ body.modal-open {
     padding: 0.45rem 0.5rem;
     font-size: clamp(0.6875rem, 1.4vw + 0.55rem, 0.8125rem);
     word-break: break-word;
+}
+@media (max-width: 420px) {
+    #customizeUIModal .settings-modal-extra-actions {
+        grid-template-columns: 1fr;
+        justify-items: stretch;
+    }
+    #customizeUIModal .settings-modal-extra-actions > button {
+        width: 100%;
+        max-width: none;
+    }
 }
 #customizeUIModal .settings-modal-extra-actions > button i {
     flex-shrink: 0;
@@ -433,6 +438,12 @@ body.app-backup-warning-perimeter-pulse::before {
 ):not(.hidden) {
     -webkit-backdrop-filter: blur(var(--modal-backdrop-blur)) !important;
     backdrop-filter: blur(var(--modal-backdrop-blur)) !important;
+}
+
+/* Детали закладки: PDF под заголовком секции без лишних вертикальных отступов */
+#bookmarkDetailModal #bookmarkDetailPdfContainer .pdf-attachments-section {
+    margin-top: 0;
+    padding-top: 0;
 }
 
 /* Стили для полноэкранного режима модальных окон */

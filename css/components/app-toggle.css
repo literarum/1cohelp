@@ -62,11 +62,6 @@
     transform: translateX(1.25rem);
 }
 
-.app-toggle input:focus-visible + .app-toggle__track {
-    outline: 2px solid var(--color-primary, #9933ff);
-    outline-offset: 2px;
-}
-
 .app-toggle:hover .app-toggle__track {
     border-color: var(--color-primary, #9933ff);
 }

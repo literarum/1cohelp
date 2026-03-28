@@ -11,6 +11,7 @@ describe('search-health-tests', () => {
             'warn',
             'Поиск / индексация',
             expect.stringContaining('IndexedDB'),
+            { system: 'search' },
         );
     });
 
@@ -54,6 +55,7 @@ describe('search-health-tests', () => {
             'info',
             expect.any(String),
             expect.stringContaining('Записей'),
+            { system: 'search' },
         );
     });
 

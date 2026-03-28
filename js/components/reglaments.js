@@ -242,10 +242,12 @@ export function createCategoryElement(categoryId, title, iconClass = 'fa-folder'
     const titleHoverColorClass = 'group-hover:text-primary';
 
     categoryElement.innerHTML = `
-        <div class="category-content-wrapper flex-grow flex flex-col items-center text-center md:items-start md:text-left">
-            <div class="category-header-info flex flex-col md:flex-row items-center md:items-center mb-2">
-                <i class="category-icon fas ${iconClass} ${iconColorClass} text-3xl md:text-2xl md:mr-3"></i>
-                <h4 class="category-title font-bold text-lg ${titleBaseColorClass} ${titleHoverColorClass} transition-colors duration-150 ease-in-out">${title}</h4>
+        <div class="category-content-wrapper flex-grow flex w-full min-w-0 flex-col items-center text-center md:items-stretch md:text-left">
+            <div class="category-header-info flex w-full min-w-0 flex-row flex-nowrap items-center justify-center gap-3 md:justify-start">
+                <span class="category-icon-wrap flex h-[1.35em] w-[1.35em] flex-shrink-0 items-center justify-center md:h-[1.25em] md:w-[1.25em]" aria-hidden="true">
+                    <i class="category-icon fas ${iconClass} ${iconColorClass} text-2xl leading-none md:text-xl"></i>
+                </span>
+                <h4 class="category-title min-w-0 flex-1 font-bold text-lg leading-snug m-0 ${titleBaseColorClass} ${titleHoverColorClass} transition-colors duration-150 ease-in-out">${title}</h4>
             </div>
         </div>
     `;

@@ -22,6 +22,8 @@ let toggleModalFullscreen = null;
 let clearTemporaryThumbnailsFromContainer = null;
 let attachBookmarkScreenshotHandlers = null;
 let attachBookmarkPdfHandlers = null;
+let removePdfSectionsFromContainer = null;
+let renderPdfAttachmentsSection = null;
 let handleBookmarkFormSubmit = null;
 let populateBookmarkFolders = null;
 let getFromIndexedDB = null;
@@ -42,6 +44,10 @@ export function setBookmarksModalDependencies(deps) {
     clearTemporaryThumbnailsFromContainer = deps.clearTemporaryThumbnailsFromContainer;
     attachBookmarkScreenshotHandlers = deps.attachBookmarkScreenshotHandlers;
     attachBookmarkPdfHandlers = deps.attachBookmarkPdfHandlers;
+    if (deps.removePdfSectionsFromContainer !== undefined)
+        removePdfSectionsFromContainer = deps.removePdfSectionsFromContainer;
+    if (deps.renderPdfAttachmentsSection !== undefined)
+        renderPdfAttachmentsSection = deps.renderPdfAttachmentsSection;
     handleBookmarkFormSubmit = deps.handleBookmarkFormSubmit;
     populateBookmarkFolders = deps.populateBookmarkFolders;
     getFromIndexedDB = deps.getFromIndexedDB;
@@ -148,6 +154,7 @@ export async function ensureBookmarkModal() {
                              </div>
                              <input type="file" class="bookmark-screenshot-input hidden" accept="image/png, image/jpeg, image/gif, image/webp" multiple>
                          </div>
+                        <div id="bookmarkPdfEditHost" class="mb-4 min-h-0" aria-label="PDF-вложения закладки"></div>
                     </form>
                 </div>
                 <div class="p-content border-t border-gray-200 dark:border-gray-700 mt-auto flex-shrink-0">
@@ -253,6 +260,12 @@ export async function ensureBookmarkModal() {
             targetModal.classList.add('hidden');
             deactivateModalFocus(targetModal);
             if (form) {
+                const pdfHostClose = form.querySelector('#bookmarkPdfEditHost');
+                if (pdfHostClose && typeof removePdfSectionsFromContainer === 'function') {
+                    removePdfSectionsFromContainer(pdfHostClose);
+                }
+                form.querySelectorAll('.pdf-draft-section').forEach((el) => el.remove());
+                form.dataset.pdfDraftWired = '0';
                 form.reset();
                 const idInput = form.querySelector('#bookmarkId');
                 if (idInput) idInput.value = '';
@@ -374,6 +387,12 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
 
     delete modal.dataset.currentBookmarkId;
     if (modal.hasAttribute('data-bookmark-id')) modal.removeAttribute('data-bookmark-id');
+    const pdfHostReset = form.querySelector('#bookmarkPdfEditHost');
+    if (pdfHostReset && typeof removePdfSectionsFromContainer === 'function') {
+        removePdfSectionsFromContainer(pdfHostReset);
+    }
+    form.querySelectorAll('.pdf-draft-section').forEach((el) => el.remove());
+    form.dataset.pdfDraftWired = '0';
     modal.querySelectorAll('.pdf-attachments-section').forEach((n) => n.remove());
 
     const descRequiredIndicator = form.querySelector('#bookmarkDescriptionRequiredIndicator');
@@ -416,6 +435,9 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
                 await Promise.all(renderPromises);
             }
             form.dataset.existingRendered = 'true';
+            if (pdfHostReset && typeof renderPdfAttachmentsSection === 'function') {
+                renderPdfAttachmentsSection(pdfHostReset, 'bookmark', String(bookmark.id));
+            }
             console.log(
                 `${LOG_PREFIX} Форма заполнена для редактирования закладки ID: ${bookmark.id}`,
             );
@@ -429,6 +451,9 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
     } else {
         modalTitle.textContent = 'Добавить закладку';
         submitButton.innerHTML = '<i class="fas fa-plus mr-1"></i> Добавить';
+        if (typeof attachBookmarkPdfHandlers === 'function') {
+            attachBookmarkPdfHandlers(form);
+        }
         console.log(`${LOG_PREFIX} Форма подготовлена для добавления новой закладки.`);
     }
 
@@ -512,12 +537,11 @@ export async function showEditBookmarkModal(id) {
 
         form.reset();
 
-        const draftList = form.querySelector('.pdf-draft-list');
-        if (draftList) {
-            const draftBlock =
-                draftList.closest('.mb-4') || draftList.closest('details') || draftList;
-            draftBlock.remove();
-            form.dataset.pdfDraftWired = '0';
+        form.querySelectorAll('.pdf-draft-section').forEach((el) => el.remove());
+        form.dataset.pdfDraftWired = '0';
+        const pdfHostEdit = form.querySelector('#bookmarkPdfEditHost');
+        if (pdfHostEdit && typeof removePdfSectionsFromContainer === 'function') {
+            removePdfSectionsFromContainer(pdfHostEdit);
         }
 
         idInput.value = bookmark.id;
@@ -545,6 +569,10 @@ export async function showEditBookmarkModal(id) {
             await Promise.all(renderPromises);
         }
         form.dataset.existingRendered = 'true';
+
+        if (pdfHostEdit && typeof renderPdfAttachmentsSection === 'function') {
+            renderPdfAttachmentsSection(pdfHostEdit, 'bookmark', String(bookmark.id));
+        }
 
         if (typeof getCurrentBookmarkFormState === 'function') {
             form._initialState = getCurrentBookmarkFormState(form);

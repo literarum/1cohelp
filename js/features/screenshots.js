@@ -117,12 +117,12 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
                             <p id="screenshotViewerSubtitle" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate" aria-live="polite"></p>
                         </div>
                         <div class="flex items-center justify-end gap-2 flex-shrink-0">
-                             <div class="inline-flex rounded-xl bg-gray-100 p-0.5 dark:bg-gray-900/80" role="group" aria-label="Вид отображения">
-                                 <button type="button" id="screenshotViewToggleGrid" class="rounded-[0.65rem] px-3 py-1.5 text-sm font-medium text-gray-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-gray-400" title="Сетка">
+                             <div class="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900/80" role="group" aria-label="Вид отображения">
+                                 <button type="button" id="screenshotViewToggleGrid" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-gray-400" title="Сетка">
                                      <i class="fas fa-th-large" aria-hidden="true"></i>
                                      <span class="hidden sm:inline sm:ml-1.5">Сетка</span>
                                  </button>
-                                 <button type="button" id="screenshotViewToggleList" class="rounded-[0.65rem] px-3 py-1.5 text-sm font-medium text-gray-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-gray-400" title="Список">
+                                 <button type="button" id="screenshotViewToggleList" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-gray-400" title="Список">
                                      <i class="fas fa-list" aria-hidden="true"></i>
                                      <span class="hidden sm:inline sm:ml-1.5">Список</span>
                                  </button>
@@ -212,9 +212,9 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
             'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100';
         const idle = 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
         modalState.gridBtn.className =
-            `rounded-[0.65rem] px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isGrid ? active : idle}`;
+            `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isGrid ? active : idle}`;
         modalState.listBtn.className =
-            `rounded-[0.65rem] px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${!isGrid ? active : idle}`;
+            `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${!isGrid ? active : idle}`;
         modalState.gridBtn.setAttribute('aria-pressed', isGrid ? 'true' : 'false');
         modalState.listBtn.setAttribute('aria-pressed', !isGrid ? 'true' : 'false');
     };

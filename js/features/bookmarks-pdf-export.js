@@ -212,6 +212,55 @@ async function loadBookmarkPdfs(bookmarkId) {
 }
 
 /**
+ * Добавляет к родителю блок скриншотов в разметке, совместимой с ExportService.extractPdfContent.
+ * @param {HTMLElement} host
+ * @param {unknown[]} screenshots — записи из IndexedDB (parentType bookmark)
+ */
+export async function appendBookmarkScreenshotsForPdfExport(host, screenshots) {
+    if (!host || !Array.isArray(screenshots) || screenshots.length === 0) return;
+
+    const imageDataUrls = [];
+    for (const sc of screenshots) {
+        let blob = sc && sc.blob;
+        if (!(blob instanceof Blob) && blob != null) {
+            if (blob instanceof ArrayBuffer || ArrayBuffer.isView(blob)) {
+                blob = new Blob([blob]);
+            } else {
+                blob = null;
+            }
+        }
+        if (blob instanceof Blob) {
+            try {
+                const dataUrl = await blobToDataUrl(blob);
+                if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+                    imageDataUrls.push(dataUrl);
+                }
+            } catch (e) {
+                console.warn('[BookmarksPdfExport] Failed to convert screenshot blob to data URL', e);
+            }
+        }
+    }
+
+    if (imageDataUrls.length === 0) return;
+
+    const screenshotsWrapper = document.createElement('div');
+    screenshotsWrapper.className = 'bookmark-screenshots';
+
+    const imgContainer = document.createElement('div');
+    imgContainer.className = 'export-pdf-image-container';
+
+    imageDataUrls.forEach((dataUrl) => {
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = '';
+        imgContainer.appendChild(img);
+    });
+
+    screenshotsWrapper.appendChild(imgContainer);
+    host.appendChild(screenshotsWrapper);
+}
+
+/**
  * Строит DOM-дерево для экспорта одной закладки в PDF.
  * Здесь важно использовать только те теги, которые корректно обрабатывает ExportService.extractPdfContent:
  * - h1/h2/h3/h4, p, li, контейнеры с img внутри (.export-pdf-image-container).
@@ -264,51 +313,7 @@ async function buildSingleBookmarkExportElement(bookmark, screenshots, pdfFiles)
         root.appendChild(descWrapper);
     }
 
-    // Скриншоты (если есть).
-    const imageDataUrls = [];
-    if (Array.isArray(screenshots) && screenshots.length > 0) {
-        for (const sc of screenshots) {
-            let blob = sc && sc.blob;
-            if (!(blob instanceof Blob) && blob != null) {
-                if (blob instanceof ArrayBuffer || ArrayBuffer.isView(blob)) {
-                    blob = new Blob([blob]);
-                } else {
-                    blob = null;
-                }
-            }
-            if (blob instanceof Blob) {
-                try {
-                    const dataUrl = await blobToDataUrl(blob);
-                    if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
-                        imageDataUrls.push(dataUrl);
-                    }
-                } catch (e) {
-                    console.warn(
-                        '[BookmarksPdfExport] Failed to convert screenshot blob to data URL',
-                        e,
-                    );
-                }
-            }
-        }
-    }
-
-    if (imageDataUrls.length > 0) {
-        const screenshotsWrapper = document.createElement('div');
-        screenshotsWrapper.className = 'bookmark-screenshots';
-
-        const imgContainer = document.createElement('div');
-        imgContainer.className = 'export-pdf-image-container';
-
-        imageDataUrls.forEach((dataUrl) => {
-            const img = document.createElement('img');
-            img.src = dataUrl;
-            img.alt = '';
-            imgContainer.appendChild(img);
-        });
-
-        screenshotsWrapper.appendChild(imgContainer);
-        root.appendChild(screenshotsWrapper);
-    }
+    await appendBookmarkScreenshotsForPdfExport(root, screenshots);
 
     if (Array.isArray(pdfFiles) && pdfFiles.length > 0) {
         const pdfWrapper = document.createElement('div');
@@ -373,7 +378,12 @@ export async function exportSingleBookmarkToPdf(bookmarkId) {
     }
 }
 
-function buildAllBookmarksExportElement(bookmarks, pdfsByBookmarkId, folderNameById) {
+async function buildAllBookmarksExportElement(
+    bookmarks,
+    pdfsByBookmarkId,
+    screenshotsByBookmarkId,
+    folderNameById,
+) {
     const root = document.createElement('div');
     root.className = 'bookmarks-export-root space-y-4';
 
@@ -394,8 +404,11 @@ function buildAllBookmarksExportElement(bookmarks, pdfsByBookmarkId, folderNameB
         return String(ta).localeCompare(String(tb), 'ru');
     });
 
-    sorted.forEach((bookmark) => {
-        if (!bookmark) return;
+    const shotsMap =
+        screenshotsByBookmarkId instanceof Map ? screenshotsByBookmarkId : new Map();
+
+    for (const bookmark of sorted) {
+        if (!bookmark) continue;
         const h2 = document.createElement('h2');
         h2.textContent = bookmark.title || `Закладка ${bookmark.id ?? ''}`.trim();
         root.appendChild(h2);
@@ -423,11 +436,14 @@ function buildAllBookmarksExportElement(bookmarks, pdfsByBookmarkId, folderNameB
             root.appendChild(folderEl);
         }
 
+        const screenshotList = shotsMap.get(String(bookmark.id)) || [];
+        await appendBookmarkScreenshotsForPdfExport(root, screenshotList);
+
         const pdfList = pdfsByBookmarkId.get(String(bookmark.id)) || [];
         if (pdfList.length > 0) {
             appendBookmarkPdfExportSection(root, pdfList);
         }
-    });
+    }
 
     return root;
 }
@@ -447,16 +463,26 @@ export async function exportAllBookmarksToPdf() {
         const folderNameById = buildFolderNameMap(allFolders);
 
         const pdfsByBookmarkId = new Map();
+        const screenshotsByBookmarkId = new Map();
         await Promise.all(
             bookmarks.map(async (bm) => {
                 const id = bm && bm.id;
                 if (id == null) return;
-                const pdfs = await loadBookmarkPdfs(id);
+                const [pdfs, shots] = await Promise.all([
+                    loadBookmarkPdfs(id),
+                    loadBookmarkScreenshots(id),
+                ]);
                 pdfsByBookmarkId.set(String(id), pdfs);
+                screenshotsByBookmarkId.set(String(id), shots);
             }),
         );
 
-        const element = buildAllBookmarksExportElement(bookmarks, pdfsByBookmarkId, folderNameById);
+        const element = await buildAllBookmarksExportElement(
+            bookmarks,
+            pdfsByBookmarkId,
+            screenshotsByBookmarkId,
+            folderNameById,
+        );
         await deps.ExportService.exportElementToPdf(element, 'Закладки', {
             type: 'bookmarks-section',
         });
@@ -481,4 +507,6 @@ export const __bookmarksPdfExportTestables = {
     buildFolderNameMap,
     resolveFolderName,
     getDescriptionParagraphsForExport,
+    appendBookmarkScreenshotsForPdfExport,
+    buildAllBookmarksExportElement,
 };

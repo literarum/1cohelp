@@ -1,9 +1,75 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ONBOARDING_AUTO_OFFER_STORAGE_KEY } from '../constants.js';
 import {
     __onboardingTourInternals,
     setOnboardingTourDependencies,
+    shouldShowOnboardingAfterInit,
 } from './onboarding-tour.js';
+
+describe('shouldShowOnboardingAfterInit', () => {
+    beforeEach(() => {
+        vi.stubGlobal('localStorage', {
+            getItem: vi.fn(() => null),
+            setItem: vi.fn(),
+            removeItem: vi.fn(),
+        });
+    });
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('returns false when tour is marked completed', () => {
+        setOnboardingTourDependencies({
+            State: {
+                userPreferences: {
+                    onboardingTourCompleted: true,
+                    onboardingTourAutoPromptConsumed: false,
+                },
+            },
+        });
+        expect(shouldShowOnboardingAfterInit()).toBe(false);
+    });
+
+    it('returns false when auto prompt was already consumed', () => {
+        setOnboardingTourDependencies({
+            State: {
+                userPreferences: {
+                    onboardingTourCompleted: false,
+                    onboardingTourAutoPromptConsumed: true,
+                },
+            },
+        });
+        expect(shouldShowOnboardingAfterInit()).toBe(false);
+    });
+
+    it('returns false when localStorage marks offer as shown', () => {
+        globalThis.localStorage.getItem = vi.fn((key) =>
+            key === ONBOARDING_AUTO_OFFER_STORAGE_KEY ? '1' : null,
+        );
+        setOnboardingTourDependencies({
+            State: {
+                userPreferences: {
+                    onboardingTourCompleted: false,
+                    onboardingTourAutoPromptConsumed: false,
+                },
+            },
+        });
+        expect(shouldShowOnboardingAfterInit()).toBe(false);
+    });
+
+    it('returns true for default first-run preferences without storage flag', () => {
+        setOnboardingTourDependencies({
+            State: {
+                userPreferences: {
+                    onboardingTourCompleted: false,
+                    onboardingTourAutoPromptConsumed: false,
+                },
+            },
+        });
+        expect(shouldShowOnboardingAfterInit()).toBe(true);
+    });
+});
 
 describe('onboarding-tour coverage', () => {
     beforeEach(() => {

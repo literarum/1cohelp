@@ -375,6 +375,11 @@ export function isClientNotesWindowOpen() {
     return !!panel && !panel.classList.contains('hidden');
 }
 
+/** Для навигации по ИНН: textarea плавающей панели (если открыта). */
+export function getClientNotesPanelTextarea() {
+    return panelTextarea || null;
+}
+
 /** Префикс сообщений postMessage для синхронизации с popup. */
 const CLIENT_NOTES_MSG_PREFIX = 'copilot1co:clientNotes:';
 

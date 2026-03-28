@@ -28,6 +28,8 @@ export const IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY = 'compatUnknownStoresSnapshot_v
 export const SEDO_CONFIG_KEY = 'sedoTypesConfigGlobal';
 export const BLACKLIST_WARNING_ACCEPTED_KEY = 'blacklistWarningAccepted';
 export const USER_PREFERENCES_KEY = 'userGlobalPreferences';
+/** Одноразовый автопоказ онбординга: синхронизация с preferences.onboardingTourAutoPromptConsumed */
+export const ONBOARDING_AUTO_OFFER_STORAGE_KEY = 'copilot1co:onboardingAutoOffered_v1';
 export const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';
 export const MAIN_ALGO_COLLAPSE_KEY = 'mainAlgoCollapsedState_v1';
 export const MAIN_ALGO_HEADERS_ONLY_KEY = 'mainAlgoHeadersOnly_v1';

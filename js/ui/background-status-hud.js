@@ -465,9 +465,11 @@ export function initBackgroundStatusHUD() {
         const hasIssues =
             effectiveDiagnosticErrors().length > 0 ||
             (STATE.diagnostics.warnings?.length || 0) > 0;
+        const hasChecks = (STATE.diagnostics.checks?.length || 0) > 0;
+        const showDetails = hasIssues || hasChecks;
         const footer = STATE.container?.querySelector('.hud-footer');
         if (!footer) return;
-        if (hasIssues) {
+        if (showDetails) {
             if (!STATE.detailsBtnEl) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -477,7 +479,7 @@ export function initBackgroundStatusHUD() {
                 footer.appendChild(btn);
                 STATE.detailsBtnEl = btn;
             }
-            STATE.detailsBtnEl.textContent = 'Подробнее';
+            STATE.detailsBtnEl.textContent = 'Сводка по системам';
         } else {
             if (STATE.detailsBtnEl?.parentNode) {
                 STATE.detailsBtnEl.remove();

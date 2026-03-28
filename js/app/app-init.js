@@ -37,6 +37,7 @@ export async function appInit(context = 'normal') {
         initDB,
         loadInitialFavoritesCache,
         handleFavoriteActionClick,
+        handleFavoriteContainerClick,
         setActiveTab,
         loadUserPreferences,
         loadCategoryInfo,
@@ -85,8 +86,8 @@ export async function appInit(context = 'normal') {
         initUI,
         initScrollNavButtons,
         initAutoExpandTextareas,
-        highlightClientNotesWindow,
         isClientNotesWindowOpen,
+        getClientNotesPanelTextarea,
     } = dependencies;
     const resolvedNotificationService =
         NotificationService || getCoreService('NotificationService');
@@ -250,6 +251,26 @@ export async function appInit(context = 'normal') {
                 );
             }
 
+            const favoritesContainer = document.getElementById('favoritesContainer');
+            if (
+                favoritesContainer &&
+                typeof handleFavoriteContainerClick === 'function'
+            ) {
+                favoritesContainer.removeEventListener('click', handleFavoriteContainerClick);
+                favoritesContainer.addEventListener('click', handleFavoriteContainerClick);
+                console.log(
+                    '[appInit - Favorites] Обработчик клика контейнера избранного добавлен/перерегистрирован.',
+                );
+            } else if (!favoritesContainer) {
+                console.warn(
+                    '[appInit - Favorites] Контейнер #favoritesContainer не найден при инициализации.',
+                );
+            } else {
+                console.error(
+                    '[appInit - Favorites] Функция handleFavoriteContainerClick не определена!',
+                );
+            }
+
             const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
             if (showFavoritesHeaderButton) {
                 if (showFavoritesHeaderButton._clickHandlerInstance) {
@@ -410,8 +431,8 @@ export async function appInit(context = 'normal') {
                     loadingOverlayManager: loadingOverlayManager,
                     debounce: debounce,
                     categoryDisplayInfo: categoryDisplayInfo,
-                    highlightClientNotesWindow: highlightClientNotesWindow,
                     isClientNotesWindowOpen: isClientNotesWindowOpen,
+                    getClientNotesPanelTextarea: getClientNotesPanelTextarea,
                 });
                 console.log('[appInit] Search dependencies установлены');
             }

@@ -41,14 +41,15 @@ function validateIndexEntry(entry) {
 /**
  * Запускает набор проверок индексации и поиска.
  * @param {object} deps — зависимости: getFromIndexedDB, performDBOperation, getGlobalSearchResults (опционально)
- * @param {function(string, string, string)} report — report(level, title, message), level: 'info'|'warn'|'error'
+ * @param {function(string, string, string, object=)} report — (level, title, message, meta?)
  * @param {function(Promise, number)} runWithTimeout — runWithTimeout(promise, ms)
  */
 export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout) {
     const timeout = runWithTimeout ? (p) => runWithTimeout(p, HEALTH_TIMEOUT_MS) : (p) => p;
+    const r = (level, title, message) => report(level, title, message, { system: 'search' });
 
     if (!deps.getFromIndexedDB || !deps.performDBOperation) {
-        report(
+        r(
             'warn',
             'Поиск / индексация',
             'Нет доступа к IndexedDB (getFromIndexedDB или performDBOperation).',
@@ -60,7 +61,7 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
     try {
         const status = await timeout(deps.getFromIndexedDB('preferences', SEARCH_INDEX_STATUS_KEY));
         if (!status) {
-            report(
+            r(
                 'warn',
                 'Поиск: статус индекса',
                 'Запись searchIndexStatus не найдена. Индекс может быть не построен.',
@@ -70,23 +71,23 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             const version = status.version != null ? status.version : '—';
             const err = status.error ? String(status.error) : null;
             if (err) {
-                report(
+                r(
                     'error',
                     'Поиск: статус индекса',
                     `Ошибка при последнем построении: ${err}.`,
                 );
             } else if (!built) {
-                report(
+                r(
                     'warn',
                     'Поиск: статус индекса',
                     `Индекс не помечен как построенный (version: ${version}).`,
                 );
             } else {
-                report('info', 'Поиск: статус индекса', `Построен, version: ${version}.`);
+                r('info', 'Поиск: статус индекса', `Построен, version: ${version}.`);
             }
         }
     } catch (err) {
-        report('error', 'Поиск: статус индекса', err.message || String(err));
+        r('error', 'Поиск: статус индекса', err.message || String(err));
     }
 
     // 2) Количество записей в searchIndex
@@ -95,12 +96,12 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             deps.performDBOperation('searchIndex', 'readonly', (store) => store.count()),
         );
         if (count === 0) {
-            report('warn', 'Поиск: индекс', 'В хранилище searchIndex 0 записей.');
+            r('warn', 'Поиск: индекс', 'В хранилище searchIndex 0 записей.');
         } else {
-            report('info', 'Поиск: индекс', `Записей в индексе: ${count}.`);
+            r('info', 'Поиск: индекс', `Записей в индексе: ${count}.`);
         }
     } catch (err) {
-        report('error', 'Поиск: индекс', err.message || String(err));
+        r('error', 'Поиск: индекс', err.message || String(err));
         return;
     }
 
@@ -125,13 +126,13 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             }),
         );
         if (samples.length === 0) {
-            report('info', 'Поиск: структура индекса', 'Нет записей для проверки структуры.');
+            r('info', 'Поиск: структура индекса', 'Нет записей для проверки структуры.');
         } else {
             let allValid = true;
             for (const entry of samples) {
                 const v = validateIndexEntry(entry);
                 if (!v.ok) {
-                    report(
+                    r(
                         'warn',
                         'Поиск: структура индекса',
                         v.message || 'Неверная структура записи.',
@@ -141,7 +142,7 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
                 }
             }
             if (allValid) {
-                report(
+                r(
                     'info',
                     'Поиск: структура индекса',
                     `Проверено записей: ${samples.length}, структура корректна.`,
@@ -149,7 +150,7 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             }
         }
     } catch (err) {
-        report('error', 'Поиск: структура индекса', err.message || String(err));
+        r('error', 'Поиск: структура индекса', err.message || String(err));
     }
 
     // 4) Выполнение поиска (getGlobalSearchResults)
@@ -158,19 +159,19 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             const query = SEARCH_TEST_QUERIES[0];
             const results = await timeout(deps.getGlobalSearchResults(query));
             if (!Array.isArray(results)) {
-                report('error', 'Поиск: выполнение', 'getGlobalSearchResults вернул не массив.');
+                r('error', 'Поиск: выполнение', 'getGlobalSearchResults вернул не массив.');
             } else {
-                report(
+                r(
                     'info',
                     'Поиск: выполнение',
                     `Запрос «${query}» — получено результатов: ${results.length}.`,
                 );
             }
         } catch (err) {
-            report('error', 'Поиск: выполнение', err.message || String(err));
+            r('error', 'Поиск: выполнение', err.message || String(err));
         }
     } else {
-        report(
+        r(
             'info',
             'Поиск: выполнение',
             'getGlobalSearchResults не передан, проверка пропущена.',
@@ -181,17 +182,17 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
     try {
         const tokens = tokenizeNormalized('тест');
         if (!Array.isArray(tokens)) {
-            report('warn', 'Поиск: токенизация', 'tokenizeNormalized вернул не массив.');
+            r('warn', 'Поиск: токенизация', 'tokenizeNormalized вернул не массив.');
         } else if (tokens.length === 0) {
-            report(
+            r(
                 'warn',
                 'Поиск: токенизация',
                 'tokenizeNormalized("тест") вернул пустой массив.',
             );
         } else {
-            report('info', 'Поиск: токенизация', 'tokenizeNormalized работает.');
+            r('info', 'Поиск: токенизация', 'tokenizeNormalized работает.');
         }
     } catch (err) {
-        report('error', 'Поиск: токенизация', err.message || String(err));
+        r('error', 'Поиск: токенизация', err.message || String(err));
     }
 }

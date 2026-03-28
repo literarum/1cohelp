@@ -445,7 +445,7 @@ function renderParagraphs(container, data) {
  * @param {Array<string|Object>} rawData - result.data из API
  * @returns {Array<string>}
  */
-function normalizeShablonyData(rawData) {
+export function normalizeShablonyData(rawData) {
     if (!Array.isArray(rawData) || rawData.length === 0) return rawData;
     const first = rawData[0];
     if (typeof first === 'string') return rawData;
@@ -544,10 +544,6 @@ function normalizeShablonyData(rawData) {
     return fallback.length ? fallback : rawData;
 }
 
-export const __googleDocsInternals = {
-    normalizeShablonyData,
-};
-
 /**
  * Parse Shablony content into blocks (для поиска)
  */
@@ -609,6 +605,56 @@ export function parseShablonyContent(data) {
 
     return blocks;
 }
+
+/**
+ * Восстанавливает плоский массив строк параграфов из разобранных блоков (для рендера после фильтрации).
+ * @param {Array<{title: string, content: string, level?: number}>} blocks
+ * @returns {Array<string>}
+ */
+function flattenShablonyBlocksToLines(blocks) {
+    if (!Array.isArray(blocks) || blocks.length === 0) return [];
+    const markers = ['', '⏩ ', '➧ ', '▸ '];
+    const out = [];
+    for (const block of blocks) {
+        const level = Math.min(Math.max(block.level ?? 2, 1), 3);
+        const marker = markers[level] || '➧ ';
+        const title = (block.title || '').trim();
+        if (title) out.push(marker + title);
+        const content = block.content || '';
+        for (const line of content.split('\n')) {
+            const t = normalizeBrokenEntities(String(line)).trim();
+            if (t) out.push(t);
+        }
+    }
+    return out;
+}
+
+/**
+ * Фильтрует шаблоны по запросу, сохраняя целостность блоков (строки разных шаблонов не смешиваются).
+ * Построчный фильтр без учёта блоков ломал DOM: тело без заголовка присоединялось к предыдущему блоку.
+ * @param {Array<string>} flatData
+ * @param {string} query
+ * @returns {Array<string>}
+ */
+export function filterShablonyDataByQuery(flatData, query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return flatData;
+    if (!Array.isArray(flatData) || flatData.length === 0) return flatData;
+
+    const blocks = parseShablonyContent(flatData);
+    const matching = blocks.filter((block) => {
+        const title = (block.title || '').toLowerCase();
+        const body = (block.content || '').toLowerCase();
+        return title.includes(q) || body.includes(q);
+    });
+    return flattenShablonyBlocksToLines(matching);
+}
+
+export const __googleDocsInternals = {
+    normalizeShablonyData,
+    filterShablonyDataByQuery,
+    flattenShablonyBlocksToLines,
+};
 
 /**
  * Render styled paragraphs for Shablony (из старого проекта)
@@ -783,11 +829,7 @@ export function handleShablonySearch() {
         return;
     }
 
-    const filteredData = originalShablonyData.filter((p) => {
-        const text = typeof p === 'string' ? p : String(p);
-        return text.toLowerCase().includes(query);
-    });
-
+    const filteredData = filterShablonyDataByQuery(originalShablonyData, query);
     renderStyledParagraphs(container, filteredData, query);
 }
 
@@ -874,6 +916,15 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
 
         updateGoogleDocStatusMessage(targetContainerId, statusMessage);
         renderGoogleDocContent(results, docContainer, targetContainerId);
+
+        if (targetContainerId === 'doc-content-shablony') {
+            queueMicrotask(() => {
+                const inp = document.getElementById('shablony-search-input');
+                if (inp?.value?.trim()) {
+                    handleShablonySearch();
+                }
+            });
+        }
 
         if (
             window.BackgroundStatusHUD &&

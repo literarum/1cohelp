@@ -352,6 +352,22 @@ export async function showAlgorithmDetail(algorithm, section) {
             algorithmStepsContainer,
             'algorithm',
             String(currentAlgorithmId),
+            {
+                readOnly: true,
+                readOnlyEmptyLink: {
+                    leadLabel: 'PDF-файлы',
+                    onActivate: () => {
+                        if (typeof window.editAlgorithm === 'function') {
+                            window.editAlgorithm(currentAlgorithmId, section);
+                        } else {
+                            showNotification?.(
+                                'Редактирование алгоритма недоступно.',
+                                'error',
+                            );
+                        }
+                    },
+                },
+            },
         );
     }
 

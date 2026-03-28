@@ -767,6 +767,25 @@ export async function analyzeMergeData(importJsonString, options = {}) {
     };
 }
 
+/**
+ * Третий контур надёжности: тот же контракт полей, что и analyzeMergeData (schemaVersion + data).
+ * Используется сухим прогоном экспорта в диагностике.
+ * @param {unknown} parsed
+ * @returns {{ ok: boolean, message?: string }}
+ */
+export function validateExportedBackupShapeForMerge(parsed) {
+    if (!parsed || typeof parsed !== 'object' || !parsed.data || !parsed.schemaVersion) {
+        return {
+            ok: false,
+            message: 'Некорректный формат: ожидаются поля schemaVersion и data (как у слияния).',
+        };
+    }
+    if (typeof parsed.data !== 'object') {
+        return { ok: false, message: 'Поле data должно быть объектом.' };
+    }
+    return { ok: true, message: `schemaVersion=${String(parsed.schemaVersion)}` };
+}
+
 // ============================================================================
 // ПРИМЕНЕНИЕ MERGE-ПЛАНА И РЕМАППИНГ ID
 // ============================================================================

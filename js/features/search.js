@@ -43,8 +43,23 @@ import {
     performDBOperation,
 } from '../db/indexeddb.js';
 
-import { fetchGoogleDocs, parseShablonyContent, getOriginalShablonyData } from './google-docs.js';
-import { tokenizeNormalized, suggestTokenVariants } from './search-normalize.js';
+import {
+    fetchGoogleDocs,
+    parseShablonyContent,
+    getOriginalShablonyData,
+    normalizeShablonyData,
+} from './google-docs.js';
+import {
+    tokenizeNormalized,
+    suggestTokenVariants,
+    indexQueryTokensFromUserQuery,
+} from './search-normalize.js';
+import {
+    navigateMainTabToAppealNotesMatch,
+    findFirstWholeInnOccurrence,
+    buildAppealNotesDigitQuerySuggestions,
+    getNotesSourceForInnSearch,
+} from './client-notes-search-nav.js';
 
 /** Доменные синонимы для расширения запроса (ФНС/СФР/Росстат и т.д.) — единый источник с палитрой команд */
 const QUERY_SYNONYMS = {
@@ -107,8 +122,8 @@ let showReglamentDetail = null;
 let showReglamentsForCategory = null;
 let loadingOverlayManager = null;
 let debounce = null;
-let highlightClientNotesWindow = null;
 let isClientNotesWindowOpen = null;
+let getClientNotesPanelTextarea = null;
 
 const isSearchBuildDebug = () => typeof window !== 'undefined' && window.__DEBUG_SEARCH__ === true;
 
@@ -133,10 +148,10 @@ export function setSearchDependencies(deps) {
         loadingOverlayManager = deps.loadingOverlayManager;
     if (deps.debounce !== undefined) debounce = deps.debounce;
     if (deps.categoryDisplayInfo !== undefined) categoryDisplayInfo = deps.categoryDisplayInfo;
-    if (deps.highlightClientNotesWindow !== undefined)
-        highlightClientNotesWindow = deps.highlightClientNotesWindow;
     if (deps.isClientNotesWindowOpen !== undefined)
         isClientNotesWindowOpen = deps.isClientNotesWindowOpen;
+    if (deps.getClientNotesPanelTextarea !== undefined)
+        getClientNotesPanelTextarea = deps.getClientNotesPanelTextarea;
     if (deps.highlightAndScrollSedoItem !== undefined) {
         // Сохраняем ссылку на функцию из SEDO модуля
         window._highlightAndScrollSedoItem = deps.highlightAndScrollSedoItem;
@@ -1888,7 +1903,11 @@ export async function buildInitialSearchIndex(progressCallback) {
         try {
             const results = await fetchGoogleDocs([SHABLONY_DOC_ID], false);
             const data = results?.[0]?.data || results?.[0]?.content?.data || [];
-            const blocks = parseShablonyContent(data);
+            const normalized = normalizeShablonyData(data);
+            const flat = Array.isArray(normalized)
+                ? normalized.map((line) => String(line))
+                : [];
+            const blocks = parseShablonyContent(flat);
             blocks.forEach((block) =>
                 processItemInMemory(
                     {
@@ -1984,6 +2003,29 @@ export async function buildInitialSearchIndex(progressCallback) {
 // ============================================================================
 
 /**
+ * Подсказки «Информация по обращению» по цифровому префиксу: сначала DOM, затем IndexedDB (current / default).
+ * @param {string} query
+ * @returns {Promise<Array<object>>}
+ */
+async function resolveAppealNotesDigitSuggestions(query) {
+    let list = buildAppealNotesDigitQuerySuggestions(query);
+    if (list.length > 0) return list;
+    const digits = query.replace(/\D/g, '');
+    if (digits.length < 2 || !State.db) return list;
+    try {
+        let row = await getFromIndexedDB('clientData', 'current');
+        if (!row || typeof row.notes !== 'string' || !row.notes.trim()) {
+            row = await getFromIndexedDB('clientData', 'default');
+        }
+        const n = row && typeof row.notes === 'string' ? row.notes : '';
+        if (n.trim()) list = buildAppealNotesDigitQuerySuggestions(query, n);
+    } catch (e) {
+        console.warn('[search] resolveAppealNotesDigitSuggestions:', e);
+    }
+    return list;
+}
+
+/**
  * Выполняет поиск
  */
 export async function performSearch(query) {
@@ -2002,11 +2044,6 @@ export async function performSearch(query) {
 
     const startTime = performance.now();
 
-    if (!State.db) {
-        console.error('[performSearch] DB not ready');
-        if (searchResultsContainer) searchResultsContainer.innerHTML = dbErrorHTML;
-        return;
-    }
     if (!searchResultsContainer) {
         console.error('[performSearch] searchResultsContainer not found');
         return;
@@ -2025,21 +2062,48 @@ export async function performSearch(query) {
         return;
     }
 
+    /** Поиск без индекса: подсказки по ИНН в заметках + совпадения разделов (БД не нужна). */
+    function renderSearchWithoutIndexDb() {
+        const MAX_SEARCH_RESULTS_DISPLAY = 50;
+        const sections = findSectionMatches(query);
+        const appeal = buildAppealNotesDigitQuerySuggestions(query);
+        const combined = sortSearchResults([...sections, ...appeal]);
+        const limited = diversifyResults(combined, MAX_SEARCH_RESULTS_DISPLAY);
+        if (limited.length > 0) {
+            renderSearchResults(limited, query);
+        } else {
+            searchResultsContainer.innerHTML = noResultsHTML(query);
+            searchResultsContainer.classList.remove('hidden');
+        }
+    }
+
+    if (!State.db) {
+        console.warn('[performSearch] DB not ready — показ локальных подсказок (ИНН в обращении, разделы).');
+        renderSearchWithoutIndexDb();
+        return;
+    }
+
     searchResultsContainer.innerHTML = loadingIndicatorHTML;
     searchResultsContainer.classList.remove('hidden');
     console.log(`[performSearch] Начало поиска по запросу: "${query}"`);
 
     try {
+        const MAX_SEARCH_RESULTS_DISPLAY = 50;
         const searchContext = determineSearchContext(query);
-        let queryTokens = tokenizeNormalized(query).filter((word) => word.length >= 2);
+        let queryTokens = indexQueryTokensFromUserQuery(query);
         const originalQueryTokens = queryTokens.slice();
         queryTokens = expandQueryTokensWithSynonyms(queryTokens);
         const sectionMatches = findSectionMatches(query);
 
         if (queryTokens.length === 0) {
-            renderSearchResults(sectionMatches, query);
-            if (sectionMatches.length === 0) {
+            const appealOnly = await resolveAppealNotesDigitSuggestions(query);
+            const combinedZero = [...sectionMatches, ...appealOnly];
+            const sortedZero = sortSearchResults(combinedZero);
+            const limitedZero = diversifyResults(sortedZero, MAX_SEARCH_RESULTS_DISPLAY);
+            if (limitedZero.length === 0) {
                 searchResultsContainer.innerHTML = noResultsHTML(query);
+            } else {
+                renderSearchResults(limitedZero, query);
             }
             return;
         }
@@ -2066,9 +2130,13 @@ export async function performSearch(query) {
             originalQueryTokens,
         );
 
-        const combinedResults = [...sectionMatches, ...finalResults];
+        const appealSuggestions = await resolveAppealNotesDigitSuggestions(query);
+        let mergedFinalResults = finalResults;
+        if (appealSuggestions.length > 0) {
+            mergedFinalResults = finalResults.filter((r) => r.type !== 'clientNote');
+        }
+        const combinedResults = [...sectionMatches, ...mergedFinalResults, ...appealSuggestions];
         const sortedResults = sortSearchResults(combinedResults);
-        const MAX_SEARCH_RESULTS_DISPLAY = 50;
         let limitedResults = diversifyResults(sortedResults, MAX_SEARCH_RESULTS_DISPLAY);
 
         // Fallback-аудит: если индекс не дал результата, делаем медленный скан по хранилищам,
@@ -2163,18 +2231,27 @@ export async function getGlobalSearchResults(query) {
     const MIN_SEARCH_LENGTH = 1;
     const MAX_RESULTS = 50;
 
-    if (!State.db) return [];
     if (typeof query !== 'string') return [];
     const q = query.trim();
     if (q.length < MIN_SEARCH_LENGTH) return [];
 
+    if (!State.db) {
+        const sections = findSectionMatches(q);
+        const appeal = buildAppealNotesDigitQuerySuggestions(q);
+        return sortSearchResults([...sections, ...appeal]).slice(0, MAX_RESULTS);
+    }
+
     const searchContext = determineSearchContext(q);
-    let queryTokens = tokenizeNormalized(q).filter((word) => word.length >= 2);
+    let queryTokens = indexQueryTokensFromUserQuery(q);
     const originalQueryTokens = queryTokens.slice();
     queryTokens = expandQueryTokensWithSynonyms(queryTokens);
     const sectionMatches = findSectionMatches(q);
 
-    if (queryTokens.length === 0) return sectionMatches;
+    if (queryTokens.length === 0) {
+        const appealZero = await resolveAppealNotesDigitSuggestions(q);
+        if (appealZero.length === 0) return sectionMatches;
+        return sortSearchResults([...sectionMatches, ...appealZero]).slice(0, MAX_RESULTS);
+    }
 
     let candidateDocs;
     try {
@@ -2198,7 +2275,12 @@ export async function getGlobalSearchResults(query) {
     }
 
     const finalResults = await processSearchResults(candidateDocs, q, q, originalQueryTokens);
-    const combined = [...sectionMatches, ...finalResults];
+    const appealSuggestions = await resolveAppealNotesDigitSuggestions(q);
+    let mergedFinal = finalResults;
+    if (appealSuggestions.length > 0) {
+        mergedFinal = finalResults.filter((r) => r.type !== 'clientNote');
+    }
+    const combined = [...sectionMatches, ...mergedFinal, ...appealSuggestions];
     const sorted = sortSearchResults(combined);
     return sorted.slice(0, MAX_RESULTS);
 }
@@ -2457,6 +2539,21 @@ function diversifyResults(results, maxTotal) {
 }
 
 /**
+ * Сравнение по score с учётом NaN/undefined (иначе NaN тянет сортировку в эвристики «алгоритм выше»).
+ * @returns {number} отрицательное — a раньше, положительное — b раньше, 0 — равны по score
+ */
+function compareSearchResultScores(a, b) {
+    const sa = Number(a?.score);
+    const sb = Number(b?.score);
+    const fa = Number.isFinite(sa);
+    const fb = Number.isFinite(sb);
+    if (fa && fb && Math.abs(sb - sa) > 0.01) return sb - sa;
+    if (fa && !fb) return -1;
+    if (!fa && fb) return 1;
+    return 0;
+}
+
+/**
  * Сортирует результаты поиска
  */
 function sortSearchResults(results) {
@@ -2464,21 +2561,16 @@ function sortSearchResults(results) {
         if (a.type === 'section_link' && b.type !== 'section_link') return -1;
         if (a.type !== 'section_link' && b.type === 'section_link') return 1;
         if (a.type === 'section_link' && b.type === 'section_link') {
-            if (
-                a.score !== undefined &&
-                b.score !== undefined &&
-                Math.abs(b.score - a.score) > 0.01
-            )
-                return b.score - a.score;
+            const sc = compareSearchResultScores(a, b);
+            if (sc !== 0) return sc;
             return (a.title || '').localeCompare(b.title || '');
         }
         if (a.isDirectPvsoOrCodeMatch && !b.isDirectPvsoOrCodeMatch) return -1;
         if (!a.isDirectPvsoOrCodeMatch && b.isDirectPvsoOrCodeMatch) return 1;
         if (a.isExactTitleMatch && !b.isExactTitleMatch) return -1;
         if (!a.isExactTitleMatch && b.isExactTitleMatch) return 1;
-        if (Math.abs(b.score - a.score) > 0.01) {
-            return b.score - a.score;
-        }
+        const sc = compareSearchResultScores(a, b);
+        if (sc !== 0) return sc;
 
         const aIsAlgo = a.type === 'algorithm' || a.type === 'main';
         const bIsAlgo = b.type === 'algorithm' || b.type === 'main';
@@ -3022,7 +3114,7 @@ function convertItemToSearchResult(ref, itemData, score) {
             break;
         case 'clientData':
             result.type = 'clientNote';
-            result.title = 'Заметки по клиенту';
+            result.title = 'Информация по обращению';
             result.description = (itemData.notes || '').substring(0, 100) + '...';
             break;
         case 'bookmarkFolders':
@@ -3169,7 +3261,7 @@ export function renderSearchResults(results, query) {
                 break;
             case 'clientNote':
                 iconClass = 'fa-user-edit';
-                typeText = 'Заметки клиента';
+                typeText = 'Информация по обращению';
                 break;
             case 'bookmarkFolder':
                 iconClass = 'fa-folder-open';
@@ -3454,20 +3546,30 @@ export async function handleSearchResultClick(result) {
                 }
                 break;
             case 'clientNote': {
-                if (setActiveTab) await setActiveTab('main');
-                const textarea = document.getElementById('clientNotes');
-                if (textarea) {
-                    textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    textarea.focus();
-                    if (typeof highlightElement === 'function')
-                        highlightElement(textarea, result.highlightTerm);
-                }
-                if (
+                const term = result.highlightTerm || result.query || '';
+                const panelTa =
                     typeof isClientNotesWindowOpen === 'function' &&
                     isClientNotesWindowOpen() &&
-                    typeof highlightClientNotesWindow === 'function'
+                    typeof getClientNotesPanelTextarea === 'function'
+                        ? getClientNotesPanelTextarea()
+                        : null;
+                const jumped = await navigateMainTabToAppealNotesMatch(term, {
+                    setActiveTab,
+                    panelTextarea: panelTa,
+                    isClientNotesPanelOpen:
+                        typeof isClientNotesWindowOpen === 'function'
+                            ? isClientNotesWindowOpen
+                            : undefined,
+                });
+                if (
+                    !jumped &&
+                    typeof showNotification === 'function' &&
+                    term.trim() !== ''
                 ) {
-                    highlightClientNotesWindow(result.highlightTerm || result.query);
+                    showNotification(
+                        'Не удалось найти выделенный фрагмент в поле «Информация по обращению».',
+                        'info',
+                    );
                 }
                 break;
             }
@@ -3668,6 +3770,35 @@ export function initSearchSystem() {
     });
 
     searchInput.addEventListener('input', handleInput);
+
+    searchInput.addEventListener('keydown', async (event) => {
+        if (event.key !== 'Enter') return;
+        if (event.isComposing || event.keyCode === 229) return;
+        const rawInn = searchInput.value.replace(/\D/g, '');
+        if (!/^\d{10}$|^\d{12}$/.test(rawInn)) return;
+        const notesBlob = getNotesSourceForInnSearch();
+        if (!findFirstWholeInnOccurrence(notesBlob, rawInn)) return;
+        event.preventDefault();
+        if (searchResultsContainer) {
+            searchResultsContainer.innerHTML = '';
+            searchResultsContainer.classList.add('hidden');
+        }
+        const panelTa =
+            typeof isClientNotesWindowOpen === 'function' &&
+            isClientNotesWindowOpen() &&
+            typeof getClientNotesPanelTextarea === 'function'
+                ? getClientNotesPanelTextarea()
+                : null;
+        await navigateMainTabToAppealNotesMatch(rawInn, {
+            setActiveTab,
+            panelTextarea: panelTa,
+            isClientNotesPanelOpen:
+                typeof isClientNotesWindowOpen === 'function'
+                    ? isClientNotesWindowOpen
+                    : undefined,
+        });
+    });
+
     document.addEventListener('click', handleClickOutside);
 
     if (clearSearchBtn) {

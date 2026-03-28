@@ -173,11 +173,6 @@ html.dark #healthReportModal .health-report-section-header {
 #healthReportModal .health-report-section-toggle:hover {
     opacity: 1;
 }
-#healthReportModal .health-report-section-toggle:focus-visible {
-    outline: 1px solid currentColor;
-    outline-offset: 1px;
-}
-
 /* Сворачиваемое тело секции: плавная анимация (grid 1fr ↔ 0fr) */
 #healthReportModal .health-report-section-collapsible .health-report-section-body {
     display: grid;
@@ -256,6 +251,90 @@ html.dark #healthReportModal .health-report-item {
     padding: 0.75rem 1rem;
     font-size: 0.8125rem;
     opacity: 0.8;
+}
+
+/* Сводка и группировка по подсистемам (многослойная диагностика) */
+#healthReportModal .health-subsystem-summary {
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--color-surface-2, #f8fafc) 92%, var(--color-text-primary, #111) 4%);
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+    margin-bottom: 1.25rem;
+}
+#healthReportModal .health-subsystem-summary-intro {
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    opacity: 0.92;
+}
+#healthReportModal .health-subsystem-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.35rem;
+}
+#healthReportModal .health-sys-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    max-width: 100%;
+    border: 1px solid transparent;
+}
+#healthReportModal .health-sys-chip-dot {
+    font-size: 0.55rem;
+    line-height: 1;
+}
+#healthReportModal .health-sys-chip.is-ok {
+    color: #15803d;
+    background: color-mix(in srgb, #16a34a 12%, transparent);
+    border-color: color-mix(in srgb, #16a34a 28%, transparent);
+}
+#healthReportModal .health-sys-chip.is-warn {
+    color: #b45309;
+    background: color-mix(in srgb, #f59e0b 14%, transparent);
+    border-color: color-mix(in srgb, #f59e0b 30%, transparent);
+}
+#healthReportModal .health-sys-chip.is-error {
+    color: #b91c1c;
+    background: color-mix(in srgb, #dc2626 12%, transparent);
+    border-color: color-mix(in srgb, #dc2626 28%, transparent);
+}
+html.dark #healthReportModal .health-sys-chip.is-ok {
+    color: #86efac;
+}
+html.dark #healthReportModal .health-sys-chip.is-warn {
+    color: #fde047;
+}
+html.dark #healthReportModal .health-sys-chip.is-error {
+    color: #fca5a5;
+}
+
+#healthReportModal ul.health-grouped-root {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+#healthReportModal .health-system-group {
+    margin-bottom: 1rem;
+}
+#healthReportModal .health-system-group:last-child {
+    margin-bottom: 0;
+}
+#healthReportModal .health-system-group-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    margin: 0 0 0.35rem;
+    padding: 0 0.25rem;
+}
+#healthReportModal ul.health-system-group-list {
+    padding: 0;
+    margin: 0;
 }
 
 /* =================================================================== */

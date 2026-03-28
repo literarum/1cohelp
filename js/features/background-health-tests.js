@@ -1,6 +1,11 @@
 'use strict';
 
-import { CURRENT_SCHEMA_VERSION, USER_PREFERENCES_KEY } from '../constants.js';
+import {
+    CURRENT_SCHEMA_VERSION,
+    USER_PREFERENCES_KEY,
+    RECENTLY_DELETED_STORE_NAME,
+} from '../constants.js';
+import { inferSystemFromTitle } from './health-report-format.js';
 import { REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER } from '../config/revocation-sources.js';
 import { REVOCATION_API_BASE_URL } from '../config.js';
 import { probeHelperAvailability } from './revocation-helper-probe.js';
@@ -27,6 +32,56 @@ const REQUIRED_STORES = [
     'favorites',
 ];
 
+/** Таймаут сухого прогона экспорта (большие PDF/скриншоты в base64). */
+const EXPORT_DRY_RUN_TIMEOUT_MS = 120000;
+
+/**
+ * Второй контур надёжности экспорта: тот же путь чтения, что и у пользовательского экспорта, без файла.
+ * @param {object} depsBag — объект зависимостей health-тестов (в т.ч. exportAllData)
+ * @param {function(string, string, string)} reportFn — report(level, title, message)
+ * @param {function(Promise, number): Promise} runWithTimeoutFn
+ */
+async function runExportPipelineDryRunCheck(depsBag, reportFn, runWithTimeoutFn) {
+    if (typeof depsBag.exportAllData !== 'function') {
+        reportFn(
+            'warn',
+            'Экспорт (сухой прогон)',
+            'Функция exportAllData не передана — проверка цепочки экспорта пропущена.',
+            { system: 'export_import' },
+        );
+        return;
+    }
+    try {
+        const ok = await runWithTimeoutFn(
+            depsBag.exportAllData({ dryRunForHealth: true, isForcedBackupMode: true }),
+            EXPORT_DRY_RUN_TIMEOUT_MS,
+        );
+        if (ok) {
+            reportFn(
+                'info',
+                'Экспорт (сухой прогон)',
+                'Все хранилища прочитаны, вложения сериализованы, JSON валиден; контракт слияния (schemaVersion+data) подтверждён.',
+                { system: 'export_import' },
+            );
+            reportFn(
+                'info',
+                'Слияние (совместимость формата)',
+                'Третий контур: validateExportedBackupShapeForMerge выполнен в цепочке сухого экспорта.',
+                { system: 'merge' },
+            );
+        } else {
+            reportFn(
+                'warn',
+                'Экспорт (сухой прогон)',
+                'Вернуло false (возможен параллельный экспорт или отказ до сериализации).',
+                { system: 'export_import' },
+            );
+        }
+    } catch (err) {
+        reportFn('error', 'Экспорт (сухой прогон)', err?.message || String(err), { system: 'export_import' });
+    }
+}
+
 export function setBackgroundHealthTestsDependencies(nextDeps) {
     deps = { ...nextDeps };
 }
@@ -38,7 +93,10 @@ function nowLabel() {
 function mergeRuntimeHubErrorsForReport(errors) {
     const rt = getRuntimeHubIssuesForHealth(40);
     if (!rt.length) return [...errors];
-    return [...rt.map((e) => ({ title: e.title, message: e.message })), ...errors];
+    return [
+        ...rt.map((e) => ({ title: e.title, message: e.message, system: 'runtime_errors' })),
+        ...errors,
+    ];
 }
 
 function runWithTimeout(promise, ms) {
@@ -120,8 +178,9 @@ export function initBackgroundHealthTestsSystem() {
         checks: [],
     };
 
-    const report = (level, title, message) => {
-        const entry = { title, message };
+    const report = (level, title, message, meta = {}) => {
+        const system = meta.system || inferSystemFromTitle(title);
+        const entry = { title, message, system };
         if (level === 'error') results.errors.push(entry);
         if (level === 'warn') results.warnings.push(entry);
         results.checks.push(entry);
@@ -196,8 +255,13 @@ export function initBackgroundHealthTestsSystem() {
 
         watchdogInFlight = (async () => {
             const cycleChecks = [];
-            const addCheck = (level, title, message) => {
-                cycleChecks.push({ level, title, message });
+            const addCheck = (level, title, message, system) => {
+                cycleChecks.push({
+                    level,
+                    title,
+                    message,
+                    system: system || inferSystemFromTitle(title),
+                });
             };
 
             // Watchdog 1: целостность структуры IndexedDB
@@ -398,19 +462,19 @@ export function initBackgroundHealthTestsSystem() {
             if (hud?.setDiagnostics) {
                 const mergedChecks = [
                     ...results.checks.filter((entry) => !entry.title.startsWith('Watchdog / ')),
-                    ...cycleChecks.map(({ title, message }) => ({ title, message })),
+                    ...cycleChecks.map(({ title, message, system }) => ({ title, message, system })),
                 ];
                 const mergedErrors = [
                     ...results.errors.filter((entry) => !entry.title.startsWith('Watchdog / ')),
                     ...cycleChecks
                         .filter((entry) => entry.level === 'error')
-                        .map(({ title, message }) => ({ title, message })),
+                        .map(({ title, message, system }) => ({ title, message, system })),
                 ];
                 const mergedWarnings = [
                     ...results.warnings.filter((entry) => !entry.title.startsWith('Watchdog / ')),
                     ...cycleChecks
                         .filter((entry) => entry.level === 'warn')
-                        .map(({ title, message }) => ({ title, message })),
+                        .map(({ title, message, system }) => ({ title, message, system })),
                 ];
 
                 hud.setDiagnostics({
@@ -511,6 +575,10 @@ export function initBackgroundHealthTestsSystem() {
 
                 // Тест 3: индексация и поиск (расширенный набор проверок)
                 await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
+                updateHud(50);
+
+                // Тест 3.1: цепочка экспорта (импорт/слияние читают тот же JSON — критический контур)
+                await runExportPipelineDryRunCheck(deps, report, runWithTimeout);
                 updateHud(60);
 
                 // Тест 4: доступность и структура базы алгоритмов
@@ -690,6 +758,34 @@ export function initBackgroundHealthTestsSystem() {
                     } catch (err) {
                         report('warn', label, err.message);
                     }
+                }
+                // Тест 5.4.1b: корзина недавно удалённого
+                try {
+                    const db = deps.State?.db;
+                    if (
+                        db &&
+                        typeof db.objectStoreNames?.contains === 'function' &&
+                        db.objectStoreNames.contains(RECENTLY_DELETED_STORE_NAME)
+                    ) {
+                        const rdCount = await runWithTimeout(
+                            deps.performDBOperation?.(RECENTLY_DELETED_STORE_NAME, 'readonly', (s) =>
+                                s.count(),
+                            ),
+                            5000,
+                        );
+                        report('info', 'Корзина удалений', `Записей: ${rdCount}.`, {
+                            system: 'data_content',
+                        });
+                    } else {
+                        report(
+                            'warn',
+                            'Корзина удалений',
+                            'Стор recentlyDeleted отсутствует в текущей схеме БД.',
+                            { system: 'storage_idb' },
+                        );
+                    }
+                } catch (err) {
+                    report('warn', 'Корзина удалений', err.message, { system: 'data_content' });
                 }
                 // Тест 5.5: компонента проверки отзыва (CRL Helper)
                 if (!REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
@@ -1009,6 +1105,9 @@ export function initBackgroundHealthTestsSystem() {
             // Тест 3: индексация и поиск (расширенный набор проверок)
             await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
 
+            // Тест 3.1: цепочка экспорта (без записи файла)
+            await runExportPipelineDryRunCheck(deps, report, runWithTimeout);
+
             // Тест 4: алгоритмы (хранятся под ключом 'all' в data.main)
             try {
                 const algoContainer = await runWithTimeout(
@@ -1167,6 +1266,34 @@ export function initBackgroundHealthTestsSystem() {
                 } catch (err) {
                     report('warn', label, err.message);
                 }
+            }
+
+            try {
+                const db = deps.State?.db;
+                if (
+                    db &&
+                    typeof db.objectStoreNames?.contains === 'function' &&
+                    db.objectStoreNames.contains(RECENTLY_DELETED_STORE_NAME)
+                ) {
+                    const rdCount = await runWithTimeout(
+                        deps.performDBOperation?.(RECENTLY_DELETED_STORE_NAME, 'readonly', (s) =>
+                            s.count(),
+                        ),
+                        5000,
+                    );
+                    report('info', 'Корзина удалений', `Записей: ${rdCount}.`, {
+                        system: 'data_content',
+                    });
+                } else {
+                    report(
+                        'warn',
+                        'Корзина удалений',
+                        'Стор recentlyDeleted отсутствует в текущей схеме БД.',
+                        { system: 'storage_idb' },
+                    );
+                }
+            } catch (err) {
+                report('warn', 'Корзина удалений', err.message, { system: 'data_content' });
             }
 
             // Тест 5.5: API/компонента проверки отзыва

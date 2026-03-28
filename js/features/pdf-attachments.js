@@ -302,19 +302,99 @@ async function confirmPdfRemoval(displayName) {
     return typeof window !== 'undefined' && window.confirm ? window.confirm(message) : false;
 }
 
-// PDF section mounting cache
+// PDF section mounting cache (keys include mode: editable vs read-only — same entity may appear in both)
 const mountedPdfSections = new Map();
+
+function getPdfSectionCacheKey(parentType, parentId, readOnly) {
+    return `${parentType}:${parentId}:${readOnly ? 'ro' : 'rw'}`;
+}
+
+const PDF_UI_CLASSES = Object.freeze({
+    addMoreButton:
+        'pdf-add-more-btn inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-primary/40 hover:bg-gray-50 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-primary/40 dark:hover:bg-gray-700/70',
+    shellEmpty:
+        'pdf-list-shell pdf-drop-target mt-2 min-h-0 rounded-xl transition-colors border-2 border-dashed border-gray-200/90 bg-gray-50/35 px-1 py-0.5 dark:border-gray-600/70 dark:bg-gray-900/25',
+    shellFilled:
+        'pdf-list-shell pdf-drop-target mt-2 rounded-xl border border-gray-200/90 bg-white px-0 py-0 shadow-sm dark:border-gray-600/80 dark:bg-gray-800/40',
+    emptyState:
+        'pdf-empty-state flex items-center gap-2 py-1.5 px-2 text-left cursor-pointer rounded-lg outline-none transition-colors hover:bg-gray-100/60 dark:hover:bg-gray-800/25 focus-visible:ring-2 focus-visible:ring-primary/35',
+    emptyIcon:
+        'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gray-200/70 text-gray-500 dark:bg-gray-700/60 dark:text-gray-300',
+    emptyHint: 'text-xs leading-snug text-gray-600 dark:text-gray-300',
+    editNameButton:
+        'rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200',
+    editNameInput:
+        'w-full h-5 border-0 bg-transparent px-0 text-sm font-medium leading-5 text-gray-900 outline-none ring-0 focus:outline-none focus:ring-0 dark:text-gray-100',
+});
+
+const PDF_DIVIDER_CLASSES = 'border-gray-200 dark:border-gray-600';
+
+function parseRgbFromCssColor(color) {
+    const m = String(color || '').match(/rgba?\(([^)]+)\)/i);
+    if (!m) return null;
+    const p = m[1].split(',').map((s) => Number.parseFloat(s.trim()));
+    if (p.length < 3 || p.some((v, i) => i < 3 && Number.isNaN(v))) return null;
+    return [p[0], p[1], p[2]];
+}
+
+function isDarkThemeEnabled(contextEl) {
+    const hasDarkClass =
+        document.documentElement.classList.contains('dark') ||
+        document.body.classList.contains('dark') ||
+        Boolean(contextEl?.closest?.('.dark'));
+    if (hasDarkClass) return true;
+
+    const probe = contextEl?.closest?.('#bookmarkDetailModal > div') || contextEl;
+    if (!probe) return false;
+    const rgb = parseRgbFromCssColor(window.getComputedStyle(probe).backgroundColor);
+    if (!rgb) return false;
+    const [r, g, b] = rgb;
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    return luminance < 140;
+}
+
+function applyPdfThemeStyling({ section, addToolbar, shell, ul }) {
+    const isDark = isDarkThemeEnabled(section);
+
+    if (addToolbar) {
+        addToolbar.style.borderColor = isDark ? 'rgba(55, 65, 81, 0.7)' : 'rgba(209, 213, 219, 0.8)';
+    }
+
+    if (shell) {
+        if (shell.classList.contains('pdf-list-shell')) {
+            shell.style.borderColor = isDark ? 'rgba(75, 85, 99, 0.8)' : 'rgba(209, 213, 219, 0.9)';
+            shell.style.backgroundColor = isDark ? 'rgba(31, 41, 55, 0.4)' : '';
+        }
+    }
+
+    if (ul) {
+        ul.dataset.themeBorder = isDark ? 'rgba(55, 65, 81, 0.8)' : 'rgba(243, 244, 246, 1)';
+        ul.style.backgroundColor = isDark ? 'rgba(31, 41, 55, 0.4)' : '';
+    }
+}
+
+function normalizePdfFilename(nextName, fallbackName) {
+    const raw = String(nextName || '').trim().replace(/\s+/g, ' ');
+    if (!raw) return String(fallbackName || 'file.pdf');
+    return raw.slice(0, 180);
+}
 
 /**
  * Mount PDF section to a host element
+ * @param {object} [options]
+ * @param {boolean} [options.readOnly] — только просмотр и скачивание (без загрузки, удаления, переименования)
  */
-export function mountPdfSection(hostEl, parentType, parentId) {
+export function mountPdfSection(hostEl, parentType, parentId, options = {}) {
     if (!hostEl) return;
 
-    const bkey = `${parentType}:${parentId}`;
+    const readOnly = Boolean(options.readOnly);
+    const bkey = getPdfSectionCacheKey(parentType, parentId, readOnly);
     if (mountedPdfSections.has(bkey)) {
         const existing = mountedPdfSections.get(bkey);
         if (existing && existing.parentNode) {
+            if (options.readOnlyEmptyLink !== undefined) {
+                existing._pdfReadOnlyEmptyLink = options.readOnlyEmptyLink || null;
+            }
             refreshPdfList(existing, parentType, parentId);
             return;
         }
@@ -323,30 +403,35 @@ export function mountPdfSection(hostEl, parentType, parentId) {
     const section = document.createElement('div');
     section.className =
         parentType === 'algorithm'
-            ? 'pdf-attachments-section mt-6 pt-6 border-t border-gray-100 dark:border-gray-700/80'
-            : 'pdf-attachments-section mt-6 pt-6 border-t border-gray-100 dark:border-gray-700/80';
+            ? `pdf-attachments-section mt-6 pt-5`
+            : `pdf-attachments-section mt-6 pt-5`;
     section.dataset.parentType = parentType;
     section.dataset.parentId = parentId;
+    section.dataset.pdfReadonly = readOnly ? '1' : '0';
 
     const addMoreLabel =
         parentType === 'bookmark'
             ? 'Добавить ещё PDF к этой закладке'
             : 'Добавить ещё PDF к этому алгоритму';
 
-    section.innerHTML = `
+    if (readOnly) {
+        section.innerHTML = `<div class="pdf-list-shell mt-2 min-h-0 rounded-xl transition-colors"></div>`;
+    } else {
+        section.innerHTML = `
     <input type="file" accept="application/pdf" multiple class="hidden pdf-input" aria-label="Выбрать PDF-файлы">
-    <div class="pdf-add-toolbar hidden border-t border-gray-100 pt-2 pb-1 dark:border-gray-700/80" role="region" aria-label="Добавление PDF">
-      <button type="button" class="pdf-add-more-btn inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-gray-600 shadow-sm transition hover:border-primary/50 hover:bg-gray-50 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-primary/40 dark:hover:bg-gray-700/50" aria-label="${addMoreLabel}">
+    <div class="pdf-add-toolbar hidden flex justify-end border-t pt-2 pb-1 ${PDF_DIVIDER_CLASSES}" role="region" aria-label="Добавление PDF">
+      <button type="button" class="${PDF_UI_CLASSES.addMoreButton}" aria-label="${addMoreLabel}">
         <i class="fas fa-plus text-sm" aria-hidden="true"></i>
+        <span>Добавить PDF</span>
       </button>
     </div>
     <div class="pdf-list-shell pdf-drop-target mt-2 min-h-0 rounded-xl transition-colors"></div>`;
+    }
 
     const shell = section.querySelector('.pdf-list-shell');
     const input = section.querySelector('.pdf-input');
-    const addToolbar = section.querySelector('.pdf-add-toolbar');
     const addMoreBtn = section.querySelector('.pdf-add-more-btn');
-    if (addMoreBtn) {
+    if (!readOnly && addMoreBtn) {
         addMoreBtn.title = addMoreLabel;
         addMoreBtn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -355,24 +440,63 @@ export function mountPdfSection(hostEl, parentType, parentId) {
         });
     }
 
-    input?.addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length) return;
-        await addPdfRecords(files, parentType, parentId);
-        input.value = '';
-        refreshPdfList(section, parentType, parentId);
-    });
+    if (!readOnly) {
+        input?.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+            await addPdfRecords(files, parentType, parentId);
+            input.value = '';
+            refreshPdfList(section, parentType, parentId);
+        });
+    }
 
-    if (shell) {
+    if (shell && !readOnly) {
         setupPdfDragAndDrop(shell, async (files) => {
             await addPdfRecords(files, parentType, parentId);
             refreshPdfList(section, parentType, parentId);
         });
     }
 
+    section._pdfReadOnlyEmptyLink = options.readOnlyEmptyLink || null;
+
     hostEl.appendChild(section);
     mountedPdfSections.set(bkey, section);
     refreshPdfList(section, parentType, parentId);
+}
+
+/**
+ * «{leadLabel} отсутствуют» — слово «отсутствуют» как подчёркнутая ссылка (открытие редактирования).
+ * @param {HTMLElement} container — родитель (очищается)
+ * @param {string} leadLabel
+ * @param {() => void} onActivate
+ */
+export function mountAttachmentAbsentParagraph(container, leadLabel, onActivate) {
+    if (!container) return;
+    container.innerHTML = '';
+    const p = document.createElement('p');
+    p.className =
+        'text-sm leading-relaxed text-gray-600 dark:text-gray-400 py-2 px-0.5';
+    p.appendChild(document.createTextNode(`${leadLabel} `));
+    const a = document.createElement('a');
+    a.href = '#';
+    a.className =
+        'attachment-empty-add-link text-primary underline decoration-primary underline-offset-2 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-sm';
+    a.textContent = 'отсутствуют';
+    a.setAttribute(
+        'aria-label',
+        `${leadLabel}: открыть редактирование, чтобы добавить вложения`,
+    );
+    a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof onActivate === 'function') onActivate();
+    });
+    p.appendChild(a);
+    container.appendChild(p);
+}
+
+function appendReadOnlyEmptyWithLink(shell, leadLabel, onActivate) {
+    mountAttachmentAbsentParagraph(shell, leadLabel, onActivate);
 }
 
 /**
@@ -382,6 +506,8 @@ async function refreshPdfList(section, parentType, parentId) {
     const shell = section.querySelector('.pdf-list-shell');
     if (!shell) return;
 
+    const readOnly = section.dataset.pdfReadonly === '1';
+
     const pdfs = await getPdfsForParent(parentType, parentId);
 
     const addToolbar = section.querySelector('.pdf-add-toolbar');
@@ -390,24 +516,42 @@ async function refreshPdfList(section, parentType, parentId) {
     }
 
     shell.innerHTML = '';
-    shell.className =
-        'pdf-list-shell pdf-drop-target mt-2 min-h-0 rounded-xl transition-colors border-2 border-dashed border-gray-200/90 bg-gray-50/40 px-1 py-0.5 dark:border-gray-600/70 dark:bg-gray-900/25';
+    shell.className = readOnly
+        ? 'pdf-list-shell mt-2 min-h-0 rounded-xl transition-colors'
+        : PDF_UI_CLASSES.shellEmpty;
 
     if (!pdfs.length) {
+        if (readOnly) {
+            const linkOpt = section._pdfReadOnlyEmptyLink;
+            if (linkOpt && typeof linkOpt.onActivate === 'function') {
+                appendReadOnlyEmptyWithLink(
+                    shell,
+                    typeof linkOpt.leadLabel === 'string' && linkOpt.leadLabel.trim()
+                        ? linkOpt.leadLabel.trim()
+                        : 'PDF-файлы',
+                    linkOpt.onActivate,
+                );
+            } else {
+                const empty = document.createElement('p');
+                empty.className = 'text-xs text-gray-500 dark:text-gray-400 py-2 px-1';
+                empty.textContent = 'Нет прикреплённых PDF.';
+                shell.appendChild(empty);
+            }
+            applyPdfThemeStyling({ section, addToolbar, shell });
+            return;
+        }
+
         const empty = document.createElement('div');
-        empty.className =
-            'pdf-empty-state flex flex-col items-center justify-center gap-0.5 py-2 px-2 text-center cursor-pointer rounded-lg outline-none transition-colors hover:bg-gray-100/60 dark:hover:bg-gray-800/25 focus-visible:ring-2 focus-visible:ring-primary/35';
+        empty.className = PDF_UI_CLASSES.emptyState;
         empty.setAttribute('role', 'button');
         empty.setAttribute('tabindex', '0');
         empty.title =
             'Нажмите, чтобы выбрать PDF, или перетащите файлы в эту область. Только PDF, хранение в браузере.';
         empty.innerHTML = `
-          <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gray-200/70 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400" aria-hidden="true">
+          <span class="${PDF_UI_CLASSES.emptyIcon}" aria-hidden="true">
             <i class="far fa-file-pdf text-sm"></i>
           </span>
-          <p class="text-xs font-medium leading-snug text-gray-700 dark:text-gray-200">Нет прикреплённых PDF</p>
-          <p class="max-w-sm text-2xs leading-snug text-gray-500 dark:text-gray-400">Нажмите здесь, чтобы выбрать файлы, или перетащите PDF в эту область</p>
-          <p class="text-2xs text-gray-400 dark:text-gray-500">Только PDF · локально в браузере</p>`;
+          <p class="${PDF_UI_CLASSES.emptyHint}">Нажмите, чтобы выбрать файлы, или перетащите PDF в эту область</p>`;
         const pickFiles = () => {
             const inp = section.querySelector('.pdf-input');
             inp?.click();
@@ -424,20 +568,24 @@ async function refreshPdfList(section, parentType, parentId) {
             }
         });
         shell.appendChild(empty);
+        applyPdfThemeStyling({ section, addToolbar, shell });
         return;
     }
 
-    shell.className =
-        'pdf-list-shell pdf-drop-target mt-2 rounded-xl border border-gray-200/90 bg-white px-0 py-0 shadow-sm dark:border-gray-600/80 dark:bg-gray-800/40';
+    shell.className = PDF_UI_CLASSES.shellFilled;
 
     const ul = document.createElement('ul');
     ul.className = 'pdf-list divide-y divide-gray-100 dark:divide-gray-700/80';
     ul.setAttribute('role', 'list');
+    applyPdfThemeStyling({ section, addToolbar, shell, ul });
 
-    pdfs.forEach((pdf) => {
+    pdfs.forEach((pdf, idx) => {
         const li = document.createElement('li');
         li.className =
             'group flex items-center gap-3 px-3 py-3 sm:px-4 sm:py-3.5 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/30';
+        if (idx > 0) {
+            li.style.borderTop = `1px solid ${ul.dataset.themeBorder || 'rgba(243, 244, 246, 1)'}`;
+        }
 
         const displayName =
             typeof pdf?.filename === 'string' && pdf.filename.trim() ? pdf.filename.trim() : 'file.pdf';
@@ -450,15 +598,30 @@ async function refreshPdfList(section, parentType, parentId) {
 
         const meta = document.createElement('div');
         meta.className = 'min-w-0 flex-1';
+        const nameSlot = document.createElement('div');
+        nameSlot.className = readOnly ? 'min-w-0' : 'relative h-5';
         const nameEl = document.createElement('p');
         nameEl.className =
-            'truncate text-sm font-medium text-gray-900 dark:text-gray-100';
+            'truncate text-sm font-medium leading-5 text-gray-900 dark:text-gray-100';
         nameEl.textContent = displayName;
         nameEl.title = displayName;
+
+        let nameInput = null;
+        if (!readOnly) {
+            nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = `${PDF_UI_CLASSES.editNameInput} absolute inset-0 hidden`;
+            nameInput.value = displayName;
+            nameInput.setAttribute('aria-label', `Переименовать PDF ${displayName}`);
+            nameInput.setAttribute('maxlength', '180');
+        }
+
         const sizeEl = document.createElement('p');
         sizeEl.className = 'mt-0.5 text-xs text-gray-500 dark:text-gray-400 tabular-nums';
         sizeEl.textContent = sizeLabel;
-        meta.appendChild(nameEl);
+        nameSlot.appendChild(nameEl);
+        if (nameInput) nameSlot.appendChild(nameInput);
+        meta.appendChild(nameSlot);
         meta.appendChild(sizeEl);
 
         const actions = document.createElement('div');
@@ -480,28 +643,127 @@ async function refreshPdfList(section, parentType, parentId) {
             }
         });
 
-        const rmBtn = document.createElement('button');
-        rmBtn.type = 'button';
-        rmBtn.className =
-            'rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:hover:bg-red-950/40 dark:hover:text-red-400';
-        rmBtn.setAttribute('aria-label', `Удалить ${displayName}`);
-        rmBtn.title = `Удалить «${displayName}» из списка PDF`;
-        rmBtn.innerHTML = '<i class="far fa-trash-alt text-sm" aria-hidden="true"></i>';
-        rmBtn.addEventListener('click', async () => {
-            const ok = await confirmPdfRemoval(displayName);
-            if (!ok) return;
-            try {
-                await deleteFromIndexedDB('pdfFiles', pdf.id);
-                await refreshPdfList(section, parentType, parentId);
-                showNotification('PDF удалён', 'success');
-            } catch (err) {
-                console.error('[refreshPdfList] Delete error:', err);
-                showNotification('Ошибка удаления PDF', 'error');
-            }
-        });
+        if (!readOnly) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = PDF_UI_CLASSES.editNameButton;
+            editBtn.setAttribute('aria-label', `Переименовать ${displayName}`);
+            editBtn.title = `Переименовать «${displayName}»`;
+            editBtn.innerHTML = '<i class="fas fa-pen text-xs" aria-hidden="true"></i>';
 
-        actions.appendChild(dlBtn);
-        actions.appendChild(rmBtn);
+            const rmBtn = document.createElement('button');
+            rmBtn.type = 'button';
+            rmBtn.className =
+                'rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:hover:bg-red-950/40 dark:hover:text-red-400';
+            rmBtn.setAttribute('aria-label', `Удалить ${displayName}`);
+            rmBtn.title = `Удалить «${displayName}» из списка PDF`;
+            rmBtn.innerHTML = '<i class="far fa-trash-alt text-sm" aria-hidden="true"></i>';
+            rmBtn.addEventListener('click', async () => {
+                const ok = await confirmPdfRemoval(displayName);
+                if (!ok) return;
+                try {
+                    await deleteFromIndexedDB('pdfFiles', pdf.id);
+                    await refreshPdfList(section, parentType, parentId);
+                    showNotification('PDF удалён', 'success');
+                } catch (err) {
+                    console.error('[refreshPdfList] Delete error:', err);
+                    showNotification('Ошибка удаления PDF', 'error');
+                }
+            });
+
+            let isEditingName = false;
+            let isSavingName = false;
+
+            const setEditButtonState = (editing) => {
+                if (editing) {
+                    editBtn.setAttribute('aria-label', `Сохранить имя ${displayName}`);
+                    editBtn.title = `Сохранить новое имя «${displayName}»`;
+                    editBtn.innerHTML = '<i class="fas fa-check text-xs" aria-hidden="true"></i>';
+                } else {
+                    editBtn.setAttribute('aria-label', `Переименовать ${displayName}`);
+                    editBtn.title = `Переименовать «${displayName}»`;
+                    editBtn.innerHTML = '<i class="fas fa-pen text-xs" aria-hidden="true"></i>';
+                }
+            };
+
+            const startRename = () => {
+                if (isSavingName) return;
+                isEditingName = true;
+                nameInput.value = nameEl.textContent || displayName;
+                nameEl.classList.add('hidden');
+                nameInput.classList.remove('hidden');
+                setEditButtonState(true);
+                nameInput.focus();
+                nameInput.select();
+            };
+
+            const stopRename = () => {
+                isEditingName = false;
+                nameInput.classList.add('hidden');
+                nameEl.classList.remove('hidden');
+                setEditButtonState(false);
+            };
+
+            const commitRename = async () => {
+                if (!isEditingName || isSavingName) return;
+                const normalized = normalizePdfFilename(nameInput.value, displayName);
+                const prev = nameEl.textContent || displayName;
+                if (normalized === prev) {
+                    stopRename();
+                    return;
+                }
+                isSavingName = true;
+                try {
+                    await saveToIndexedDB('pdfFiles', { ...pdf, id: pdf.id, filename: normalized });
+                    await refreshPdfList(section, parentType, parentId);
+                    showNotification('Имя PDF обновлено', 'success');
+                } catch (err) {
+                    console.error('[refreshPdfList] Rename error:', err);
+                    showNotification('Не удалось переименовать PDF', 'error');
+                    stopRename();
+                } finally {
+                    isSavingName = false;
+                }
+            };
+
+            editBtn.addEventListener('click', () => {
+                if (isEditingName) {
+                    commitRename();
+                    return;
+                }
+                startRename();
+            });
+
+            editBtn.addEventListener('mousedown', (e) => {
+                if (isEditingName) {
+                    e.preventDefault();
+                }
+            });
+
+            nameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitRename();
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    stopRename();
+                }
+            });
+
+            nameInput.addEventListener('blur', () => {
+                if (isEditingName && !isSavingName) {
+                    stopRename();
+                }
+            });
+
+            actions.appendChild(editBtn);
+            actions.appendChild(dlBtn);
+            actions.appendChild(rmBtn);
+        } else {
+            actions.appendChild(dlBtn);
+        }
         li.appendChild(iconWrap);
         li.appendChild(meta);
         li.appendChild(actions);
@@ -523,7 +785,8 @@ export function removePdfSectionsFromContainer(container) {
         const pt = section.dataset?.parentType;
         const pid = section.dataset?.parentId;
         if (pt != null && pid != null) {
-            mountedPdfSections.delete(`${pt}:${pid}`);
+            const readOnly = section.dataset?.pdfReadonly === '1';
+            mountedPdfSections.delete(getPdfSectionCacheKey(pt, pid, readOnly));
         }
         section.remove();
     });
@@ -531,18 +794,28 @@ export function removePdfSectionsFromContainer(container) {
 
 /**
  * Render PDF attachments section
+ * @param {object} [options]
+ * @param {boolean} [options.readOnly] — просмотр без загрузки/удаления (режим «только чтение»)
+ * @param {{ leadLabel?: string, onActivate: () => void } | null} [options.readOnlyEmptyLink] — в readOnly при пустом списке: «{leadLabel} отсутствуют» со ссылкой
  */
-export function renderPdfAttachmentsSection(container, parentType, parentId) {
+export function renderPdfAttachmentsSection(container, parentType, parentId, options = {}) {
     if (!container) return;
-    const bkey = `${parentType}:${parentId}`;
+    const readOnly = Boolean(options.readOnly);
+    const bkey = getPdfSectionCacheKey(parentType, parentId, readOnly);
     if (mountedPdfSections.has(bkey)) {
         const existing = mountedPdfSections.get(bkey);
         if (existing && existing.parentNode) {
+            if (options.readOnlyEmptyLink !== undefined) {
+                existing._pdfReadOnlyEmptyLink = options.readOnlyEmptyLink || null;
+            }
             refreshPdfList(existing, parentType, parentId);
             return;
         }
     }
-    mountPdfSection(container, parentType, parentId);
+    mountPdfSection(container, parentType, parentId, {
+        readOnly,
+        readOnlyEmptyLink: options.readOnlyEmptyLink,
+    });
 }
 
 // Helper to try attaching to algorithm view modal
@@ -566,7 +839,7 @@ function tryAttachToAlgorithmModal() {
             content.appendChild(pdfHost);
         }
 
-        mountPdfSection(pdfHost, 'algorithm', algoId);
+        mountPdfSection(pdfHost, 'algorithm', algoId, { readOnly: true });
     });
 
     observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
@@ -662,10 +935,13 @@ export function attachBookmarkPdfHandlers(form) {
         <div class="pdf-draft-shell mt-4 min-h-[4rem] rounded-xl border-2 border-dashed border-gray-200/90 bg-white/60 px-1 py-1 dark:border-gray-600/60 dark:bg-gray-800/30"></div>
       </div>`;
 
+    const pdfHostAnchor = form.querySelector('#bookmarkPdfEditHost');
     const screenshotsBlock = form
         .querySelector('#bookmarkScreenshotThumbnailsContainer')
         ?.closest('.mb-4');
-    if (screenshotsBlock && screenshotsBlock.parentNode) {
+    if (pdfHostAnchor && pdfHostAnchor.parentNode) {
+        pdfHostAnchor.parentNode.insertBefore(block, pdfHostAnchor.nextSibling);
+    } else if (screenshotsBlock && screenshotsBlock.parentNode) {
         screenshotsBlock.parentNode.insertBefore(block, screenshotsBlock.nextSibling);
     } else {
         form.appendChild(block);

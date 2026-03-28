@@ -1,5 +1,7 @@
 'use strict';
 
+import { ONBOARDING_AUTO_OFFER_STORAGE_KEY } from '../constants.js';
+
 const DRIVER_VENDOR_VERSION = '1.4.0';
 const DRIVER_SCRIPT_SRC = `vendor/driver.js/${DRIVER_VENDOR_VERSION}/driver.js.iife.js`;
 const DRIVER_STYLES_SRC = `vendor/driver.js/${DRIVER_VENDOR_VERSION}/driver.css`;
@@ -715,7 +717,7 @@ function activateTourTab(tabId) {
             requestAnimationFrame(() => {
                 try {
                     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                } catch (_) {
+                } catch {
                     window.scrollTo(0, 0);
                 }
                 const linksContent = document.getElementById('linksContent');
@@ -766,7 +768,7 @@ function buildTourSteps() {
                 if (blueprint.scrollToTop) {
                     try {
                         window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                    } catch (_) {
+                    } catch {
                         window.scrollTo(0, 0);
                     }
                 }
@@ -790,10 +792,35 @@ function buildTourSteps() {
     });
 }
 
+function setOnboardingAutoOfferInStorage() {
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(ONBOARDING_AUTO_OFFER_STORAGE_KEY, '1');
+        }
+    } catch {
+        /* ignore */
+    }
+}
+
+async function persistOnboardingAutoPromptConsumed() {
+    if (!deps.State?.userPreferences) return;
+    deps.State.userPreferences.onboardingTourAutoPromptConsumed = true;
+    setOnboardingAutoOfferInStorage();
+    if (typeof deps.saveUserPreferences === 'function') {
+        try {
+            await deps.saveUserPreferences();
+        } catch (error) {
+            console.warn('[onboarding-tour] Не удалось сохранить флаг автопоказа онбординга:', error);
+        }
+    }
+}
+
 async function markTourCompleted() {
     if (!deps.State || !deps.State.userPreferences) return;
 
     deps.State.userPreferences.onboardingTourCompleted = true;
+    deps.State.userPreferences.onboardingTourAutoPromptConsumed = true;
+    setOnboardingAutoOfferInStorage();
     if (typeof deps.saveUserPreferences === 'function') {
         try {
             await deps.saveUserPreferences();
@@ -909,11 +936,21 @@ function applyPopoverAccessibility(popover) {
 }
 
 export function shouldShowOnboardingAfterInit() {
-    return !(
-        deps.State &&
-        deps.State.userPreferences &&
-        deps.State.userPreferences.onboardingTourCompleted
-    );
+    if (!deps.State?.userPreferences) return false;
+    const p = deps.State.userPreferences;
+    if (p.onboardingTourCompleted === true) return false;
+    if (p.onboardingTourAutoPromptConsumed === true) return false;
+    try {
+        if (
+            typeof localStorage !== 'undefined' &&
+            localStorage.getItem(ONBOARDING_AUTO_OFFER_STORAGE_KEY) === '1'
+        ) {
+            return false;
+        }
+    } catch {
+        /* ignore */
+    }
+    return true;
 }
 
 export async function startOnboardingTour() {
@@ -986,6 +1023,8 @@ export async function startOnboardingTour() {
 }
 
 export async function promptAndStartOnboardingTour() {
+    await persistOnboardingAutoPromptConsumed();
+
     if (typeof deps.showAppConfirm !== 'function') {
         return startOnboardingTour();
     }

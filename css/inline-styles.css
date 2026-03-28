@@ -83,3 +83,48 @@ html.dark body::-webkit-scrollbar-corner {
 .btn-destructive-all {
     border-radius: var(--border-radius) !important;
 }
+
+/* ------------------------------------------------------------------ */
+/* Глобально: без фокус-обводки / ring (Tailwind и outline)            */
+/* Загружается последним через main.css — перекрывает компонентные правила */
+/* ------------------------------------------------------------------ */
+:focus,
+:focus-visible {
+    outline: none !important;
+    outline-offset: 0 !important;
+}
+
+/* Tailwind ring задаётся и на :focus (не только :focus-visible) */
+:focus,
+:focus-visible {
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-width: 0px !important;
+    --tw-ring-width: 0px !important;
+}
+
+/* Поля ввода: убрать focus:border-primary и прочие фокус-рамки */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+    border-color: var(--color-border);
+    box-shadow: none !important;
+}
+
+/* Не-Tailwind: явные focus-ring в компонентах */
+.engineering-cockpit-password-input:focus,
+.engineering-cockpit-password-input:focus-visible {
+    border-color: var(--color-border);
+    box-shadow: none !important;
+}
+
+#dbMergeModal #dbMergeSelectFileBtn:focus-visible {
+    box-shadow: none !important;
+}
+
+.app-toggle input:focus-visible + .app-toggle__track {
+    outline: none !important;
+}
