@@ -43,7 +43,6 @@ body.custom-background-active .tab-btn.tab-active > *,
 #timerDecreaseButton,
 #timerIncreaseButton,
 #themeToggle,
-#clearSearchInputBtn,
 #openCommandPaletteBtn,
 #customizeUIBtn,
 #exportDataBtn,
@@ -58,7 +57,6 @@ body.custom-background-active .tab-btn.tab-active > *,
 #timerDecreaseButton i,
 #timerIncreaseButton i,
 #themeToggle i,
-#clearSearchInputBtn i,
 #openCommandPaletteBtn i,
 #customizeUIBtn i,
 #exportDataBtn i,
@@ -67,6 +65,20 @@ body.custom-background-active .tab-btn.tab-active > *,
 #forceReloadBtn i,
 #showHotkeysBtn i {
     color: var(--color-primary) !important;
+}
+
+/* Иконки поля поиска в шапке: нейтральный серый (не primary / не «белый» текст темы) */
+#toggleAdvancedSearch,
+#toggleAdvancedSearch i,
+#clearSearchInputBtn,
+#clearSearchInputBtn i {
+    color: rgb(107 114 128) !important;
+}
+html.dark #toggleAdvancedSearch,
+html.dark #toggleAdvancedSearch i,
+html.dark #clearSearchInputBtn,
+html.dark #clearSearchInputBtn i {
+    color: rgb(156 163 175) !important;
 }
 
 #appSlogan {

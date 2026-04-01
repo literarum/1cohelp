@@ -25,16 +25,21 @@ export const TYPE_FILTER_MAP = {
     ошибки: 'error',
     xml: 'xml_report',
     xml_report: 'xml_report',
+    окно: 'modal',
+    окна: 'modal',
+    modal: 'modal',
+    modals: 'modal',
 };
 
-/** Порядок типов при равном score (меньше индекс — выше в списке): алгоритмы → xml_report → error → tab → action */
+/** Порядок типов при равном score (меньше индекс — выше в списке): алгоритмы → xml_report → error → modal → tab → action */
 export const TYPE_ORDER = {
     algorithm: 0,
     main: 0,
     xml_report: 1,
     error: 2,
-    tab: 3,
-    action: 4,
+    modal: 3,
+    tab: 4,
+    action: 5,
 };
 
 /** Подписи типов результатов для бейджей (палитра + глобальный поиск) */
@@ -45,6 +50,7 @@ export const TYPE_LABELS = {
     error: 'Ошибка',
     action: 'Действие',
     tab: 'Вкладка',
+    modal: 'Окно',
     link: 'Ссылка 1С',
     bookmark: 'Закладка',
     bookmark_note: 'Заметка',

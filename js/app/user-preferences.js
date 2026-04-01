@@ -130,6 +130,8 @@ export async function loadUserPreferences() {
         onboardingTourCompleted: false,
         /** Автопоказ тура при старте уже использован (или отклонён) — не предлагать снова */
         onboardingTourAutoPromptConsumed: false,
+        /** Напоминания о резервном копировании (тост каждые 3 ч). false — отключено. */
+        backupReminderEnabled: true,
         clientNotesFontSize: 100,
         employeeExtension: '',
         textareaHeights: {},
@@ -301,6 +303,7 @@ export async function saveUserPreferences() {
             'welcomeTextShownInitially',
             'onboardingTourCompleted',
             'onboardingTourAutoPromptConsumed',
+            'backupReminderEnabled',
             'clientNotesFontSize',
             'employeeExtension',
             'textareaHeights',
@@ -320,6 +323,8 @@ export async function saveUserPreferences() {
                 );
                 if (field === 'textareaHeights') {
                     State.userPreferences[field] = {};
+                } else if (field === 'backupReminderEnabled') {
+                    State.userPreferences[field] = true;
                 } else if (booleanPreferenceFields.has(field)) {
                     State.userPreferences[field] = false;
                 } else {

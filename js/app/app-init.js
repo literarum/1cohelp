@@ -12,6 +12,7 @@ import {
     REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER,
 } from '../config/revocation-sources.js';
 import { getCoreService, notify } from '../core/kernel.js';
+import { initBackupReminderScheduler } from '../features/backup-reminder.js';
 
 let dependencies = {};
 
@@ -301,6 +302,13 @@ export async function appInit(context = 'normal') {
                 await loadUserPreferences();
             } else {
                 console.warn('[appInit V3] Функция loadUserPreferences не найдена.');
+            }
+            try {
+                if (typeof initBackupReminderScheduler === 'function') {
+                    initBackupReminderScheduler();
+                }
+            } catch (e) {
+                console.error('[appInit V3] initBackupReminderScheduler:', e);
             }
             updateTotalAppInitProgress(STAGE_WEIGHTS_APP_INIT.USER_PREFS, 'UserPrefs');
 

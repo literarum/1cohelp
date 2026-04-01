@@ -122,6 +122,11 @@ export function populateModalControls(settings) {
         staticHeaderToggle.checked = settings.staticHeader ?? false;
     }
 
+    const backupReminderToggle = modal.querySelector('#toggleBackupReminder');
+    if (backupReminderToggle) {
+        backupReminderToggle.checked = settings.backupReminderEnabled !== false;
+    }
+
     const fontSizeLabel = modal.querySelector('#fontSizeLabel');
     if (fontSizeLabel) fontSizeLabel.textContent = (settings.fontSize ?? 100) + '%';
 
@@ -185,6 +190,7 @@ export function getSettingsFromModal() {
     const showBlacklistWarningToggle = modal.querySelector('#toggleBlacklistWarning');
     const disableForcedBackupToggle = modal.querySelector('#toggleDisableForcedBackup');
     const staticHeaderToggle = modal.querySelector('#toggleStaticHeader');
+    const backupReminderToggle = modal.querySelector('#toggleBackupReminder');
 
     const primaryColor =
         State.currentPreviewSettings.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
@@ -226,6 +232,7 @@ export function getSettingsFromModal() {
             ? disableForcedBackupToggle.checked
             : false,
         staticHeader: staticHeaderToggle ? staticHeaderToggle.checked : false,
+        backupReminderEnabled: backupReminderToggle ? backupReminderToggle.checked : true,
     };
 }
 

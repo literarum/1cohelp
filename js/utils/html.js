@@ -214,3 +214,66 @@ export function linkify(text) {
         })
         .join('');
 }
+
+/**
+ * Нормализует строку URL закладки/внешней ссылки (как в карточке закладки).
+ * @returns {string} Абсолютный href или пустая строка при ошибке разбора.
+ */
+export function normalizeExternalHttpUrl(raw) {
+    if (typeof raw !== 'string') return '';
+    let fixed = raw.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+    if (!fixed) return '';
+    if (!fixed.match(/^https?:\/\//i)) {
+        fixed = 'https://' + fixed;
+    }
+    try {
+        return new URL(fixed).href;
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Блок «Ссылка» для модалки деталей закладки (DOM API, безопасный href).
+ * @returns {HTMLElement|null}
+ */
+export function createBookmarkDetailUrlSectionElement(rawUrl) {
+    const href = normalizeExternalHttpUrl(rawUrl);
+    if (!href || typeof document === 'undefined') return null;
+    let hostname = '';
+    try {
+        hostname = new URL(href).hostname;
+    } catch {
+        return null;
+    }
+    const section = document.createElement('section');
+    section.className =
+        'bookmark-detail-url-section mb-4 pb-4 border-b border-gray-200 dark:border-gray-600';
+    section.setAttribute('aria-labelledby', 'bookmarkDetailUrlHeading');
+
+    const h3 = document.createElement('h3');
+    h3.id = 'bookmarkDetailUrlHeading';
+    h3.className =
+        'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2';
+    h3.textContent = 'Ссылка';
+
+    const p = document.createElement('p');
+    p.className = 'text-sm m-0';
+
+    const a = document.createElement('a');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className =
+        'text-primary hover:underline break-all inline-flex items-start gap-1.5 max-w-full';
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-external-link-alt mt-0.5 opacity-75 flex-shrink-0';
+    icon.setAttribute('aria-hidden', 'true');
+    a.appendChild(icon);
+    a.appendChild(document.createTextNode(hostname));
+
+    p.appendChild(a);
+    section.appendChild(h3);
+    section.appendChild(p);
+    return section;
+}

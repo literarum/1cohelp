@@ -65,6 +65,7 @@ import {
     highlightElement,
     highlightTextInElement,
     linkify as linkifyModule,
+    createBookmarkDetailUrlSectionElement,
 } from './js/utils/html.js';
 
 import {
@@ -281,6 +282,7 @@ import {
     showAppConfirm as showAppConfirmModule,
     showAppAlert as showAppAlertModule,
 } from './js/ui/app-confirm-modal.js';
+import { setBackupReminderDependencies } from './js/features/backup-reminder.js';
 import {
     setHeaderButtonsDependencies,
     initHeaderButtons as initHeaderButtonsModule,
@@ -1513,6 +1515,14 @@ setAppInitDependencies({
     getClientNotesPanelTextarea: getClientNotesPanelTextareaModule,
 });
 console.log('[script.js] Зависимости модуля appInit установлены');
+
+setBackupReminderDependencies({
+    State,
+    NotificationService,
+    showAppConfirm: showAppConfirmModule,
+    saveUserPreferences: saveUserPreferencesModule,
+});
+console.log('[script.js] Зависимости модуля backup-reminder установлены');
 
 // ============================================================================
 // УСТАНОВКА ЗАВИСИМОСТЕЙ ДЛЯ МОДУЛЕЙ (ДО window.onload)
@@ -3190,11 +3200,15 @@ async function showBookmarkDetailModal(bookmarkId) {
 
         if (bookmark) {
             titleEl.textContent = bookmark.title || 'Без названия';
+            textContentEl.innerHTML = '';
+            const urlSection = createBookmarkDetailUrlSectionElement(bookmark.url);
+            if (urlSection) {
+                textContentEl.appendChild(urlSection);
+            }
             const descWrap = document.createElement('div');
             descWrap.className = 'whitespace-pre-wrap break-words text-sm font-sans mt-0';
             descWrap.style.fontSize = '102%';
             descWrap.innerHTML = linkifyModule(bookmark.description || 'Нет описания.');
-            textContentEl.innerHTML = '';
             textContentEl.appendChild(descWrap);
 
             editButton.classList.remove('hidden');
@@ -3210,6 +3224,7 @@ async function showBookmarkDetailModal(bookmarkId) {
                 bookmark.description,
                 isFav,
                 'modal-header',
+                bookmark.url || '',
             );
             favoriteButtonContainer.innerHTML = favButtonHTML;
 
@@ -3773,6 +3788,7 @@ async function toggleFavorite(
     title,
     description,
     buttonElement,
+    itemUrl,
 ) {
     return toggleFavoriteModule(
         originalItemId,
@@ -3781,6 +3797,7 @@ async function toggleFavorite(
         title,
         description,
         buttonElement,
+        itemUrl,
     );
 }
 
@@ -3800,6 +3817,7 @@ function getFavoriteButtonHTML(
     description,
     isCurrentlyFavorite,
     uiVariant,
+    itemUrl,
 ) {
     return getFavoriteButtonHTMLModule(
         originalItemId,
@@ -3809,6 +3827,7 @@ function getFavoriteButtonHTML(
         description,
         isCurrentlyFavorite,
         uiVariant,
+        itemUrl,
     );
 }
 
@@ -4676,4 +4695,12 @@ if (typeof initHotkeysModal === 'function') window.initHotkeysModal = initHotkey
 if (typeof initClearDataFunctionality === 'function')
     window.initClearDataFunctionality = initClearDataFunctionality;
 if (typeof showNoInnModal === 'function') window.showNoInnModal = showNoInnModal;
+if (typeof openDbMergeModal === 'function') window.openDbMergeModal = openDbMergeModal;
+if (typeof showAddExtLinkModal === 'function') window.showAddExtLinkModal = showAddExtLinkModal;
+if (typeof showAddReglamentModalModule === 'function')
+    window.showAddReglamentModal = showAddReglamentModalModule;
+if (typeof showBlacklistEntryModal === 'function')
+    window.showBlacklistEntryModal = showBlacklistEntryModal;
+if (typeof showAddEditCibLinkModalModule === 'function')
+    window.showAddEditCibLinkModal = showAddEditCibLinkModalModule;
 window.rebuildSearchIndexNow = rebuildSearchIndexNow;

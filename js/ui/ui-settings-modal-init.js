@@ -4,6 +4,7 @@ import {
     buildGroupedHealthListHtml,
     buildHealthSubsystemSummaryHtml,
 } from '../features/health-report-format.js';
+import { onBackupReminderReEnabled } from '../features/backup-reminder.js';
 
 let deps = {
     State: null,
@@ -488,7 +489,17 @@ export function initUISettingsModalHandlers() {
         }
 
         customizeUIModal.addEventListener('change', (e) => {
-            if (e.target.matches('input[name="staticHeader"]')) {
+            if (
+                e.target.matches('input[name="staticHeader"]') ||
+                e.target.matches('input[name="backupReminderEnabled"]')
+            ) {
+                if (e.target.matches('input[name="backupReminderEnabled"]') && e.target.checked) {
+                    try {
+                        onBackupReminderReEnabled();
+                    } catch (err) {
+                        console.warn('[UISettingsModal] onBackupReminderReEnabled:', err);
+                    }
+                }
                 if (typeof deps.updatePreviewSettingsFromModal === 'function') {
                     deps.updatePreviewSettingsFromModal();
                     if (deps.State && typeof deps.applyPreviewSettings === 'function') {

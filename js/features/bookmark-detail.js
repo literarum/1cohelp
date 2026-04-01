@@ -1,6 +1,6 @@
 'use strict';
 
-import { linkify } from '../utils/html.js';
+import { linkify, createBookmarkDetailUrlSectionElement } from '../utils/html.js';
 import { getAllFromIndexWithKeyVariants } from '../db/indexeddb.js';
 import {
     mountAttachmentAbsentParagraph,
@@ -305,11 +305,15 @@ export async function showBookmarkDetailModal(bookmarkId) {
 
         if (bookmark) {
             titleEl.textContent = bookmark.title || 'Без названия';
+            textContentEl.innerHTML = '';
+            const urlSection = createBookmarkDetailUrlSectionElement(bookmark.url);
+            if (urlSection) {
+                textContentEl.appendChild(urlSection);
+            }
             const descWrap = document.createElement('div');
             descWrap.className = 'whitespace-pre-wrap break-words text-sm font-sans mt-0';
             descWrap.style.fontSize = '102%';
             descWrap.innerHTML = linkify(bookmark.description || 'Нет описания.');
-            textContentEl.innerHTML = '';
             textContentEl.appendChild(descWrap);
 
             editButton.classList.remove('hidden');
@@ -325,6 +329,7 @@ export async function showBookmarkDetailModal(bookmarkId) {
                 bookmark.description,
                 isFav,
                 'modal-header',
+                bookmark.url || '',
             );
             favoriteButtonContainer.innerHTML = favButtonHTML ?? '';
 

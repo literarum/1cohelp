@@ -46,7 +46,7 @@ export function getOrCreateModal() {
           <div id="commandPaletteList" class="flex-1 min-h-0 overflow-y-auto py-1 max-h-[60vh]"></div>
           <div class="flex-shrink-0 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2 flex-wrap">
             <span id="commandPaletteCount" class="flex-shrink-0">Показано 0</span>
-            <span>↑↓ навигация · Enter выбор · Esc закрыть · <span class="opacity-90">@тип</span> — фильтр по типу</span>
+            <span>↑↓ навигация · Enter выбор · Esc закрыть · <span class="opacity-90">@тип</span> — фильтр · <span class="opacity-90">@окно</span> — все модальные окна</span>
           </div>
         </div>
     `;
@@ -77,11 +77,8 @@ export function renderResults(results) {
     }
     results.forEach((r, i) => {
         const row = document.createElement('div');
-        row.className = `command-palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer border-l-2 border-transparent ${
-            i === 0
-                ? 'bg-primary/10 dark:bg-primary/20 border-primary'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-        }`;
+        row.className =
+            'command-palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer border-l-2 border-transparent';
         row.dataset.index = String(i);
         row.innerHTML = `
           <span class="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">${TYPE_LABELS[r.type] || r.type}</span>
@@ -90,6 +87,10 @@ export function renderResults(results) {
             ${r.subtitle ? `<div class="text-sm text-gray-500 dark:text-gray-400 truncate">${escapeHtml(r.subtitle)}</div>` : ''}
           </div>
         `;
+        row.addEventListener('mouseenter', () => {
+            selectedIndex = i;
+            updateHighlight();
+        });
         row.addEventListener('click', () => {
             if (typeof selectResultCallback === 'function') selectResultCallback(r);
         });
@@ -108,6 +109,8 @@ export function updateHighlight() {
         el.classList.toggle('border-transparent', !isSelected);
         el.classList.toggle('hover:bg-gray-100', !isSelected);
         el.classList.toggle('dark:hover:bg-gray-700', !isSelected);
+        el.classList.toggle('hover:bg-primary/15', isSelected);
+        el.classList.toggle('dark:hover:bg-primary/25', isSelected);
     });
     const selectedEl = listEl?.querySelector(
         `.command-palette-item[data-index="${selectedIndex}"]`,

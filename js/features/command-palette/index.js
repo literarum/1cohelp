@@ -7,6 +7,7 @@
 
 import { runSearch, runSearchWithGlobal } from './search.js';
 import { handleSearchResultClick } from '../search.js';
+import { executeModalPaletteCommand } from './modal-commands.js';
 import * as ui from './ui.js';
 import { getRecentIds, addRecentId, clearRecentIds, reorderByRecent } from './recent.js';
 
@@ -41,6 +42,15 @@ function selectResult(result) {
                 showAlgorithmDetail(result.payload.algorithm, result.payload.section);
             }
         }, 100);
+        return;
+    }
+
+    if (result.type === 'modal' && result.payload.modalKey) {
+        executeModalPaletteCommand(result.payload.modalKey, { setActiveTab }).then((ok) => {
+            if (!ok && typeof showNotification === 'function') {
+                showNotification('Не удалось открыть выбранное окно');
+            }
+        });
         return;
     }
 

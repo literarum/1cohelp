@@ -13,6 +13,7 @@ import {
     TYPE_ORDER,
 } from './constants.js';
 import { getActionResults } from './actions.js';
+import { getModalPaletteResults } from './modal-commands.js';
 import { getErrorDictionaryResults } from './errors.js';
 import { getGlobalSearchResults } from '../search.js';
 
@@ -219,12 +220,18 @@ export function runSearch(query, algorithms) {
     const actionResults =
         typeFilter === null || typeFilter === 'action' ? getActionResults(trimmed) : [];
 
+    const modalResults =
+        typeFilter === null || typeFilter === 'modal'
+            ? getModalPaletteResults(trimmed, typeFilter, MAX_RESULTS)
+            : [];
+
     const combined = [
         ...algoResults,
         ...tabResults,
         ...xmlResults,
         ...errorResults,
         ...errorDictResults,
+        ...modalResults,
         ...actionResults,
     ];
     combined.sort((a, b) => {

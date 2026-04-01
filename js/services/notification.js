@@ -195,10 +195,251 @@ export const NotificationService = {
         });
     },
 
+    /**
+     * Важное уведомление с дополнительными кнопками и режимом «HUD»: первые minVisibleBeforeInteractionDismissMs
+     * не закрывается от активности документа; затем — как фоновый HUD (активность → задержка → закрытие).
+     * Кнопка ✕ закрывает сразу. Кнопки в панели действий должны сами вызывать dismiss при необходимости.
+     * @param {Object} options
+     * @param {string} [options.id]
+     * @param {string} options.message
+     * @param {string} [options.type='warning']
+     * @param {Array<{ label: string, onClick?: function, primary?: boolean, id?: string }>} [options.actions]
+     * @param {boolean} [options.isDismissible=true]
+     * @param {number} [options.minVisibleBeforeInteractionDismissMs=7000]
+     * @param {number} [options.dismissAfterActivityDelayMs=2000]
+     * @param {function} [options.onDismiss]
+     * @param {function(Event): boolean} [options.shouldIgnoreInteractionEvent] — не считать событие «активностью» для автоскрытия (например, клик по модальному окну подтверждения).
+     */
+    showImportantRich(options = {}) {
+        ensureNotificationIconlessStyles();
+        const {
+            id: fixedId = null,
+            message,
+            type = 'warning',
+            actions = [],
+            isDismissible = true,
+            minVisibleBeforeInteractionDismissMs = 7000,
+            dismissAfterActivityDelayMs = 2000,
+            onDismiss = null,
+            shouldIgnoreInteractionEvent = null,
+        } = options;
+
+        if (!message || typeof message !== 'string') {
+            console.warn('[NotificationService.showImportantRich] Пустое сообщение.');
+            return;
+        }
+
+        const notificationId =
+            fixedId ||
+            `important-rich-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+        if (fixedId && this.activeImportantNotifications.has(fixedId)) {
+            this.dismissImportant(fixedId);
+        }
+
+        if (!this.importantNotificationsContainer) this.init();
+
+        const outer = document.createElement('div');
+        outer.dataset.id = notificationId;
+        outer.dataset.richNotification = '1';
+        outer.setAttribute('role', 'region');
+        outer.setAttribute('aria-label', 'Уведомление приложения');
+        outer.classList.add(
+            'p-4',
+            'rounded-md',
+            'shadow-lg',
+            'border-l-4',
+            'box-border',
+            'notification-item',
+            'important-notification',
+            'flex',
+            'flex-col',
+            'items-stretch',
+            'gap-0',
+            'w-full',
+        );
+
+        let bgColorClassesArr;
+        let textColorClassesArr;
+        let borderColorClass;
+        switch (type) {
+            case 'hyper-alert':
+                bgColorClassesArr = ['bg-red-100', 'dark:bg-red-900/95'];
+                textColorClassesArr = ['text-red-900', 'dark:text-yellow-200'];
+                borderColorClass = 'border-yellow-400 dark:border-yellow-300';
+                outer.classList.add('notification-hyper-alert', 'border-4');
+                break;
+            case 'error':
+                bgColorClassesArr = ['bg-red-100', 'dark:bg-red-700/90'];
+                textColorClassesArr = ['text-red-700', 'dark:text-red-100'];
+                borderColorClass = 'border-red-500';
+                break;
+            case 'warning':
+                bgColorClassesArr = ['bg-yellow-100', 'dark:bg-yellow-600/90'];
+                textColorClassesArr = ['text-yellow-700', 'dark:text-yellow-50'];
+                borderColorClass = 'border-yellow-500';
+                break;
+            case 'info':
+                bgColorClassesArr = ['bg-blue-100', 'dark:bg-blue-700/90'];
+                textColorClassesArr = ['text-blue-700', 'dark:text-blue-100'];
+                borderColorClass = 'border-blue-500';
+                break;
+            case 'success':
+            default:
+                bgColorClassesArr = ['bg-green-100', 'dark:bg-green-700/90'];
+                textColorClassesArr = ['text-green-700', 'dark:text-green-100'];
+                borderColorClass = 'border-green-500';
+                break;
+        }
+        if (borderColorClass)
+            borderColorClass
+                .split(' ')
+                .filter((cls) => cls.trim())
+                .forEach((cls) => outer.classList.add(cls));
+        if (bgColorClassesArr) {
+            bgColorClassesArr.forEach((cls) => {
+                cls.split(' ')
+                    .filter((c) => c.trim())
+                    .forEach((subCls) => outer.classList.add(subCls));
+            });
+        }
+        if (textColorClassesArr) {
+            textColorClassesArr.forEach((cls) => {
+                cls.split(' ')
+                    .filter((c) => c.trim())
+                    .forEach((subCls) => outer.classList.add(subCls));
+            });
+        }
+
+        outer.style.transition =
+            'transform 0.3s ease-out, opacity 0.3s ease-out, margin-top 0.3s ease-out, margin-bottom 0.3s ease-out, padding-top 0.3s ease-out, padding-bottom 0.3s ease-out, border-width 0.3s ease-out, max-height 0.3s ease-out';
+        outer.style.opacity = '0';
+        outer.style.transform = 'translateX(100%)';
+        outer.style.width = '100%';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-start justify-between gap-3 w-full min-w-0';
+
+        const messageSpan = document.createElement('span');
+        messageSpan.className = 'notification-message-span flex-1 text-sm break-words';
+        messageSpan.innerHTML = linkifyFn(message);
+        topRow.appendChild(messageSpan);
+
+        if (isDismissible) {
+            const closeButton = document.createElement('button');
+            closeButton.setAttribute('type', 'button');
+            closeButton.setAttribute('aria-label', 'Закрыть уведомление');
+            closeButton.className =
+                'ml-3 p-1 flex-shrink-0 rounded-full hover:bg-black/10 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-current self-start';
+            closeButton.innerHTML = `<i class="fas fa-times fa-fw text-base"></i>`;
+            closeButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof onDismiss === 'function') onDismiss();
+                this.dismissImportant(notificationId);
+            });
+            topRow.appendChild(closeButton);
+        }
+
+        const actionsRow = document.createElement('div');
+        actionsRow.className =
+            'flex flex-wrap gap-2 mt-3 pt-2 border-t border-black/10 dark:border-white/10 w-full';
+
+        for (const action of actions) {
+            if (!action || !action.label) continue;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            const isPrimary = action.primary === true;
+            btn.className = isPrimary
+                ? 'px-3 py-1.5 rounded-md text-sm font-medium bg-primary hover:bg-secondary text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                : 'px-3 py-1.5 rounded-md text-sm font-medium border border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2';
+            btn.textContent = action.label;
+            if (action.id) btn.dataset.actionId = String(action.id);
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof action.onClick === 'function') action.onClick();
+            });
+            actionsRow.appendChild(btn);
+        }
+
+        outer.appendChild(topRow);
+        outer.appendChild(actionsRow);
+
+        this.importantNotificationsContainer.appendChild(outer);
+
+        requestAnimationFrame(() => {
+            outer.style.opacity = '1';
+            outer.style.transform = 'translateX(0)';
+        });
+
+        let interactionDismissEnabled = false;
+        let postActivityDismissTimeout = null;
+        let minVisibleTimeout = null;
+
+        const removeActivityListeners = () => {
+            document.removeEventListener('click', onDocumentActivity, false);
+            document.removeEventListener('keydown', onDocumentActivity, false);
+            document.removeEventListener('touchstart', onDocumentActivity, false);
+            document.removeEventListener('scroll', onDocumentActivity, false);
+        };
+
+        const onDocumentActivity = (e) => {
+            if (!interactionDismissEnabled) return;
+            if (typeof shouldIgnoreInteractionEvent === 'function' && shouldIgnoreInteractionEvent(e)) {
+                return;
+            }
+            if (outer.contains(e.target) && e.target.closest('button')) {
+                return;
+            }
+            removeActivityListeners();
+            if (postActivityDismissTimeout) clearTimeout(postActivityDismissTimeout);
+            postActivityDismissTimeout = setTimeout(() => {
+                postActivityDismissTimeout = null;
+                if (typeof onDismiss === 'function') onDismiss();
+                this.dismissImportant(notificationId);
+            }, dismissAfterActivityDelayMs);
+        };
+
+        const richCleanup = () => {
+            if (minVisibleTimeout) {
+                clearTimeout(minVisibleTimeout);
+                minVisibleTimeout = null;
+            }
+            if (postActivityDismissTimeout) {
+                clearTimeout(postActivityDismissTimeout);
+                postActivityDismissTimeout = null;
+            }
+            removeActivityListeners();
+        };
+
+        minVisibleTimeout = setTimeout(() => {
+            minVisibleTimeout = null;
+            interactionDismissEnabled = true;
+            document.addEventListener('click', onDocumentActivity, false);
+            document.addEventListener('keydown', onDocumentActivity, false);
+            document.addEventListener('touchstart', onDocumentActivity, { passive: true });
+            document.addEventListener('scroll', onDocumentActivity, { passive: true });
+        }, minVisibleBeforeInteractionDismissMs);
+
+        this.activeImportantNotifications.set(notificationId, {
+            element: outer,
+            data: { message, type, id: notificationId, isDismissible, rich: true },
+            timeoutId: null,
+            richCleanup,
+        });
+    },
+
     dismissImportant(notificationId) {
         const notificationData = this.activeImportantNotifications.get(notificationId);
         if (notificationData && notificationData.element) {
             const el = notificationData.element;
+
+            if (typeof notificationData.richCleanup === 'function') {
+                try {
+                    notificationData.richCleanup();
+                } catch (e) {
+                    console.warn('[NotificationService] richCleanup error:', e);
+                }
+            }
 
             if (notificationData.timeoutId) {
                 clearTimeout(notificationData.timeoutId);

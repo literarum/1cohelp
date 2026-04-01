@@ -73,8 +73,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260401-225536-bedb2e7"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260401-225536-bedb2e7"></script>
+        <script src="js/vendor-config.js?v=legacy-20260402-000024-726ef1e"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260402-000024-726ef1e"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -140,11 +140,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260401-225536-bedb2e7"
+            href="css/tailwind.generated.css?v=legacy-20260402-000024-726ef1e"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260401-225536-bedb2e7" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260402-000024-726ef1e" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -998,15 +998,15 @@
                                 <button
                                     id="clearSearchInputBtn"
                                     type="button"
-                                    class="absolute top-1/2 right-10 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                                    class="absolute top-1/2 right-10 flex items-center justify-center transform -translate-y-1/2 p-1.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors hidden"
                                     title="Очистить поиск"
                                 >
-                                    <i class="fas fa-times"></i>
+                                    <i class="fas fa-times text-sm" aria-hidden="true"></i>
                                 </button>
                                 <button
                                     id="toggleAdvancedSearch"
                                     type="button"
-                                    class="absolute top-1/2 right-2 transform -translate-y-1/2 p-1.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                                    class="absolute top-1/2 right-2 flex items-center justify-center transform -translate-y-1/2 p-1.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                                     title="Параметры поиска (Расширенный поиск)"
                                     aria-expanded="false"
                                     aria-controls="advancedSearchOptions"
@@ -2862,6 +2862,34 @@
 
                                         <div
                                             class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                        >
+                                            <label
+                                                for="toggleBackupReminder"
+                                                class="app-toggle flex items-center cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    id="toggleBackupReminder"
+                                                    name="backupReminderEnabled"
+                                                    class="app-toggle-input"
+                                                />
+                                                <span class="app-toggle__track"></span>
+                                                <span
+                                                    class="ml-3 text-sm text-gray-700 dark:text-gray-300"
+                                                    >Напоминания о резервном копировании базы</span
+                                                >
+                                            </label>
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
+                                            >
+                                                Каждые три часа показывается напоминание создать
+                                                резервную копию. Отключить можно и из самого
+                                                напоминания; снова включить — здесь.
+                                            </p>
+                                        </div>
+
+                                        <div
+                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
                                             id="manualHealthRunSection"
                                         >
                                             <div class="flex flex-wrap items-center gap-3">
@@ -4590,7 +4618,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260401-225536-bedb2e7"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260401-225536-bedb2e7"></script>
+        <script type="module" src="./script.js?v=legacy-20260402-000024-726ef1e"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260402-000024-726ef1e"></script>
     </body>
 </html>

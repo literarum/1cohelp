@@ -6,7 +6,8 @@
  */
 
 import { State } from '../app/state.js';
-import { escapeHtml, highlightElement, linkify } from '../utils/html.js';
+import { escapeHtml, highlightElement, linkify, normalizeExternalHttpUrl } from '../utils/html.js';
+import { getFromIndexedDB } from '../db/indexeddb.js';
 import {
     addToFavoritesDB,
     removeFromFavoritesDB,
@@ -14,7 +15,6 @@ import {
     getAllFavoritesDB,
     clearAllFavoritesDB,
 } from '../db/favorites.js';
-import { getFromIndexedDB } from '../db/indexeddb.js';
 import {
     BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS,
     BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS,
@@ -57,6 +57,28 @@ export function setFavoritesDependencies(dependencies) {
 // ============================================================================
 
 /**
+ * Разметка строки с внешней ссылкой для карточки избранного (закладка).
+ */
+function formatFavoriteBookmarkUrlMarkup(rawUrl) {
+    const href = normalizeExternalHttpUrl(rawUrl);
+    if (!href) return '';
+    let hostname = '';
+    try {
+        hostname = new URL(href).hostname;
+    } catch {
+        return '';
+    }
+    const safeHref = escapeHtml(href);
+    const safeHost = escapeHtml(hostname);
+    return `<p class="favorite-bookmark-url text-xs mb-2 mt-0.5 min-w-0" title="${safeHref}">
+    <a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline inline-flex items-center gap-1 max-w-full min-w-0" data-action="open-favorite-bookmark-url">
+      <i class="fas fa-link mr-0.5 opacity-75 flex-shrink-0" aria-hidden="true"></i>
+      <span class="truncate">${safeHost}</span>
+    </a>
+  </p>`;
+}
+
+/**
  * Переключает статус избранного для элемента
  */
 export async function toggleFavorite(
@@ -66,6 +88,7 @@ export async function toggleFavorite(
     title,
     description,
     buttonElement = null,
+    itemUrl = '',
 ) {
     const isCurrentlyFavoriteInDB = await isFavoriteDB(itemType, originalItemId);
     let success = false;
@@ -92,6 +115,12 @@ export async function toggleFavorite(
                 description: description || '',
                 dateAdded: new Date().toISOString(),
             };
+            const normalized = normalizeExternalHttpUrl(
+                typeof itemUrl === 'string' ? itemUrl : String(itemUrl || ''),
+            );
+            if (normalized) {
+                favoriteItem.itemUrl = normalized;
+            }
             await addToFavoritesDB(favoriteItem);
             deps.showNotification?.(`"${title}" добавлено в избранное!`, 'success', 2000);
             success = true;
@@ -173,6 +202,29 @@ export async function renderFavoritesPage() {
         return;
     }
 
+    favoritesToRender = await Promise.all(
+        favoritesToRender.map(async (fav) => {
+            if (
+                (fav.itemType === 'bookmark' || fav.itemType === 'bookmark_note') &&
+                !fav.itemUrl
+            ) {
+                try {
+                    const bid = parseInt(fav.originalItemId, 10);
+                    if (!Number.isNaN(bid)) {
+                        const b = await getFromIndexedDB('bookmarks', bid);
+                        if (b?.url) {
+                            const n = normalizeExternalHttpUrl(b.url);
+                            if (n) return { ...fav, itemUrl: n };
+                        }
+                    }
+                } catch (enrichErr) {
+                    console.warn('[Favorites] Не удалось подставить URL закладки из БД:', enrichErr);
+                }
+            }
+            return fav;
+        }),
+    );
+
     State.currentFavoritesCache = favoritesToRender;
     favoritesToRender.sort(
         (a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime(),
@@ -195,6 +247,9 @@ export async function renderFavoritesPage() {
             itemElement.dataset.originalItemId = fav.originalItemId;
             itemElement.dataset.itemType = fav.itemType;
             itemElement.dataset.originalItemSection = fav.originalItemSection;
+            if (fav.itemUrl) {
+                itemElement.dataset.itemUrl = fav.itemUrl;
+            }
 
             let iconClass = 'fa-question-circle';
             let typeText = fav.itemType;
@@ -234,6 +289,11 @@ export async function renderFavoritesPage() {
                     break;
             }
 
+            const bookmarkUrlHtml =
+                (fav.itemType === 'bookmark' || fav.itemType === 'bookmark_note') && fav.itemUrl
+                    ? formatFavoriteBookmarkUrlMarkup(fav.itemUrl)
+                    : '';
+
             const favButtonHTML = getFavoriteButtonHTML(
                 fav.originalItemId,
                 fav.itemType,
@@ -241,6 +301,8 @@ export async function renderFavoritesPage() {
                 fav.title,
                 fav.description,
                 true,
+                'default',
+                fav.itemUrl || '',
             );
             const goToOriginalBtnHTML = `
                 <button class="go-to-original-btn p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-blue-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Перейти к оригиналу">
@@ -271,6 +333,7 @@ export async function renderFavoritesPage() {
                             )}">${escapeHtml(fav.title)}</h3>
                         </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Тип: ${typeText}</p>
+                        ${bookmarkUrlHtml}
                         <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3" title="${escapeHtml(
                             fav.description || '',
                         )}">${linkify(fav.description || 'Нет описания')}</p>
@@ -306,6 +369,7 @@ export async function renderFavoritesPage() {
                                  fav.title,
                              )}">${escapeHtml(fav.title)}</h3>
                              <p class="text-xs text-gray-500 dark:text-gray-400">${typeText}</p>
+                             ${bookmarkUrlHtml ? `<div class="mt-0.5 min-w-0">${bookmarkUrlHtml}</div>` : ''}
                          </div>
                     </div>
                     <div class="flex-shrink-0 ml-4 flex items-center gap-2">
@@ -338,6 +402,7 @@ export function getFavoriteButtonHTML(
     description,
     isCurrentlyFavorite,
     uiVariant = 'default',
+    itemUrl = '',
 ) {
     const iconClass = isCurrentlyFavorite ? 'fas fa-star text-yellow-400' : 'far fa-star';
     const tooltip = isCurrentlyFavorite ? 'Удалить из избранного' : 'Добавить в избранное';
@@ -351,6 +416,9 @@ export function getFavoriteButtonHTML(
     ).replace(/"/g, '&quot;');
     const safeOriginalItemSection = (
         typeof originalItemSection === 'string' ? escapeHtml(originalItemSection) : ''
+    ).replace(/"/g, '&quot;');
+    const safeItemUrl = (
+        typeof itemUrl === 'string' ? escapeHtml(itemUrl) : ''
     ).replace(/"/g, '&quot;');
 
     const btnClass =
@@ -374,7 +442,8 @@ export function getFavoriteButtonHTML(
                 data-item-type="${itemType}"
                 data-original-item-section="${safeOriginalItemSection}"
                 data-item-title="${safeTitle}"
-                data-item-description="${safeDescription}">
+                data-item-description="${safeDescription}"
+                data-item-url="${safeItemUrl}">
             <i class="${iconClass} text-sm" aria-hidden="true"></i>
         </button>
     `;
@@ -384,6 +453,11 @@ export function getFavoriteButtonHTML(
  * Обработчик клика по контейнеру избранного
  */
 export async function handleFavoriteContainerClick(event) {
+    if (event.target.closest('a[data-action="open-favorite-bookmark-url"]')) {
+        event.stopPropagation();
+        return;
+    }
+
     const button = event.target.closest('button');
     const favoriteItemCard = event.target.closest('.favorite-item');
 
@@ -518,6 +592,7 @@ export async function handleFavoriteContainerClick(event) {
         }
     } else if (button && button.classList.contains('toggle-favorite-btn')) {
         event.stopPropagation();
+        const itemUrlFromBtn = button.dataset.itemUrl || '';
         await toggleFavorite(
             originalItemId,
             itemType,
@@ -525,6 +600,7 @@ export async function handleFavoriteContainerClick(event) {
             title,
             description,
             button,
+            itemUrlFromBtn,
         );
     } else {
         event.stopPropagation();
@@ -640,6 +716,7 @@ export async function handleFavoriteActionClick(event) {
     let originalItemSection = button.dataset.originalItemSection;
     let title = button.dataset.itemTitle || 'Элемент';
     let description = button.dataset.itemDescription || '';
+    const itemUrl = button.dataset.itemUrl || '';
 
     if (!originalItemId || !itemType) {
         console.error(
@@ -703,7 +780,7 @@ export async function handleFavoriteActionClick(event) {
     console.log(
         `Favorite button clicked (Capturing Phase Logic Active): ID=${originalItemId}, Type=${itemType}, Section=${originalItemSection}`,
     );
-    await toggleFavorite(originalItemId, itemType, originalItemSection, title, description, button);
+    await toggleFavorite(originalItemId, itemType, originalItemSection, title, description, button, itemUrl);
 }
 
 /**

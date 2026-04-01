@@ -279,6 +279,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                   bookmark.description,
                   isFav,
                   listRow ? 'bookmark-list' : 'default',
+                  bookmark.url ? fixedUrl : '',
               )
             : '';
 
