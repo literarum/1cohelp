@@ -198,6 +198,238 @@ body.modal-open {
     overflow: auto;
 }
 
+/* ——— «Кастомизация»: премиальный слой (сегменты, карточки, фокус) ——— */
+#appCustomizationModal.app-customization-overlay {
+    -webkit-tap-highlight-color: transparent;
+}
+
+#appCustomizationModal .app-customization-panel {
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.18),
+        0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+html.dark #appCustomizationModal .app-customization-panel {
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+#appCustomizationModal .app-customization-stack {
+    padding-bottom: 0.25rem;
+}
+
+#appCustomizationModal .app-customization-section {
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+}
+
+html.dark #appCustomizationModal .app-customization-section {
+    border-bottom-color: var(--color-border, rgba(255, 255, 255, 0.08));
+}
+
+#appCustomizationModal .app-customization-section--tight {
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+#appCustomizationModal .app-customization-section--last {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+#appCustomizationModal .app-customization-section-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, rgb(107 114 128));
+    margin: 0 0 0.5rem;
+}
+
+html.dark #appCustomizationModal .app-customization-section-title {
+    color: var(--color-text-secondary, rgb(156 163 175));
+}
+
+#appCustomizationModal .app-customization-section-hint {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--color-text-secondary, rgb(107 114 128));
+    margin: 0 0 0.75rem;
+    max-width: 42rem;
+}
+
+#appCustomizationModal .app-customization-section-hint--tight {
+    margin-bottom: 0.625rem;
+}
+
+/* Сегментированный переключатель (как в нативных HIG-подобных UI) */
+#appCustomizationModal .app-customization-segmented {
+    display: flex;
+    width: 100%;
+    padding: 4px;
+    gap: 4px;
+    /* Как rounded-xl в tailwind.config: согласовано с --border-radius */
+    border-radius: calc(var(--border-radius, 8px) * 1.75);
+    background: var(--color-surface-1, rgba(0, 0, 0, 0.05));
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+    box-sizing: border-box;
+}
+
+html.dark #appCustomizationModal .app-customization-segmented {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--color-border, rgba(255, 255, 255, 0.1));
+}
+
+#appCustomizationModal .app-customization-segmented--equal .app-customization-segment {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+#appCustomizationModal .app-customization-segmented--triple {
+    flex-wrap: wrap;
+}
+
+@media (min-width: 400px) {
+    #appCustomizationModal .app-customization-segmented--triple .app-customization-segment {
+        flex: 1 1 calc(33.333% - 4px);
+        min-width: 5.5rem;
+    }
+}
+
+#appCustomizationModal .app-customization-segment {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: calc(var(--border-radius, 8px) * 1.25);
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        box-shadow 0.15s ease;
+    outline: none;
+}
+
+#appCustomizationModal .app-customization-segment:focus-within {
+    z-index: 1;
+}
+
+#appCustomizationModal .app-customization-segment-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--color-text-primary, rgb(55 65 81));
+    border-radius: calc(var(--border-radius, 8px) * 1.25);
+    transition: inherit;
+}
+
+html.dark #appCustomizationModal .app-customization-segment-label {
+    color: var(--color-text-primary, rgb(229 231 235));
+}
+
+#appCustomizationModal .app-customization-segment--compact .app-customization-segment-label {
+    padding: 0.45rem 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+#appCustomizationModal .app-customization-segment-icon {
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+
+#appCustomizationModal .app-customization-segment:has(.app-customization-segment-input:checked) {
+    background: var(--color-primary, #3b82f6);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+#appCustomizationModal
+    .app-customization-segment:has(.app-customization-segment-input:checked)
+    .app-customization-segment-label {
+    color: #fff;
+}
+
+#appCustomizationModal
+    .app-customization-segment:has(.app-customization-segment-input:checked)
+    .app-customization-segment-icon {
+    opacity: 1;
+}
+
+#appCustomizationModal .app-customization-segment-input:focus-visible + .app-customization-segment-label {
+    box-shadow:
+        0 0 0 2px var(--color-surface-2, #fff),
+        0 0 0 4px var(--color-primary, #3b82f6);
+}
+
+html.dark
+    #appCustomizationModal
+    .app-customization-segment-input:focus-visible
+    + .app-customization-segment-label {
+    box-shadow:
+        0 0 0 2px rgb(17 24 39),
+        0 0 0 4px var(--color-primary, #60a5fa);
+}
+
+#appCustomizationModal .app-customization-card {
+    padding: 1rem 1.125rem;
+    border-radius: calc(var(--border-radius, 8px) * 2);
+    background: var(--color-surface-1, rgba(0, 0, 0, 0.03));
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+}
+
+html.dark #appCustomizationModal .app-customization-card {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--color-border, rgba(255, 255, 255, 0.1));
+}
+
+#appCustomizationModal .app-customization-swatch-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#appCustomizationModal .app-customization-swatch-caption {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, rgb(107 114 128));
+}
+
+#appCustomizationModal .app-customization-range {
+    height: 0.5rem;
+    /* Не fixed pill: при --border-radius: 0 трек остаётся прямоугольным */
+    border-radius: calc(var(--border-radius, 8px) * 1.25);
+}
+
+#appCustomizationModal .app-customization-range:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #3b82f6) 35%, transparent);
+}
+
+@supports not (color: color-mix(in srgb, white 50%, black)) {
+    #appCustomizationModal .app-customization-range:focus-visible {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+    }
+}
+
+@media (max-width: 380px) {
+    #appCustomizationModal .app-customization-header-icon {
+        display: none;
+    }
+}
+
 /* Блок доп. действий: адаптивная сетка без наслоения (flex+nowrap ломался в узкой колонке ~360px) */
 #customizeUIModal .settings-modal-extra-actions {
     margin-top: 1rem;
@@ -367,6 +599,7 @@ body.app-backup-warning-perimeter-pulse::before {
     #editModal,
     #addModal,
     #customizeUIModal,
+    #appCustomizationModal,
     #confirmClearDataModal,
     #cibLinkModal,
     #hotkeysModal,
@@ -392,6 +625,7 @@ body.app-backup-warning-perimeter-pulse::before {
     #editModal,
     #addModal,
     #customizeUIModal,
+    #appCustomizationModal,
     #confirmClearDataModal,
     #cibLinkModal,
     #hotkeysModal,
@@ -418,6 +652,7 @@ body.app-backup-warning-perimeter-pulse::before {
     #editModal,
     #addModal,
     #customizeUIModal,
+    #appCustomizationModal,
     #confirmClearDataModal,
     #cibLinkModal,
     #hotkeysModal,

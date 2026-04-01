@@ -37,6 +37,57 @@ function normalizeHex(hex) {
 }
 
 /**
+ * Дорожка градиента — первый дочерний блок (внутренний rounded); считаем по его getBoundingClientRect,
+ * иначе ручка и 0–100% не совпадают с полосой и вылезают за градиент.
+ */
+function getTrackAndSliderRects(slider) {
+    const sliderRect = slider.getBoundingClientRect();
+    const trackEl = slider.querySelector('[data-color-track]') || slider.firstElementChild;
+    const trackRect = trackEl ? trackEl.getBoundingClientRect() : sliderRect;
+    return { sliderRect, trackRect };
+}
+
+function getHandleHalfWidth(handle) {
+    const w = handle.offsetWidth || handle.getBoundingClientRect().width;
+    return w > 0 ? w / 2 : 10;
+}
+
+/**
+ * Ставит центр ручки над дорожкой градиента: логическое 0–100 → left% относительно padding-box слайдера.
+ */
+function setHandleLogicalPercent(slider, handle, logical0to100) {
+    if (!slider || !handle) return;
+    const { sliderRect, trackRect } = getTrackAndSliderRects(slider);
+    const hw = getHandleHalfWidth(handle);
+    const travel = trackRect.width - 2 * hw;
+    const lp = Math.max(0, Math.min(100, logical0to100));
+    let centerGlobalX;
+    if (travel <= 1e-9) {
+        centerGlobalX = trackRect.left + trackRect.width / 2;
+    } else {
+        centerGlobalX = trackRect.left + hw + (lp / 100) * travel;
+    }
+    const leftPercent = ((centerGlobalX - sliderRect.left) / sliderRect.width) * 100;
+    handle.style.left = `${Math.max(0, Math.min(100, leftPercent))}%`;
+}
+
+/**
+ * Обратное к setHandleLogicalPercent: логическое 0–100 по left% и геометрии дорожки.
+ */
+function logicalPercentFromHandle(slider, handle) {
+    if (!slider || !handle) return 0;
+    const { sliderRect, trackRect } = getTrackAndSliderRects(slider);
+    const hw = getHandleHalfWidth(handle);
+    const travel = trackRect.width - 2 * hw;
+    const leftPercent = parseFloat(handle.style.left);
+    if (Number.isNaN(leftPercent)) return 0;
+    const centerGlobalX = sliderRect.left + (leftPercent / 100) * sliderRect.width;
+    if (travel <= 1e-9) return 0;
+    const lp = ((centerGlobalX - trackRect.left - hw) / travel) * 100;
+    return Math.max(0, Math.min(100, lp));
+}
+
+/**
  * Обновляет превью-свотч и значения полей из текущих H,S,L
  */
 function updateUIFromHsl(h, s, l) {
@@ -68,28 +119,34 @@ export function setColorPickerStateFromHex(hex) {
     const hueHandle = document.getElementById('hue-handle');
     const saturationHandle = document.getElementById('saturation-handle');
     const brightnessHandle = document.getElementById('brightness-handle');
-    if (hueSlider && hueHandle) {
-        hueHandle.style.left = (h / 360) * 100 + '%';
+    function applyHandlesFromHsl() {
+        if (hueSlider && hueHandle) {
+            setHandleLogicalPercent(hueSlider, hueHandle, (h / 360) * 100);
+        }
+        if (saturationSlider && saturationHandle) {
+            setHandleLogicalPercent(saturationSlider, saturationHandle, s);
+        }
+        if (brightnessSlider && brightnessHandle) {
+            setHandleLogicalPercent(brightnessSlider, brightnessHandle, l);
+        }
     }
-    if (saturationSlider && saturationHandle) {
-        saturationHandle.style.left = s + '%';
-    }
-    if (brightnessSlider && brightnessHandle) {
-        brightnessHandle.style.left = l + '%';
-    }
+    applyHandlesFromHsl();
     updateGradients(h, s, l);
     updateUIFromHsl(h, s, l);
+    /* После показа модалки геометрия дорожки может обновиться на следующем кадре */
+    requestAnimationFrame(applyHandlesFromHsl);
 }
 
 function updateGradients(h, _s, _l) {
     const satGrad = document.getElementById('saturation-slider-gradient');
     const brightGrad = document.getElementById('brightness-slider-gradient');
     const baseColor = hslToHex(h, 100, 50);
+    /* Только backgroundImage — не затирать background-size из CSS (иначе градиент «не доходит» до края) */
     if (satGrad) {
-        satGrad.style.background = `linear-gradient(to right, #808080 0%, ${baseColor} 100%)`;
+        satGrad.style.backgroundImage = `linear-gradient(to right, #808080 0%, ${baseColor} 100%)`;
     }
     if (brightGrad) {
-        brightGrad.style.background = `linear-gradient(to right, #000 0%, ${baseColor} 50%, #fff 100%)`;
+        brightGrad.style.backgroundImage = `linear-gradient(to right, #000 0%, ${baseColor} 50%, #fff 100%)`;
     }
 }
 
@@ -97,13 +154,16 @@ function updateGradients(h, _s, _l) {
  * Применяет текущие значения слайдеров к primaryColor и превью (target = elements).
  */
 function getHslFromHandles() {
+    const hueSlider = document.getElementById('hue-slider');
+    const saturationSlider = document.getElementById('saturation-slider');
+    const brightnessSlider = document.getElementById('brightness-slider');
     const hueHandle = document.getElementById('hue-handle');
     const saturationHandle = document.getElementById('saturation-handle');
     const brightnessHandle = document.getElementById('brightness-handle');
     if (!hueHandle || !saturationHandle || !brightnessHandle) return null;
-    const h = (parseFloat(hueHandle.style.left) || 0) * 3.6; // 0..100 -> 0..360
-    const s = parseFloat(saturationHandle.style.left) || 0;
-    const l = parseFloat(brightnessHandle.style.left) || 0;
+    const h = logicalPercentFromHandle(hueSlider, hueHandle) * 3.6;
+    const s = logicalPercentFromHandle(saturationSlider, saturationHandle);
+    const l = logicalPercentFromHandle(brightnessSlider, brightnessHandle);
     return { h, s, l };
 }
 
@@ -147,15 +207,22 @@ function makeSliderDrag(sliderId, handleId, maxPercent, getValueFromPercent, set
     const handle = document.getElementById(handleId);
     if (!slider || !handle) return;
     let isDrag = false;
+    function pointerToLogicalPercent(e) {
+        const { trackRect } = getTrackAndSliderRects(slider);
+        const hw = getHandleHalfWidth(handle);
+        const travel = Math.max(1e-9, trackRect.width - 2 * hw);
+        const clientX = typeof e.clientX !== 'undefined' ? e.clientX : e.touches[0].clientX;
+        const centerGlobalX = Math.max(
+            trackRect.left + hw,
+            Math.min(trackRect.right - hw, clientX),
+        );
+        return ((centerGlobalX - trackRect.left - hw) / travel) * (maxPercent || 100);
+    }
     function move(e) {
         if (!isDrag) return;
-        const rect = slider.getBoundingClientRect();
-        const x = typeof e.clientX !== 'undefined' ? e.clientX : e.touches[0].clientX;
-        let p = (x - rect.left) / rect.width;
-        p = Math.max(0, Math.min(1, p));
-        const percent = p * (maxPercent || 100);
-        handle.style.left = percent + '%';
-        const value = getValueFromPercent ? getValueFromPercent(percent) : percent;
+        const logicalPercent = pointerToLogicalPercent(e);
+        setHandleLogicalPercent(slider, handle, logicalPercent);
+        const value = getValueFromPercent ? getValueFromPercent(logicalPercent) : logicalPercent;
         if (typeof setHandleFromValue === 'function') setHandleFromValue(value);
         updateGradientsFromHandles();
         applyColorFromSliders();
@@ -186,12 +253,9 @@ function makeSliderDrag(sliderId, handleId, maxPercent, getValueFromPercent, set
     );
     slider.addEventListener('click', (e) => {
         if (e.target === handle) return;
-        const rect = slider.getBoundingClientRect();
-        let p = (e.clientX - rect.left) / rect.width;
-        p = Math.max(0, Math.min(1, p));
-        const percent = p * (maxPercent || 100);
-        handle.style.left = percent + '%';
-        const value = getValueFromPercent ? getValueFromPercent(percent) : percent;
+        const logicalPercent = pointerToLogicalPercent(e);
+        setHandleLogicalPercent(slider, handle, logicalPercent);
+        const value = getValueFromPercent ? getValueFromPercent(logicalPercent) : logicalPercent;
         if (typeof setHandleFromValue === 'function') setHandleFromValue(value);
         updateGradientsFromHandles();
         applyColorFromSliders();
@@ -211,43 +275,20 @@ export function initColorPicker() {
     if (hueSlider.dataset.colorPickerInited === 'true') return;
     hueSlider.dataset.colorPickerInited = 'true';
 
-    function _setHueFromPercent(percent) {
-        const h = percent * 3.6;
-        updateGradients(
-            h,
-            parseFloat(document.getElementById('saturation-handle')?.style.left) || 80,
-            parseFloat(document.getElementById('brightness-handle')?.style.left) || 50,
-        );
-        return h;
-    }
-    function _setSatFromPercent(percent) {
-        const s = percent;
-        const h = parseFloat(document.getElementById('hue-handle')?.style.left) * 3.6 || 0;
-        updateGradients(
-            h,
-            s,
-            parseFloat(document.getElementById('brightness-handle')?.style.left) || 50,
-        );
-        return s;
-    }
-    function _setBrightFromPercent(percent) {
-        const l = percent;
-        const h = parseFloat(document.getElementById('hue-handle')?.style.left) * 3.6 || 0;
-        const s = parseFloat(document.getElementById('saturation-handle')?.style.left) || 80;
-        updateGradients(h, s, l);
-        return l;
-    }
-
     makeSliderDrag(
         'hue-slider',
         'hue-handle',
         100,
         (p) => p * 3.6,
         (h) => {
-            const handle = document.getElementById('hue-handle');
-            if (handle) handle.style.left = h / 3.6 + '%';
-            const s = parseFloat(document.getElementById('saturation-handle')?.style.left) || 80;
-            const l = parseFloat(document.getElementById('brightness-handle')?.style.left) || 50;
+            const s = logicalPercentFromHandle(
+                saturationSlider,
+                document.getElementById('saturation-handle'),
+            );
+            const l = logicalPercentFromHandle(
+                brightnessSlider,
+                document.getElementById('brightness-handle'),
+            );
             updateUIFromHsl(h, s, l);
             updateGradients(h, s, l);
         },
@@ -258,8 +299,12 @@ export function initColorPicker() {
         100,
         (p) => p,
         (s) => {
-            const h = parseFloat(document.getElementById('hue-handle')?.style.left) * 3.6 || 0;
-            const l = parseFloat(document.getElementById('brightness-handle')?.style.left) || 50;
+            const h =
+                logicalPercentFromHandle(hueSlider, document.getElementById('hue-handle')) * 3.6 || 0;
+            const l = logicalPercentFromHandle(
+                brightnessSlider,
+                document.getElementById('brightness-handle'),
+            );
             updateUIFromHsl(h, s, l);
             updateGradients(h, s, l);
         },
@@ -270,8 +315,12 @@ export function initColorPicker() {
         100,
         (p) => p,
         (l) => {
-            const h = parseFloat(document.getElementById('hue-handle')?.style.left) * 3.6 || 0;
-            const s = parseFloat(document.getElementById('saturation-handle')?.style.left) || 80;
+            const h =
+                logicalPercentFromHandle(hueSlider, document.getElementById('hue-handle')) * 3.6 || 0;
+            const s = logicalPercentFromHandle(
+                saturationSlider,
+                document.getElementById('saturation-handle'),
+            );
             updateUIFromHsl(h, s, l);
             updateGradients(h, s, l);
         },

@@ -170,6 +170,8 @@ body.custom-background-active
         #addModal .bg-white.dark\:bg-gray-800,
         #editModal .bg-white.dark\:bg-gray-800,
         #customizeUIModal .bg-white.dark\:bg-gray-800,
+        #appCustomizationModal .app-customization-panel.bg-white.dark\:bg-gray-800,
+        #appCustomizationModal .bg-white.dark\:bg-gray-800,
         #confirmClearDataModal .bg-white.dark\:bg-gray-800,
         #cibLinkModal .bg-white.dark\:bg-gray-800,
         #hotkeysModal .bg-white.dark\:bg-gray-800,
@@ -726,6 +728,13 @@ body.custom-background-active .force-transparent {
 body.custom-background-active #customizeUIModal .p-content > div[class*='space-y'] > div {
     background-color: transparent !important;
     box-shadow: none !important;
+}
+
+body.custom-background-active #appCustomizationModal .app-customization-section,
+body.custom-background-active #appCustomizationModal .app-customization-card {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border-color: var(--color-border) !important;
 }
 
 /* ---------------------------------------------------- */

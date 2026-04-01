@@ -721,16 +721,25 @@ export async function loadBookmarks() {
  * @param {{ criteria: string, direction: string }} sortState - currentBookmarksSort из State
  * @returns {Array} новый отсортированный массив
  */
+/** Единая нормализация метки времени для сортировки (устойчиво к невалидным датам и типам). */
+function bookmarkSortTimestamp(bookmark) {
+    if (!bookmark || typeof bookmark !== 'object') return 0;
+    const raw = bookmark.dateAdded ?? bookmark.dateUpdated ?? 0;
+    const ms = new Date(raw).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+}
+
 function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
     if (!bookmarks || bookmarks.length === 0) return [...(bookmarks || [])];
     const criteria = sortState.criteria || 'date';
     const direction = sortState.direction || 'asc';
     const mult = direction === 'desc' ? -1 : 1;
 
-    return [...bookmarks].sort((a, b) => {
+    const list = bookmarks.filter((b) => b && typeof b === 'object');
+    return [...list].sort((a, b) => {
         if (criteria === 'date') {
-            const tsA = new Date(a.dateAdded || a.dateUpdated || 0).getTime();
-            const tsB = new Date(b.dateAdded || b.dateUpdated || 0).getTime();
+            const tsA = bookmarkSortTimestamp(a);
+            const tsB = bookmarkSortTimestamp(b);
             if (tsA !== tsB) return (tsA - tsB) * mult;
             return (a.id || 0) - (b.id || 0);
         }
@@ -801,7 +810,7 @@ export async function renderBookmarks(bookmarks, folderMap = {}) {
 
     const fragment = document.createDocumentFragment();
     for (const bookmark of bookmarks) {
-        if (!bookmark || typeof bookmark !== 'object' || !bookmark.id) {
+        if (!bookmark || typeof bookmark !== 'object' || bookmark.id == null) {
             console.warn('[renderBookmarks] Пропуск невалидной закладки:', bookmark);
             continue;
         }
@@ -1037,15 +1046,13 @@ export async function filterBookmarks() {
         } else if (selectedFolderValue === ARCHIVE_FOLDER_ID) {
             bookmarksToDisplay = allBookmarks.filter((bm) => bm.folder === ARCHIVE_FOLDER_ID);
         } else {
-            const numericFolderId = parseInt(selectedFolderValue, 10);
-            if (!isNaN(numericFolderId)) {
-                bookmarksToDisplay = allBookmarks.filter((bm) => bm.folder === numericFolderId);
-            } else {
-                console.warn(
-                    `filterBookmarks: Некорректный ID папки '${selectedFolderValue}'. Показываем неархивированные.`,
-                );
-                bookmarksToDisplay = allBookmarks.filter((bm) => bm.folder !== ARCHIVE_FOLDER_ID);
-            }
+            // Должно совпадать с loadBookmarks: id папки в БД может быть числом или строкой (импорт),
+            // value у <option> всегда строка — строгое сравнение с parseInt давало пустой список.
+            bookmarksToDisplay = allBookmarks.filter(
+                (bm) =>
+                    String(bm.folder) === String(selectedFolderValue) &&
+                    bm.folder !== ARCHIVE_FOLDER_ID,
+            );
         }
 
         if (searchValue) {
