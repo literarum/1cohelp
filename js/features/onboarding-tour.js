@@ -81,16 +81,14 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Экспорт базы (как использовать)',
-        description:
-            'Кнопка экспорта создает резервную копию базы данных. На этом шаге показываем только расположение и назначение кнопки, без запуска диалогов.',
+        description: 'Кнопка экспорта создает резервную копию базы данных.',
         selectors: ['#exportDataBtn'],
         side: 'bottom',
         align: 'center',
     },
     {
         title: 'Импорт базы (как использовать)',
-        description:
-            'Кнопка импорта загружает файл резервной копии. На этом шаге показываем только интерфейс импорта, без открытия проводника.',
+        description: 'Кнопка импорта загружает файл резервной копии.',
         selectors: ['#importDataBtn'],
         side: 'bottom',
         align: 'center',
@@ -287,6 +285,7 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'Главная',
         description: 'На главной вкладке расположен основной алгоритм и быстрые действия по клиенту.',
         tabId: 'main',
+        tabNavHighlightTabId: 'main',
         selectors: ['#mainTab'],
         side: 'bottom',
         align: 'center',
@@ -318,11 +317,12 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'Программа 1СО',
+        title: 'Раздел «Программа 1С/УП»',
         description:
             'Раздел с алгоритмами по сценариям работы в программе 1С: добавление, редактирование и хранение инструкций.',
         tabId: 'program',
-        selectors: ['#programAlgorithms', '#addProgramAlgorithmBtn', '#programTab'],
+        tabNavHighlightTabId: 'program',
+        selectors: ['#programTab'],
         side: 'right',
         align: 'start',
     },
@@ -330,16 +330,18 @@ const TOUR_STEP_BLUEPRINTS = [
         title: 'СКЗИ',
         description: 'Алгоритмы по работе с криптосредствами и сертификатами собраны на этой вкладке.',
         tabId: 'skzi',
-        selectors: ['#skziTab', '#skziAlgorithms', '#addSkziAlgorithmBtn'],
+        tabNavHighlightTabId: 'skzi',
+        selectors: ['#skziTab'],
         side: 'bottom',
         align: 'center',
     },
     {
         title: 'ЛК 1СО',
         description:
-            'Здесь инструкции для сценариев личного кабинета 1С с отдельной базой алгоритмов.',
+            'Здесь инструкции для сценариев личного кабинета 1С-Отчетность с отдельной базой алгоритмов.',
         tabId: 'lk1c',
-        selectors: ['#lk1cAlgorithms', '#addLk1cAlgorithmBtn', '#lk1cTab'],
+        tabNavHighlightTabId: 'lk1c',
+        selectors: ['#lk1cTab'],
         side: 'right',
         align: 'start',
     },
@@ -348,7 +350,8 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'Вкладка для алгоритмов по работе с веб-регистратором.',
         tabId: 'webReg',
-        selectors: ['#webRegAlgorithms', '#addWebRegAlgorithmBtn', '#webRegTab'],
+        tabNavHighlightTabId: 'webReg',
+        selectors: ['#webRegTab'],
         side: 'right',
         align: 'start',
     },
@@ -437,7 +440,7 @@ const TOUR_STEP_BLUEPRINTS = [
     {
         title: 'Черный список',
         description:
-            'Раздел для фиксации проблемных кейсов с поиском и управлением записями.',
+            'Раздел для фиксации… кхм… жабных кейсов, чтобы потом делать им установку на понос.',
         tabId: 'blacklistedClients',
         selectors: ['#blacklistedClientsTab', '#blacklistTableContainer', '#addBlacklistEntryBtn'],
         side: 'bottom',
@@ -459,6 +462,52 @@ const TOUR_STEP_BLUEPRINTS = [
         tabId: 'xmlAnalyzer',
         selectors: ['#xmlAnalyzerTab', '#xmlAnalyzerDropZone', '#xmlAnalyzerAnalyzeBtn'],
         side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Вкладка «Обучение»',
+        description:
+            'Раздел обучения: учебные модули по шагам, карточки интервального повторения (SRS), учёт слабых мест и статистика. Откройте вкладку, чтобы увидеть инструменты ниже.',
+        tabId: 'training',
+        selectors: ['#trainingTab'],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Обучение: режимы',
+        description:
+            'Переключайте режимы: учебник, карточки SRS, слабые места и статистика. В каждом режиме свой сценарий закрепления материала.',
+        tabId: 'training',
+        selectors: [
+            'nav[aria-label="Разделы обучения"]',
+            '#trainingMount .training-hero',
+            '#trainingMount',
+        ],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Обучение: модули и редактор',
+        description:
+            'Создавайте свои учебные модули или используйте стандартные материалы. В режиме «Учебник» кнопка «Новый модуль» открывает редактор шагов и мини-квизов.',
+        tabId: 'training',
+        selectors: [
+            '[data-training-user-new-module]',
+            '.training-user-toolbar',
+            '#trainingMount .training-body',
+            '#trainingMount',
+        ],
+        side: 'bottom',
+        align: 'center',
+    },
+    {
+        title: 'Обучение: содержимое раздела',
+        description:
+            'Здесь отображаются карточки модулей, шаги, мини-квизы и отметки о прочтении.',
+        tabId: 'training',
+        tabNavHighlightTabId: 'training',
+        selectors: ['#trainingMount .training-body', '#trainingMount', '#trainingTab'],
+        side: 'top',
         align: 'center',
     },
     {
@@ -564,6 +613,36 @@ function resolveFirstAvailableElement(selectors) {
         if (!el) continue;
         if (typeof el.getClientRects !== 'function') return el;
         if (typeof el.getClientRects === 'function' && el.getClientRects().length > 0) return el;
+    }
+    return null;
+}
+
+/**
+ * Кнопка вкладки в горизонтальной панели или «⋯», если вкладка ушла в переполнение.
+ * Исключает ложное попадание на запасной fallback (#mainTab) в туре.
+ * @param {string} panelId — без суффикса Tab (например main, training).
+ * @returns {HTMLElement | null}
+ */
+function resolveVisibleTabNavTarget(panelId) {
+    if (!panelId || typeof document.getElementById !== 'function') return null;
+    const tabEl = document.getElementById(`${panelId}Tab`);
+    if (
+        tabEl &&
+        typeof tabEl.getClientRects === 'function' &&
+        tabEl.getClientRects().length > 0
+    ) {
+        return tabEl;
+    }
+    const moreBtn = document.getElementById('moreTabsBtn');
+    const moreWrap = moreBtn?.parentElement;
+    if (
+        moreBtn &&
+        moreWrap &&
+        !moreWrap.classList.contains('hidden') &&
+        typeof moreBtn.getClientRects === 'function' &&
+        moreBtn.getClientRects().length > 0
+    ) {
+        return moreBtn;
     }
     return null;
 }
@@ -771,6 +850,11 @@ function buildTourSteps() {
                     } catch {
                         window.scrollTo(0, 0);
                     }
+                }
+
+                if (blueprint.tabNavHighlightTabId) {
+                    const navTarget = resolveVisibleTabNavTarget(blueprint.tabNavHighlightTabId);
+                    if (navTarget) return navTarget;
                 }
 
                 const highlightGroupTarget = buildHighlightProxyForSelectors(
@@ -1004,6 +1088,11 @@ export async function startOnboardingTour() {
             onDestroyed: () => {
                 removeTourHighlightProxy();
                 void markTourCompleted();
+                if (typeof deps.setActiveTab === 'function') {
+                    void Promise.resolve(deps.setActiveTab('main')).catch((error) => {
+                        console.warn('[onboarding-tour] Не удалось перейти на вкладку «Главная» после тура:', error);
+                    });
+                }
                 if (previouslyFocused && document.contains(previouslyFocused)) {
                     previouslyFocused.focus();
                 }
@@ -1049,4 +1138,5 @@ export const __onboardingTourInternals = {
     detectPopoverSide,
     stabilizePopoverArrow,
     syncPopoverArrowToElement,
+    resolveVisibleTabNavTarget,
 };

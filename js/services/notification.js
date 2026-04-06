@@ -692,8 +692,28 @@ export const NotificationService = {
 // LEGACY showNotification (message, type, duration) — один тост по id "notification"
 // ============================================================================
 
-export function showNotification(message, type = 'success', duration = 5000) {
+export function showNotification(message, type = 'success', durationOrOptions = 5000) {
     ensureNotificationIconlessStyles();
+
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+        console.warn(
+            '[ShowNotification_V5.2_INLINE_STYLE] Вызван с пустым или невалидным сообщением. Уведомление не будет показано.',
+            { messageContent: message, type, durationOrOptions },
+        );
+        return;
+    }
+
+    // Объект опций — тот же контракт, что у NotificationService.add (duration, important, …)
+    if (durationOrOptions !== null && typeof durationOrOptions === 'object') {
+        NotificationService.add(message, type, durationOrOptions);
+        return;
+    }
+
+    const duration =
+        typeof durationOrOptions === 'number' && Number.isFinite(durationOrOptions)
+            ? durationOrOptions
+            : 5000;
+
     console.log(
         `[SHOW_NOTIFICATION_CALL_V5.2_INLINE_STYLE] Message: "${message}", Type: "${type}", Duration: ${duration}, Timestamp: ${new Date().toISOString()}`,
     );
@@ -711,14 +731,6 @@ export function showNotification(message, type = 'success', duration = 5000) {
         // ignore stack parse errors
     }
     console.log(`[SHOW_NOTIFICATION_CALL_STACK_V5.2_INLINE_STYLE] Called from: ${callStackInfo}`);
-
-    if (!message || typeof message !== 'string' || message.trim() === '') {
-        console.warn(
-            '[ShowNotification_V5.2_INLINE_STYLE] Вызван с пустым или невалидным сообщением. Уведомление не будет показано.',
-            { messageContent: message, type, duration },
-        );
-        return;
-    }
 
     const FADE_DURATION_MS = 300;
     const NOTIFICATION_ID = 'notification';

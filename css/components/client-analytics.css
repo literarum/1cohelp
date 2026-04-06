@@ -1,0 +1,64 @@
+/* База клиентов и аналитика */
+
+#clientAnalyticsContent .client-analytics-card {
+    min-height: 7rem;
+}
+
+#clientAnalyticsDetailModal:not(.hidden) {
+    display: flex;
+}
+
+/* Заголовок строки: как у закладок — заголовок слева, действия справа */
+#clientAnalyticsContent .client-analytics-section-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+    #clientAnalyticsContent .client-analytics-section-head {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+
+/* Панель действий — правый верхний угол (на sm+) */
+#clientAnalyticsContent .client-analytics-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+/* Кнопка загрузки .txt — primary, как «Добавить» в закладках; доп. контраст при фокусе клавиатуры */
+#clientAnalyticsContent .client-analytics-upload-label:focus-within {
+    outline: none;
+}
+
+/* Список загруженных файлов */
+#clientAnalyticsContent .client-analytics-files-heading {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--color-text-secondary, #374151);
+}
+
+html.dark #clientAnalyticsContent .client-analytics-files-heading {
+    color: var(--color-text-secondary, #d1d5db);
+}
+
+#clientAnalyticsContent #clientAnalyticsFilesList {
+    list-style: none;
+    max-height: 8rem;
+    overflow-y: auto;
+    color: var(--color-text-primary, #111827);
+}
+
+html.dark #clientAnalyticsContent #clientAnalyticsFilesList {
+    color: var(--color-text-primary, #f3f4f6);
+}

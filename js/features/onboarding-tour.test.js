@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ONBOARDING_AUTO_OFFER_STORAGE_KEY } from '../constants.js';
 import {
@@ -109,12 +109,23 @@ describe('onboarding-tour coverage', () => {
                 'extLinks',
                 'reglaments',
                 'bookmarks',
+                'training',
                 'sedoTypes',
                 'blacklistedClients',
                 'fnsCert',
                 'xmlAnalyzer',
             ]),
         );
+        expect(blueprints.some((step) => step.tabId === 'training')).toBe(true);
+        const programStep = blueprints.find((step) => step.tabId === 'program');
+        expect(programStep?.title).toContain('Программа 1С/УП');
+        expect(programStep?.tabNavHighlightTabId).toBe('program');
+        expect(programStep?.selectors?.[0]).toBe('#programTab');
+        const trainingBodyStep = blueprints.find(
+            (step) => step.title === 'Обучение: содержимое раздела',
+        );
+        expect(trainingBodyStep?.tabNavHighlightTabId).toBe('training');
+        expect(trainingBodyStep?.description || '').not.toMatch(/локально/i);
         expect(blueprints.some((step) => step.title.includes('Палитра команд'))).toBe(true);
         expect(
             blueprints.some((step) => step.title.includes('Настройки приложения')),
@@ -241,5 +252,41 @@ describe('onboarding-tour coverage', () => {
         __onboardingTourInternals.syncPopoverArrowToElement(highlightedElement);
         expect(arrow.style.left).toBeDefined();
         expect(arrow.style.left).not.toBe('');
+    });
+
+    it('resolveVisibleTabNavTarget prefers visible tab, else кнопка «Ещё»', () => {
+        const resolve = __onboardingTourInternals.resolveVisibleTabNavTarget;
+        const visibleTab = {
+            id: 'trainingTab',
+            getClientRects: () => /** @type {any} */ ([{ width: 1 }]),
+        };
+        globalThis.document = {
+            getElementById: (id) => (id === 'trainingTab' ? visibleTab : null),
+            body: { classList: { remove: vi.fn() } },
+        };
+        expect(resolve('training')).toBe(visibleTab);
+
+        const hiddenTab = {
+            id: 'trainingTab',
+            getClientRects: () => [],
+        };
+        const moreBtn = {
+            id: 'moreTabsBtn',
+            getClientRects: () => /** @type {any} */ ([{ width: 1 }]),
+            parentElement: {
+                classList: {
+                    contains: () => false,
+                },
+            },
+        };
+        globalThis.document = {
+            getElementById: (id) => {
+                if (id === 'trainingTab') return hiddenTab;
+                if (id === 'moreTabsBtn') return moreBtn;
+                return null;
+            },
+            body: { classList: { remove: vi.fn() } },
+        };
+        expect(resolve('training')).toBe(moreBtn);
     });
 });

@@ -6,6 +6,9 @@
  */
 
 import { escapeHtml } from '../utils/html.js';
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
+import { formatTagsForInput, parseTagsFromUserString } from '../features/global-tags.js';
 
 // ========== Dependencies (будут инъектированы через setReglamentsDependencies) ==========
 let State = null;
@@ -780,7 +783,9 @@ export async function showAddReglamentModal(currentCategoryId = null) {
                     <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                         <div class="flex justify-between items-center">
                             <h2 class="text-xl font-bold" id="reglamentModalTitle">Добавить регламент</h2>
-                            <div>
+                            <div class="flex items-center gap-1">
+                                <button type="button" id="reglamentModalUndoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Предыдущая сохранённая версия (Ctrl+Shift+U)" aria-label="Откат к предыдущей сохранённой версии"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                                <button type="button" id="reglamentModalRedoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Следующая сохранённая версия (Ctrl+Shift+R)" aria-label="Повтор отменённой версии"><i class="fas fa-redo" aria-hidden="true"></i></button>
                                 <button id="toggleFullscreenReglamentBtn" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                     <i class="fas fa-expand"></i>
                                 </button>
@@ -808,6 +813,11 @@ export async function showAddReglamentModal(currentCategoryId = null) {
                             <div class="mb-4 flex-1 flex flex-col">
                                 <label class="block text-sm font-medium mb-1" for="reglamentContent">Содержание</label>
                                 <textarea id="reglamentContent" name="reglamentContent" required class="w-full flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base resize-none"></textarea>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium mb-1" for="reglamentTags">Теги (через запятую)</label>
+                                <input type="text" id="reglamentTags" name="reglamentTags" autocomplete="off" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base" placeholder="например: фнс, срочно" />
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">В глобальном поиске: <span class="font-mono">#тег</span></p>
                             </div>
                         </form>
                     </div>
@@ -846,6 +856,11 @@ export async function showAddReglamentModal(currentCategoryId = null) {
                 const category = categorySelect.value;
                 const content = contentTextarea.value.trim();
                 const reglamentId = idInput.value;
+                const tagsList = parseTagsFromUserString(
+                    form.elements.reglamentTags && form.elements.reglamentTags.value
+                        ? form.elements.reglamentTags.value
+                        : '',
+                );
 
                 if (!title || !category || !content) {
                     if (typeof showNotification === 'function') {
@@ -866,6 +881,7 @@ export async function showAddReglamentModal(currentCategoryId = null) {
                 }
 
                 const newData = { title, category, content };
+                if (tagsList.length > 0) newData.tags = tagsList;
                 const isEditing = !!reglamentId;
                 let oldData = null;
                 let finalId = null;
@@ -894,6 +910,20 @@ export async function showAddReglamentModal(currentCategoryId = null) {
                     if (!isEditing) {
                         finalId = savedResult;
                         newData.id = finalId;
+                    }
+
+                    if (isEditing && oldData) {
+                        try {
+                            const newFromDb = await getFromIndexedDB('reglaments', finalId);
+                            await recordStoreEntityHistoryAfterSave({
+                                storeName: 'reglaments',
+                                recordId: finalId,
+                                oldRecord: oldData,
+                                newRecord: newFromDb,
+                            });
+                        } catch (histErr) {
+                            console.warn('[reglaments] entity history:', histErr);
+                        }
                     }
 
                     console.log(
@@ -1104,6 +1134,8 @@ export async function showAddReglamentModal(currentCategoryId = null) {
         if (titleInput) {
             titleInput.focus();
         }
+
+        refreshModalEntityHistoryToolbar('reglamentModal').catch(() => {});
     } catch (error) {
         console.error('Ошибка при показе модального окна добавления регламента:', error);
         if (typeof showNotification === 'function') {
@@ -1181,6 +1213,8 @@ export async function editReglament(id) {
         idInput.value = reglament.id;
         titleInput.value = reglament.title || '';
         contentTextarea.value = reglament.content || '';
+        const regTags = modal.querySelector('#reglamentTags');
+        if (regTags) regTags.value = formatTagsForInput(reglament.tags);
 
         if (categorySelect.querySelector(`option[value="${reglament.category}"]`)) {
             categorySelect.value = reglament.category;
@@ -1191,6 +1225,8 @@ export async function editReglament(id) {
             categorySelect.value = '';
         }
         titleInput.focus();
+
+        refreshModalEntityHistoryToolbar('reglamentModal').catch(() => {});
     } catch (error) {
         console.error('Ошибка при загрузке или отображении регламента для редактирования:', error);
         if (typeof showNotification === 'function') {

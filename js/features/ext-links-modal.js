@@ -4,6 +4,7 @@
 // EXT LINKS MODAL (вынос из script.js)
 // ============================================================================
 
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
 import {
     activateModalFocus,
     deactivateModalFocus,
@@ -74,9 +75,13 @@ export function ensureExtLinkModal() {
                                     <div class="p-6">
                                     <div class="flex justify-between items-center mb-4">
                                     <h2 class="text-xl font-bold" id="extLinkModalTitle">Заголовок окна</h2>
+                                    <div class="flex items-center gap-1">
+                                    <button type="button" id="extLinkModalUndoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Предыдущая сохранённая версия (Ctrl+Shift+U)" aria-label="Откат к предыдущей сохранённой версии"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                                    <button type="button" id="extLinkModalRedoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Следующая сохранённая версия (Ctrl+Shift+R)" aria-label="Повтор отменённой версии"><i class="fas fa-redo" aria-hidden="true"></i></button>
                                     <button class="close-modal bg-transparent p-2 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors" title="Закрыть">
                                     <i class="fas fa-times text-xl"></i>
                                     </button>
+                                    </div>
                                     </div>
                                     <form id="extLinkForm" novalidate>
                                     <input type="hidden" id="extLinkId">
@@ -246,6 +251,8 @@ export function showAddExtLinkModal() {
     modal.classList.remove('hidden');
     activateModalFocus(modal);
     form.elements.extLinkTitle?.focus();
+
+    refreshModalEntityHistoryToolbar('extLinkModal').catch(() => {});
 }
 
 export async function showEditExtLinkModal(id) {
@@ -303,6 +310,8 @@ export async function showEditExtLinkModal(id) {
         document.body.classList.add('modal-open');
         activateModalFocus(modal);
         titleInput.focus();
+
+        refreshModalEntityHistoryToolbar('extLinkModal').catch(() => {});
     } catch (error) {
         console.error('Ошибка при загрузке данных ресурса:', error);
         showNotification('Ошибка загрузки ресурса', 'error');
@@ -381,4 +390,6 @@ export async function showAddEditExtLinkModal(id = null, categoryId = null) {
     document.body.classList.add('modal-open');
     activateModalFocus(modal);
     titleInput.focus();
+
+    refreshModalEntityHistoryToolbar('extLinkModal').catch(() => {});
 }

@@ -3,6 +3,7 @@
 import { escapeHtml } from '../utils/html.js';
 import { getSectionName, formatExampleForTextarea, deepEqual } from '../utils/helpers.js';
 import { renderMainAlgorithm } from './main-algorithm.js';
+import { SCREENSHOT_EDIT_FIELD } from '../ui/screenshot-attachment-field.js';
 
 // ============================================================================
 // КОМПОНЕНТ РАБОТЫ С АЛГОРИТМАМИ
@@ -346,13 +347,13 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
 
     const screenshotHTML = includeScreenshotsField
         ? `
-        <div class="mt-3 border-t border-gray-200 dark:border-gray-600 pt-3">
-            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
-             <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера.</p>
-            <div id="screenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem]">
+        <div class="${SCREENSHOT_EDIT_FIELD.wrapperCard} mt-4">
+            <label class="${SCREENSHOT_EDIT_FIELD.label}">Скриншоты (опционально)</label>
+            <p class="${SCREENSHOT_EDIT_FIELD.hint}">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl/Cmd+V) в эту область.</p>
+            <div id="screenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}">
             </div>
-            <div class="flex items-center gap-3">
-                <button type="button" class="add-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
+            <div class="${SCREENSHOT_EDIT_FIELD.actions}">
+                <button type="button" class="${SCREENSHOT_EDIT_FIELD.addBtnStep}">
                     <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
                 </button>
             </div>
@@ -1143,12 +1144,6 @@ export function getCurrentEditState() {
         const currentStepData = {
             title: titleInput ? titleInput.value.trim() : '',
             description: descInput ? descInput.value.trim() : '',
-            example:
-                isMainAlgorithm && exampleInput
-                    ? exampleInput.value.trim()
-                    : isMainAlgorithm
-                      ? ''
-                      : undefined,
             additionalInfoText: additionalInfoTextarea ? additionalInfoTextarea.value.trim() : '',
             additionalInfoShowTop: additionalInfoPosTopCheckbox
                 ? additionalInfoPosTopCheckbox.checked
@@ -1157,8 +1152,8 @@ export function getCurrentEditState() {
                 ? additionalInfoPosBottomCheckbox.checked
                 : false,
         };
-
         if (isMainAlgorithm) {
+            currentStepData.example = exampleInput ? exampleInput.value.trim() : '';
             if (isCopyableCheckbox) {
                 currentStepData.isCopyable = isCopyableCheckbox.checked;
             } else {
@@ -1304,6 +1299,89 @@ export function getCurrentAddState() {
 }
 
 /**
+ * Нормализует снимок формы редактирования/добавления алгоритма для устойчивого сравнения
+ * (без ложного «грязного» состояния из-за \\r\\n, number vs string в type, порядка id).
+ * @param {object} state
+ * @param {boolean} isMain
+ * @returns {object}
+ */
+export function normalizeFormStateForDirtyCheck(state, isMain) {
+    if (!state || typeof state !== 'object') return state;
+    const out = {
+        title: normTextForDirtyCheck(state.title),
+        steps: [],
+    };
+    if (!isMain && Object.prototype.hasOwnProperty.call(state, 'description')) {
+        out.description = normTextForDirtyCheck(state.description);
+    }
+    const steps = Array.isArray(state.steps) ? state.steps : [];
+    for (const step of steps) {
+        if (!step || typeof step !== 'object') {
+            out.steps.push(step);
+            continue;
+        }
+        const s = { ...step };
+        s.title = normTextForDirtyCheck(s.title);
+        s.description = normTextForDirtyCheck(s.description);
+        s.additionalInfoText = normTextForDirtyCheck(s.additionalInfoText);
+        s.additionalInfoShowTop = Boolean(s.additionalInfoShowTop);
+        s.additionalInfoShowBottom = Boolean(s.additionalInfoShowBottom);
+        if (isMain) {
+            s.example = normTextForDirtyCheck(s.example);
+            if (s.type !== undefined && s.type !== null && String(s.type).length > 0) {
+                s.type = String(s.type);
+            } else {
+                delete s.type;
+            }
+            s.isCopyable = Boolean(s.isCopyable);
+            s.isCollapsible = Boolean(s.isCollapsible);
+            s.showNoInnHelp = Boolean(s.showNoInnHelp);
+            s.phoneNumbersEnabled = Boolean(s.phoneNumbersEnabled);
+            if (Array.isArray(s.phoneNumbers)) {
+                s.phoneNumbers = [...s.phoneNumbers].map(normTextForDirtyCheck).filter(Boolean).sort();
+            } else {
+                s.phoneNumbers = [];
+            }
+            if (s.groupId !== undefined && s.groupId !== null && String(s.groupId).trim() !== '') {
+                s.groupId = String(s.groupId).trim();
+            } else {
+                delete s.groupId;
+            }
+            delete s.existingScreenshotIds;
+            delete s.tempScreenshotsCount;
+            delete s.deletedScreenshotIds;
+        } else {
+            if (s.type !== undefined && s.type !== null && String(s.type).length > 0) {
+                s.type = String(s.type);
+            } else {
+                delete s.type;
+            }
+            s.existingScreenshotIds = sortCommaSeparatedIdsForDirtyCheck(s.existingScreenshotIds || '');
+            s.tempScreenshotsCount = Number(s.tempScreenshotsCount) || 0;
+            s.deletedScreenshotIds = sortCommaSeparatedIdsForDirtyCheck(s.deletedScreenshotIds || '');
+            delete s.example;
+        }
+        out.steps.push(s);
+    }
+    return out;
+}
+
+function normTextForDirtyCheck(v) {
+    if (v === null || v === undefined) return '';
+    return String(v).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
+
+function sortCommaSeparatedIdsForDirtyCheck(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .join(',');
+}
+
+/**
  * Проверяет наличие изменений в форме
  * @param {string} modalType - тип модального окна ('edit' или 'add')
  * @returns {boolean} true если есть изменения
@@ -1364,16 +1442,24 @@ export function hasChanges(modalType) {
         return true;
     }
 
-    const areEquivalent = deepEqual(initialState, currentState);
+    const isMainForNormalize =
+        modalType === 'edit' &&
+        typeof document !== 'undefined' &&
+        document.getElementById('editModal')?.dataset?.section === 'main';
+
+    const normalizedInitial = normalizeFormStateForDirtyCheck(initialState, isMainForNormalize);
+    const normalizedCurrent = normalizeFormStateForDirtyCheck(currentState, isMainForNormalize);
+
+    const areEquivalent = deepEqual(normalizedInitial, normalizedCurrent);
 
     const changed = !areEquivalent;
 
     if (changed) {
-        console.log(`hasChanges (${modalType}): Обнаружены изменения через deepEqual.`);
-        console.log('Initial State:', JSON.stringify(initialState, null, 2));
-        console.log('Current State:', JSON.stringify(currentState, null, 2));
+        console.log(`hasChanges (${modalType}): Обнаружены изменения после нормализации.`);
+        console.log('Initial State:', JSON.stringify(normalizedInitial, null, 2));
+        console.log('Current State:', JSON.stringify(normalizedCurrent, null, 2));
     } else {
-        console.log(`hasChanges (${modalType}): Изменения НЕ обнаружены через deepEqual.`);
+        console.log(`hasChanges (${modalType}): Изменения НЕ обнаружены (нормализованное сравнение).`);
     }
 
     return changed;

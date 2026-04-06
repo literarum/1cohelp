@@ -14,6 +14,7 @@
 
 /* 3. Компоненты */
 @import url('./components/modals.css');
+@import url('./components/screenshot-attachment-field.css');
 @import url('./components/scrollbar.css');
 @import url('./components/tabs.css');
 @import url('./components/search.css');
@@ -38,7 +39,10 @@
 @import url('./components/health-modal.css');
 @import url('./components/db-merge-modal.css');
 @import url('./components/onboarding-tour.css');
+@import url('./components/reminders.css');
 @import url('./components/engineering-cockpit.css');
+@import url('./components/training.css');
+@import url('./components/client-analytics.css');
 
 /* 6. Скроллбар и кнопки (используют переменные из theme/variables.css) */
 @import url('./inline-styles.css');

@@ -4,6 +4,14 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
+        <meta name="application-name" content="Copilot 1СО 2.0" />
+        <meta name="theme-color" content="#12121f" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="1СО Copilot" />
+        <link rel="manifest" href="manifest.webmanifest" />
+        <link rel="apple-touch-icon" href="icons/icon-180.png" />
         <script type="text/javascript">
             (function bootstrapEngineeringConsole() {
                 if (typeof window === 'undefined' || !window.console) return;
@@ -73,8 +81,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260402-000024-726ef1e"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260402-000024-726ef1e"></script>
+        <script src="js/vendor-config.js?v=legacy-20260406-232016-ffb1f6f"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260406-232016-ffb1f6f"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -140,11 +148,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260402-000024-726ef1e"
+            href="css/tailwind.generated.css?v=legacy-20260406-232016-ffb1f6f"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260402-000024-726ef1e" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260406-232016-ffb1f6f" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -924,12 +932,28 @@
                                     id="showFavoritesHeaderBtn"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                     title="Избранное"
+                                    type="button"
                                 >
                                     <i class="fas fa-star hover:text-yellow-400"></i>
                                 </button>
 
                                 <div
                                     class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center"
+                                    aria-hidden="true"
+                                ></div>
+
+                                <button
+                                    id="showRemindersHeaderBtn"
+                                    type="button"
+                                    class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Напоминания"
+                                >
+                                    <i class="fas fa-bell hover:text-primary" aria-hidden="true"></i>
+                                </button>
+
+                                <div
+                                    class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center"
+                                    aria-hidden="true"
                                 ></div>
 
                                 <div
@@ -990,6 +1014,7 @@
                                     type="text"
                                     id="searchInput"
                                     placeholder="Поиск..."
+                                    title="Фильтр по тегам: добавьте #тег к запросу (несколько тегов — все должны совпасть)"
                                     class="w-full pl-10 pr-20 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                                 />
                                 <i
@@ -1136,6 +1161,17 @@
                                         >Шаги</span
                                     >
                                 </label>
+                                <label class="inline-flex items-center whitespace-nowrap flex-shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked
+                                        class="search-field search-field-filter form-checkbox text-primary focus:ring-primary"
+                                        value="tags"
+                                    />
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300"
+                                        >Теги</span
+                                    >
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -1195,8 +1231,29 @@
                         <button
                             id="bookmarksTab"
                             class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                            aria-controls="bookmarksContent"
                         >
                             <i class="fas fa-bookmark mr-1"></i>Закладки
+                        </button>
+                        <button
+                            id="clientAnalyticsTab"
+                            type="button"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                            aria-controls="clientAnalyticsContent"
+                            aria-label="База клиентов и аналитика"
+                        >
+                            <i class="fas fa-database mr-1"></i>
+                            <span class="hidden lg:inline">База клиентов</span>
+                        </button>
+                        <button
+                            id="trainingTab"
+                            type="button"
+                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                            aria-controls="trainingContent"
+                            aria-label="Обучение"
+                        >
+                            <i class="fas fa-graduation-cap mr-1"></i>
+                            <span class="hidden sm:inline">Обучение</span>
                         </button>
                         <button
                             id="sedoTypesTab"
@@ -1393,6 +1450,26 @@
                                     id="clientNotesActions"
                                     class="flex flex-row flex-nowrap items-center justify-end gap-1.5 flex-shrink-0"
                                 >
+                                    <button
+                                        type="button"
+                                        id="clientDataUndoBtn"
+                                        disabled
+                                        class="w-8 h-8 flex items-center justify-center rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 transition text-sm shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title="Предыдущая сохранённая версия заметок (Ctrl+Shift+U)"
+                                        aria-label="Откат к предыдущей сохранённой версии"
+                                    >
+                                        <i class="fas fa-undo" aria-hidden="true"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="clientDataRedoBtn"
+                                        disabled
+                                        class="w-8 h-8 flex items-center justify-center rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 transition text-sm shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title="Следующая сохранённая версия (Ctrl+Shift+R)"
+                                        aria-label="Повтор отменённой версии"
+                                    >
+                                        <i class="fas fa-redo" aria-hidden="true"></i>
+                                    </button>
                                     <button
                                         type="button"
                                         id="openClientNotesWindowBtn"
@@ -1912,6 +1989,101 @@
                 </div>
             </div>
 
+            <!-- База клиентов и аналитика -->
+            <div
+                id="clientAnalyticsContent"
+                class="tab-content hidden"
+                role="tabpanel"
+                aria-labelledby="clientAnalyticsTab"
+            >
+                <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                    <div class="client-analytics-section-head">
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            База клиентов и аналитика
+                        </h2>
+                        <div class="client-analytics-toolbar">
+                            <div
+                                class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5"
+                                role="group"
+                                aria-label="Вид списка"
+                            >
+                                <button
+                                    type="button"
+                                    class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300"
+                                    data-view="cards"
+                                    title="Карточки"
+                                >
+                                    <i class="fas fa-th-large" aria-hidden="true"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="view-toggle p-1.5 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-300"
+                                    data-view="list"
+                                    title="Список"
+                                >
+                                    <i class="fas fa-list" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <label
+                                class="client-analytics-upload-label inline-flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-md transition shadow-sm focus-within:outline-none focus-within:ring-2 focus-within:ring-white/50"
+                                title="Загрузить .txt для разбора (ИНН, КПП, телефоны)"
+                                aria-label="Загрузить файл заметок: выберите один или несколько .txt"
+                            >
+                                <i class="fas fa-file-download text-base opacity-95" aria-hidden="true"></i>
+                                <span class="whitespace-nowrap">Загрузить файл заметок</span>
+                                <input
+                                    id="clientAnalyticsFileInput"
+                                    type="file"
+                                    accept=".txt,text/plain"
+                                    multiple
+                                    class="hidden"
+                                />
+                            </label>
+                            <button
+                                type="button"
+                                id="clientAnalyticsExportBtn"
+                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
+                                title="Экспорт раздела в JSON"
+                                aria-label="Экспорт раздела в JSON"
+                            >
+                                <i class="fas fa-upload" aria-hidden="true"></i>
+                            </button>
+                            <label
+                                class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors cursor-pointer inline-flex items-center justify-center"
+                                title="Импорт JSON раздела"
+                                aria-label="Импорт JSON раздела"
+                            >
+                                <i class="fas fa-download" aria-hidden="true"></i>
+                                <input
+                                    id="clientAnalyticsImportInput"
+                                    type="file"
+                                    accept="application/json,.json"
+                                    class="hidden"
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="clientAnalyticsFilesSection" class="mb-4" hidden>
+                        <h3 class="client-analytics-files-heading">Загруженные файлы</h3>
+                        <ul id="clientAnalyticsFilesList" class="space-y-1"></ul>
+                    </div>
+
+                    <div
+                        id="clientAnalyticsContainer"
+                        class="grid gap-content"
+                        data-section-id="clientAnalyticsContainer"
+                        data-default-view="cards"
+                    >
+                        <p
+                            class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6"
+                        >
+                            Загрузите .txt для анализа.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div id="sedoTypesContent" class="tab-content hidden">
                 <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                     <div
@@ -2380,40 +2552,70 @@
                                 <h2 id="modalTitle" class="text-2xl font-bold">
                                     Название алгоритма
                                 </h2>
-                                <div class="flex flex-wrap gap-2 justify-end flex-shrink-0">
+                                <div
+                                    class="modal-algorithm-toolbar algorithm-modal-toolbar-inner flex flex-wrap items-center justify-end gap-x-0.5 gap-y-1.5 sm:flex-nowrap sm:gap-x-1 flex-shrink-0"
+                                >
                                     <button
-                                        id="startStepExecutionBtn"
-                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition text-sm"
+                                        id="deleteAlgorithmBtn"
                                         type="button"
+                                        class="algorithm-modal-toolbar-icon-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30"
+                                        title="Удалить"
+                                        aria-label="Удалить алгоритм"
                                     >
-                                        <i class="fas fa-person-walking mr-2"></i>Начать выполнение
-                                        по шагам
+                                        <i class="fas fa-trash text-base leading-none" aria-hidden="true"></i>
                                     </button>
                                     <button
                                         id="editAlgorithmBtn"
-                                        class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition text-sm"
+                                        type="button"
+                                        class="algorithm-modal-toolbar-icon-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                        title="Редактировать"
+                                        aria-label="Редактировать алгоритм"
                                     >
-                                        <i class="fas fa-edit mr-2"></i>Редактировать
+                                        <i class="fas fa-edit text-base leading-none" aria-hidden="true"></i>
                                     </button>
+                                    <span
+                                        class="algorithm-modal-toolbar-rule h-10 w-px shrink-0 self-center bg-gray-300 dark:bg-gray-600"
+                                        aria-hidden="true"
+                                    ></span>
+                                    <div
+                                        class="export-btn-placeholder-modal flex h-10 w-10 shrink-0 items-center justify-center"
+                                        aria-hidden="false"
+                                    ></div>
+                                    <div
+                                        class="fav-btn-placeholder-modal flex h-10 w-10 shrink-0 items-center justify-center"
+                                        aria-hidden="false"
+                                    ></div>
                                     <button
-                                        id="deleteAlgorithmBtn"
-                                        class="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white rounded-md transition text-sm"
+                                        id="startStepExecutionBtn"
+                                        class="algorithm-modal-toolbar-execute inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50 dark:hover:bg-indigo-600"
+                                        type="button"
+                                        title="Выполнить по шагам"
+                                        aria-label="Выполнить алгоритм по шагам"
                                     >
-                                        <i class="fas fa-trash mr-2"></i>Удалить
+                                        <i class="fas fa-play text-sm leading-none opacity-95" aria-hidden="true"></i>
+                                        <span class="leading-none">Выполнить</span>
                                     </button>
+                                    <span
+                                        class="algorithm-modal-toolbar-rule h-10 w-px shrink-0 self-center bg-gray-300 dark:bg-gray-600"
+                                        aria-hidden="true"
+                                    ></span>
                                     <button
                                         id="toggleFullscreenViewBtn"
-                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        type="button"
+                                        class="algorithm-modal-toolbar-icon-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                                         title="Развернуть на весь экран"
+                                        aria-label="Развернуть на весь экран"
                                     >
-                                        <i class="fas fa-expand"></i>
+                                        <i class="fas fa-expand text-base leading-none" aria-hidden="true"></i>
                                     </button>
                                     <button
                                         id="closeModalBtn"
-                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        type="button"
+                                        class="algorithm-modal-toolbar-icon-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                                         title="Закрыть"
+                                        aria-label="Закрыть окно"
                                     >
-                                        <i class="fas fa-times text-xl"></i>
+                                        <i class="fas fa-times text-base leading-none" aria-hidden="true"></i>
                                     </button>
                                 </div>
                             </div>
@@ -2478,6 +2680,26 @@
                                 </h2>
                                 <div class="flex items-center gap-2 justify-end flex-shrink-0">
                                     <button
+                                        type="button"
+                                        id="editAlgorithmUndoBtn"
+                                        disabled
+                                        class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                        title="Предыдущая сохранённая версия карточки (Ctrl+Shift+U)"
+                                        aria-label="Откат к предыдущей сохранённой версии"
+                                    >
+                                        <i class="fas fa-undo" aria-hidden="true"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="editAlgorithmRedoBtn"
+                                        disabled
+                                        class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                        title="Следующая сохранённая версия (Ctrl+Shift+R)"
+                                        aria-label="Повтор отменённой версии"
+                                    >
+                                        <i class="fas fa-redo" aria-hidden="true"></i>
+                                    </button>
+                                    <button
                                         id="toggleFullscreenEditBtn"
                                         class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle"
                                         title="Развернуть на весь экран"
@@ -2494,62 +2716,97 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="p-content overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-800">
-                            <div class="mb-4">
-                                <label
-                                    for="algorithmTitle"
-                                    class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                    >Название алгоритма</label
-                                >
-                                <input
-                                    type="text"
-                                    id="algorithmTitle"
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                />
-                            </div>
-                            <div class="mb-4" id="algorithmDescriptionContainer">
-                                <label
-                                    for="algorithmDescription"
-                                    class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                    >Краткое описание</label
-                                >
-                                <textarea
-                                    id="algorithmDescription"
-                                    rows="6"
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 modal-description-field min-h-[10rem]"
-                                ></textarea>
-                            </div>
-                            <h3 class="text-xl font-bold mb-3 text-gray-800 dark:text-gray-200">
-                                Шаги
-                            </h3>
-                            <div id="editSteps" class="space-y-4"></div>
-                            <div class="mt-4">
-                                <button
-                                    id="addStepBtn"
-                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
-                                >
-                                    <i class="fas fa-plus mr-2"></i>Добавить шаг
-                                </button>
-                            </div>
-                        </div>
-                        <div
-                            class="p-content border-t border-gray-200 dark:border-gray-600 mt-auto"
+                        <form
+                            id="editAlgorithmForm"
+                            class="flex flex-col flex-1 min-h-0"
+                            novalidate
                         >
-                            <div class="flex justify-end items-center gap-2">
-                                <button
-                                    id="cancelEditBtn"
-                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition"
-                                >
-                                    Отмена
-                                </button>
-                                <button
-                                    id="saveAlgorithmBtn"
-                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
-                                >
-                                    <i class="fas fa-save mr-1"></i> Сохранить изменения
-                                </button>
+                            <div class="p-content overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-800">
+                                <input type="hidden" id="editAlgorithmId" name="editAlgorithmId" value="" />
+                                <div class="mb-4">
+                                    <label
+                                        for="algorithmTitle"
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                        >Название алгоритма</label
+                                    >
+                                    <input
+                                        type="text"
+                                        id="algorithmTitle"
+                                        name="algorithmTitle"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                </div>
+                                <div class="mb-4">
+                                    <label
+                                        for="algorithmTags"
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                        >Теги (через запятую)</label
+                                    >
+                                    <input
+                                        type="text"
+                                        id="algorithmTags"
+                                        name="algorithmTags"
+                                        autocomplete="off"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                        placeholder="например: фнс, лк"
+                                    />
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        В поиске: <span class="font-mono">#тег</span>
+                                    </p>
+                                </div>
+                                <div class="mb-4" id="algorithmDescriptionContainer">
+                                    <label
+                                        for="algorithmDescription"
+                                        class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                        >Краткое описание</label
+                                    >
+                                    <textarea
+                                        id="algorithmDescription"
+                                        name="algorithmDescription"
+                                        rows="6"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 modal-description-field min-h-[10rem]"
+                                    ></textarea>
+                                </div>
+                                <div
+                                    id="algorithmPdfEditHost"
+                                    class="mb-4 min-h-0"
+                                    aria-label="PDF-вложения алгоритма"
+                                ></div>
+                                <h3 class="text-xl font-bold mb-3 text-gray-800 dark:text-gray-200">
+                                    Шаги
+                                </h3>
+                                <div id="editSteps" class="space-y-4"></div>
+                                <div class="mt-4">
+                                    <button
+                                        type="button"
+                                        id="addStepBtn"
+                                        class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
+                                    >
+                                        <i class="fas fa-plus mr-2"></i>Добавить шаг
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                            <div
+                                class="p-content border-t border-gray-200 dark:border-gray-600 mt-auto flex-shrink-0"
+                            >
+                                <div class="flex justify-end items-center gap-2">
+                                    <button
+                                        type="button"
+                                        id="cancelEditBtn"
+                                        class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition"
+                                    >
+                                        Отмена
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="saveAlgorithmBtn"
+                                        class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
+                                    >
+                                        <i class="fas fa-save mr-1"></i> Сохранить изменения
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -2597,6 +2854,20 @@
                                     type="text"
                                     id="newAlgorithmTitle"
                                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                />
+                            </div>
+                            <div class="mb-4">
+                                <label
+                                    for="newAlgorithmTags"
+                                    class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                    >Теги (через запятую)</label
+                                >
+                                <input
+                                    type="text"
+                                    id="newAlgorithmTags"
+                                    autocomplete="off"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                    placeholder="например: фнс, лк"
                                 />
                             </div>
                             <div class="mb-4">
@@ -3444,6 +3715,19 @@
                                         <input
                                             type="checkbox"
                                             class="mt-1 db-merge-scope-checkbox"
+                                            value="reminders"
+                                            checked
+                                        />
+                                        <span
+                                            ><span class="db-merge-scope-label"
+                                                >Напоминания</span
+                                            ></span
+                                        >
+                                    </label>
+                                    <label class="db-merge-scope-item">
+                                        <input
+                                            type="checkbox"
+                                            class="mt-1 db-merge-scope-checkbox"
                                             value="attachments"
                                             checked
                                         />
@@ -3630,7 +3914,7 @@
 
             <div
                 id="healthReportModal"
-                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 flex items-center justify-center"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[85] p-4 flex items-center justify-center"
             >
                 <div
                     class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden my-8"
@@ -3760,7 +4044,7 @@
                                 type="button"
                                 class="engineering-cockpit-tab-btn"
                                 data-cockpit-tab="errors"
-                                title="Ошибки runtime и необработанные сбои"
+                                title="Журнал ошибок: буфер hub + кокпит, без ложного слияния повторов в разное время"
                             >
                                 Ошибки
                             </button>
@@ -3790,6 +4074,14 @@
                                     Обновить
                                 </button>
                                 <button
+                                    id="engineeringCockpitRunManualDiagnosticBtn"
+                                    type="button"
+                                    class="engineering-cockpit-toolbar-btn"
+                                    title="Полный ручной прогон диагностики (как «Запустить проверку систем» в настройках)"
+                                >
+                                    <i class="fas fa-stethoscope mr-1" aria-hidden="true"></i>Ручной прогон
+                                </button>
+                                <button
                                     id="engineeringCockpitClearLogsBtn"
                                     type="button"
                                     class="engineering-cockpit-toolbar-btn"
@@ -3804,6 +4096,14 @@
                                     title="Скопировать полный snapshot в буфер обмена"
                                 >
                                     Копировать snapshot
+                                </button>
+                                <button
+                                    id="engineeringCockpitExportDiagnosticBtn"
+                                    type="button"
+                                    class="engineering-cockpit-toolbar-btn"
+                                    title="Скачать один JSON-файл: логи, версия схемы, флаги браузера, снимок диагностики и ошибки"
+                                >
+                                    Пакет диагностики
                                 </button>
                             </div>
                         </div>
@@ -4041,7 +4341,7 @@
             <!-- Универсальное окно подтверждения/алерта (в стилистике приложения) -->
             <div
                 id="appConfirmModal"
-                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 overflow-y-auto"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[100] p-4 overflow-y-auto"
                 aria-modal="true"
                 role="dialog"
                 aria-labelledby="appConfirmModalTitle"
@@ -4133,6 +4433,27 @@
                                 >
                                     Добавить ссылку 1С
                                 </h2>
+                                <div class="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        id="cibLinkModalUndoBtn"
+                                        disabled
+                                        class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                        title="Предыдущая сохранённая версия (Ctrl+Shift+U)"
+                                        aria-label="Откат к предыдущей сохранённой версии"
+                                    >
+                                        <i class="fas fa-undo" aria-hidden="true"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="cibLinkModalRedoBtn"
+                                        disabled
+                                        class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                        title="Следующая сохранённая версия (Ctrl+Shift+R)"
+                                        aria-label="Повтор отменённой версии"
+                                    >
+                                        <i class="fas fa-redo" aria-hidden="true"></i>
+                                    </button>
                                 <button
                                     type="button"
                                     class="close-modal p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -4140,6 +4461,7 @@
                                 >
                                     <i class="fas fa-times text-xl"></i>
                                 </button>
+                                </div>
                             </div>
                         </div>
                         <form id="cibLinkForm" class="flex flex-col flex-1 min-h-0">
@@ -4209,6 +4531,15 @@
                 </div>
             </div>
 
+            <div
+                id="trainingContent"
+                class="tab-content hidden p-content"
+                aria-labelledby="trainingTab"
+                role="tabpanel"
+            >
+                <div id="trainingMount" class="training-root min-h-[50vh]"></div>
+            </div>
+
             <div id="favoritesContent" class="tab-content hidden">
                 <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                     <div
@@ -4256,11 +4587,217 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Окно Горячие клавиши -->
-        <div
-            id="hotkeysModal"
+            <div id="remindersContent" class="tab-content hidden">
+                <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
+                    <div
+                        class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-content"
+                    >
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                Напоминания
+                            </h2>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-xl">
+                                Локально на устройстве: «вернуться к закладке через N дней», перезвон,
+                                уточнение по задаче — без сервера.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            id="addReminderBtn"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-secondary text-white text-sm font-medium shadow-sm transition"
+                        >
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            Новое напоминание
+                        </button>
+                    </div>
+                    <p
+                        id="remindersEmptyState"
+                        class="text-center py-10 text-gray-500 dark:text-gray-400 hidden"
+                    >
+                        Пока нет напоминаний. Создайте из этого экрана или из деталей закладки / блока
+                        обращения.
+                    </p>
+                    <div id="remindersList" class="space-y-3" role="region" aria-label="Список напоминаний"></div>
+                </div>
+            </div>
+
+            <div
+                id="reminderModal"
+                class="fixed inset-0 z-[75] hidden bg-black bg-opacity-60 overflow-y-auto p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reminderModalTitle"
+            >
+                <div
+                    id="reminderModalViewport"
+                    class="flex min-h-full w-full items-center justify-center py-4 sm:py-6"
+                >
+                    <div
+                        id="reminderModalInner"
+                        class="modal-inner-container bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+                    >
+                    <div
+                        class="flex items-center justify-between gap-3 px-5 py-4 sm:px-6 sm:py-4 border-b border-gray-200 dark:border-gray-600 flex-shrink-0"
+                    >
+                        <h2
+                            id="reminderModalTitle"
+                            class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center"
+                        >
+                            <i class="fas fa-bell mr-2 text-primary" aria-hidden="true"></i>Напоминание
+                        </h2>
+                        <div class="flex items-center flex-shrink-0 gap-1">
+                            <button
+                                type="button"
+                                id="toggleFullscreenReminderBtn"
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Развернуть на весь экран"
+                            >
+                                <i class="fas fa-expand" aria-hidden="true"></i>
+                            </button>
+                            <button
+                                type="button"
+                                id="reminderModalCloseBtn"
+                                class="p-2 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть (Esc)"
+                            >
+                                <i class="fas fa-times text-xl" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="reminderModalBody" class="flex flex-col overflow-y-auto flex-1 min-h-0">
+                        <input type="hidden" id="reminderFormId" value="" />
+                        <input type="hidden" id="reminderFormContextType" value="free" />
+                        <input type="hidden" id="reminderFormContextId" value="" />
+                        <input type="hidden" id="reminderFormContextLabel" value="" />
+
+                        <div class="min-w-0">
+                            <label
+                                for="reminderFormContextDisplay"
+                                class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2"
+                                >Контекст</label
+                            >
+                            <p
+                                id="reminderFormContextDisplay"
+                                class="text-sm leading-relaxed text-gray-800 dark:text-gray-200 rounded-lg bg-gray-50 dark:bg-gray-900/50 px-3.5 py-2.5 border border-gray-200 dark:border-gray-600"
+                            ></p>
+                        </div>
+
+                        <div class="min-w-0">
+                            <label
+                                for="reminderFormTitle"
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2"
+                                >Заголовок</label
+                            >
+                            <input
+                                id="reminderFormTitle"
+                                type="text"
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-sm"
+                                placeholder="Например: перезвонить по сертификату"
+                                maxlength="200"
+                            />
+                        </div>
+
+                        <div class="min-w-0">
+                            <label
+                                for="reminderFormIntent"
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2"
+                                >Тип</label
+                            >
+                            <select
+                                id="reminderFormIntent"
+                                class="reminder-form-control reminder-form-control--intent w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm"
+                            >
+                                <option value="callback">Перезвонить клиенту</option>
+                                <option value="followup">Уточнить / по задаче</option>
+                                <option value="return_to">Вернуться к контексту</option>
+                                <option value="task">Контрольная точка</option>
+                                <option value="other">Другое</option>
+                            </select>
+                        </div>
+
+                        <div class="min-w-0">
+                            <label
+                                for="reminderFormDueLocal"
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2"
+                                >Когда напомнить</label
+                            >
+                            <input
+                                id="reminderFormDueLocal"
+                                type="datetime-local"
+                                class="reminder-form-control reminder-form-control--datetime w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm"
+                            />
+                            <div class="flex flex-wrap gap-2.5 mt-3">
+                                <button
+                                    type="button"
+                                    class="reminder-quick-due-btn px-2.5 py-1 rounded-md text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    data-days="1"
+                                >
+                                    Завтра
+                                </button>
+                                <button
+                                    type="button"
+                                    class="reminder-quick-due-btn px-2.5 py-1 rounded-md text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    data-days="3"
+                                >
+                                    3 дня
+                                </button>
+                                <button
+                                    type="button"
+                                    class="reminder-quick-due-btn px-2.5 py-1 rounded-md text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    data-days="7"
+                                >
+                                    7 дней
+                                </button>
+                                <button
+                                    type="button"
+                                    class="reminder-quick-due-btn px-2.5 py-1 rounded-md text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    data-days="14"
+                                >
+                                    14 дней
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex min-h-0 min-w-0 flex-col">
+                            <label
+                                for="reminderFormNote"
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2"
+                                >Заметка (необязательно)</label
+                            >
+                            <textarea
+                                id="reminderFormNote"
+                                rows="5"
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-500 bg-white px-3.5 py-3 text-base leading-relaxed text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 modal-description-field min-h-[10rem] resize-y"
+                                placeholder="Детали, что именно сделать..."
+                            ></textarea>
+                        </div>
+                    </div>
+                    <div
+                        class="flex flex-wrap justify-end gap-3 px-5 py-4 sm:px-6 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/30 flex-shrink-0"
+                    >
+                        <button
+                            type="button"
+                            id="reminderModalCancelBtn"
+                            class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm"
+                        >
+                            Отмена
+                        </button>
+                        <button
+                            type="button"
+                            id="reminderFormSubmitBtn"
+                            class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-95"
+                        >
+                            Сохранить
+                        </button>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Окно Горячие клавиши -->
+            <div
+                id="hotkeysModal"
             class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto"
         >
             <div class="flex items-center justify-center min-h-full">
@@ -4545,6 +5082,37 @@
             </div>
         </div>
 
+        <!-- Модальное окно: запись базы клиентов -->
+        <div
+            id="clientAnalyticsDetailModal"
+            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] flex items-center justify-center p-4"
+            aria-hidden="true"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clientAnalyticsDetailTitle"
+        >
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-600"
+            >
+                <header
+                    class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600"
+                >
+                    <h3 id="clientAnalyticsDetailTitle" class="text-xl font-bold text-gray-900 dark:text-gray-100">
+                        Карточка клиента
+                    </h3>
+                    <button
+                        type="button"
+                        id="clientAnalyticsDetailCloseBtn"
+                        class="h-9 w-9 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 text-2xl leading-none"
+                        aria-label="Закрыть"
+                    >
+                        ×
+                    </button>
+                </header>
+                <div id="clientAnalyticsDetailBody" class="flex-grow p-4 overflow-y-auto text-gray-800 dark:text-gray-200"></div>
+            </div>
+        </div>
+
         <!-- Кнопки прокрутки вверх/вниз для длинных страниц -->
         <div
             id="scrollNavButtons"
@@ -4618,7 +5186,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260402-000024-726ef1e"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260402-000024-726ef1e"></script>
+        <script type="module" src="./script.js?v=legacy-20260406-232016-ffb1f6f"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260406-232016-ffb1f6f"></script>
     </body>
 </html>

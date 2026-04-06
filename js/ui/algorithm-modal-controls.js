@@ -34,6 +34,38 @@ export function initAlgorithmModalControls() {
         }
     });
 
+    const editAlgorithmBtn = document.getElementById('editAlgorithmBtn');
+    if (editAlgorithmBtn) {
+        const editFromDetailHandler = async () => {
+            const algorithmId = algorithmModal?.dataset?.currentAlgorithmId;
+            const section = algorithmModal?.dataset?.currentSection;
+            if (
+                algorithmId === undefined ||
+                algorithmId === null ||
+                String(algorithmId).trim() === '' ||
+                section === undefined ||
+                section === null ||
+                String(section).trim() === ''
+            ) {
+                deps.showNotification?.(
+                    'Ошибка: Не удалось определить алгоритм для редактирования.',
+                    'error',
+                );
+                return;
+            }
+            if (typeof deps.editAlgorithm === 'function') {
+                await deps.editAlgorithm(algorithmId, section);
+            } else {
+                console.error('Функция editAlgorithm не найдена для кнопки editAlgorithmBtn');
+            }
+        };
+        if (editAlgorithmBtn._editFromDetailHandler) {
+            editAlgorithmBtn.removeEventListener('click', editAlgorithmBtn._editFromDetailHandler);
+        }
+        editAlgorithmBtn.addEventListener('click', editFromDetailHandler);
+        editAlgorithmBtn._editFromDetailHandler = editFromDetailHandler;
+    }
+
     const exportMainBtn = document.getElementById('exportMainBtn');
     if (exportMainBtn) {
         exportMainBtn.addEventListener('click', () => {

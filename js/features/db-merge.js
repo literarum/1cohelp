@@ -33,6 +33,7 @@ let deps = {
     loadExtLinks: null,
     loadCibLinks: null,
     renderReglamentCategories: null,
+    renderRemindersPage: null,
     showReglamentsForCategory: null,
     initSearchSystem: null,
     buildInitialSearchIndex: null,
@@ -62,6 +63,7 @@ export const CONTENT_STORES = [
     'extLinks',
     'extLinkCategories',
     'favorites',
+    'reminders',
     'pdfFiles',
     'screenshots',
 ];
@@ -72,6 +74,7 @@ const MERGE_SCOPE_TO_STORES = {
     reglaments: ['reglaments'],
     extLinks: ['extLinkCategories', 'extLinks'],
     favorites: ['favorites'],
+    reminders: ['reminders'],
     attachments: ['pdfFiles', 'screenshots'],
 };
 
@@ -193,6 +196,16 @@ const MERGE_IDENTITY_CONFIG = {
             )}`;
         },
     },
+    reminders: {
+        identityKey: (record) => {
+            const ct = normalizeText(record?.contextType || 'free');
+            const cid = String(record?.contextId ?? '');
+            const due = String(record?.dueAt ?? '');
+            const tit = normalizeText(record?.title);
+            const int = normalizeText(record?.intent || 'other');
+            return `reminder|${ct}|${cid}|${due}|${tit}|${int}`;
+        },
+    },
     pdfFiles: {
         identityKey: (record) =>
             `pdf|${normalizeText(record?.parentType)}|${String(
@@ -204,6 +217,15 @@ const MERGE_IDENTITY_CONFIG = {
             `screenshot|${normalizeText(record?.parentType)}|${String(record?.parentId ?? '')}|${
                 record?.id ?? ''
             }`,
+    },
+    trainingUserCurriculum: {
+        identityKey: (record) => `trainingUserTrack|${String(record?.id ?? '')}`,
+    },
+    trainingBuiltinCurriculum: {
+        identityKey: (record) => `trainingBuiltin|${String(record?.id ?? '')}`,
+    },
+    mentorQuizPackages: {
+        identityKey: (record) => `mentorQuizPack|${String(record?.id ?? '')}`,
     },
 };
 
@@ -260,6 +282,10 @@ function normalizeImportedRecordForStore(storeName, record, ctx) {
 
     if (storeName === 'favorites' && typeof normalized.originalItemId !== 'undefined') {
         normalized.originalItemId = String(normalized.originalItemId);
+    }
+
+    if (storeName === 'reminders' && typeof normalized.contextId !== 'undefined' && normalized.contextId !== null) {
+        normalized.contextId = String(normalized.contextId);
     }
 
     if (storeName === 'pdfFiles' && typeof normalized.parentId !== 'undefined') {
@@ -794,7 +820,7 @@ export function validateExportedBackupShapeForMerge(parsed) {
  * Порядок применения с учётом зависимостей:
  *  - Сначала «родительские» сущности (папки и категории),
  *  - затем основные сущности (bookmarks, reglaments, extLinks),
- *  - затем favorites, pdfFiles, screenshots, которые ссылаются на них.
+ *  - затем favorites, reminders, pdfFiles, screenshots (вложения ссылаются на сущности выше).
  */
 const MERGE_APPLICATION_ORDER = [
     'algorithms',
@@ -804,8 +830,15 @@ const MERGE_APPLICATION_ORDER = [
     'extLinks',
     'bookmarks',
     'favorites',
+    'reminders',
     'pdfFiles',
     'screenshots',
+    'trainingProgress',
+    'trainingSrsCards',
+    'trainingWeakSpots',
+    'trainingUserCurriculum',
+    'trainingBuiltinCurriculum',
+    'mentorQuizPackages',
 ];
 
 function cloneRecordForRollback(record) {
@@ -1130,6 +1163,48 @@ export async function applyMergePlan(mergePlan) {
             return;
         }
 
+        if (storeName === 'reminders') {
+            const mapReminderContextId = (contextType, contextId) => {
+                if (contextId === undefined || contextId === null || contextId === '') {
+                    return contextId;
+                }
+                const t = String(contextType || '').toLowerCase();
+                let mapped = contextId;
+                if (t === 'bookmark') {
+                    mapped =
+                        getMappedValue(idMapping.bookmarks, contextId) ??
+                        getMappedValue(idMapping.bookmarks, String(contextId)) ??
+                        contextId;
+                } else if (t === 'algorithm') {
+                    mapped =
+                        getMappedValue(idMapping.algorithms, contextId) ??
+                        getMappedValue(idMapping.algorithms, String(contextId)) ??
+                        contextId;
+                } else if (t === 'reglament') {
+                    mapped =
+                        getMappedValue(idMapping.reglaments, contextId) ??
+                        getMappedValue(idMapping.reglaments, String(contextId)) ??
+                        contextId;
+                }
+                return mapped === undefined || mapped === null ? contextId : String(mapped);
+            };
+
+            for (const op of storePlan.toInsert) {
+                const incoming = { ...op.record };
+                incoming.contextId = mapReminderContextId(incoming.contextType, incoming.contextId);
+                delete incoming.id;
+                await saveToIndexedDB('reminders', incoming);
+            }
+
+            for (const op of storePlan.toUpdate) {
+                const { local, incoming } = op;
+                const updated = { ...incoming, id: local.id };
+                updated.contextId = mapReminderContextId(updated.contextType, updated.contextId);
+                await saveToIndexedDB('reminders', updated);
+            }
+            return;
+        }
+
         if (storeName === 'pdfFiles') {
             for (const op of storePlan.toInsert) {
                 const incoming = { ...op.record };
@@ -1191,6 +1266,7 @@ export async function applyMergePlan(mergePlan) {
             deps.loadExtLinks?.(),
             deps.loadCibLinks?.(),
             deps.renderReglamentCategories?.(),
+            deps.renderRemindersPage?.(),
         ]);
         if (deps.buildInitialSearchIndex) {
             await deps.buildInitialSearchIndex();

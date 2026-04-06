@@ -7,6 +7,8 @@
 
 import { State } from '../app/state.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { refreshClientDataHistoryToolbar } from '../history/modal-entity-history.js';
 
 let deps = {
     showNotification: null,
@@ -60,6 +62,20 @@ export async function saveClientData() {
             }
             console.log('Client data saved to IndexedDB (integrity check passed)');
             savedToDB = true;
+
+            if (oldData !== null && oldData !== undefined) {
+                try {
+                    await recordStoreEntityHistoryAfterSave({
+                        storeName: 'clientData',
+                        recordId: clientDataToSave.id,
+                        oldRecord: oldData,
+                        newRecord: savedSnapshot,
+                    });
+                } catch (histErr) {
+                    console.warn('[client-data] entity history:', histErr);
+                }
+            }
+            refreshClientDataHistoryToolbar().catch(() => {});
 
             if (deps.updateSearchIndex && typeof deps.updateSearchIndex === 'function') {
                 await deps.updateSearchIndex(

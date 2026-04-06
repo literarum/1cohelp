@@ -19,8 +19,11 @@ import {
     collectPlatformHealthProbeRows,
     runPlatformHealthProbeSuite,
 } from './platform-health-probes.js';
+import { runLightDataIntegrityPass } from './data-integrity-pass.js';
 
 let deps = {};
+/** Счётчик циклов watchdog (interval) для периодического второго контура целостности данных */
+let watchdogDataIntegrityCycleCount = 0;
 const WATCHDOG_INTERVAL_MS = 60000;
 const AUTOSAVE_STALE_MS = 45000;
 const REQUIRED_STORES = [
@@ -458,20 +461,50 @@ export function initBackgroundHealthTestsSystem() {
                 );
             }
 
+            // Watchdog 7: второй контур целостности данных (дублирование: ссылки, PDF, сироты, count/getAll)
+            if (source === 'interval') {
+                watchdogDataIntegrityCycleCount += 1;
+                if (watchdogDataIntegrityCycleCount % 5 === 0) {
+                    try {
+                        const intRows = await runLightDataIntegrityPass(
+                            {
+                                performDBOperation: deps.performDBOperation,
+                                getFromIndexedDB: deps.getFromIndexedDB,
+                                runWithTimeout,
+                            },
+                            { profile: 'fast' },
+                        );
+                        for (const r of intRows) {
+                            addCheck(r.level, r.title, r.message, r.system || 'data_integrity');
+                        }
+                    } catch (err) {
+                        addCheck(
+                            'warn',
+                            'Целостность данных / прогон',
+                            err?.message || String(err),
+                            'data_integrity',
+                        );
+                    }
+                }
+            }
+
             // Обновляем диагностику, добавляя watchdog-результаты к уже собранным.
             if (hud?.setDiagnostics) {
+                const notReplacedByWatchdogCycle = (entry) =>
+                    !entry.title.startsWith('Watchdog / ') &&
+                    !entry.title.startsWith('Целостность данных /');
                 const mergedChecks = [
-                    ...results.checks.filter((entry) => !entry.title.startsWith('Watchdog / ')),
+                    ...results.checks.filter(notReplacedByWatchdogCycle),
                     ...cycleChecks.map(({ title, message, system }) => ({ title, message, system })),
                 ];
                 const mergedErrors = [
-                    ...results.errors.filter((entry) => !entry.title.startsWith('Watchdog / ')),
+                    ...results.errors.filter(notReplacedByWatchdogCycle),
                     ...cycleChecks
                         .filter((entry) => entry.level === 'error')
                         .map(({ title, message, system }) => ({ title, message, system })),
                 ];
                 const mergedWarnings = [
-                    ...results.warnings.filter((entry) => !entry.title.startsWith('Watchdog / ')),
+                    ...results.warnings.filter(notReplacedByWatchdogCycle),
                     ...cycleChecks
                         .filter((entry) => entry.level === 'warn')
                         .map(({ title, message, system }) => ({ title, message, system })),
@@ -571,6 +604,53 @@ export function initBackgroundHealthTestsSystem() {
                         // cleanup failure should not fail health check sequence
                     }
                 }
+
+                // Тест 2.1: резервный контур — хранилища «База клиентов и аналитика»
+                let caFileId = null;
+                try {
+                    if (deps.saveToIndexedDB && deps.getFromIndexedDB && deps.deleteFromIndexedDB) {
+                        caFileId = await runWithTimeout(
+                            deps.saveToIndexedDB('clientAnalyticsFiles', {
+                                fileName: '_health_probe.txt',
+                                uploadedAt: new Date().toISOString(),
+                                textSha256: '00'.repeat(32),
+                                charCount: 0,
+                                parseStatus: 'ok',
+                                parseError: null,
+                                rawText: '',
+                            }),
+                            5000,
+                        );
+                        const caRow = await runWithTimeout(
+                            deps.getFromIndexedDB('clientAnalyticsFiles', caFileId),
+                            5000,
+                        );
+                        if (caRow && caRow.textSha256 === '00'.repeat(32)) {
+                            report(
+                                'info',
+                                'ClientAnalytics DB',
+                                'Запись и чтение clientAnalyticsFiles работают.',
+                            );
+                        } else {
+                            report(
+                                'warn',
+                                'ClientAnalytics DB',
+                                'Запись clientAnalyticsFiles не подтверждена после чтения.',
+                            );
+                        }
+                    }
+                } catch (err) {
+                    report('warn', 'ClientAnalytics DB', err.message || String(err));
+                } finally {
+                    if (caFileId != null) {
+                        try {
+                            await deps.deleteFromIndexedDB?.('clientAnalyticsFiles', caFileId);
+                        } catch {
+                            /* ignore */
+                        }
+                    }
+                }
+
                 updateHud(40);
 
                 // Тест 3: индексация и поиск (расширенный набор проверок)
@@ -1503,6 +1583,25 @@ export function initBackgroundHealthTestsSystem() {
                 }
             } catch (err) {
                 report('warn', 'Буфер обмена', `Clipboard: ${err.message}.`);
+            }
+
+            // Второй контур целостности данных (полный профиль; не дублирует быстрый watchdog)
+            try {
+                const intRowsFull = await runLightDataIntegrityPass(
+                    {
+                        performDBOperation: deps.performDBOperation,
+                        getFromIndexedDB: deps.getFromIndexedDB,
+                        runWithTimeout,
+                    },
+                    { profile: 'full' },
+                );
+                for (const r of intRowsFull) {
+                    report(r.level, r.title, r.message, { system: 'data_integrity' });
+                }
+            } catch (err) {
+                report('warn', 'Целостность данных / прогон', err?.message || String(err), {
+                    system: 'data_integrity',
+                });
             }
 
             // Watchdog: IndexedDB структура + автосохранение

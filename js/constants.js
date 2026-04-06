@@ -4,8 +4,9 @@
 // БАЗА ДАННЫХ
 // ============================================================================
 export const DB_NAME = 'CopilotDB';
-export const DB_VERSION = 14;
-export const CURRENT_SCHEMA_VERSION = '1.5';
+export const DB_VERSION = 21;
+export const CURRENT_SCHEMA_VERSION = '1.7';
+export const REMINDERS_STORE_NAME = 'reminders';
 export const FAVORITES_STORE_NAME = 'favorites';
 export const RECENTLY_DELETED_STORE_NAME = 'recentlyDeleted';
 export const RECENTLY_DELETED_TRACKED_STORES = [
@@ -32,11 +33,24 @@ export const USER_PREFERENCES_KEY = 'userGlobalPreferences';
 export const ONBOARDING_AUTO_OFFER_STORAGE_KEY = 'copilot1co:onboardingAutoOffered_v1';
 export const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';
 export const MAIN_ALGO_COLLAPSE_KEY = 'mainAlgoCollapsedState_v1';
+/** Резервная копия состояния свёрнутости (localStorage), дублирует данные preferences в IndexedDB */
+export const MAIN_ALGO_COLLAPSE_LOCAL_MIRROR_KEY = 'mainAlgoCollapsedState_v1_localMirror';
 export const MAIN_ALGO_HEADERS_ONLY_KEY = 'mainAlgoHeadersOnly_v1';
 export const MAIN_ALGO_DENSITY_KEY = 'mainAlgoDensity_v1';
 export const MAIN_ALGO_HEADERS_EXPANDED_KEY = 'mainAlgoHeadersExpanded_v1';
+/** Резервная копия прогресса режима «Обучение» (дублирует IndexedDB) */
+export const TRAINING_PROGRESS_BACKUP_KEY = 'copilot1co:trainingProgressBackup_v1';
+/** Резервное зеркало пользовательских модулей учебника (IndexedDB + localStorage) */
+export const TRAINING_USER_CURRICULUM_BACKUP_KEY = 'copilot1co:trainingUserCurriculumBackup_v1';
+/** Резервное зеркало квиз-пакетов наставника (IndexedDB + localStorage) */
+export const TRAINING_MENTOR_QUIZ_PACKS_BACKUP_KEY = 'copilot1co:trainingMentorQuizPacksBackup_v1';
 export const MAIN_ALGO_GROUPS_OPEN_KEY = 'mainAlgoGroupsOpen_v1';
 export const TIMER_STATE_KEY = 'appTimerStateCopilot1CO_v2';
+
+/** Хранилище IndexedDB: стеки отката/повтора по ключу сущности */
+export const ENTITY_EDIT_HISTORY_STORE = 'entityEditHistory';
+/** Префикс резервного зеркала стеков в localStorage (метаданные, без Blob) */
+export const ENTITY_HISTORY_LOCAL_MIRROR_PREFIX = 'Copilot1CO_entityHistMirror_v1_';
 
 // ============================================================================
 // АРХИВ
@@ -101,6 +115,7 @@ export const FIELD_WEIGHTS = {
         title: 3.0,
         description: 1.5,
         steps: 1.0,
+        tags: 2.6,
         sectionNameForAlgo: 1.2,
         sectionIdForAlgo: 0.8,
     },
@@ -117,6 +132,7 @@ export const FIELD_WEIGHTS = {
     bookmarks: {
         title: 3.0,
         description: 1.5,
+        tags: 2.6,
         url_original: 0.7,
         url_hostname: 1.8,
         url_path_0: 1.2,
@@ -129,6 +145,7 @@ export const FIELD_WEIGHTS = {
     reglaments: {
         title: 2.8,
         content: 1.0,
+        tags: 2.6,
         categoryName: 1.5,
     },
     extLinks: {
@@ -161,6 +178,15 @@ export const FIELD_WEIGHTS = {
         inn: 2.0,
         phone: 1.5,
         notes: 1.0,
+    },
+    clientAnalyticsRecords: {
+        titleLine: 1.5,
+        inn: 2.0,
+        kpp: 1.5,
+        phones: 1.5,
+        question: 1.2,
+        contextSnippet: 1.0,
+        sourceFileName: 1.0,
     },
     default: {
         title: 2.0,

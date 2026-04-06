@@ -84,6 +84,7 @@ let deps = {
     exportSingleBookmarkToPdf: null,
     renderScreenshotThumbnails: null,
     openLightbox: null,
+    openReminderModal: null,
 };
 
 export function setBookmarkDetailDependencies(dependencies) {
@@ -107,6 +108,9 @@ export async function showBookmarkDetailModal(bookmarkId) {
                                 <h2 class="text-lg font-semibold leading-tight tracking-tight text-gray-900 dark:text-gray-100 min-w-0 flex items-center self-center" id="bookmarkDetailTitle">Детали закладки</h2>
                                 <div class="bookmark-detail-header-actions flex items-center flex-shrink-0 gap-1 h-9 self-center" role="toolbar" aria-label="Действия в шапке">
                                     <div class="fav-btn-placeholder-modal-bookmark flex h-9 w-9 flex-shrink-0 items-center justify-center"></div>
+                                    <button type="button" id="bookmarkDetailReminderBtn" title="Напоминание по этой закладке (локально)" aria-label="Напоминание по этой закладке (локально)" class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-gray-500 hover:text-amber-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-amber-400 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors">
+                                        <i class="fas fa-bell text-sm" aria-hidden="true"></i>
+                                    </button>
                                     <button id="${deps.bookmarkDetailModalConfig?.buttonId || 'toggleFullscreenBookmarkDetailBtn'}" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Развернуть на весь экран">
                                         <i class="fas fa-expand text-sm" aria-hidden="true"></i>
                                     </button>
@@ -207,6 +211,22 @@ export async function showBookmarkDetailModal(bookmarkId) {
                         'Ошибка: не удалось определить ID для редактирования',
                         'error',
                     );
+                }
+            } else if (e.target.closest('#bookmarkDetailReminderBtn')) {
+                const currentId = parseInt(currentModal.dataset.currentBookmarkId, 10);
+                const titleEl = currentModal.querySelector('#bookmarkDetailTitle');
+                const t = (titleEl?.textContent || '').trim() || 'Закладка';
+                if (!Number.isNaN(currentId) && typeof deps.openReminderModal === 'function') {
+                    deps.openReminderModal({
+                        contextType: 'bookmark',
+                        contextId: String(currentId),
+                        contextLabel: t,
+                        title: `Вернуться к закладке: ${t}`,
+                        intent: 'return_to',
+                        daysFromNow: 7,
+                    });
+                } else if (Number.isNaN(currentId)) {
+                    deps.showNotification?.('Не удалось определить закладку для напоминания.', 'error');
                 }
             }
         });

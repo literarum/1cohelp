@@ -14,6 +14,8 @@ import {
     getAllFromIndex,
     performDBOperation,
 } from '../db/indexeddb.js';
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setBlacklistDependencies)
@@ -786,7 +788,11 @@ export async function showBlacklistEntryModal(entryId = null) {
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-xl font-bold" id="blacklistEntryModalTitle">Добавить в черный список</h2>
+                            <div class="flex items-center gap-1">
+                            <button type="button" id="blacklistEntryModalUndoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Предыдущая сохранённая версия (Ctrl+Shift+U)" aria-label="Откат к предыдущей сохранённой версии"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                            <button type="button" id="blacklistEntryModalRedoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Следующая сохранённая версия (Ctrl+Shift+R)" aria-label="Повтор отменённой версии"><i class="fas fa-redo" aria-hidden="true"></i></button>
                             <button type="button" class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Закрыть"><i class="fas fa-times text-xl"></i></button>
+                            </div>
                         </div>
                         <input type="hidden" id="blacklistEntryId">
                         <div class="mb-3">
@@ -918,6 +924,8 @@ export async function showBlacklistEntryModal(entryId = null) {
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
     orgNameInput.focus();
+
+    refreshModalEntityHistoryToolbar('blacklistEntryModal').catch(() => {});
 }
 
 /**
@@ -976,6 +984,19 @@ export async function handleSaveBlacklistEntry(event) {
             oldData = await getBlacklistEntryDB(id);
             entryData.dateAdded = oldData?.dateAdded || new Date().toISOString();
             await updateBlacklistEntryDB(entryData);
+            if (oldData) {
+                try {
+                    const newFromDb = await getBlacklistEntryDB(entryData.id);
+                    await recordStoreEntityHistoryAfterSave({
+                        storeName: 'blacklistedClients',
+                        recordId: entryData.id,
+                        oldRecord: oldData,
+                        newRecord: newFromDb,
+                    });
+                } catch (histErr) {
+                    console.warn('[blacklist] entity history:', histErr);
+                }
+            }
             deps.showNotification?.('Запись успешно обновлена', 'success');
         } else {
             entryData.dateAdded = new Date().toISOString();

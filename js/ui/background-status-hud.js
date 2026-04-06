@@ -168,7 +168,6 @@ export function initBackgroundStatusHUD() {
     }
     #bg-status-hud .hud-completion-card .hud-completion-icon { color: var(--color-success, #16a34a); font-size: 18px; }
     #bg-status-hud .hud-completion-card .hud-completion-text { font-size: 14px; font-weight: 600; }
-    @media (prefers-reduced-motion: reduce){ #bg-status-hud .hud-bar{ animation: none; } }
     @keyframes hud-stripes{ 0%{ background-position: 0 0; } 100%{ background-position: 24px 0; } }
     #bg-hud-details-modal {
       position: fixed; z-index: 9999; display: none;
@@ -763,6 +762,18 @@ export function initBackgroundStatusHUD() {
             updateDetailsButton();
             suppressCompletionUiWhenErrors();
             updateTitle();
+        },
+        /** Снимок последней диагностики (фон / ручной прогон) для экспорта пакета. */
+        getDiagnosticsSnapshot() {
+            return {
+                errors: [...(STATE.diagnostics.errors || [])],
+                warnings: [...(STATE.diagnostics.warnings || [])],
+                checks: [...(STATE.diagnostics.checks || [])],
+                updatedAt: STATE.diagnostics.updatedAt || null,
+            };
+        },
+        getWatchdogSnapshot() {
+            return { ...STATE.watchdog };
         },
         setWatchdogStatus(payload = {}) {
             STATE.watchdog = {

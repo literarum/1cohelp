@@ -1,6 +1,6 @@
 'use strict';
 
-import { MAX_UPDATE_VISIBLE_TABS_RETRIES } from '../constants.js';
+import { MAX_UPDATE_VISIBLE_TABS_RETRIES, SHABLONY_DOC_ID } from '../constants.js';
 import { State } from '../app/state.js';
 import { tabsConfig } from '../config.js';
 
@@ -12,9 +12,12 @@ let deps = {
     setActiveTab: null,
     showBlacklistWarning: null,
     renderFavoritesPage: null,
+    renderRemindersPage: null,
+    renderTrainingPage: null,
     updateVisibleTabs: null,
     getVisibleModals: null,
     loadBookmarks: null,
+    renderClientAnalyticsPage: null,
 };
 
 /**
@@ -517,12 +520,19 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
     if (tabId === 'favorites' && State.currentSection !== 'favorites') {
         State.sectionBeforeFavorites = State.currentSection;
     }
+    if (tabId === 'reminders' && State.currentSection === 'reminders') {
+        tabId = State.sectionBeforeReminders || 'main';
+    }
+    if (tabId === 'reminders' && State.currentSection !== 'reminders') {
+        State.sectionBeforeReminders = State.currentSection;
+    }
     const targetTabId = tabId + 'Tab';
     const targetContentId = tabId + 'Content';
 
     const allTabButtons = document.querySelectorAll('.tab-btn');
     const allTabContents = document.querySelectorAll('.tab-content');
     const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
+    const showRemindersHeaderButton = document.getElementById('showRemindersHeaderBtn');
 
     const FADE_DURATION = 150;
 
@@ -539,7 +549,7 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
         }
     }
 
-    if (!targetContent && tabId !== 'favorites') {
+    if (!targetContent && tabId !== 'favorites' && tabId !== 'reminders') {
         console.error(
             `[setActiveTab] Контент вкладки "${tabId}" (${targetContentId}) не найден. Переключение отменено.`,
         );
@@ -562,9 +572,12 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
     if (showFavoritesHeaderButton) {
         showFavoritesHeaderButton.classList.toggle('text-primary', tabId === 'favorites');
     }
+    if (showRemindersHeaderButton) {
+        showRemindersHeaderButton.classList.toggle('text-primary', tabId === 'reminders');
+    }
 
     allTabButtons.forEach((button) => {
-        const isActive = button.id === targetTabId && tabId !== 'favorites';
+        const isActive = button.id === targetTabId && tabId !== 'favorites' && tabId !== 'reminders';
         if (isActive) {
             button.classList.add('tab-active');
             button.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
@@ -645,6 +658,32 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
             await deps.renderFavoritesPage();
         } else {
             console.error('setActiveTab: Функция renderFavoritesPage не найдена!');
+        }
+    }
+
+    if (targetContent && tabId === 'reminders') {
+        if (deps.renderRemindersPage && typeof deps.renderRemindersPage === 'function') {
+            await deps.renderRemindersPage();
+        } else {
+            console.error('setActiveTab: Функция renderRemindersPage не найдена!');
+        }
+    }
+
+    if (targetContent && tabId === 'training') {
+        if (deps.renderTrainingPage && typeof deps.renderTrainingPage === 'function') {
+            await deps.renderTrainingPage();
+        } else {
+            console.error('setActiveTab: Функция renderTrainingPage не найдена!');
+        }
+    }
+
+    if (targetContent && tabId === 'clientAnalytics') {
+        if (deps.renderClientAnalyticsPage && typeof deps.renderClientAnalyticsPage === 'function') {
+            await deps.renderClientAnalyticsPage();
+        } else if (typeof window.renderClientAnalyticsPage === 'function') {
+            await window.renderClientAnalyticsPage();
+        } else {
+            console.error('setActiveTab: Функция renderClientAnalyticsPage не найдена!');
         }
     }
 

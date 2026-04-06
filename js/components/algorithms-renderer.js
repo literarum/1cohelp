@@ -7,6 +7,7 @@
 
 import { escapeHtml, linkify } from '../utils/html.js';
 import { getStepContentAsText } from '../utils/helpers.js';
+import { embedAlgorithmStepScreenshotsInDetail } from '../features/screenshots.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ
@@ -102,7 +103,7 @@ export async function showAlgorithmDetail(algorithm, section) {
     if (editAlgorithmBtnModal) editAlgorithmBtnModal.style.display = '';
 
     const headerControlsContainer = modalTitleElement.parentElement.querySelector(
-        '.flex.flex-wrap.gap-2.justify-end',
+        '.modal-algorithm-toolbar',
     );
     if (headerControlsContainer) {
         let exportButtonContainer = headerControlsContainer.querySelector(
@@ -110,25 +111,29 @@ export async function showAlgorithmDetail(algorithm, section) {
         );
         if (!exportButtonContainer) {
             exportButtonContainer = document.createElement('div');
-            exportButtonContainer.className = 'export-btn-placeholder-modal';
-            const exportButton = document.createElement('button');
-            exportButton.id = 'exportAlgorithmToPdfBtn';
-            exportButton.type = 'button';
-            exportButton.className =
-                'inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle';
-            exportButton.title = 'Экспорт в PDF';
-            exportButton.innerHTML = '<i class="fas fa-file-pdf"></i>';
-            exportButtonContainer.appendChild(exportButton);
-            if (editAlgorithmBtnModal) {
-                editAlgorithmBtnModal.insertAdjacentElement('beforebegin', exportButtonContainer);
-            } else if (deleteAlgorithmBtn) {
-                deleteAlgorithmBtn.insertAdjacentElement('beforebegin', exportButtonContainer);
+            exportButtonContainer.className =
+                'export-btn-placeholder-modal flex h-10 w-10 shrink-0 items-center justify-center';
+            const anchor = headerControlsContainer.querySelector('#startStepExecutionBtn');
+            if (anchor && anchor.parentNode === headerControlsContainer) {
+                headerControlsContainer.insertBefore(exportButtonContainer, anchor);
             } else {
                 headerControlsContainer.insertBefore(
                     exportButtonContainer,
                     headerControlsContainer.firstChild,
                 );
             }
+        }
+        if (exportButtonContainer && !exportButtonContainer.querySelector('#exportAlgorithmToPdfBtn')) {
+            const exportButton = document.createElement('button');
+            exportButton.id = 'exportAlgorithmToPdfBtn';
+            exportButton.type = 'button';
+            exportButton.className =
+                'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25';
+            exportButton.title = 'Экспорт в PDF';
+            exportButton.setAttribute('aria-label', 'Экспорт алгоритма в PDF');
+            exportButton.innerHTML =
+                '<i class="fas fa-file-pdf text-base leading-none" aria-hidden="true"></i>';
+            exportButtonContainer.appendChild(exportButton);
         }
         const exportBtn = headerControlsContainer.querySelector('#exportAlgorithmToPdfBtn');
         if (exportBtn && ExportService) {
@@ -151,11 +156,11 @@ export async function showAlgorithmDetail(algorithm, section) {
         );
         if (!favButtonContainer) {
             favButtonContainer = document.createElement('div');
-            favButtonContainer.className = 'fav-btn-placeholder-modal';
-            if (editAlgorithmBtnModal) {
-                editAlgorithmBtnModal.insertAdjacentElement('beforebegin', favButtonContainer);
-            } else if (deleteAlgorithmBtn) {
-                deleteAlgorithmBtn.insertAdjacentElement('beforebegin', favButtonContainer);
+            favButtonContainer.className =
+                'fav-btn-placeholder-modal flex h-10 w-10 shrink-0 items-center justify-center';
+            const exportHost = headerControlsContainer.querySelector('.export-btn-placeholder-modal');
+            if (exportHost && exportHost.parentNode === headerControlsContainer) {
+                headerControlsContainer.insertBefore(favButtonContainer, exportHost.nextSibling);
             } else {
                 headerControlsContainer.insertBefore(
                     favButtonContainer,
@@ -188,6 +193,7 @@ export async function showAlgorithmDetail(algorithm, section) {
                     itemTitle,
                     itemDesc,
                     isFav,
+                    'algorithm-modal-toolbar',
                 );
                 console.log(
                     `[showAlgorithmDetail v11] Кнопка 'В избранное' отображена для алгоритма ID ${itemId} в модальном окне.`,
@@ -288,8 +294,10 @@ export async function showAlgorithmDetail(algorithm, section) {
                 isMainAlgorithm && step.isCopyable
                     ? ' data-copyable-step="1" data-step-index="' + index + '"'
                     : '';
+            const stepIndexDataAttr =
+                !isMainAlgorithm ? ` data-step-index="${index}"` : '';
             const stepHTML = `
-                 <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3 relative${copyableAttr ? ' copyable-step-active cursor-pointer' : ''}"${copyableAttr} title="${copyableAttr ? 'Нажмите, чтобы скопировать содержимое шага' : ''}">
+                 <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3 relative${copyableAttr ? ' copyable-step-active cursor-pointer' : ''}"${stepIndexDataAttr}${copyableAttr} title="${copyableAttr ? 'Нажмите, чтобы скопировать содержимое шага' : ''}">
                      ${additionalInfoTopHTML}
                      <h3 class="font-bold text-lg ${
                          iconContainerHtml ? 'inline' : ''
@@ -304,6 +312,21 @@ export async function showAlgorithmDetail(algorithm, section) {
 
         const stepsHtmlArray = await Promise.all(stepHtmlPromises);
         algorithmStepsContainer.innerHTML = stepsHtmlArray.join('');
+
+        if (!isMainAlgorithm) {
+            try {
+                await embedAlgorithmStepScreenshotsInDetail(
+                    algorithmStepsContainer,
+                    algorithm,
+                    currentAlgorithmId,
+                );
+            } catch (embedErr) {
+                console.warn(
+                    '[showAlgorithmDetail v11] Не удалось встроить превью скриншотов шагов:',
+                    embedErr,
+                );
+            }
+        }
 
         if (isMainAlgorithm && typeof copyToClipboard === 'function') {
             algorithmStepsContainer

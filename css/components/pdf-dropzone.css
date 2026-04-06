@@ -36,3 +36,97 @@
 .pdf-empty {
     padding: 0.5rem 0.25rem;
 }
+
+/*
+ * Пустой список PDF в модалках (редактирование алгоритма и др.).
+ * Tailwind не эмитит border-primary/opacity для var(--color-primary), поэтому стили здесь.
+ */
+.pdf-list-shell.pdf-drop-shell-empty {
+    border-width: 2px;
+    border-style: dashed;
+    border-color: #d1d5db;
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.pdf-list-shell.pdf-drop-shell-empty:hover {
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+@supports (color: color-mix(in srgb, white 50%, black)) {
+    .pdf-list-shell.pdf-drop-shell-empty {
+        border-color: color-mix(in srgb, var(--color-primary, #9933ff) 34%, #d1d5db);
+    }
+
+    .pdf-list-shell.pdf-drop-shell-empty:hover {
+        border-color: color-mix(in srgb, var(--color-primary, #9933ff) 52%, #d1d5db);
+    }
+}
+
+html.dark .pdf-list-shell.pdf-drop-shell-empty,
+.dark .pdf-list-shell.pdf-drop-shell-empty {
+    border-color: rgba(75, 85, 99, 0.8);
+    background-color: rgba(17, 24, 39, 0.32);
+    box-shadow: none;
+}
+
+html.dark .pdf-list-shell.pdf-drop-shell-empty:hover,
+.dark .pdf-list-shell.pdf-drop-shell-empty:hover {
+    border-color: rgba(107, 114, 128, 0.95);
+}
+
+.pdf-empty-state:hover {
+    border-radius: 0.5rem;
+    background-color: rgba(243, 232, 255, 0.45);
+}
+
+@supports (color: color-mix(in srgb, white 50%, black)) {
+    .pdf-empty-state:hover {
+        background-color: color-mix(in srgb, var(--color-primary, #9933ff) 9%, transparent);
+    }
+}
+
+html.dark .pdf-empty-state:hover,
+.dark .pdf-empty-state:hover {
+    background-color: rgba(31, 41, 55, 0.5);
+}
+
+.pdf-empty-icon-tile {
+    display: inline-flex;
+    height: 2rem;
+    width: 2rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    color: var(--color-primary, #9933ff);
+    background-color: rgba(153, 51, 255, 0.12);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+@supports (color: color-mix(in srgb, white 50%, black)) {
+    .pdf-empty-icon-tile {
+        background-color: color-mix(in srgb, var(--color-primary, #9933ff) 16%, #ffffff);
+    }
+}
+
+html.dark .pdf-empty-icon-tile,
+.dark .pdf-empty-icon-tile {
+    color: rgb(209 213 219);
+    background-color: rgba(55, 65, 81, 0.72);
+    box-shadow: none;
+}
+
+.pdf-empty-state-inner-hint {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: rgb(31 41 55);
+}
+
+html.dark .pdf-empty-state-inner-hint,
+.dark .pdf-empty-state-inner-hint {
+    color: rgb(209 213 219);
+}

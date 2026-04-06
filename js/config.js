@@ -21,6 +21,12 @@ export const tabsConfig = [
     { id: 'webReg', name: 'Веб-Регистратор', icon: 'fa-plug' },
     { id: 'reglaments', name: 'Регламенты', icon: 'fa-clipboard-list' },
     { id: 'bookmarks', name: 'Закладки', icon: 'fa-bookmark' },
+    {
+        id: 'clientAnalytics',
+        name: 'База клиентов и аналитика',
+        icon: 'fa-database',
+    },
+    { id: 'training', name: 'Обучение', icon: 'fa-graduation-cap' },
     { id: 'shablony', name: 'Шаблоны', icon: 'fa-file-invoice' },
     { id: 'sedoTypes', name: 'Типы сообщений СЭДО', icon: 'fa-comments' },
     {
@@ -219,6 +225,45 @@ export const hotkeysModalConfig = {
     contentAreaSelector: '.p-6.overflow-y-auto.flex-1',
 };
 
+/** Модальное окно напоминания — тот же паттерн, что hotkeys (центрирование + fullscreen) */
+export const reminderModalConfig = {
+    modalId: 'reminderModal',
+    buttonId: 'toggleFullscreenReminderBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-4', 'overflow-y-auto'],
+            innerContainer: [
+                'max-w-2xl',
+                'max-h-[90vh]',
+                'rounded-lg',
+                'shadow-xl',
+                'w-full',
+                'flex',
+                'flex-col',
+            ],
+            contentArea: ['flex', 'flex-col', 'overflow-y-auto', 'flex-1', 'min-h-0'],
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: [
+                ...UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+                'flex',
+                'flex-col',
+                'min-h-0',
+            ],
+            contentArea: [
+                ...UNIFIED_FULLSCREEN_MODAL_CLASSES.contentArea,
+                'flex',
+                'flex-col',
+                'overflow-y-auto',
+                'min-h-0',
+            ],
+        },
+    },
+    innerContainerSelector: '#reminderModalInner',
+    contentAreaSelector: '#reminderModalBody',
+};
+
 export const healthReportModalConfig = {
     modalId: 'healthReportModal',
     buttonId: 'toggleFullscreenHealthReportBtn',
@@ -323,6 +368,7 @@ export const FULLSCREEN_MODAL_CONFIGS = [
     reglamentModalConfigGlobal,
     bookmarkDetailModalConfigGlobal,
     hotkeysModalConfig,
+    reminderModalConfig,
     healthReportModalConfig,
     dbMergeModalConfig,
     engineeringCockpitModalConfig,
@@ -363,6 +409,7 @@ export const LIST_HOVER_TRANSITION_CLASSES = ['transition-colors'];
 
 export const SECTION_GRID_COLS = {
     bookmarksContainer: ['grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3'],
+    clientAnalyticsContainer: ['grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3'],
     extLinksContainer: ['grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3'],
     linksContainer: ['grid-cols-1', 'md:grid-cols-2'],
     reglamentsContainer: ['grid-cols-1', 'md:grid-cols-2'],

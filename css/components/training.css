@@ -1,0 +1,773 @@
+/* Режим «Обучение»: сегменты, шаги учебника, прогресс */
+
+.training-seg {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.9rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgb(55 65 81);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(209, 213, 219, 0.9);
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.dark .training-seg {
+    color: rgb(229 231 235);
+    background: rgba(31, 41, 55, 0.5);
+    border-color: rgba(75, 85, 99, 0.9);
+}
+
+.training-seg:hover {
+    border-color: var(--color-primary, #9933ff);
+    color: var(--color-primary, #9933ff);
+}
+
+.training-seg--active,
+.training-seg[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 22%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    color: var(--color-primary, #9933ff);
+    font-weight: 600;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 35%, transparent),
+        0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.dark .training-seg--active,
+.dark .training-seg[aria-pressed='true'] {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 45%, transparent),
+        0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.training-step {
+    position: relative;
+    padding: 1rem 1rem 1rem 0.5rem;
+    border-radius: calc(var(--border-radius, 8px) * 1.75);
+    border: 1px solid rgba(229, 231, 235, 0.9);
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.dark .training-step {
+    border-color: rgba(75, 85, 99, 0.7);
+    background: rgba(17, 24, 39, 0.35);
+}
+
+.training-step--locked {
+    opacity: 0.72;
+    filter: grayscale(0.15);
+}
+
+.training-step--done {
+    border-color: color-mix(in srgb, rgb(16 185 129) 35%, transparent);
+}
+
+.training-step-badge {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 22%, transparent);
+    color: var(--color-primary, #9933ff);
+}
+
+.training-step-body ul {
+    margin-top: 0.5rem;
+}
+
+.training-quiz-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: 0.35rem 0.5rem;
+    margin: 0 -0.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    transition:
+        background 0.12s ease,
+        border-color 0.12s ease;
+}
+
+.training-quiz-opt:has(input:checked) {
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 45%, transparent);
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 10%, transparent);
+}
+
+.dark .training-quiz-opt:has(input:checked) {
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 18%, transparent);
+}
+
+.training-quiz-opt:has(input:focus-visible) {
+    outline: 2px solid color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    outline-offset: 1px;
+}
+
+.training-quiz-q--wrong {
+    border-radius: calc(var(--border-radius, 8px) * 1.25);
+    padding: 0.75rem;
+    margin: 0 -0.25rem 0.5rem;
+    border: 1px solid color-mix(in srgb, rgb(245 158 11) 55%, transparent);
+    background: color-mix(in srgb, rgb(245 158 11) 12%, transparent);
+}
+
+.dark .training-quiz-q--wrong {
+    border-color: color-mix(in srgb, rgb(251 191 36) 45%, transparent);
+    background: color-mix(in srgb, rgb(251 191 36) 10%, transparent);
+}
+
+/* Пройденный квиз: визуально приглушён; кнопка «Пройти повторно» снаружи блока */
+.training-quiz-block.training-quiz-section--passed {
+    opacity: 0.62;
+    filter: saturate(0.78) brightness(0.97);
+    transition:
+        opacity 0.28s ease,
+        filter 0.28s ease;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Редактор: группа «верный ответ» (WCAG H71 — fieldset + legend) */
+.uct-q-correct-fieldset {
+    min-inline-size: 0;
+}
+
+.uct-q-correct-opt:has(input:checked) {
+    font-weight: 600;
+    color: var(--color-primary, #9933ff);
+}
+
+.training-progress-ring {
+    --p: 0;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 9999px;
+    background: conic-gradient(
+        var(--color-primary, #9933ff) calc(var(--p) * 1%),
+        rgba(156, 163, 175, 0.35) 0
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgb(17 24 39);
+}
+
+.dark .training-progress-ring {
+    color: rgb(243 244 246);
+}
+
+.training-progress-ring span {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: rgb(255 255 255);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dark .training-progress-ring span {
+    background: rgb(31 41 55);
+}
+
+.training-track-card {
+    scroll-margin-top: 1rem;
+}
+
+/* Кнопки без «светлой» обводки: иконки в шапке карточки, вторичные действия */
+.training-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid transparent;
+    background: transparent;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+}
+
+.training-icon-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    outline-offset: 2px;
+}
+
+.training-ack-btn {
+    border: 1px solid transparent;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 35%, transparent);
+    cursor: pointer;
+    transition:
+        background-color 0.18s ease,
+        box-shadow 0.18s ease,
+        color 0.18s ease,
+        transform 0.18s ease;
+}
+
+.training-ack-btn:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-primary, #9933ff) 14%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 50%, transparent),
+        0 2px 8px color-mix(in srgb, var(--color-primary, #9933ff) 18%, transparent);
+    transform: translateY(-1px);
+}
+
+.training-ack-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.training-ack-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    outline-offset: 2px;
+}
+
+.training-weak-mark-btn {
+    border: 1px solid transparent;
+    box-shadow: 0 0 0 1px color-mix(in srgb, rgb(245 158 11) 35%, transparent);
+}
+
+.training-weak-mark-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, rgb(245 158 11) 55%, transparent);
+    outline-offset: 2px;
+}
+
+/* Редактор модуля: стрелки вверх/вниз — как .training-modal-step-icon (без заливки, тот же hover) */
+.training-modal-step-move {
+    border: 1px solid transparent;
+    background: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    cursor: pointer;
+}
+
+.training-modal-step-move:focus,
+.training-modal-step-move:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
+.training-modal-step-move:hover {
+    background: color-mix(in srgb, rgb(156 163 175) 14%, transparent);
+}
+
+.dark .training-modal-step-move:hover {
+    background: color-mix(in srgb, rgb(75 85 99) 35%, transparent);
+}
+
+.training-modal-step-icon {
+    border: 1px solid transparent;
+    background: transparent;
+}
+
+.training-modal-step-icon:hover {
+    background: color-mix(in srgb, rgb(156 163 175) 14%, transparent);
+}
+
+.dark .training-modal-step-icon:hover {
+    background: color-mix(in srgb, rgb(75 85 99) 35%, transparent);
+}
+
+/* Иконка удаления (шаг, вопрос квиза): красный hover поверх базового .training-modal-step-icon (без рамки) */
+.training-modal-step-icon.training-modal-danger-icon:hover {
+    background: color-mix(in srgb, rgb(239 68 68) 12%, transparent);
+}
+
+.dark .training-modal-step-icon.training-modal-danger-icon:hover {
+    background: color-mix(in srgb, rgb(127 29 29) 22%, transparent);
+}
+
+.training-shell .training-hero,
+.training-shell .training-track-card {
+    border-radius: calc(var(--border-radius, 8px) * 2.25);
+}
+
+/* Редактор модуля: в режиме шага верх и низ размыты, фокус на панели шага */
+.training-user-editor-blur-when-step {
+    transition: filter 0.32s ease, opacity 0.32s ease;
+}
+
+.training-user-editor--step-focus .training-user-editor-blur-when-step {
+    filter: blur(6px);
+    opacity: 0.52;
+    pointer-events: none;
+}
+
+.training-user-editor--step-focus .training-user-editor-step-panel {
+    position: relative;
+    z-index: 2;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 24%, transparent),
+        0 16px 44px color-mix(in srgb, rgb(0 0 0) 12%, transparent);
+}
+
+.dark .training-user-editor--step-focus .training-user-editor-step-panel {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 38%, transparent),
+        0 16px 44px color-mix(in srgb, rgb(0 0 0) 45%, transparent);
+}
+
+/* Модальные окна обучения */
+.training-modal-overlay {
+    animation: training-modal-in 0.2s ease-out;
+}
+
+.training-modal-overlay.training-modal-overlay--fullscreen {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+}
+
+.training-modal-overlay.training-modal-overlay--fullscreen .training-modal-panel {
+    max-width: none;
+    max-height: none;
+    height: 100vh;
+    width: 100%;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+}
+
+.training-modal-field-resize {
+    box-sizing: border-box;
+}
+
+@keyframes training-modal-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.training-modal-panel {
+    animation: training-panel-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes training-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.training-pick-row:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    outline-offset: 2px;
+}
+
+/* Редактор текста шага (панель + область ввода, без показа HTML пользователю) */
+.training-rich-editor-host {
+    border-radius: 0.5rem;
+    border: 1px solid rgb(209 213 219);
+    background: rgb(255 255 255);
+    overflow: hidden;
+}
+
+.dark .training-rich-editor-host {
+    border-color: rgb(75 85 99);
+    background: rgb(17 24 39);
+}
+
+.training-rich-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid rgb(229 231 235);
+    background: rgba(249 250 251 / 0.95);
+}
+
+.dark .training-rich-toolbar {
+    border-bottom-color: rgb(55 65 81);
+    background: rgba(31 41 55 / 0.85);
+}
+
+.training-rich-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgb(55 65 81);
+    cursor: pointer;
+    transition:
+        background 0.12s ease,
+        border-color 0.12s ease,
+        color 0.12s ease;
+}
+
+.dark .training-rich-toolbar-btn {
+    color: rgb(229 231 235);
+}
+
+.training-rich-toolbar-btn:hover {
+    background: rgba(153 51 255 / 0.08);
+    border-color: rgba(153 51 255 / 0.25);
+    color: var(--color-primary, #9933ff);
+}
+
+.training-rich-toolbar-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    outline-offset: 1px;
+}
+
+.training-rich-toolbar-sep {
+    width: 1px;
+    height: 1.25rem;
+    margin: 0 0.15rem;
+    background: rgb(209 213 219);
+    flex-shrink: 0;
+}
+
+.dark .training-rich-toolbar-sep {
+    background: rgb(75 85 99);
+}
+
+.training-rich-editable {
+    min-height: 9rem;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: rgb(17 24 39);
+    outline: none;
+}
+
+.dark .training-rich-editable {
+    color: rgb(243 244 246);
+}
+
+.training-rich-editable:focus {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #9933ff) 35%, transparent);
+}
+
+.training-rich-editable p {
+    margin: 0 0 0.5rem;
+}
+
+.training-rich-editable ul,
+.training-rich-editable ol {
+    margin: 0.35rem 0 0.5rem 1.1rem;
+    padding: 0;
+}
+
+/* Наставник: карточка и CTA — стили здесь, т.к. разметка собирается в training.js и палитра violet не в tailwind.generated.css */
+.training-mentor-hero {
+    border: 1px solid color-mix(in srgb, var(--color-primary, #9933ff) 24%, rgb(229 231 235));
+    background: linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--color-primary, #9933ff) 10%, white) 0%,
+        rgb(255 255 255 / 0.95) 55%,
+        rgb(255 255 255 / 0.88) 100%
+    );
+}
+
+.dark .training-mentor-hero {
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 38%, rgb(55 65 81));
+    background: linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--color-primary, #9933ff) 16%, rgb(17 24 39)) 0%,
+        rgb(17 24 39 / 0.92) 100%
+    );
+}
+
+.training-mentor-panel .training-mentor-btn {
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        filter 0.2s ease,
+        border-color 0.2s ease,
+        background-color 0.2s ease;
+}
+
+.training-mentor-panel .training-mentor-btn--primary {
+    background-color: var(--color-primary, #9933ff);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.07);
+}
+
+.training-mentor-panel .training-mentor-btn--primary:hover {
+    filter: brightness(1.09);
+    box-shadow:
+        0 6px 20px -6px color-mix(in srgb, var(--color-primary, #9933ff) 50%, transparent),
+        0 2px 8px -2px color-mix(in srgb, var(--color-primary, #9933ff) 35%, transparent);
+    transform: translateY(-2px);
+}
+
+.training-mentor-panel .training-mentor-btn--primary:active {
+    transform: translateY(0);
+    filter: brightness(0.95);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.training-mentor-panel .training-mentor-btn--primary .fa-plus {
+    transition: transform 0.2s ease;
+}
+
+.training-mentor-panel .training-mentor-btn--primary:hover .fa-plus {
+    transform: scale(1.12);
+}
+
+.training-mentor-panel .training-mentor-btn--secondary {
+    border: 1px solid color-mix(in srgb, var(--color-primary, #9933ff) 42%, rgb(209 213 219));
+    background: rgb(255 255 255 / 0.88);
+    color: color-mix(in srgb, var(--color-primary, #6b21a8) 55%, rgb(55 65 81));
+}
+
+.dark .training-mentor-panel .training-mentor-btn--secondary {
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 48%, rgb(75 85 99));
+    background: rgb(31 41 55 / 0.92);
+    color: color-mix(in srgb, var(--color-primary, #c4b5fd) 45%, rgb(229 231 235));
+}
+
+.training-mentor-panel .training-mentor-btn--secondary:hover {
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, rgb(209 213 219));
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 9%, white);
+    box-shadow: 0 4px 16px -6px color-mix(in srgb, var(--color-primary, #9933ff) 32%, transparent);
+    transform: translateY(-2px);
+}
+
+.dark .training-mentor-panel .training-mentor-btn--secondary:hover {
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 14%, rgb(17 24 39));
+}
+
+.training-mentor-panel .training-mentor-btn--secondary:active {
+    transform: translateY(0);
+}
+
+.training-mentor-panel .training-mentor-btn--secondary .fa-file-import {
+    transition: transform 0.2s ease;
+}
+
+.training-mentor-panel .training-mentor-btn--secondary:hover .fa-file-import {
+    transform: translateY(-2px) scale(1.06);
+}
+
+/* SRS: 3D flip card (вопрос ↔ ответ) */
+.training-srs-flip {
+    --training-srs-flip-duration: 0.62s;
+    --training-srs-flip-ease: cubic-bezier(0.4, 0.22, 0.2, 1);
+    perspective: 1280px;
+    perspective-origin: 50% 50%;
+}
+
+.training-srs-flip__stage {
+    position: relative;
+    width: 100%;
+    min-height: 12.5rem;
+    cursor: pointer;
+    border-radius: calc(var(--border-radius, 8px) * 1.75);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    /* Тень на stage, не filter на inner — иначе WebKit/Blink «сплющивают» preserve-3d и ломают flip */
+    transition: box-shadow 0.24s ease;
+}
+
+.training-srs-flip__stage:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+    outline-offset: 3px;
+}
+
+.training-srs-flip__inner {
+    position: relative;
+    width: 100%;
+    min-height: 12.5rem;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    /* Только transform: не использовать filter на этом узле — ломает 3D-контекст дочерних граней */
+    transition: transform var(--training-srs-flip-duration) var(--training-srs-flip-ease);
+}
+
+.training-srs-flip--revealed .training-srs-flip__inner {
+    transform: rotateY(180deg);
+}
+
+/* Лёгкий «peek» при наведении (только устройства с hover; без filter на inner) */
+@media (hover: hover) {
+    .training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:hover {
+        box-shadow:
+            0 14px 36px -10px rgba(15, 23, 42, 0.22),
+            0 0 0 1px rgba(153, 51, 255, 0.08);
+    }
+
+    .dark .training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:hover {
+        box-shadow:
+            0 16px 40px -12px rgba(0, 0, 0, 0.45),
+            0 0 0 1px rgba(196, 181, 253, 0.12);
+    }
+
+    .training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:hover {
+        box-shadow:
+            0 14px 36px -10px rgba(15, 23, 42, 0.2),
+            0 0 0 1px rgba(153, 51, 255, 0.07);
+    }
+
+    .dark .training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:hover {
+        box-shadow:
+            0 16px 40px -12px rgba(0, 0, 0, 0.42),
+            0 0 0 1px rgba(196, 181, 253, 0.1);
+    }
+
+    .training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:hover .training-srs-flip__inner {
+        transform: rotateY(9deg) translateZ(14px);
+        transition-duration: 0.24s;
+    }
+
+    .training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:hover .training-srs-flip__inner {
+        transform: rotateY(171deg) translateZ(14px);
+        transition-duration: 0.24s;
+    }
+}
+
+/* Фокус клавиатуры / тач после tap: тот же peek, что и у hover */
+.training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:focus-visible {
+    box-shadow:
+        0 14px 36px -10px rgba(15, 23, 42, 0.22),
+        0 0 0 1px rgba(153, 51, 255, 0.08);
+}
+
+.dark .training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:focus-visible {
+    box-shadow:
+        0 16px 40px -12px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(196, 181, 253, 0.12);
+}
+
+.training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:focus-visible {
+    box-shadow:
+        0 14px 36px -10px rgba(15, 23, 42, 0.2),
+        0 0 0 1px rgba(153, 51, 255, 0.07);
+}
+
+.dark .training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:focus-visible {
+    box-shadow:
+        0 16px 40px -12px rgba(0, 0, 0, 0.42),
+        0 0 0 1px rgba(196, 181, 253, 0.1);
+}
+
+.training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:focus-visible .training-srs-flip__inner {
+    transform: rotateY(9deg) translateZ(14px);
+    transition-duration: 0.24s;
+}
+
+.training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:focus-visible .training-srs-flip__inner {
+    transform: rotateY(171deg) translateZ(14px);
+    transition-duration: 0.24s;
+}
+
+/* :active вне (hover: hover) — иначе на touch нет отклика при нажатии */
+.training-srs-flip__stage:active .training-srs-flip__inner {
+    transition-duration: 0.1s;
+}
+
+.training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:active .training-srs-flip__inner {
+    transform: rotateY(4deg) translateZ(6px) scale(0.995);
+}
+
+.training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:active .training-srs-flip__inner {
+    transform: rotateY(176deg) translateZ(6px) scale(0.995);
+}
+
+.training-srs-flip__face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.15rem 1.25rem;
+    border-radius: calc(var(--border-radius, 8px) * 1.75);
+    border: 1px solid rgba(209, 213, 219, 0.95);
+    background: linear-gradient(
+        165deg,
+        rgba(255, 255, 255, 0.98) 0%,
+        rgba(249, 250, 251, 0.96) 55%,
+        rgba(243, 244, 246, 0.94) 100%
+    );
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.65) inset,
+        0 10px 28px -12px rgba(15, 23, 42, 0.18);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.dark .training-srs-flip__face {
+    border-color: rgba(75, 85, 99, 0.85);
+    background: linear-gradient(
+        165deg,
+        rgba(55, 65, 81, 0.55) 0%,
+        rgba(31, 41, 55, 0.92) 45%,
+        rgba(17, 24, 39, 0.96) 100%
+    );
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.04) inset,
+        0 14px 36px -14px rgba(0, 0, 0, 0.55);
+}
+
+/* Safari / compositing: тонкий Z-offset уменьшает мерцание при перевороте */
+.training-srs-flip__face--front {
+    transform: translateZ(0.75px);
+}
+
+.training-srs-flip__face--back {
+    transform: rotateY(180deg) translateZ(0.75px);
+}
+
+.training-srs-flip__label {
+    margin: 0;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgb(107 114 128);
+}
+
+.dark .training-srs-flip__label {
+    color: rgb(156 163 175);
+}
+
+.training-srs-flip__label--answer {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 72%, rgb(107 114 128));
+}
+
+.dark .training-srs-flip__label--answer {
+    color: color-mix(in srgb, var(--color-primary, #c4b5fd) 55%, rgb(156 163 175));
+}
+
+.training-srs-flip__text {
+    margin: 0;
+    flex: 1;
+    min-height: 0;
+    line-height: 1.5;
+}
+
+.training-srs-flip__hint {
+    user-select: none;
+    pointer-events: none;
+}

@@ -6,9 +6,22 @@ import {
     clearRuntimeHubBuffer,
     getRuntimeHubFaultEntries,
 } from './runtime-issue-hub.js';
+import { mergeHubAndCockpitFaultRows } from './error-stream-merge.js';
+import {
+    buildCopilotDiagnosticBundle,
+    diagnosticBundleToJsonString,
+    suggestDiagnosticFilename,
+} from './diagnostic-bundle.js';
+import {
+    runManualHealthDiagnosticFromCockpit,
+    buildManualDiagnosticFailureReport,
+} from './engineering-cockpit-manual-health.js';
+import { getPwaCockpitBlock } from '../app/pwa-register.js';
 
 const ENGINEERING_PASSWORD = '05213587';
 const LOG_BUFFER_LIMIT = 1500;
+const MANUAL_DIAGNOSTIC_BTN_DEFAULT_HTML =
+    '<i class="fas fa-stethoscope mr-1" aria-hidden="true"></i>Ручной прогон';
 
 function pickNative(methodName) {
     if (typeof window !== 'undefined') {
@@ -38,7 +51,10 @@ let deps = {
     State: null,
     storeConfigs: null,
     getAllFromIndexedDB: null,
+    getFromIndexedDB: null,
     showNotification: null,
+    /** Регистрирует window.showHealthReportModal (как после onload); вызывать до ручного прогона при гонке инициализации. */
+    initUISettingsModalHandlers: null,
 };
 
 let refs = null;
@@ -119,11 +135,10 @@ function pushCockpitRuntimeError(source, errorLike, extra = null) {
 }
 
 function addRuntimeError(source, errorLike, extra = null) {
-    pushCockpitRuntimeError(source, errorLike, extra);
     try {
-        ingestRuntimeHubIssue(source, buildRuntimeErrorMessage(errorLike), extra, { mirror: false });
+        ingestRuntimeHubIssue(source, errorLike, extra, { mirror: true });
     } catch {
-        /* хаб может быть ещё не загружен — кокпит остаётся первичным буфером */
+        pushCockpitRuntimeError(source, errorLike, extra);
     }
 }
 
@@ -259,47 +274,19 @@ function getStateSnapshot() {
     return snapshot;
 }
 
-function formatCockpitErrorLine(entry) {
-    return [
-        `[${entry.ts}] [${entry.source}]`,
-        entry.message,
-        entry.extra ? `extra: ${safeSerialize(entry.extra, 2000)}` : null,
-    ]
-        .filter(Boolean)
-        .join('\n');
-}
-
-function runtimeErrorDedupeKey(block) {
-    const normalized = block.replace(/\s+/g, ' ').trim();
-    return normalized
-        .replace(/^\[[0-9T:.-]+Z?\]\s*\[[^\]]+\]\s*/i, '')
-        .replace(/^Runtime \/ [^|]+\s*\|\s*/i, '')
-        .slice(0, 420);
-}
-
 function buildMergedErrorsText() {
-    const hubBlocks = getRuntimeHubFaultEntries(400).map((e) =>
-        [`[${e.tsIso}] [${e.source}]`, e.title, e.message].filter(Boolean).join('\n'),
-    );
-    const cockpitBlocks = state.errors.map(formatCockpitErrorLine);
-    const seen = new Set();
-    const merged = [];
-    const push = (block) => {
-        const key = runtimeErrorDedupeKey(block);
-        if (!key || seen.has(key)) return;
-        seen.add(key);
-        merged.push(block);
-    };
-    hubBlocks.forEach(push);
-    cockpitBlocks.forEach(push);
-    if (!merged.length) return 'Ошибки runtime не зафиксированы.';
-    return merged.join('\n\n---\n\n');
+    return mergeHubAndCockpitFaultRows(getRuntimeHubFaultEntries(2000), state.errors);
 }
 
-function renderActiveTab() {
+async function renderActiveTab() {
     if (!refs) return;
 
     const overviewData = getSystemOverview();
+    try {
+        overviewData.pwa = await getPwaCockpitBlock();
+    } catch (err) {
+        overviewData.pwa = { error: err?.message || String(err) };
+    }
     refs.overview.textContent = safeSerialize(overviewData, 200000);
 
     refs.logs.textContent = state.logs.length
@@ -333,12 +320,12 @@ function activateTab(tabId) {
     refs.tabSections.forEach((section) => {
         section.classList.toggle('is-active', section.dataset.cockpitTab === tabId);
     });
-    renderActiveTab();
+    void renderActiveTab();
 }
 
 async function refreshCockpitData() {
     await refreshDbSummary();
-    renderActiveTab();
+    await renderActiveTab();
 }
 
 function closeEngineeringCockpit() {
@@ -377,8 +364,12 @@ function bindUi() {
         unlockBtn: document.getElementById('engineeringCockpitUnlockBtn'),
         authMessage: document.getElementById('engineeringCockpitAuthMessage'),
         refreshBtn: document.getElementById('engineeringCockpitRefreshBtn'),
+        runManualDiagnosticBtn: document.getElementById(
+            'engineeringCockpitRunManualDiagnosticBtn',
+        ),
         clearLogsBtn: document.getElementById('engineeringCockpitClearLogsBtn'),
         copySnapshotBtn: document.getElementById('engineeringCockpitCopySnapshotBtn'),
+        exportDiagnosticBtn: document.getElementById('engineeringCockpitExportDiagnosticBtn'),
         tabButtons: Array.from(
             document.querySelectorAll('[data-cockpit-tab].engineering-cockpit-tab-btn'),
         ),
@@ -412,6 +403,44 @@ function bindUi() {
     refs.refreshBtn?.addEventListener('click', () => {
         void refreshCockpitData();
     });
+
+    refs.runManualDiagnosticBtn?.addEventListener('click', () => {
+        void (async () => {
+            const btn = refs.runManualDiagnosticBtn;
+            if (!btn || btn.disabled) return;
+            btn.disabled = true;
+            btn.innerHTML =
+                '<i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Прогон...';
+            try {
+                if (
+                    typeof window !== 'undefined' &&
+                    typeof window.showHealthReportModal !== 'function' &&
+                    typeof deps.initUISettingsModalHandlers === 'function'
+                ) {
+                    deps.initUISettingsModalHandlers();
+                }
+                await runManualHealthDiagnosticFromCockpit();
+                await refreshCockpitData();
+            } catch (err) {
+                nativeConsole.error('[engineering-cockpit] manual diagnostic failed', err);
+                if (
+                    typeof window !== 'undefined' &&
+                    typeof window.showHealthReportModal === 'function'
+                ) {
+                    window.showHealthReportModal(buildManualDiagnosticFailureReport(err));
+                } else {
+                    deps.showNotification?.(
+                        `Диагностика недоступна: ${err?.message || err}`,
+                        'error',
+                    );
+                }
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = MANUAL_DIAGNOSTIC_BTN_DEFAULT_HTML;
+            }
+        })();
+    });
+
     refs.clearLogsBtn?.addEventListener('click', () => {
         state.logs = [];
         state.errors = [];
@@ -423,14 +452,21 @@ function bindUi() {
                 /* ignore */
             }
         }
-        renderActiveTab();
+        void renderActiveTab();
     });
     refs.copySnapshotBtn?.addEventListener('click', async () => {
+        const overview = getSystemOverview();
+        try {
+            overview.pwa = await getPwaCockpitBlock();
+        } catch (err) {
+            overview.pwa = { error: err?.message || String(err) };
+        }
         const snapshot = {
-            overview: getSystemOverview(),
+            overview,
             state: getStateSnapshot(),
             db: state.dbSummary,
-            errors: state.errors.slice(-200),
+            errorsMerged: buildMergedErrorsText(),
+            errorsCockpit: state.errors.slice(-200),
             errorsHub: getRuntimeHubFaultEntries(200),
             logs: state.logs.slice(-500),
         };
@@ -448,6 +484,49 @@ function bindUi() {
         } catch {
             deps.showNotification?.('Не удалось скопировать snapshot.', 'error');
         }
+    });
+
+    refs.exportDiagnosticBtn?.addEventListener('click', () => {
+        void (async () => {
+            try {
+                const hud = window.BackgroundStatusHUD;
+                const bundle = await buildCopilotDiagnosticBundle({
+                    getFromIndexedDB: deps.getFromIndexedDB,
+                    getLogs: () => state.logs.slice(-1500),
+                    getCockpitErrors: () => state.errors.slice(),
+                    getHubFaultEntries: () => getRuntimeHubFaultEntries(2000),
+                    getSystemOverview: getSystemOverview,
+                    getStateSnapshot: getStateSnapshot,
+                    getDbSummary: () => state.dbSummary,
+                    getHudDiagnostics: () =>
+                        typeof hud?.getDiagnosticsSnapshot === 'function'
+                            ? hud.getDiagnosticsSnapshot()
+                            : null,
+                    getWatchdog: () =>
+                        typeof hud?.getWatchdogSnapshot === 'function'
+                            ? hud.getWatchdogSnapshot()
+                            : null,
+                });
+                const json = diagnosticBundleToJsonString(bundle);
+                const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = suggestDiagnosticFilename();
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                deps.showNotification?.('Пакет диагностики сохранён в файл.', 'success');
+            } catch (err) {
+                nativeConsole.error('[engineering-cockpit] diagnostic export failed', err);
+                deps.showNotification?.(
+                    `Не удалось сформировать пакет: ${err?.message || err}`,
+                    'error',
+                );
+            }
+        })();
     });
 
     document.querySelectorAll('[data-cockpit-copy]').forEach((btn) => {

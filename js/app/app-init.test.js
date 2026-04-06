@@ -19,6 +19,11 @@ function createDomHarness() {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
     };
+    const remindersHeaderBtn = {
+        _clickHandlerInstance: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+    };
 
     const documentMock = {
         body: {},
@@ -30,6 +35,7 @@ function createDomHarness() {
         }),
         getElementById: vi.fn((id) => {
             if (id === 'showFavoritesHeaderBtn') return favoritesHeaderBtn;
+            if (id === 'showRemindersHeaderBtn') return remindersHeaderBtn;
             if (id === 'favoritesContainer') return favoritesContainer;
             return null;
         }),
@@ -39,6 +45,7 @@ function createDomHarness() {
         documentMock,
         favoritesContainer,
         favoritesHeaderBtn,
+        remindersHeaderBtn,
         documentListeners,
     };
 }

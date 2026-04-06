@@ -13,6 +13,8 @@ import {
     saveToIndexedDB,
     deleteFromIndexedDB,
 } from '../db/indexeddb.js';
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setCibLinksDependencies)
@@ -206,6 +208,8 @@ export async function showAddEditCibLinkModal(linkId = null) {
         document.body.classList.add('overflow-hidden');
         deps.addEscapeHandler?.(modal);
         titleInput.focus();
+
+        refreshModalEntityHistoryToolbar('cibLinkModal').catch(() => {});
     } catch (error) {
         console.error(`Ошибка при ${linkId ? 'загрузке' : 'подготовке'} ссылки 1С:`, error);
         deps.showNotification?.(
@@ -570,6 +574,20 @@ export async function handleCibLinkSubmit(event) {
         if (!isEditing) {
             finalId = savedResult;
             newData.id = finalId;
+        }
+
+        if (isEditing && oldData) {
+            try {
+                const newFromDb = await getFromIndexedDB('links', finalId);
+                await recordStoreEntityHistoryAfterSave({
+                    storeName: 'links',
+                    recordId: finalId,
+                    oldRecord: oldData,
+                    newRecord: newFromDb,
+                });
+            } catch (histErr) {
+                console.warn('[cib-links] entity history:', histErr);
+            }
         }
 
         if (deps.updateSearchIndex) {

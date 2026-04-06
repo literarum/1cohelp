@@ -498,6 +498,99 @@ export function renderScreenshotThumbnails(
     );
 }
 
+/**
+ * Встраивает в карточки шагов алгоритма (режим просмотра) секцию «Изображения» с той же сеткой,
+ * что в деталях закладки (renderScreenshotThumbnails + embeddedInDetail).
+ * @param {HTMLElement} algorithmStepsContainer — #algorithmSteps
+ * @param {object} algorithm — объект алгоритма с массивом steps
+ * @param {string|number} algorithmIdStr — id алгоритма для индекса screenshots
+ */
+function resolveOpenLightboxForEmbed() {
+    if (typeof deps.openLightbox === 'function') return deps.openLightbox;
+    if (typeof window !== 'undefined' && typeof window.openLightbox === 'function') {
+        return window.openLightbox;
+    }
+    return null;
+}
+
+export async function embedAlgorithmStepScreenshotsInDetail(
+    algorithmStepsContainer,
+    algorithm,
+    algorithmIdStr,
+) {
+    const openLightboxFn = resolveOpenLightboxForEmbed();
+    if (!algorithmStepsContainer || !algorithm || typeof openLightboxFn !== 'function') {
+        if (!openLightboxFn && algorithmStepsContainer && algorithm) {
+            console.warn(
+                '[embedAlgorithmStepScreenshotsInDetail] openLightbox недоступен — превью шагов не встроены.',
+            );
+        }
+        return;
+    }
+    const steps = Array.isArray(algorithm.steps) ? algorithm.steps : [];
+    const hasAny = steps.some(
+        (s) => s && Array.isArray(s.screenshotIds) && s.screenshotIds.length > 0,
+    );
+    if (!hasAny) return;
+
+    let allParentScreenshots = [];
+    try {
+        allParentScreenshots = await getAllFromIndexWithKeyVariants(
+            'screenshots',
+            'parentId',
+            algorithmIdStr,
+        );
+    } catch (e) {
+        console.warn('[embedAlgorithmStepScreenshotsInDetail] Ошибка загрузки скриншотов:', e);
+        return;
+    }
+
+    const algorithmScreenshots = (allParentScreenshots || []).filter(
+        (s) => s && s.parentType === 'algorithm',
+    );
+
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        if (!step || !Array.isArray(step.screenshotIds) || step.screenshotIds.length === 0) {
+            continue;
+        }
+        const stepScreenshots = algorithmScreenshots.filter((s) => {
+            if (!s || !(s.blob instanceof Blob)) return false;
+            const si = Number(s.stepIndex);
+            return Number.isFinite(si) && si === i;
+        });
+        if (stepScreenshots.length === 0) continue;
+
+        const stepEl = algorithmStepsContainer.querySelector(
+            `.algorithm-step[data-step-index="${i}"]`,
+        );
+        if (!stepEl) continue;
+
+        const section = document.createElement('section');
+        section.className =
+            'app-screenshot-detail-section mt-3 pt-3 border-t border-gray-200 dark:border-gray-600';
+        const headingId = `algorithm-step-${String(algorithmIdStr).replace(/[^a-zA-Z0-9_-]/g, '_')}-${i}-images`;
+        section.setAttribute('aria-labelledby', headingId);
+
+        const h = document.createElement('h4');
+        h.id = headingId;
+        h.className =
+            'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3';
+        h.textContent = 'Изображения';
+
+        const gridHost = document.createElement('div');
+        gridHost.className = 'app-screenshot-detail-grid min-h-[1rem]';
+
+        section.appendChild(h);
+        section.appendChild(gridHost);
+        stepEl.appendChild(section);
+
+        renderScreenshotThumbnails(gridHost, stepScreenshots, openLightboxFn, null, {
+            embeddedInDetail: true,
+        });
+    }
+}
+
 export function renderScreenshotList(
     container,
     screenshots,
@@ -901,7 +994,7 @@ export function renderTemporaryThumbnail(blob, tempIndex, container, stepEl) {
     }
     const thumbDiv = document.createElement('div');
     thumbDiv.className =
-        'relative w-16 h-12 group border-2 border-dashed border-green-500 dark:border-green-400 rounded overflow-hidden shadow-sm screenshot-thumbnail temporary';
+        'app-screenshot-thumb relative w-16 h-12 group border-2 border-dashed border-green-500 dark:border-green-400 rounded overflow-hidden shadow-sm screenshot-thumbnail temporary';
     thumbDiv.dataset.tempIndex = tempIndex;
     const img = document.createElement('img');
     img.className = 'w-full h-full object-contain bg-gray-200 dark:bg-gray-600';
@@ -1393,7 +1486,7 @@ export async function renderExistingThumbnail(screenshotId, container, parentEle
 
     const thumbDiv = document.createElement('div');
     thumbDiv.className =
-        'relative w-16 h-12 group border border-gray-300 dark:border-gray-500 rounded overflow-hidden shadow-sm screenshot-thumbnail existing';
+        'app-screenshot-thumb relative w-16 h-12 group border border-gray-300 dark:border-gray-500 rounded overflow-hidden shadow-sm screenshot-thumbnail existing';
     thumbDiv.dataset.existingId = screenshotId;
 
     if (!screenshotData || !(screenshotData.blob instanceof Blob)) {

@@ -4,11 +4,14 @@
 // BOOKMARKS MODAL (вынос из script.js)
 // ============================================================================
 
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
 import {
     activateModalFocus,
     deactivateModalFocus,
     enhanceModalAccessibility,
 } from '../ui/modals-manager.js';
+import { SCREENSHOT_EDIT_FIELD } from '../ui/screenshot-attachment-field.js';
+import { formatTagsForInput } from '../features/global-tags.js';
 
 let bookmarkModalConfigGlobal = null;
 let State = null;
@@ -106,7 +109,9 @@ export async function ensureBookmarkModal() {
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
                             Заголовок окна закладки
                         </h2>
-                        <div class="flex items-center flex-shrink-0">
+                        <div class="flex items-center flex-shrink-0 gap-1">
+                            <button type="button" id="bookmarkModalUndoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Предыдущая сохранённая версия (Ctrl+Shift+U)" aria-label="Откат к предыдущей сохранённой версии"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                            <button type="button" id="bookmarkModalRedoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Следующая сохранённая версия (Ctrl+Shift+R)" aria-label="Повтор отменённой версии"><i class="fas fa-redo" aria-hidden="true"></i></button>
                             <button id="${bookmarkModalConfigGlobal.buttonId}" type="button" class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors align-middle" title="Развернуть на весь экран">
                                 <i class="fas fa-expand"></i>
                             </button>
@@ -143,12 +148,19 @@ export async function ensureBookmarkModal() {
                             </select>
                         </div>
                         <div class="mb-4">
-                             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Скриншоты (опционально)</label>
-                             <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl/Cmd+V) в эту область.</p>
-                             <div id="bookmarkScreenshotThumbnailsContainer" class="flex flex-wrap gap-2 mb-2 min-h-[3rem] p-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/30">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTags">Теги (через запятую)</label>
+                            <input type="text" id="bookmarkTags" name="bookmarkTags" autocomplete="off"
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"
+                                placeholder="например: фнс, срочно" />
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">В глобальном поиске используйте <span class="font-mono">#тег</span> для фильтра по меткам.</p>
+                        </div>
+                        <div class="mb-4 ${SCREENSHOT_EDIT_FIELD.wrapperCard}">
+                             <label class="${SCREENSHOT_EDIT_FIELD.label}">Скриншоты (опционально)</label>
+                             <p class="${SCREENSHOT_EDIT_FIELD.hint}">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl/Cmd+V) в эту область.</p>
+                             <div id="bookmarkScreenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}">
                              </div>
-                             <div class="flex items-center gap-3">
-                                 <button type="button" class="add-bookmark-screenshot-btn px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition">
+                             <div class="${SCREENSHOT_EDIT_FIELD.actions}">
+                                 <button type="button" class="${SCREENSHOT_EDIT_FIELD.addBtnBookmark}">
                                      <i class="fas fa-camera mr-1"></i> Загрузить/Добавить
                                  </button>
                              </div>
@@ -316,10 +328,12 @@ export async function ensureBookmarkModal() {
         urlInput: modal.querySelector('#bookmarkUrl'),
         descriptionInput: modal.querySelector('#bookmarkDescription'),
         folderSelect: modal.querySelector('#bookmarkFolder'),
+        tagsInput: modal.querySelector('#bookmarkTags'),
         thumbsContainer: modal.querySelector('#bookmarkScreenshotThumbnailsContainer'),
     };
 
     for (const key in elements) {
+        if (key === 'tagsInput') continue;
         if (!elements[key]) {
             console.error(
                 `${LOG_PREFIX} КРИТИЧЕСКАЯ ОШИБКА: Элемент '${key}' не найден ПОСЛЕ ensureBookmarkModal!`,
@@ -494,6 +508,8 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
             }
         }, 50);
     }
+
+    refreshModalEntityHistoryToolbar('bookmarkModal').catch(() => {});
 }
 
 export async function showEditBookmarkModal(id) {
@@ -518,6 +534,7 @@ export async function showEditBookmarkModal(id) {
         urlInput,
         descriptionInput,
         folderSelect,
+        tagsInput,
         thumbsContainer,
     } = modalElements;
 
@@ -548,6 +565,7 @@ export async function showEditBookmarkModal(id) {
         titleInput.value = bookmark.title || '';
         urlInput.value = bookmark.url || '';
         descriptionInput.value = bookmark.description || '';
+        if (tagsInput) tagsInput.value = formatTagsForInput(bookmark.tags);
 
         if (typeof populateBookmarkFolders === 'function') {
             await populateBookmarkFolders(folderSelect);
@@ -596,6 +614,8 @@ export async function showEditBookmarkModal(id) {
                 }
             }, 50);
         }
+
+        refreshModalEntityHistoryToolbar('bookmarkModal').catch(() => {});
     } catch (error) {
         console.error('Ошибка при загрузке закладки для редактирования:', error);
         showNotification?.('Ошибка загрузки закладки', 'error');

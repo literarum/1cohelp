@@ -30,7 +30,11 @@ function serializeReportBody(body) {
 }
 
 function initReportingObserver() {
-    if (typeof ReportingObserver !== 'function') return;
+    const ReportingObserverCtor =
+        typeof globalThis !== 'undefined' && typeof globalThis.ReportingObserver === 'function'
+            ? globalThis.ReportingObserver
+            : null;
+    if (!ReportingObserverCtor) return;
 
     const handler = (reports) => {
         for (const report of reports) {
@@ -54,7 +58,7 @@ function initReportingObserver() {
 
     for (const types of typeSets) {
         try {
-            const ro = new ReportingObserver(handler, { types, buffered: true });
+            const ro = new ReportingObserverCtor(handler, { types, buffered: true });
             ro.observe();
             return;
         } catch {

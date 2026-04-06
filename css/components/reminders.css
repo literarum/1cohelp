@@ -1,0 +1,37 @@
+/* Контекстные напоминания — список и карточки */
+
+#remindersContent .reminder-card {
+    transition:
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
+}
+
+#remindersContent .reminder-card--overdue {
+    border-left-width: 4px;
+    border-left-style: solid;
+    border-left-color: rgb(220 38 38);
+}
+
+html.dark #remindersContent .reminder-card--overdue {
+    border-left-color: rgb(248 113 113);
+}
+
+#showRemindersHeaderBtn.has-pending-reminders {
+    position: relative;
+}
+
+#showRemindersHeaderBtn .reminders-header-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 0.5rem;
+    height: 0.5rem;
+    padding: 0;
+    border-radius: 9999px;
+    background: rgb(220 38 38);
+    box-shadow: 0 0 0 2px rgb(255 255 255);
+}
+
+html.dark #showRemindersHeaderBtn .reminders-header-badge {
+    box-shadow: 0 0 0 2px rgb(31 41 55);
+}

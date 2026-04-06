@@ -4,11 +4,16 @@ import { escapeHtml } from '../utils/html.js';
 import { getStepContentAsText } from '../utils/helpers.js';
 import {
     MAIN_ALGO_COLLAPSE_KEY,
+    MAIN_ALGO_COLLAPSE_LOCAL_MIRROR_KEY,
     MAIN_ALGO_HEADERS_ONLY_KEY,
     MAIN_ALGO_DENSITY_KEY,
     MAIN_ALGO_HEADERS_EXPANDED_KEY,
     MAIN_ALGO_GROUPS_OPEN_KEY,
 } from '../constants.js';
+import {
+    collectCollapsedMainAlgoIndicesFromDom,
+    isMainStepCollapsibleInView,
+} from './main-algo-collapse-persist.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
@@ -32,29 +37,74 @@ export function setMainAlgorithmDependencies(deps) {
 /**
  * Загружает состояние свернутости главного алгоритма
  */
+function parseCollapseStatePayload(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const stepsCount = raw.stepsCount;
+    const collapsedIndices = raw.collapsedIndices;
+    if (!Number.isInteger(stepsCount) || stepsCount < 0 || !Array.isArray(collapsedIndices)) {
+        return null;
+    }
+    return { stepsCount, collapsedIndices };
+}
+
+/**
+ * Читает зеркало из localStorage (резервный контур, если IndexedDB недоступен или пуст).
+ */
+function loadMainAlgoCollapseStateFromLocalMirror() {
+    try {
+        if (typeof localStorage === 'undefined') return null;
+        const raw = localStorage.getItem(MAIN_ALGO_COLLAPSE_LOCAL_MIRROR_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parseCollapseStatePayload(parsed);
+    } catch (e) {
+        console.warn('[loadMainAlgoCollapseState] Ошибка чтения зеркала localStorage:', e);
+        return null;
+    }
+}
+
 export async function loadMainAlgoCollapseState() {
+    let fromDb = null;
     try {
         const saved = await getFromIndexedDB('preferences', MAIN_ALGO_COLLAPSE_KEY);
         if (saved && saved.data && typeof saved.data === 'object') {
-            return saved.data;
+            fromDb = parseCollapseStatePayload(saved.data);
         }
     } catch (error) {
         console.warn('[loadMainAlgoCollapseState] Ошибка загрузки состояния:', error);
     }
-    return null;
+    if (fromDb) {
+        return fromDb;
+    }
+    return loadMainAlgoCollapseStateFromLocalMirror();
 }
 
 /**
  * Сохраняет состояние свернутости главного алгоритма
  */
 export async function saveMainAlgoCollapseState(state) {
+    const normalized = parseCollapseStatePayload(state);
+    if (!normalized) {
+        console.warn('[saveMainAlgoCollapseState] Пропуск: невалидное состояние', state);
+        return;
+    }
     try {
         await saveToIndexedDB('preferences', {
             id: MAIN_ALGO_COLLAPSE_KEY,
-            data: state,
+            data: normalized,
         });
     } catch (error) {
-        console.error('[saveMainAlgoCollapseState] Ошибка сохранения состояния:', error);
+        console.error('[saveMainAlgoCollapseState] Ошибка сохранения в IndexedDB:', error);
+    }
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(
+                MAIN_ALGO_COLLAPSE_LOCAL_MIRROR_KEY,
+                JSON.stringify(normalized),
+            );
+        }
+    } catch (e) {
+        console.warn('[saveMainAlgoCollapseState] Ошибка зеркала localStorage:', e);
     }
 }
 
@@ -213,7 +263,7 @@ export async function renderMainAlgorithm() {
                       Number.isInteger(i) &&
                       i >= 0 &&
                       i < mainSteps.length &&
-                      !!mainSteps[i]?.isCollapsible,
+                      isMainStepCollapsibleInView(mainSteps[i]),
               )
             : [];
     const collapsedSet = new Set(validIndices);
@@ -400,11 +450,12 @@ export async function renderMainAlgorithm() {
 
     function buildStepElementFull(step, index) {
         const stepDiv = document.createElement('div');
-        const isCollapsible = !!step.isCollapsible;
+        const isCollapsible = isMainStepCollapsibleInView(step);
         stepDiv.className =
             'algorithm-step bg-white dark:bg-gray-700 p-content-sm rounded-lg shadow-sm mb-3';
         if (isCollapsible) {
             stepDiv.classList.add('collapsible');
+            stepDiv.setAttribute('data-main-algo-step-index', String(index));
             if (collapsedSet.has(index)) stepDiv.classList.add('is-collapsed');
         }
         if (step.isCopyable) {
@@ -522,11 +573,7 @@ export async function renderMainAlgorithm() {
         if (isCollapsible) {
             titleH3.addEventListener('click', async () => {
                 stepDiv.classList.toggle('is-collapsed');
-                const indices = Array.from(
-                    mainAlgorithmContainer.querySelectorAll('.algorithm-step.collapsible'),
-                )
-                    .map((el, i) => (el.classList.contains('is-collapsed') ? i : -1))
-                    .filter((i) => i >= 0);
+                const indices = collectCollapsedMainAlgoIndicesFromDom(mainAlgorithmContainer);
                 await saveMainAlgoCollapseState({
                     stepsCount: mainSteps.length,
                     collapsedIndices: indices,

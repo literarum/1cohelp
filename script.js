@@ -402,6 +402,16 @@ import {
     deleteAlgorithm as deleteAlgorithmModule,
 } from './js/components/algorithms-save.js';
 
+import {
+    setAlgorithmHistoryDependencies,
+    initAlgorithmEditHistoryToolbarUi,
+} from './js/history/algorithm-history-bridge.js';
+import {
+    setModalEntityHistoryDependencies,
+    initModalEntityHistoryToolbarButtons,
+} from './js/history/modal-entity-history.js';
+import { createModalEntityHistoryHandlers } from './js/history/modal-entity-history-handlers.js';
+
 // Main Algorithm Component
 import {
     setMainAlgorithmDependencies,
@@ -511,6 +521,7 @@ import {
     handleSaveExtLinkCategorySubmit as handleSaveExtLinkCategorySubmitModule,
     handleDeleteExtLinkCategoryClick as handleDeleteExtLinkCategoryClickModule,
     populateExtLinkCategoryFilter as populateExtLinkCategoryFilterModule,
+    loadExtLinkCategoriesList as loadExtLinkCategoriesListModule,
 } from './js/features/ext-links-categories.js';
 
 // Ext Links Actions (extracted from script.js)
@@ -539,6 +550,25 @@ import {
     isFavorite as isFavoriteModule,
     refreshAllFavoritableSectionsUI as refreshAllFavoritableSectionsUIModule,
 } from './js/features/favorites.js';
+
+import {
+    initContextRemindersSystem,
+    setContextRemindersDependencies,
+    renderRemindersPage as renderRemindersPageModule,
+    openReminderModal as openReminderModalModule,
+} from './js/features/context-reminders.js';
+
+import {
+    initTrainingSystem,
+    renderTrainingPage as renderTrainingPageModule,
+    setTrainingDependencies,
+} from './js/features/training.js';
+
+import {
+    setClientAnalyticsDependencies,
+    initClientAnalyticsSystem,
+    renderClientAnalyticsPage as renderClientAnalyticsPageModule,
+} from './js/features/client-analytics.js';
 
 // Алиас для глобального использования в appInit и при экспорте в window
 const handleFavoriteActionClick = handleFavoriteActionClickModule;
@@ -1219,23 +1249,40 @@ const initUICustomization = initUICustomizationModule;
 // Адаптивное расширение полей ввода (textarea), кроме #clientNotes — размер окна заметок фиксирован (rows), растягивание только вручную (resize-y)
 function initAutoExpandTextareas() {
     const expand = (el) => {
-        if (!el || el.tagName !== 'TEXTAREA' || el.id === 'clientNotes') return;
+        if (
+            !el ||
+            el.tagName !== 'TEXTAREA' ||
+            el.id === 'clientNotes' ||
+            el.id === 'reminderFormNote'
+        ) {
+            return;
+        }
         el.style.height = 'auto';
         el.style.height = Math.min(el.scrollHeight, 600) + 'px';
     };
     document.addEventListener('input', (e) => {
-        if (e.target && e.target.tagName === 'TEXTAREA' && e.target.id !== 'clientNotes')
+        if (
+            e.target &&
+            e.target.tagName === 'TEXTAREA' &&
+            e.target.id !== 'clientNotes' &&
+            e.target.id !== 'reminderFormNote'
+        )
             expand(e.target);
     });
     document.addEventListener(
         'focus',
         (e) => {
-            if (e.target && e.target.tagName === 'TEXTAREA' && e.target.id !== 'clientNotes')
+            if (
+                e.target &&
+                e.target.tagName === 'TEXTAREA' &&
+                e.target.id !== 'clientNotes' &&
+                e.target.id !== 'reminderFormNote'
+            )
                 expand(e.target);
         },
         true,
     );
-    document.querySelectorAll('textarea:not(#clientNotes)').forEach(expand);
+    document.querySelectorAll('textarea:not(#clientNotes):not(#reminderFormNote)').forEach(expand);
 }
 
 // Кнопки прокрутки вверх/вниз — показываются только если контент не помещается на экране; клик — в начало/конец страницы
@@ -1485,6 +1532,9 @@ setAppInitDependencies({
     initViewToggles,
     initReglamentsSystem,
     initClientDataSystem,
+    initContextRemindersSystem,
+    initTrainingSystem,
+    initClientAnalyticsSystem,
     initExternalLinksSystem,
     initTimerSystem,
     initSedoTypesSystem,
@@ -1515,6 +1565,21 @@ setAppInitDependencies({
     getClientNotesPanelTextarea: getClientNotesPanelTextareaModule,
 });
 console.log('[script.js] Зависимости модуля appInit установлены');
+
+setContextRemindersDependencies({
+    showNotification,
+    setActiveTab: setActiveTabModule,
+    showBookmarkDetailModal,
+    getClientData: getClientDataModule,
+});
+console.log('[script.js] Зависимости context-reminders установлены');
+
+setTrainingDependencies({
+    showNotification,
+    showAppConfirm:
+        typeof showAppConfirmModule === 'function' ? showAppConfirmModule : null,
+});
+console.log('[script.js] Зависимости training установлены');
 
 setBackupReminderDependencies({
     State,
@@ -2990,6 +3055,9 @@ async function showBookmarkDetailModal(bookmarkId) {
                                 <h2 class="text-lg font-semibold leading-tight tracking-tight text-gray-900 dark:text-gray-100 min-w-0 flex items-center self-center" id="bookmarkDetailTitle">Детали закладки</h2>
                                 <div class="bookmark-detail-header-actions flex items-center flex-shrink-0 gap-1 h-9 self-center" role="toolbar" aria-label="Действия в шапке">
                                     <div class="fav-btn-placeholder-modal-bookmark flex h-9 w-9 flex-shrink-0 items-center justify-center"></div>
+                                    <button type="button" id="bookmarkDetailReminderBtn" title="Напоминание по этой закладке (локально)" aria-label="Напоминание по этой закладке (локально)" class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-gray-500 hover:text-amber-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-amber-400 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors">
+                                        <i class="fas fa-bell text-sm" aria-hidden="true"></i>
+                                    </button>
                                     <button id="${bookmarkDetailModalConfigGlobal.buttonId}" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Развернуть на весь экран">
                                         <i class="fas fa-expand text-sm" aria-hidden="true"></i>
                                     </button>
@@ -3096,6 +3164,22 @@ async function showBookmarkDetailModal(bookmarkId) {
                         'Ошибка: не удалось определить ID для редактирования',
                         'error',
                     );
+                }
+            } else if (e.target.closest('#bookmarkDetailReminderBtn')) {
+                const currentId = parseInt(currentModal.dataset.currentBookmarkId, 10);
+                const titleEl = currentModal.querySelector('#bookmarkDetailTitle');
+                const t = (titleEl?.textContent || '').trim() || 'Закладка';
+                if (!Number.isNaN(currentId)) {
+                    openReminderModalModule({
+                        contextType: 'bookmark',
+                        contextId: String(currentId),
+                        contextLabel: t,
+                        title: `Вернуться к закладке: ${t}`,
+                        intent: 'return_to',
+                        daysFromNow: 7,
+                    });
+                } else {
+                    showNotification('Не удалось определить закладку для напоминания.', 'error');
                 }
             }
         });
@@ -3493,6 +3577,10 @@ document.addEventListener('click', (e) => {
     e.stopPropagation();
     if (typeof requestCloseModal !== 'function') {
         modal.classList.add('hidden');
+        if (modal.id === 'editModal') {
+            const pdfHostEdit = document.getElementById('algorithmPdfEditHost');
+            if (pdfHostEdit) removePdfSectionsFromContainer(pdfHostEdit);
+        }
         if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
         if (getVisibleModals().length === 0)
             document.body.classList.remove('modal-open', 'overflow-hidden');
@@ -3500,6 +3588,10 @@ document.addEventListener('click', (e) => {
     }
     if (requestCloseModal(modal) !== false) {
         modal.classList.add('hidden');
+        if (modal.id === 'editModal') {
+            const pdfHostEdit = document.getElementById('algorithmPdfEditHost');
+            if (pdfHostEdit) removePdfSectionsFromContainer(pdfHostEdit);
+        }
         if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
         if (getVisibleModals().length === 0)
             document.body.classList.remove('modal-open', 'overflow-hidden');
@@ -4185,6 +4277,7 @@ setDbMergeDependencies({
     loadExtLinks,
     loadCibLinks: loadCibLinksModule,
     renderReglamentCategories: renderReglamentCategoriesModule,
+    renderRemindersPage: renderRemindersPageModule,
     showReglamentsForCategory,
     initSearchSystem,
     buildInitialSearchIndex,
@@ -4227,6 +4320,14 @@ setTabsDependencies({
         typeof renderFavoritesPageModule !== 'undefined'
             ? renderFavoritesPageModule
             : renderFavoritesPage,
+    renderRemindersPage:
+        typeof renderRemindersPageModule !== 'undefined' ? renderRemindersPageModule : () => {},
+    renderTrainingPage:
+        typeof renderTrainingPageModule !== 'undefined' ? renderTrainingPageModule : () => {},
+    renderClientAnalyticsPage:
+        typeof renderClientAnalyticsPageModule !== 'undefined'
+            ? renderClientAnalyticsPageModule
+            : () => {},
     updateVisibleTabs:
         typeof updateVisibleTabsModule !== 'undefined'
             ? updateVisibleTabsModule
@@ -4236,6 +4337,13 @@ setTabsDependencies({
     loadBookmarks: typeof loadBookmarksModule !== 'undefined' ? loadBookmarksModule : loadBookmarks,
 });
 console.log('[script.js] Зависимости модуля Tabs UI установлены');
+
+setClientAnalyticsDependencies({
+    showNotification,
+    updateSearchIndex,
+    applyCurrentView: applyCurrentViewModule,
+});
+console.log('[script.js] Зависимости модуля Client Analytics установлены');
 
 // Делегированный обработчик кликов по вкладкам (для кнопок из HTML, созданных не через createTabButtonElement)
 document.addEventListener('click', (e) => {
@@ -4339,7 +4447,12 @@ setEngineeringCockpitDependencies({
     State,
     storeConfigs,
     getAllFromIndexedDB,
+    getFromIndexedDB,
     showNotification,
+    initUISettingsModalHandlers:
+        typeof initUISettingsModalHandlersModule === 'function'
+            ? initUISettingsModalHandlersModule
+            : null,
 });
 
 // Escape Handler Dependencies (PR11)
@@ -4483,6 +4596,51 @@ setAlgorithmsSaveDependencies({
     getSectionName,
 });
 console.log('[script.js] Зависимости модуля Algorithms Save установлены');
+
+setAlgorithmHistoryDependencies({
+    algorithms,
+    showNotification,
+    editAlgorithm: editAlgorithmModule,
+    updateSearchIndex,
+    renderMainAlgorithm: renderMainAlgorithmModule,
+    renderAlgorithmCards: renderAlgorithmCardsModule,
+    hasChanges: hasChangesModule,
+    showAppConfirm: showAppConfirmModule,
+});
+initAlgorithmEditHistoryToolbarUi();
+console.log('[script.js] История версий карточек алгоритмов инициализирована');
+
+const modalEntityHistoryHandlers = createModalEntityHistoryHandlers({
+    loadFoldersListInContainer: loadFoldersListModule,
+    populateBookmarkFolders,
+    loadBookmarks,
+    loadExtLinkCategoriesList: loadExtLinkCategoriesListModule,
+    populateExtLinkCategoryFilter: populateExtLinkCategoryFilterModule,
+    renderExtLinks: renderExtLinksModule,
+    loadReglaments: loadReglamentsModule,
+    sortAndRenderBlacklist,
+});
+
+setModalEntityHistoryDependencies({
+    showNotification,
+    showAppConfirm: showAppConfirmModule,
+    updateSearchIndex,
+    showAddBookmarkModal: showAddBookmarkModalModule,
+    loadBookmarks,
+    showAddEditCibLinkModal: showAddEditCibLinkModalModule,
+    loadCibLinks: loadCibLinksModule,
+    showEditExtLinkModal: showEditExtLinkModalModule,
+    renderExtLinks: renderExtLinksModule,
+    editReglament: editReglamentModule,
+    reloadReglamentsUi: () => loadReglamentsModule(),
+    showBlacklistEntryModal,
+    refreshBlacklistAfterHistory: async () => {
+        sortAndRenderBlacklist();
+    },
+    ...modalEntityHistoryHandlers,
+});
+initModalEntityHistoryToolbarButtons();
+console.log('[script.js] История версий модальных сущностей инициализирована');
 
 /**
  * Возвращает существующий модальный элемент по id или создаёт новый (div с id, классом, HTML и опциональной настройкой).
@@ -4659,6 +4817,7 @@ if (typeof handleViewBookmarkScreenshots === 'function')
     window.handleViewBookmarkScreenshots = handleViewBookmarkScreenshots;
 if (typeof showScreenshotViewerModal === 'function')
     window.showScreenshotViewerModal = showScreenshotViewerModal;
+if (typeof openLightbox === 'function') window.openLightbox = openLightbox;
 if (typeof showAppConfirmModule === 'function') window.showAppConfirm = showAppConfirmModule;
 
 // Внешние ссылки и регламенты

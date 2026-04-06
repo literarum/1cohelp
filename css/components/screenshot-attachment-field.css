@@ -1,0 +1,21 @@
+/* =============================================================================
+   Блок добавления скриншотов в формах (закладки, шаги алгоритма) — единый вид с закладками
+   ============================================================================= */
+
+.app-screenshot-field__dropzone {
+    box-sizing: border-box;
+}
+
+/* Лёгкий акцент при фокусе внутри (вставка с клавиатуры / таб на кнопку) */
+.app-screenshot-field__dropzone:focus-within {
+    border-color: rgb(99 102 241 / 0.45);
+}
+
+.dark .app-screenshot-field__dropzone:focus-within {
+    border-color: rgb(129 140 248 / 0.45);
+}
+
+/* Миниатюры в форме редактирования (общие с закладками и алгоритмами) */
+.app-screenshot-thumb.screenshot-thumbnail {
+    box-sizing: border-box;
+}

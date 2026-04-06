@@ -4,6 +4,8 @@
 // EXT LINKS FORM SUBMIT (вынос из script.js)
 // ============================================================================
 
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+
 let State = null;
 let showNotification = null;
 let ensureExtLinkModal = null;
@@ -119,6 +121,20 @@ export async function handleExtLinkFormSubmit(e) {
         if (!isEditing) {
             finalId = savedResult;
             newData.id = finalId;
+        }
+
+        if (isEditing && oldData) {
+            try {
+                const newFromDb = await getFromIndexedDB('extLinks', finalId);
+                await recordStoreEntityHistoryAfterSave({
+                    storeName: 'extLinks',
+                    recordId: finalId,
+                    oldRecord: oldData,
+                    newRecord: newFromDb,
+                });
+            } catch (histErr) {
+                console.warn('[ext-links-form] entity history:', histErr);
+            }
         }
 
         if (typeof updateSearchIndex === 'function') {

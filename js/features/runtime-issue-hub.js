@@ -5,7 +5,8 @@
  * Инициализируется как можно раньше в script.js, до тяжёлой логики приложения.
  */
 
-const MAX_ENTRIES = 80;
+/** Достаточная глубина буфера для сессии; дублирующий контур — буфер кокпита (см. engineering-cockpit). */
+const MAX_ENTRIES = 500;
 
 let initialized = false;
 /** @type {((source: string, errorLike: unknown, extra?: unknown) => void) | null} */
@@ -132,6 +133,18 @@ export function getRuntimeHubFaultEntries(limit = 300) {
         title: e.title,
         message: e.message,
     }));
+}
+
+/** Мета для диагностического пакета и самопроверки (двухконтурное сравнение с буфером кокпита). */
+export function getRuntimeHubBufferMeta() {
+    const faults = buffer.filter((e) => e.isFault);
+    const signals = buffer.filter((e) => !e.isFault);
+    return {
+        capacity: MAX_ENTRIES,
+        total: buffer.length,
+        faultCount: faults.length,
+        signalCount: signals.length,
+    };
 }
 
 export function initRuntimeIssueHub() {

@@ -1,6 +1,12 @@
 'use strict';
 
 import { escapeHtml } from '../utils/html.js';
+import { refreshAlgorithmHistoryToolbar } from '../history/algorithm-history-bridge.js';
+import {
+    renderPdfAttachmentsSection,
+    removePdfSectionsFromContainer,
+} from '../features/pdf-attachments.js';
+import { formatTagsForInput } from '../features/global-tags.js';
 
 /**
  * Модуль операций с алгоритмами (редактирование, добавление)
@@ -480,6 +486,8 @@ export async function editAlgorithm(algorithmId, section = 'main') {
         if (!isMainAlgorithm) {
             algorithmDescriptionInput.value = algorithm.description ?? '';
         }
+        const algorithmTagsInput = document.getElementById('algorithmTags');
+        if (algorithmTagsInput) algorithmTagsInput.value = formatTagsForInput(algorithm.tags);
 
         if (isMainAlgorithm) {
             if (!Array.isArray(algorithm.groups)) algorithm.groups = [];
@@ -735,6 +743,13 @@ export async function editAlgorithm(algorithmId, section = 'main') {
 
         editModal.dataset.algorithmId = String(algorithm.id);
         editModal.dataset.section = section;
+        const editIdInput = document.getElementById('editAlgorithmId');
+        if (editIdInput) editIdInput.value = String(algorithm.id);
+        const pdfHostEdit = document.getElementById('algorithmPdfEditHost');
+        if (pdfHostEdit) {
+            removePdfSectionsFromContainer(pdfHostEdit);
+            renderPdfAttachmentsSection(pdfHostEdit, 'algorithm', String(algorithm.id));
+        }
         if (typeof captureInitialEditState === 'function') {
             captureInitialEditState(algorithm, section);
         }
@@ -757,6 +772,7 @@ export async function editAlgorithm(algorithmId, section = 'main') {
     if (typeof openAnimatedModal === 'function') {
         openAnimatedModal(editModal);
     }
+    refreshAlgorithmHistoryToolbar().catch(() => {});
     setTimeout(() => algorithmTitleInput.focus(), 50);
 }
 

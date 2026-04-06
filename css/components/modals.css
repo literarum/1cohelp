@@ -26,6 +26,108 @@ body.modal-open {
     padding: 1rem 1.25rem !important;
 }
 
+/* Напоминание: воздух между блоками формы + единые отступы контента */
+#reminderModal #reminderModalBody {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+    padding: 1.25rem 1.5rem !important;
+}
+
+@media (min-width: 640px) {
+    #reminderModal #reminderModalBody {
+        gap: 1.5rem !important;
+        padding: 1.5rem 1.75rem !important;
+    }
+}
+
+/* Напоминание: одинаковая высота select и datetime-local — стрелка и иконка календаря совпадают по оси Y */
+#reminderModal .reminder-form-control {
+    box-sizing: border-box;
+    height: 2.5rem;
+    min-height: 2.5rem;
+    max-height: 2.5rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 0.875rem;
+    /* Одна визуальная строка по центру по вертикали (учёт border 1px сверху/снизу) */
+    line-height: calc(2.5rem - 2px);
+}
+
+/* У select — кастомная стрелка: правый край иконки ровно 10px от края поля */
+#reminderModal #reminderFormIntent.reminder-form-control--intent {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-left: 10px;
+    /* 10px до стрелки + 16px иконка + зазор до текста */
+    padding-right: calc(10px + 16px + 8px);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23374151' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px 16px;
+}
+
+html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* У datetime-local — под иконку календаря (WebKit/Blink) */
+#reminderModal #reminderFormDueLocal.reminder-form-control--datetime {
+    padding-right: 10px;
+}
+
+#reminderModal #reminderFormDueLocal::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.85;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Напоминание: заметка — фиксированная минимальная высота (initAutoExpand на скрытой модалке давал height: 0) */
+#reminderModal #reminderFormNote.modal-description-field {
+    min-height: 10rem;
+}
+
+/* Полноэкранное напоминание: оболочка и каркас поверх .modal-inner-container */
+#reminderModal.is-fullscreen #reminderModalViewport {
+    min-height: 100vh !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+}
+
+#reminderModal.is-fullscreen #reminderModalInner.modal-inner-container {
+    max-width: none !important;
+    max-height: none !important;
+    width: 100vw !important;
+    min-height: 100vh !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+#reminderModal.is-fullscreen #reminderModalBody {
+    flex-grow: 1;
+    overflow-y: auto;
+    min-height: 0;
+    /* В полноэкранном режиме чуть больше поля у краёв */
+    padding: 1.5rem 1.75rem !important;
+    gap: 1.5rem !important;
+}
+
+@media (min-width: 640px) {
+    #reminderModal.is-fullscreen #reminderModalBody {
+        padding: 1.75rem 2rem !important;
+        gap: 1.75rem !important;
+    }
+}
+
 /* Модал подтверждения: блюр фона за окном (не только затемнение) */
 #appConfirmModal {
     -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
@@ -735,7 +837,8 @@ body.app-backup-warning-perimeter-pulse::before {
         #bookmarkModal .modal-content-area,
         #bookmarkDetailModal #bookmarkDetailOuterContent,
         #addModal .p-content.overflow-y-auto.flex-1,
-        #editModal .p-content.overflow-y-auto.flex-1
+        #editModal .p-content.overflow-y-auto.flex-1,
+        #reminderModal #reminderModalBody
     ) {
     flex-grow: 1;
     overflow-y: auto;
@@ -764,4 +867,56 @@ body.app-backup-warning-perimeter-pulse::before {
 #algorithmModal .pdf-dropzone {
     margin-top: 0.5rem;
     margin-bottom: 0.5rem;
+}
+
+/* Пустое состояние PDF (read-only): контраст в светлой теме внутри модалки */
+#algorithmModal .pdf-attachments-section .pdf-list-shell > p.text-sm.leading-relaxed {
+    color: rgb(31 41 55);
+}
+html.dark #algorithmModal .pdf-attachments-section .pdf-list-shell > p.text-sm.leading-relaxed {
+    color: rgb(156 163 175);
+}
+
+/* Панель действий модалки алгоритма: один ряд, общий «тесный» gap, воздух только у «Выполнить» */
+#algorithmModal .algorithm-modal-toolbar-inner {
+    align-items: center;
+}
+
+#algorithmModal .algorithm-modal-toolbar-inner > * {
+    flex-shrink: 0;
+}
+
+/*
+ * «Выполнить»: нормальный line-height для подписи + умеренные поля по бокам.
+ */
+#algorithmModal .algorithm-modal-toolbar-execute {
+    line-height: 1.25;
+    margin-left: 0.375rem;
+    margin-right: 0.375rem;
+}
+
+@media (min-width: 640px) {
+    #algorithmModal .algorithm-modal-toolbar-execute {
+        margin-left: 0.5rem;
+        margin-right: 0.5rem;
+    }
+}
+
+/*
+ * Одна линия по вертикали: иконки без смещения baseline (только кнопки без текста + PDF + избранное).
+ */
+#algorithmModal .algorithm-modal-toolbar-icon-btn,
+#algorithmModal .algorithm-modal-toolbar-inner #exportAlgorithmToPdfBtn,
+#algorithmModal .algorithm-modal-toolbar-inner .toggle-favorite-btn {
+    box-sizing: border-box;
+    line-height: 0;
+}
+
+#algorithmModal .algorithm-modal-toolbar-inner .algorithm-modal-toolbar-icon-btn i,
+#algorithmModal .algorithm-modal-toolbar-inner #exportAlgorithmToPdfBtn i,
+#algorithmModal .algorithm-modal-toolbar-inner .toggle-favorite-btn i {
+    /* Единый кегль с PDF и избранным (раньше звезда была text-sm и «плыла» относительно PDF) */
+    font-size: 1rem;
+    line-height: 1;
+    vertical-align: middle;
 }

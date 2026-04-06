@@ -93,6 +93,20 @@ export const TABS = [
     { tabId: 'webReg', label: 'Веб-Регистратор', synonyms: ['веб', 'регистратор', 'webreg'] },
     { tabId: 'reglaments', label: 'Регламенты', synonyms: ['регламент', 'регламенты'] },
     { tabId: 'bookmarks', label: 'Закладки', synonyms: ['закладки', 'закладк', 'bookmarks'] },
+    {
+        tabId: 'training',
+        label: 'Обучение',
+        synonyms: [
+            'обучение',
+            'учебник',
+            'наставник',
+            'наставничество',
+            'srs',
+            'квиз',
+            'карточки',
+            'training',
+        ],
+    },
     { tabId: 'sedoTypes', label: 'Типы СЭДО', synonyms: ['седо', 'сэдо', 'типы', 'sedo'] },
     {
         tabId: 'blacklistedClients',

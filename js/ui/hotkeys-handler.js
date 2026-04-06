@@ -5,6 +5,14 @@
  * Вынесено из script.js (Этап 5)
  */
 
+import { performAlgorithmRedo, performAlgorithmUndo } from '../history/algorithm-history-bridge.js';
+import {
+    MODAL_IDS_WITH_HISTORY,
+    performClientDataHistoryStep,
+    performModalEntityRedo,
+    performModalEntityUndo,
+} from '../history/modal-entity-history.js';
+
 let showNoInnModal = null;
 let showNotification = null;
 let _handleGlobalHotkeyRef = null;
@@ -253,6 +261,68 @@ export async function handleGlobalHotkey(event) {
     const ctrlOrMeta = event.ctrlKey || event.metaKey;
     const shift = event.shiftKey;
     const alt = event.altKey;
+
+    const activeElementEarly = document.activeElement;
+    const isInputFocusedEarly =
+        activeElementEarly &&
+        (activeElementEarly.tagName === 'INPUT' ||
+            activeElementEarly.tagName === 'TEXTAREA' ||
+            activeElementEarly.isContentEditable);
+
+    // Ctrl+Shift+U / Cmd+Shift+U — откат сохранённой версии (алгоритм / модалки сущностей / заметки клиента)
+    // Ctrl+Shift+R / Cmd+Shift+R — повтор (не перехватываем в полях ввода, чтобы не мешать вводу)
+    if (
+        ctrlOrMeta &&
+        shift &&
+        !alt &&
+        !isInputFocusedEarly &&
+        (code === 'KeyU' || code === 'KeyR')
+    ) {
+        const visibleForHistory =
+            typeof getVisibleModals === 'function' ? getVisibleModals() : [];
+        const topModalForHistory =
+            typeof getTopmostModal === 'function' && visibleForHistory.length
+                ? getTopmostModal(visibleForHistory)
+                : null;
+
+        if (topModalForHistory?.id === 'editModal') {
+            const editModalForHistory = document.getElementById('editModal');
+            if (editModalForHistory && !editModalForHistory.classList.contains('hidden')) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (code === 'KeyU') {
+                    performAlgorithmUndo();
+                } else {
+                    performAlgorithmRedo();
+                }
+                return;
+            }
+        } else if (
+            topModalForHistory &&
+            MODAL_IDS_WITH_HISTORY.includes(topModalForHistory.id)
+        ) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (code === 'KeyU') {
+                await performModalEntityUndo(topModalForHistory.id);
+            } else {
+                await performModalEntityRedo(topModalForHistory.id);
+            }
+            return;
+        }
+
+        const clientNotesPanel = document.getElementById('clientNotesPanel');
+        if (clientNotesPanel && clientNotesPanel.offsetParent !== null) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (code === 'KeyU') {
+                await performClientDataHistoryStep('undo');
+            } else {
+                await performClientDataHistoryStep('redo');
+            }
+            return;
+        }
+    }
 
     // Ctrl+K / Cmd+K — палитра команд
     if (

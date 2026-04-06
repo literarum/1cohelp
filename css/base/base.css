@@ -55,7 +55,11 @@ header,
 /* Основной контейнер приложения: центрирование и ограничение ширины (как container + max-w-7xl); safe area и адаптивные отступы */
 #appContent {
     flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     min-width: 0;
+    min-height: 0;
     width: 100%;
     max-width: 80rem;
     margin-left: auto;
@@ -63,6 +67,12 @@ header,
     padding-left: max(var(--content-padding-inline), var(--safe-area-left));
     padding-right: max(var(--content-padding-inline), var(--safe-area-right));
     box-sizing: border-box;
+}
+
+/* Видимая вкладка заполняет колонку сверху вниз (без «провала» контента при flex-родителе body) */
+#appContent > .tab-content:not(.hidden) {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 #appContent.has-static-header {

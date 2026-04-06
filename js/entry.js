@@ -5,7 +5,10 @@
  * Загружается после script.js — все глобальные функции уже в window.
  * Связывает новые модули с глобальными зависимостями, без повторной инициализации БД.
  */
+import { initPwaShell } from './app/pwa-register.js';
 import { setDependencies } from './app.js';
+
+initPwaShell();
 
 (function connectModules() {
     const deps = {

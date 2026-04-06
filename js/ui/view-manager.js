@@ -117,7 +117,7 @@ export function applyView(container, view) {
         items = container.querySelectorAll('.view-item, .reglament-category, .reglament-item');
     } else {
         items = container.querySelectorAll(
-            '.view-item, .algorithm-card, .bookmark-item, .ext-link-item, .cib-link-item, .favorite-item, .reglament-item',
+            '.view-item, .algorithm-card, .bookmark-item, .ext-link-item, .cib-link-item, .favorite-item, .reglament-item, .client-analytics-card',
         );
     }
 
@@ -170,7 +170,11 @@ export function applyView(container, view) {
         } else {
             container.classList.add(...gridColsClassesBase);
         }
-        if (['bookmarksContainer', 'extLinksContainer', 'linksContainer'].includes(sectionId)) {
+        if (
+            ['bookmarksContainer', 'extLinksContainer', 'linksContainer', 'clientAnalyticsContainer'].includes(
+                sectionId,
+            )
+        ) {
             container.classList.add('gap-4');
         } else if (sectionId === 'reglamentCategoryGrid') {
             container.classList.add('gap-content');
@@ -250,6 +254,8 @@ export function applyView(container, view) {
                 item.classList.contains('ext-link-item') ||
                 item.classList.contains('cib-link-item')
             ) {
+                item.classList.add(...ALGO_BOOKMARK_CARD_CLASSES);
+            } else if (item.classList.contains('client-analytics-card')) {
                 item.classList.add(...ALGO_BOOKMARK_CARD_CLASSES);
             }
         } else {

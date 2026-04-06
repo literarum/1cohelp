@@ -64,6 +64,9 @@ export async function appInit(context = 'normal') {
         initViewToggles,
         initReglamentsSystem,
         initClientDataSystem,
+        initContextRemindersSystem,
+        initTrainingSystem,
+        initClientAnalyticsSystem,
         initExternalLinksSystem,
         initTimerSystem,
         initSedoTypesSystem,
@@ -298,6 +301,32 @@ export async function appInit(context = 'normal') {
                 );
             }
 
+            const showRemindersHeaderButton = document.getElementById('showRemindersHeaderBtn');
+            if (showRemindersHeaderButton) {
+                if (showRemindersHeaderButton._clickHandlerInstance) {
+                    showRemindersHeaderButton.removeEventListener(
+                        'click',
+                        showRemindersHeaderButton._clickHandlerInstance,
+                    );
+                }
+                showRemindersHeaderButton._clickHandlerInstance = () => {
+                    if (typeof setActiveTab === 'function') {
+                        setActiveTab('reminders');
+                    }
+                };
+                showRemindersHeaderButton.addEventListener(
+                    'click',
+                    showRemindersHeaderButton._clickHandlerInstance,
+                );
+                console.log(
+                    "[appInit - Reminders] Обработчик для кнопки напоминаний в шапке (#showRemindersHeaderBtn) инициализирован.",
+                );
+            } else {
+                console.warn(
+                    "[appInit - Reminders] Кнопка #showRemindersHeaderBtn не найдена.",
+                );
+            }
+
             if (typeof loadUserPreferences === 'function') {
                 await loadUserPreferences();
             } else {
@@ -520,6 +549,30 @@ export async function appInit(context = 'normal') {
                         typeof initClientDataSystem === 'function'
                             ? initClientDataSystem
                             : () => console.warn('initClientDataSystem not defined'),
+                    critical: false,
+                },
+                {
+                    name: 'initContextRemindersSystem',
+                    func:
+                        typeof initContextRemindersSystem === 'function'
+                            ? initContextRemindersSystem
+                            : () => console.warn('initContextRemindersSystem not defined'),
+                    critical: false,
+                },
+                {
+                    name: 'initTrainingSystem',
+                    func:
+                        typeof initTrainingSystem === 'function'
+                            ? initTrainingSystem
+                            : () => console.warn('initTrainingSystem not defined'),
+                    critical: false,
+                },
+                {
+                    name: 'initClientAnalyticsSystem',
+                    func:
+                        typeof initClientAnalyticsSystem === 'function'
+                            ? initClientAnalyticsSystem
+                            : () => console.warn('initClientAnalyticsSystem not defined'),
                     critical: false,
                 },
                 {

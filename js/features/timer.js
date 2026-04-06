@@ -1241,6 +1241,10 @@ export function initTimerSystem() {
         }
     });
 
+    if (timerWatchdogId != null) {
+        clearInterval(timerWatchdogId);
+        timerWatchdogId = null;
+    }
     timerWatchdogId = setInterval(() => {
         if (
             document.hidden ||

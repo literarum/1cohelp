@@ -424,6 +424,14 @@ export function getFavoriteButtonHTML(
     const btnClass =
         uiVariant === 'bookmark-list'
             ? BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS
+            : uiVariant === 'algorithm-modal-toolbar'
+              ? [
+                    'toggle-favorite-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+                    'text-gray-500 hover:text-yellow-500 hover:bg-gray-100',
+                    'dark:text-gray-400 dark:hover:text-yellow-300 dark:hover:bg-gray-700',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                    'transition-colors',
+                ].join(' ')
             : uiVariant === 'modal-header'
               ? [
                     'toggle-favorite-btn inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl',
@@ -433,6 +441,8 @@ export function getFavoriteButtonHTML(
                     'transition-colors',
                 ].join(' ')
               : BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS;
+
+    const iconSizeClass = uiVariant === 'algorithm-modal-toolbar' ? 'text-base leading-none' : 'text-sm';
 
     return `
         <button class="${btnClass}"
@@ -444,7 +454,7 @@ export function getFavoriteButtonHTML(
                 data-item-title="${safeTitle}"
                 data-item-description="${safeDescription}"
                 data-item-url="${safeItemUrl}">
-            <i class="${iconClass} text-sm" aria-hidden="true"></i>
+            <i class="${iconClass} ${iconSizeClass}" aria-hidden="true"></i>
         </button>
     `;
 }

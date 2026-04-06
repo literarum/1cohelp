@@ -99,4 +99,67 @@ export const storeConfigs = [
             { name: 'deletedAt', keyPath: 'deletedAt', options: { unique: false } },
         ],
     },
+    {
+        name: 'entityEditHistory',
+        options: { keyPath: 'id' },
+    },
+    {
+        name: 'reminders',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [
+            { name: 'dueAt', keyPath: 'dueAt', options: { unique: false } },
+            { name: 'status', keyPath: 'status', options: { unique: false } },
+            {
+                name: 'contextLookup',
+                keyPath: ['contextType', 'contextId'],
+                options: { unique: false },
+            },
+        ],
+    },
+    {
+        name: 'trainingProgress',
+        options: { keyPath: 'id' },
+    },
+    {
+        name: 'trainingSrsCards',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [
+            { name: 'dueAt', keyPath: 'dueAt', options: { unique: false } },
+            { name: 'sourceType', keyPath: 'sourceType', options: { unique: false } },
+        ],
+    },
+    {
+        name: 'trainingWeakSpots',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [{ name: 'stepKey', keyPath: 'stepKey', options: { unique: false } }],
+    },
+    {
+        name: 'trainingUserCurriculum',
+        options: { keyPath: 'id' },
+    },
+    {
+        name: 'trainingBuiltinCurriculum',
+        options: { keyPath: 'id' },
+    },
+    {
+        name: 'mentorQuizPackages',
+        options: { keyPath: 'id' },
+    },
+    {
+        name: 'clientAnalyticsFiles',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [
+            { name: 'uploadedAt', keyPath: 'uploadedAt', options: { unique: false } },
+            { name: 'textSha256', keyPath: 'textSha256', options: { unique: false } },
+        ],
+    },
+    {
+        name: 'clientAnalyticsRecords',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [
+            { name: 'inn', keyPath: 'inn', options: { unique: false } },
+            { name: 'sourceFileId', keyPath: 'sourceFileId', options: { unique: false } },
+            { name: 'uploadedAt', keyPath: 'uploadedAt', options: { unique: false } },
+        ],
+    },
 ];

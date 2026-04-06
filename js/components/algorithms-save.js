@@ -6,6 +6,9 @@
  */
 
 import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
+import { recordAlgorithmHistoryAfterSuccessfulSave } from '../history/algorithm-history-bridge.js';
+import { removePdfSectionsFromContainer } from '../features/pdf-attachments.js';
+import { parseTagsFromUserString } from '../features/global-tags.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ
@@ -117,6 +120,8 @@ export async function saveNewAlgorithm() {
 
     const finalTitle = newAlgorithmTitleInput.value.trim();
     const newDescription = newAlgorithmDescInput.value.trim();
+    const newTagsInput = document.getElementById('newAlgorithmTags');
+    const newTagsList = parseTagsFromUserString(newTagsInput?.value || '');
 
     if (!finalTitle) {
         showNotification('Заголовок нового алгоритма не может быть пустым.', 'warning');
@@ -243,6 +248,7 @@ export async function saveNewAlgorithm() {
             dateAdded: timestamp,
             dateUpdated: timestamp,
         };
+        if (newTagsList.length > 0) newAlgorithmData.tags = newTagsList;
 
         if (!algorithms[section]) {
             algorithms[section] = [];
@@ -381,6 +387,7 @@ export async function saveNewAlgorithm() {
         });
         newAlgorithmTitleInput.value = '';
         newAlgorithmDescInput.value = '';
+        if (newTagsInput) newTagsInput.value = '';
         newStepsContainer.innerHTML = '';
         const firstStepDiv = newStepsContainer.querySelector('.edit-step');
         if (firstStepDiv) {
@@ -439,6 +446,8 @@ export async function saveAlgorithm() {
         !isMainAlgo && algorithmDescriptionInput
             ? algorithmDescriptionInput.value.trim()
             : undefined;
+    const algorithmTagsInput = document.getElementById('algorithmTags');
+    const tagsList = parseTagsFromUserString(algorithmTagsInput?.value || '');
     if (!finalTitle) {
         showNotification('Заголовок не может быть пустым.', 'warning');
         algorithmTitleInput.focus();
@@ -700,6 +709,8 @@ export async function saveAlgorithm() {
             algorithms.main.groups = Array.isArray(groupsOrdered) ? groupsOrdered : [];
             algorithms.main.dateUpdated = timestamp;
             if (!algorithms.main.dateAdded) algorithms.main.dateAdded = timestamp;
+            if (tagsList.length > 0) algorithms.main.tags = tagsList;
+            else delete algorithms.main.tags;
             targetAlgorithmObject = algorithms.main;
             const mainTitleElement = document.querySelector('#mainContent h2');
             if (mainTitleElement) mainTitleElement.textContent = finalTitle;
@@ -727,12 +738,15 @@ export async function saveAlgorithm() {
                         oldAlgorithmData?.dateAdded ||
                         timestamp,
                 };
+                if (tagsList.length > 0) algorithms[section][algorithmIndex].tags = tagsList;
+                else delete algorithms[section][algorithmIndex].tags;
                 targetAlgorithmObject = algorithms[section][algorithmIndex];
             } else {
                 console.warn(
                     `[Save Algorithm v7 TX] Алгоритм ${algorithmIdStr} не найден в памяти ${section} во время редактирования. Создание нового (неожиданно).`,
                 );
                 targetAlgorithmObject = { ...algoDataBase, dateAdded: timestamp };
+                if (tagsList.length > 0) targetAlgorithmObject.tags = tagsList;
                 algorithms[section].push(targetAlgorithmObject);
             }
         }
@@ -823,6 +837,15 @@ export async function saveAlgorithm() {
 
     if (updateSuccessful) {
         console.log(`[Save Algorithm v7 (Robust TX)] Алгоритм ${algorithmIdStr} успешно сохранен.`);
+        recordAlgorithmHistoryAfterSuccessfulSave({
+            section,
+            algorithmIdStr,
+            isMainAlgo,
+            oldAlgorithm: oldAlgorithmData,
+            newAlgorithm: finalAlgorithmData,
+        }).catch((histErr) => {
+            console.error('[Save Algorithm v7] Ошибка записи истории версий:', histErr);
+        });
         if (typeof updateSearchIndex === 'function' && finalAlgorithmData?.id) {
             const indexId = isMainAlgo ? 'main' : finalAlgorithmData.id;
             updateSearchIndex('algorithms', indexId, finalAlgorithmData, 'update', oldAlgorithmData)
@@ -853,6 +876,8 @@ export async function saveAlgorithm() {
         showNotification('Алгоритм успешно сохранен.');
         if (resetInitialEditState) resetInitialEditState();
         if (editModal) editModal.classList.add('hidden');
+        const pdfHostAfterSave = document.getElementById('algorithmPdfEditHost');
+        if (pdfHostAfterSave) removePdfSectionsFromContainer(pdfHostAfterSave);
         requestAnimationFrame(() => {
             if (!getVisibleModals || getVisibleModals().length === 0) {
                 document.body.classList.remove('modal-open');

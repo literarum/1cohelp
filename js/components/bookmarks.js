@@ -19,6 +19,13 @@ import { ARCHIVE_FOLDER_ID, ARCHIVE_FOLDER_NAME } from '../constants.js';
 import { updateSearchIndex } from '../features/search.js';
 import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
 import { State as GlobalState } from '../app/state.js';
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
+import {
+    coerceTagsArray,
+    parseSearchQueryTagsAndText,
+    itemMatchesAllTags,
+} from '../features/global-tags.js';
 
 // Полные классы для бейджей папок (Tailwind не поддерживает динамические имена классов — только явные строки)
 const FOLDER_BADGE_CLASSES = {
@@ -309,6 +316,16 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
     const safeTitle = escapeHtml(bookmark.title || 'Без названия');
     const safeDescription = escapeHtml(bookmark.description || '');
     const descriptionLinked = linkify(bookmark.description || '');
+    const tagList = coerceTagsArray(bookmark.tags);
+    const tagsChipsHtml =
+        tagList.length > 0
+            ? `<div class="bookmark-tags flex flex-wrap gap-1 mt-1.5" aria-label="Теги">${tagList
+                  .map(
+                      (t) =>
+                          `<span class="inline-flex items-center rounded-full bg-primary/10 text-primary dark:bg-primary/20 px-2 py-0.5 text-[11px] font-medium">${escapeHtml(t)}</span>`,
+                  )
+                  .join('')}</div>`
+            : '';
 
     if (viewMode === 'cards') {
         bookmarkElement.className =
@@ -326,6 +343,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                     ${safeTitle}
                 </h3>
                 ${descriptionHTML}
+                ${tagsChipsHtml}
                 <div class="bookmark-meta flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-2">
                     ${folderBadgeHTML}
                     <span class="text-gray-500 dark:text-gray-400" title="Добавлено: ${new Date(
@@ -370,6 +388,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                     <p class="bookmark-description text-sm text-gray-500 dark:text-gray-400 truncate" title="${
                         safeDescription || (bookmark.url ? escapeHtml(bookmark.url) : '')
                     }">${listDescContent}</p>
+                    ${tagsChipsHtml ? `<div class="mt-0.5">${tagsChipsHtml}</div>` : ''}
                 </div>
             </div>`;
         bookmarkElement.innerHTML = mainContentHTML + actionsHTML;
@@ -992,6 +1011,7 @@ export function getCurrentBookmarkFormState(form) {
         url: form.elements.bookmarkUrl.value.trim(),
         description: form.elements.bookmarkDescription.value.trim(),
         folder: form.elements.bookmarkFolder.value,
+        tags: form.elements.bookmarkTags ? form.elements.bookmarkTags.value.trim() : '',
         existingScreenshotIds: (form.dataset.existingScreenshotIds || '')
             .split(',')
             .filter(Boolean)
@@ -1027,7 +1047,9 @@ export async function filterBookmarks() {
         return;
     }
 
-    const searchValue = searchInput.value.trim().toLowerCase();
+    const rawSearch = searchInput.value.trim();
+    const { textQuery, tagFilters } = parseSearchQueryTagsAndText(rawSearch);
+    const searchValue = textQuery.toLowerCase();
     const selectedFolderValue = folderFilter.value;
 
     try {
@@ -1053,6 +1075,12 @@ export async function filterBookmarks() {
                 (bm) =>
                     String(bm.folder) === String(selectedFolderValue) &&
                     bm.folder !== ARCHIVE_FOLDER_ID,
+            );
+        }
+
+        if (tagFilters.length > 0) {
+            bookmarksToDisplay = bookmarksToDisplay.filter((bm) =>
+                itemMatchesAllTags(bm, tagFilters),
             );
         }
 
@@ -1234,6 +1262,20 @@ export async function handleSaveFolderSubmit(event) {
             folderData.id = finalId;
         }
 
+        if (isEditing && oldData) {
+            try {
+                const newFromDb = await getFromIndexedDB('bookmarkFolders', finalId);
+                await recordStoreEntityHistoryAfterSave({
+                    storeName: 'bookmarkFolders',
+                    recordId: finalId,
+                    oldRecord: oldData,
+                    newRecord: newFromDb,
+                });
+            } catch (histErr) {
+                console.warn('[bookmarks folder] entity history:', histErr);
+            }
+        }
+
         if (typeof updateSearchIndex === 'function') {
             try {
                 await updateSearchIndex(
@@ -1318,9 +1360,13 @@ export function showOrganizeFoldersModal() {
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-xl font-bold">Управление папками</h2>
+                            <div class="flex items-center gap-1">
+                            <button type="button" id="foldersModalUndoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Предыдущая сохранённая версия (Ctrl+Shift+U)" aria-label="Откат к предыдущей сохранённой версии"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                            <button type="button" id="foldersModalRedoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Следующая сохранённая версия (Ctrl+Shift+R)" aria-label="Повтор отменённой версии"><i class="fas fa-redo" aria-hidden="true"></i></button>
                             <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
+                            </div>
                         </div>
                         
                         <div id="foldersList" class="max-h-60 overflow-y-auto mb-4">
@@ -1460,6 +1506,8 @@ export function showOrganizeFoldersModal() {
 
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
+
+    refreshModalEntityHistoryToolbar('foldersModal').catch(() => {});
 }
 
 /**

@@ -1,5 +1,9 @@
 'use strict';
 
+import { getFromIndexedDB } from '../db/indexeddb.js';
+import { parseTagsFromUserString } from '../features/global-tags.js';
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+
 // ============================================================================
 // BOOKMARKS FORM SUBMIT (вынос из script.js)
 // ============================================================================
@@ -153,12 +157,19 @@ export async function handleBookmarkFormSubmit(event) {
     let finalId = isEditing ? parseInt(id, 10) : null;
     let oldData = null;
     let existingIdsToKeep = [];
+    const tagsRaw = form.elements.bookmarkTags && form.elements.bookmarkTags.value;
+    const tagsList = parseTagsFromUserString(
+        typeof tagsRaw === 'string' ? tagsRaw : '',
+    );
+
     const newDataBase = {
         title,
         url: url || null,
         description: description || null,
         folder: folder,
     };
+    if (tagsList.length > 0) newDataBase.tags = tagsList;
+    else delete newDataBase.tags;
 
     let transaction;
     let saveSuccessful = false;
@@ -386,6 +397,20 @@ export async function handleBookmarkFormSubmit(event) {
     if (saveSuccessful) {
         console.log(`[Save Bookmark v6 (Robust TX)] Успешно завершено для ID: ${finalId}`);
         const finalDataForIndex = { ...newDataBase };
+
+        if (isEditing && oldData) {
+            try {
+                const newFromDb = await getFromIndexedDB('bookmarks', finalId);
+                await recordStoreEntityHistoryAfterSave({
+                    storeName: 'bookmarks',
+                    recordId: finalId,
+                    oldRecord: oldData,
+                    newRecord: newFromDb,
+                });
+            } catch (histErr) {
+                console.warn('[bookmarks-form] entity history:', histErr);
+            }
+        }
 
         if (typeof updateSearchIndex === 'function') {
             updateSearchIndex(

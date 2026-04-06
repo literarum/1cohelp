@@ -101,6 +101,7 @@ describe('db-merge identity and diff logic', () => {
         expect(CONTENT_STORES).toContain('bookmarks');
         expect(CONTENT_STORES).toContain('bookmarkFolders');
         expect(CONTENT_STORES).toContain('favorites');
+        expect(CONTENT_STORES).toContain('reminders');
     });
 
     it('analyzeMergeData does not throw for older schemaVersion (backward compatibility)', async () => {
@@ -115,7 +116,7 @@ describe('db-merge identity and diff logic', () => {
             stores: ['bookmarkFolders', 'bookmarks'],
         });
         expect(analysis.schemaVersion).toBe('1.0');
-        expect(analysis.expectedSchemaVersion).toBe('1.5');
+        expect(analysis.expectedSchemaVersion).toBe('1.7');
         expect(analysis.storeDiffs).toBeDefined();
         const bookmarksDiff = analysis.storeDiffs.find((d) => d.storeName === 'bookmarks');
         expect(bookmarksDiff?.importOnly?.length).toBe(1);
@@ -511,6 +512,11 @@ describe('db-merge scope mapping', () => {
             'pdfFiles',
             'screenshots',
         ]);
+    });
+
+    it('maps reminders scope to reminders store', () => {
+        const { resolveStoresFromSelectedScopes } = __dbMergeScopeInternals;
+        expect(resolveStoresFromSelectedScopes(['reminders'])).toEqual(['reminders']);
     });
 
     it('returns empty list for empty or unknown scopes', () => {

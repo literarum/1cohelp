@@ -16,6 +16,7 @@ export const HEALTH_SYSTEM_ORDER = [
     'export_import',
     'merge',
     'data_content',
+    'data_integrity',
     'autosave',
     'revocation',
     'ui',
@@ -37,6 +38,7 @@ export const HEALTH_SYSTEM_LABELS = {
     export_import: 'Экспорт и резервное копирование',
     merge: 'Слияние баз (совместимость формата)',
     data_content: 'Данные (алгоритмы, закладки, клиент, сторы)',
+    data_integrity: 'Целостность данных (второй контур: ссылки, PDF, сироты)',
     autosave: 'Автосохранение заметок',
     revocation: 'Проверка отзыва сертификатов',
     ui: 'Интерфейс, тема, вёрстка',
@@ -61,6 +63,7 @@ export function inferSystemFromTitle(title) {
     if (/Экспорт|Импорт|File System|экспорт|резервн/i.test(t)) return 'export_import';
     if (/слиян|merge|Merge|совместимост/i.test(t)) return 'merge';
     if (/Yandex|отзыв|API проверки|Компонента проверки|проверки отзыва/i.test(t)) return 'revocation';
+    if (/Целостность данных/i.test(t)) return 'data_integrity';
     if (/IndexedDB|хранилищ|clientData|Алгоритмы|Закладки|Черн|Избранное|Заметки|Регламент|Ссылки|pdfFiles|screenshots|СЭДО|Корзина удалений|sedoTypes/i.test(t))
         return 'data_content';
     if (/автосохран|Autosave/i.test(t)) return 'autosave';

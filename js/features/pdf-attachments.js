@@ -311,16 +311,15 @@ function getPdfSectionCacheKey(parentType, parentId, readOnly) {
 
 const PDF_UI_CLASSES = Object.freeze({
     addMoreButton:
-        'pdf-add-more-btn inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-primary/40 hover:bg-gray-50 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-primary/40 dark:hover:bg-gray-700/70',
+        'pdf-add-more-btn inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-primary hover:bg-gray-50 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-primary dark:hover:bg-gray-700/70',
     shellEmpty:
-        'pdf-list-shell pdf-drop-target mt-2 min-h-0 rounded-xl transition-colors border-2 border-dashed border-gray-200/90 bg-gray-50/35 px-1 py-0.5 dark:border-gray-600/70 dark:bg-gray-900/25',
+        'pdf-list-shell pdf-drop-target pdf-drop-shell-empty mt-2 min-h-0 rounded-xl px-2 py-1.5 transition-[border-color,box-shadow]',
     shellFilled:
         'pdf-list-shell pdf-drop-target mt-2 rounded-xl border border-gray-200/90 bg-white px-0 py-0 shadow-sm dark:border-gray-600/80 dark:bg-gray-800/40',
     emptyState:
-        'pdf-empty-state flex items-center gap-2 py-1.5 px-2 text-left cursor-pointer rounded-lg outline-none transition-colors hover:bg-gray-100/60 dark:hover:bg-gray-800/25 focus-visible:ring-2 focus-visible:ring-primary/35',
-    emptyIcon:
-        'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gray-200/70 text-gray-500 dark:bg-gray-700/60 dark:text-gray-300',
-    emptyHint: 'text-xs leading-snug text-gray-600 dark:text-gray-300',
+        'pdf-empty-state flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary',
+    emptyIcon: 'pdf-empty-icon-tile',
+    emptyHint: 'pdf-empty-state-inner-hint m-0 leading-snug',
     editNameButton:
         'rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200',
     editNameInput:
@@ -362,8 +361,17 @@ function applyPdfThemeStyling({ section, addToolbar, shell, ul }) {
 
     if (shell) {
         if (shell.classList.contains('pdf-list-shell')) {
-            shell.style.borderColor = isDark ? 'rgba(75, 85, 99, 0.8)' : 'rgba(209, 213, 219, 0.9)';
-            shell.style.backgroundColor = isDark ? 'rgba(31, 41, 55, 0.4)' : '';
+            /* Пустой drop-zone: только pdf-dropzone.css (+ .dark), без inline — иначе «серое пятно» в светлой теме. */
+            if (shell.classList.contains('pdf-drop-shell-empty')) {
+                shell.style.borderColor = '';
+                shell.style.backgroundColor = '';
+            } else if (isDark) {
+                shell.style.borderColor = 'rgba(75, 85, 99, 0.8)';
+                shell.style.backgroundColor = 'rgba(31, 41, 55, 0.4)';
+            } else {
+                shell.style.borderColor = '';
+                shell.style.backgroundColor = '';
+            }
         }
     }
 
@@ -475,7 +483,7 @@ export function mountAttachmentAbsentParagraph(container, leadLabel, onActivate)
     container.innerHTML = '';
     const p = document.createElement('p');
     p.className =
-        'text-sm leading-relaxed text-gray-600 dark:text-gray-400 py-2 px-0.5';
+        'text-sm leading-relaxed text-gray-800 dark:text-gray-400 py-2 px-0.5';
     p.appendChild(document.createTextNode(`${leadLabel} `));
     const a = document.createElement('a');
     a.href = '#';
@@ -533,7 +541,7 @@ async function refreshPdfList(section, parentType, parentId) {
                 );
             } else {
                 const empty = document.createElement('p');
-                empty.className = 'text-xs text-gray-500 dark:text-gray-400 py-2 px-1';
+                empty.className = 'text-sm text-gray-800 dark:text-gray-400 py-2 px-1';
                 empty.textContent = 'Нет прикреплённых PDF.';
                 shell.appendChild(empty);
             }
@@ -845,39 +853,16 @@ function tryAttachToAlgorithmModal() {
     observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
 }
 
-// Helper to try attaching to algorithm edit modal
-function tryAttachToAlgorithmEditModal() {
-    const modal = document.getElementById('editModal');
-    if (!modal) return;
-
-    const observer = new MutationObserver(() => {
-        if (modal.classList.contains('hidden')) return;
-
-        const algoId = modal.dataset.algorithmId || modal.querySelector('#editAlgorithmId')?.value;
-        if (!algoId) return;
-
-        const form = modal.querySelector('form');
-        if (!form) return;
-
-        let pdfHost = form.querySelector('.pdf-host-area');
-        if (!pdfHost) {
-            pdfHost = document.createElement('div');
-            pdfHost.className = 'pdf-host-area';
-            form.appendChild(pdfHost);
-        }
-
-        mountPdfSection(pdfHost, 'algorithm', algoId);
-    });
-
-    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
-}
+/**
+ * Редактирование алгоритма: PDF монтируется явно через renderPdfAttachmentsSection
+ * в editAlgorithm (как для закладок в showEditBookmarkModal), без MutationObserver.
+ */
 
 /**
  * Initialize PDF attachment system
  */
 export function initPdfAttachmentSystem() {
     tryAttachToAlgorithmModal();
-    tryAttachToAlgorithmEditModal();
     console.log('PDF Attachment System initialized.');
 }
 

@@ -55,11 +55,18 @@ import {
     indexQueryTokensFromUserQuery,
 } from './search-normalize.js';
 import {
+    parseSearchQueryTagsAndText,
+    itemMatchesAllTags,
+    formatTagsForSearchSnippet,
+    coerceTagsArray,
+} from './global-tags.js';
+import {
     navigateMainTabToAppealNotesMatch,
     findFirstWholeInnOccurrence,
     buildAppealNotesDigitQuerySuggestions,
     getNotesSourceForInnSearch,
 } from './client-notes-search-nav.js';
+import { showClientAnalyticsDetailModal } from './client-analytics.js';
 
 /** Доменные синонимы для расширения запроса (ФНС/СФР/Росстат и т.д.) — единый источник с палитрой команд */
 const QUERY_SYNONYMS = {
@@ -461,6 +468,11 @@ export function getAlgorithmText(algoData) {
         texts.steps = aggregatedStepsText;
     }
 
+    if (Array.isArray(algoData.tags) && algoData.tags.length) {
+        const t = coerceTagsArray(algoData.tags);
+        if (t.length) texts.tags = t.join(' ');
+    }
+
     for (const key in algoData) {
         if (
             Object.prototype.hasOwnProperty.call(algoData, key) &&
@@ -475,6 +487,7 @@ export function getAlgorithmText(algoData) {
                 'dateUpdated',
                 'type',
                 'aggregated_steps_content',
+                'tags',
             ];
             if (!excludedKeys.includes(key) && texts[key] === undefined && !key.startsWith('_')) {
                 const cleanedValue = cleanHtml(algoData[key]);
@@ -576,6 +589,10 @@ export function getTextForItem(storeName, itemData) {
             if (itemData._folderNameForIndex) {
                 textsByField.folderName = cleanHtml(itemData._folderNameForIndex);
             }
+            if (Array.isArray(itemData.tags) && itemData.tags.length) {
+                const t = coerceTagsArray(itemData.tags);
+                if (t.length) textsByField.tags = t.join(' ');
+            }
             break;
 
         case 'reglaments':
@@ -589,6 +606,10 @@ export function getTextForItem(storeName, itemData) {
                 textsByField.categoryName = cleanHtml(categoryDisplayInfo[itemData.category].title);
             } else if (itemData.category) {
                 textsByField.categoryName = cleanHtml(itemData.category);
+            }
+            if (Array.isArray(itemData.tags) && itemData.tags.length) {
+                const t = coerceTagsArray(itemData.tags);
+                if (t.length) textsByField.tags = t.join(' ');
             }
             break;
 
@@ -644,6 +665,37 @@ export function getTextForItem(storeName, itemData) {
             if (itemData.inn) textsByField.inn = cleanHtml(String(itemData.inn));
             if (itemData.phone) textsByField.phone = cleanHtml(String(itemData.phone));
             if (itemData.notes) textsByField.notes = cleanHtml(itemData.notes);
+            break;
+
+        case 'clientAnalyticsRecords':
+            if (itemData.inn) textsByField.inn = cleanHtml(String(itemData.inn));
+            if (itemData.kpp) textsByField.kpp = cleanHtml(String(itemData.kpp));
+            if (itemData.phonesJoined) textsByField.phones = cleanHtml(String(itemData.phonesJoined));
+            if (itemData.question) textsByField.question = cleanHtml(String(itemData.question));
+            if (itemData.contextSnippet)
+                textsByField.contextSnippet = cleanHtml(String(itemData.contextSnippet));
+            if (itemData.sourceFileName)
+                textsByField.sourceFileName = cleanHtml(String(itemData.sourceFileName));
+            if (itemData.listItemIndex != null) {
+                textsByField.listItemIndex = cleanHtml(String(itemData.listItemIndex));
+            }
+            {
+                const pfx =
+                    itemData.listItemIndex != null ? `п.${itemData.listItemIndex} · ` : '';
+                let line = '';
+                if (itemData.inn) line = `${pfx}ИНН ${itemData.inn}`;
+                else if (itemData.phonesJoined) line = `${pfx}Тел. ${itemData.phonesJoined}`;
+                else if (itemData.kpp) line = `${pfx}КПП ${itemData.kpp}`;
+                else line = `${pfx}${itemData.sourceFileName || 'запись'}`;
+                if (itemData.sourceFileName && itemData.inn) {
+                    line = `${line} · ${itemData.sourceFileName}`;
+                } else if (itemData.sourceFileName && !itemData.inn && itemData.phonesJoined) {
+                    line = `${line} · ${itemData.sourceFileName}`;
+                } else if (itemData.sourceFileName && !itemData.inn && !itemData.phonesJoined && itemData.kpp) {
+                    line = `${line} · ${itemData.sourceFileName}`;
+                }
+                textsByField.titleLine = cleanHtml(line.trim());
+            }
             break;
 
         case 'preferences': {
@@ -1689,6 +1741,7 @@ export async function buildInitialSearchIndex(progressCallback) {
             { name: 'bookmarkFolders', type: 'bookmarkFolders' },
             { name: 'clientData', type: 'clientData' },
             { name: 'blacklistedClients', type: 'blacklistedClients' },
+            { name: 'clientAnalyticsRecords', type: 'clientAnalyticsRecords' },
             {
                 name: 'preferences',
                 type: 'preferences',
@@ -2026,6 +2079,77 @@ async function resolveAppealNotesDigitSuggestions(query) {
 }
 
 /**
+ * Поиск только по тегам (#тег в запросе без остального текста).
+ * @param {string[]} tagFilters
+ * @param {string} originalQuery
+ * @returns {Promise<Array<object>>}
+ */
+async function searchByTagsOnly(tagFilters, originalQuery) {
+    if (!tagFilters || tagFilters.length === 0 || !State.db) return [];
+    const out = [];
+    try {
+        const bookmarks = (await getAllFromIndexedDB('bookmarks')) || [];
+        for (const bm of bookmarks) {
+            if (!bm || bm.folder === ARCHIVE_FOLDER_ID) continue;
+            if (!itemMatchesAllTags(bm, tagFilters)) continue;
+            const ref = { store: 'bookmarks', id: String(bm.id), field: 'tags' };
+            const r = convertItemToSearchResult(ref, bm, 4000);
+            if (r) {
+                r.highlightTerm = originalQuery;
+                r.query = originalQuery;
+                out.push(r);
+            }
+        }
+        const reglaments = (await getAllFromIndexedDB('reglaments')) || [];
+        for (const reg of reglaments) {
+            if (!reg || !itemMatchesAllTags(reg, tagFilters)) continue;
+            const ref = { store: 'reglaments', id: String(reg.id), field: 'tags' };
+            const r = convertItemToSearchResult(ref, reg, 4000);
+            if (r) {
+                r.highlightTerm = originalQuery;
+                r.query = originalQuery;
+                out.push(r);
+            }
+        }
+        const algoContainer = await getFromIndexedDB('algorithms', 'all');
+        if (algoContainer?.data) {
+            const main = algoContainer.data.main;
+            if (main && itemMatchesAllTags(main, tagFilters)) {
+                const ref = { store: 'algorithms', id: 'main', field: 'tags' };
+                const r = convertItemToSearchResult(ref, main, 4000);
+                if (r) {
+                    r.highlightTerm = originalQuery;
+                    r.query = originalQuery;
+                    out.push(r);
+                }
+            }
+            for (const sectionKey of Object.keys(algoContainer.data)) {
+                if (sectionKey === 'main') continue;
+                const arr = algoContainer.data[sectionKey];
+                if (!Array.isArray(arr)) continue;
+                for (const algo of arr) {
+                    if (!algo || !itemMatchesAllTags(algo, tagFilters)) continue;
+                    const ref = {
+                        store: 'algorithms',
+                        id: String(algo.id),
+                        field: 'tags',
+                    };
+                    const r = convertItemToSearchResult(ref, algo, 4000);
+                    if (r) {
+                        r.highlightTerm = originalQuery;
+                        r.query = originalQuery;
+                        out.push(r);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[searchByTagsOnly]', e);
+    }
+    return out;
+}
+
+/**
  * Выполняет поиск
  */
 export async function performSearch(query) {
@@ -2089,15 +2213,19 @@ export async function performSearch(query) {
 
     try {
         const MAX_SEARCH_RESULTS_DISPLAY = 50;
-        const searchContext = determineSearchContext(query);
-        let queryTokens = indexQueryTokensFromUserQuery(query);
+        const { textQuery, tagFilters } = parseSearchQueryTagsAndText(query);
+        const textForContext = textQuery || query;
+        const searchContext = determineSearchContext(textForContext);
+        let queryTokens = indexQueryTokensFromUserQuery(textQuery);
         const originalQueryTokens = queryTokens.slice();
         queryTokens = expandQueryTokensWithSynonyms(queryTokens);
-        const sectionMatches = findSectionMatches(query);
+        const sectionMatches = findSectionMatches(textForContext);
 
         if (queryTokens.length === 0) {
+            const tagResults =
+                tagFilters.length > 0 ? await searchByTagsOnly(tagFilters, query) : [];
             const appealOnly = await resolveAppealNotesDigitSuggestions(query);
-            const combinedZero = [...sectionMatches, ...appealOnly];
+            const combinedZero = [...sectionMatches, ...tagResults, ...appealOnly];
             const sortedZero = sortSearchResults(combinedZero);
             const limitedZero = diversifyResults(sortedZero, MAX_SEARCH_RESULTS_DISPLAY);
             if (limitedZero.length === 0) {
@@ -2128,6 +2256,7 @@ export async function performSearch(query) {
             query,
             query,
             originalQueryTokens,
+            tagFilters,
         );
 
         const appealSuggestions = await resolveAppealNotesDigitSuggestions(query);
@@ -2141,9 +2270,10 @@ export async function performSearch(query) {
 
         // Fallback-аудит: если индекс не дал результата, делаем медленный скан по хранилищам,
         // чтобы не терять навигацию для элементов, которые еще не попали в индекс.
-        if (limitedResults.length === 0 && query.trim().length >= 2) {
+        const fallbackText = ((textQuery || '').trim() || query.trim());
+        if (limitedResults.length === 0 && fallbackText.length >= 2) {
             try {
-                const fallbackRegex = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const fallbackRegex = fallbackText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const fallbackResults = await searchWithRegex(`/${fallbackRegex}/`);
                 if (Array.isArray(fallbackResults) && fallbackResults.length > 0) {
                     limitedResults = fallbackResults
@@ -2185,7 +2315,11 @@ export async function performSearch(query) {
         }
     } catch (error) {
         console.error('[performSearch] Ошибка поиска:', error);
-        searchResultsContainer.innerHTML = errorHTML;
+        const msg = error && /** @type {any} */ (error).message ? String(error.message) : '';
+        const looksLikeDb =
+            /indexeddb|idb|database|баз[аы]\s+данн/i.test(msg) ||
+            /** @type {any} */ (error)?.name === 'InvalidStateError';
+        searchResultsContainer.innerHTML = looksLikeDb ? dbErrorHTML : errorHTML;
 
         if (showNotification) {
             showNotification(`Ошибка поиска: ${error.message}`, 'error');
@@ -2241,16 +2375,19 @@ export async function getGlobalSearchResults(query) {
         return sortSearchResults([...sections, ...appeal]).slice(0, MAX_RESULTS);
     }
 
-    const searchContext = determineSearchContext(q);
-    let queryTokens = indexQueryTokensFromUserQuery(q);
+    const { textQuery, tagFilters } = parseSearchQueryTagsAndText(q);
+    const textForContext = textQuery || q;
+    const searchContext = determineSearchContext(textForContext);
+    let queryTokens = indexQueryTokensFromUserQuery(textQuery);
     const originalQueryTokens = queryTokens.slice();
     queryTokens = expandQueryTokensWithSynonyms(queryTokens);
-    const sectionMatches = findSectionMatches(q);
+    const sectionMatches = findSectionMatches(textForContext);
 
     if (queryTokens.length === 0) {
+        const tagResults = tagFilters.length > 0 ? await searchByTagsOnly(tagFilters, q) : [];
         const appealZero = await resolveAppealNotesDigitSuggestions(q);
-        if (appealZero.length === 0) return sectionMatches;
-        return sortSearchResults([...sectionMatches, ...appealZero]).slice(0, MAX_RESULTS);
+        const combinedZero = [...sectionMatches, ...tagResults, ...appealZero];
+        return sortSearchResults(combinedZero).slice(0, MAX_RESULTS);
     }
 
     let candidateDocs;
@@ -2274,7 +2411,7 @@ export async function getGlobalSearchResults(query) {
         return sectionMatches;
     }
 
-    const finalResults = await processSearchResults(candidateDocs, q, q, originalQueryTokens);
+    const finalResults = await processSearchResults(candidateDocs, q, q, originalQueryTokens, tagFilters);
     const appealSuggestions = await resolveAppealNotesDigitSuggestions(q);
     let mergedFinal = finalResults;
     if (appealSuggestions.length > 0) {
@@ -2622,8 +2759,12 @@ function findSectionMatches(normalizedQuery) {
  * Применяет фильтры полей
  */
 function applyFieldFilters(docEntries) {
+    const allFieldBoxes = document.querySelectorAll('.search-field-filter');
     const searchFieldCheckboxes = document.querySelectorAll('.search-field-filter:checked');
-    if (searchFieldCheckboxes.length === 0 || searchFieldCheckboxes.length >= 3) {
+    if (
+        searchFieldCheckboxes.length === 0 ||
+        (allFieldBoxes.length > 0 && searchFieldCheckboxes.length === allFieldBoxes.length)
+    ) {
         return docEntries;
     }
 
@@ -2649,6 +2790,7 @@ function isFieldMatch(ref, selectedField) {
         title: ['title', 'name', 'tableTitle'],
         description: ['description', 'notes', 'content'],
         steps: ['steps', 'stepTitle'],
+        tags: ['tags'],
     };
 
     const matchingFields = fieldMapping[selectedField] || [selectedField];
@@ -2771,6 +2913,7 @@ async function processSearchResults(
     normalizedQuery,
     originalQuery,
     originalQueryTokens = null,
+    tagFilters = [],
 ) {
     const startTime = performance.now();
     console.log(
@@ -2783,7 +2926,12 @@ async function processSearchResults(
 
     const filteredEntries = applyFieldFilters(finalDocEntries);
 
-    const fullResults = await loadFullDataForResults(filteredEntries);
+    let fullResults = await loadFullDataForResults(filteredEntries);
+    if (tagFilters && tagFilters.length > 0) {
+        fullResults = fullResults.filter((entry) =>
+            itemMatchesAllTags(entry.itemData, tagFilters),
+        );
+    }
 
     const groupedByActualItem = new Map();
     fullResults.forEach((entry) => {
@@ -3050,6 +3198,9 @@ function convertItemToSearchResult(ref, itemData, score) {
     } else if (storeName === 'blacklistedClients') {
         finalSection = 'blacklistedClients';
         finalItemId = String(itemData.id || itemIdFromRef);
+    } else if (storeName === 'clientAnalyticsRecords') {
+        finalSection = 'clientAnalytics';
+        finalItemId = String(itemData.id || itemIdFromRef);
     } else {
         finalSection = storeName;
         finalItemId = String(itemData.id || itemIdFromRef);
@@ -3126,6 +3277,27 @@ function convertItemToSearchResult(ref, itemData, score) {
             result.title = itemData.organizationName || `Запись ЧС #${finalItemId}`;
             result.description = `ИНН: ${itemData.inn || '-'}, Тел: ${itemData.phone || '-'}`;
             break;
+        case 'clientAnalyticsRecords':
+            result.type = 'clientAnalyticsRecord';
+            {
+                const pfx =
+                    itemData.listItemIndex != null ? `п.${itemData.listItemIndex} · ` : '';
+                if (itemData.inn) {
+                    result.title = `${pfx}ИНН ${itemData.inn} · ${itemData.sourceFileName || 'файл'}`;
+                } else if (itemData.phonesJoined) {
+                    result.title = `${pfx}Тел. ${itemData.phonesJoined} · ${itemData.sourceFileName || 'файл'}`;
+                } else if (itemData.kpp) {
+                    result.title = `${pfx}КПП ${itemData.kpp} · ${itemData.sourceFileName || 'файл'}`;
+                } else {
+                    result.title = `${pfx}${itemData.sourceFileName || 'Запись аналитики'}`;
+                }
+            }
+            result.description = (
+                itemData.question ||
+                itemData.contextSnippet ||
+                ''
+            ).substring(0, 160);
+            break;
         case 'preferences':
             if (itemIdFromRef === SEDO_CONFIG_KEY) {
                 const table = itemData.tables?.[ref.tableIndex];
@@ -3158,6 +3330,16 @@ function convertItemToSearchResult(ref, itemData, score) {
         default:
             result.type = storeName;
             break;
+    }
+
+    const tagSnip = formatTagsForSearchSnippet(itemData);
+    if (
+        tagSnip &&
+        (storeName === 'algorithms' || storeName === 'bookmarks' || storeName === 'reglaments')
+    ) {
+        result.description = result.description
+            ? `${result.description} · Теги: ${tagSnip}`
+            : `Теги: ${tagSnip}`;
     }
 
     if (result.description) {
@@ -3593,6 +3775,17 @@ export async function handleSearchResultClick(result) {
                     `tr[data-entry-id="${result.id}"]`,
                     result.highlightTerm || result.title,
                 );
+                break;
+            case 'clientAnalyticsRecord':
+                if (setActiveTab) await setActiveTab('clientAnalytics');
+                await tryScrollAndHighlight(
+                    'clientAnalytics',
+                    `.client-analytics-card[data-id="${result.id}"]`,
+                    result.highlightTerm || result.title,
+                );
+                if (typeof showClientAnalyticsDetailModal === 'function') {
+                    showClientAnalyticsDetailModal(parseInt(result.id, 10));
+                }
                 break;
             case 'preference':
                 if (result.section && setActiveTab) await setActiveTab(result.section);

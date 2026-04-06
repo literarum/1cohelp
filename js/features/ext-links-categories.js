@@ -5,6 +5,9 @@
  * Вынесено из script.js
  */
 
+import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
+
 // ============================================================================
 // ЗАВИСИМОСТИ
 // ============================================================================
@@ -114,9 +117,13 @@ export function showOrganizeExtLinkCategoriesModal() {
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">Управление категориями</h2>
+                            <div class="flex items-center gap-1">
+                            <button type="button" id="extLinkCategoriesModalUndoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Предыдущая сохранённая версия (Ctrl+Shift+U)" aria-label="Откат к предыдущей сохранённой версии"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                            <button type="button" id="extLinkCategoriesModalRedoBtn" disabled class="inline-block p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Следующая сохранённая версия (Ctrl+Shift+R)" aria-label="Повтор отменённой версии"><i class="fas fa-redo" aria-hidden="true"></i></button>
                             <button class="close-modal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
+                            </div>
                         </div>
                         
                         <div id="extLinkCategoriesList" class="max-h-60 overflow-y-auto mb-4">
@@ -248,12 +255,14 @@ export function showOrganizeExtLinkCategoriesModal() {
 
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
+
+    refreshModalEntityHistoryToolbar('extLinkCategoriesModal').catch(() => {});
 }
 
 /**
  * Загружает и отображает список категорий в указанном контейнере
  */
-async function loadExtLinkCategoriesList(categoriesListElement) {
+export async function loadExtLinkCategoriesList(categoriesListElement) {
     if (!categoriesListElement) {
         console.error('loadExtLinkCategoriesList: Контейнер для списка категорий не передан.');
         return;
@@ -408,6 +417,20 @@ export async function handleSaveExtLinkCategorySubmit(event) {
         if (!isEditing) {
             finalId = savedResult;
             categoryData.id = finalId;
+        }
+
+        if (isEditing && oldData) {
+            try {
+                const newFromDb = await getFromIndexedDB('extLinkCategories', finalId);
+                await recordStoreEntityHistoryAfterSave({
+                    storeName: 'extLinkCategories',
+                    recordId: finalId,
+                    oldRecord: oldData,
+                    newRecord: newFromDb,
+                });
+            } catch (histErr) {
+                console.warn('[ext-link-categories] entity history:', histErr);
+            }
         }
 
         // Обновляем State.extLinkCategoryInfo

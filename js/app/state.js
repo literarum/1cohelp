@@ -77,6 +77,8 @@ export const State = {
     currentSection: 'main',
     /** Секция, с которой перешли в избранное; повторный клик по «Избранное» возвращает в неё */
     sectionBeforeFavorites: 'main',
+    /** Секция до открытия напоминаний (кнопка в шапке) */
+    sectionBeforeReminders: 'main',
     currentAlgorithm: null,
     editMode: false,
     viewPreferences: {},

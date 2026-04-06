@@ -11,6 +11,7 @@ import {
     RUNTIME_LONGTASK_RECORD_MIN_MS,
 } from './runtime-telemetry-observers.js';
 import { inferSystemFromTitle } from './health-report-format.js';
+import { getPwaRuntimeSnapshot } from '../app/pwa-register.js';
 
 /**
  * @param {number} bytes
@@ -232,15 +233,34 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
         message: `crossOriginIsolated: ${Boolean(window.crossOriginIsolated)}.`,
     });
 
-    // Service Worker
+    // Service Worker (дублирующий контур: регистрация + снимок из pwa-register)
     if ('serviceWorker' in navigator) {
-        const hasCtrl = Boolean(navigator.serviceWorker.controller);
+        const snap = getPwaRuntimeSnapshot();
+        let msg = snap.controller
+            ? 'Контроллер активен (кэш оболочки; офлайн возможен после успешной загрузки).'
+            : 'Контроллер не активен (первый заход или страница ещё не под управлением SW).';
+        msg += ` Версия активов: ${snap.assetQueryVersion}.`;
+        if (snap.controllerScriptUrl) {
+            msg += ` SW: ${snap.controllerScriptUrl}.`;
+        }
+        if (snap.controllerState) {
+            msg += ` state: ${snap.controllerState}.`;
+        }
+        try {
+            const reg = await runWithTimeout(navigator.serviceWorker.getRegistration(), 4000);
+            if (reg) {
+                msg += ` scope: ${reg.scope}.`;
+                msg += reg.waiting
+                    ? ' Есть ожидающее обновление (панель «Доступна новая версия»).'
+                    : ' Ожидающего обновления нет.';
+            }
+        } catch (err) {
+            msg += ` getRegistration: ${err?.message || String(err)}.`;
+        }
         rows.push({
             level: 'info',
             title: 'Service Worker',
-            message: hasCtrl
-                ? 'Контроллер активен (PWA/offline-режим возможен).'
-                : 'Контроллер отсутствует (обычное веб-приложение без SW).',
+            message: msg,
         });
     }
 
