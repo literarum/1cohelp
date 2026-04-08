@@ -671,6 +671,8 @@ export function getTextForItem(storeName, itemData) {
             if (itemData.inn) textsByField.inn = cleanHtml(String(itemData.inn));
             if (itemData.kpp) textsByField.kpp = cleanHtml(String(itemData.kpp));
             if (itemData.phonesJoined) textsByField.phones = cleanHtml(String(itemData.phonesJoined));
+            if (itemData.emailsJoined)
+                textsByField.emails = cleanHtml(String(itemData.emailsJoined));
             if (itemData.question) textsByField.question = cleanHtml(String(itemData.question));
             if (itemData.contextSnippet)
                 textsByField.contextSnippet = cleanHtml(String(itemData.contextSnippet));
@@ -680,13 +682,11 @@ export function getTextForItem(storeName, itemData) {
                 textsByField.listItemIndex = cleanHtml(String(itemData.listItemIndex));
             }
             {
-                const pfx =
-                    itemData.listItemIndex != null ? `п.${itemData.listItemIndex} · ` : '';
                 let line = '';
-                if (itemData.inn) line = `${pfx}ИНН ${itemData.inn}`;
-                else if (itemData.phonesJoined) line = `${pfx}Тел. ${itemData.phonesJoined}`;
-                else if (itemData.kpp) line = `${pfx}КПП ${itemData.kpp}`;
-                else line = `${pfx}${itemData.sourceFileName || 'запись'}`;
+                if (itemData.inn) line = `ИНН ${itemData.inn}`;
+                else if (itemData.phonesJoined) line = `Тел. ${itemData.phonesJoined}`;
+                else if (itemData.kpp) line = `КПП ${itemData.kpp}`;
+                else line = `${itemData.sourceFileName || 'запись'}`;
                 if (itemData.sourceFileName && itemData.inn) {
                     line = `${line} · ${itemData.sourceFileName}`;
                 } else if (itemData.sourceFileName && !itemData.inn && itemData.phonesJoined) {
@@ -3280,16 +3280,14 @@ function convertItemToSearchResult(ref, itemData, score) {
         case 'clientAnalyticsRecords':
             result.type = 'clientAnalyticsRecord';
             {
-                const pfx =
-                    itemData.listItemIndex != null ? `п.${itemData.listItemIndex} · ` : '';
                 if (itemData.inn) {
-                    result.title = `${pfx}ИНН ${itemData.inn} · ${itemData.sourceFileName || 'файл'}`;
+                    result.title = `ИНН ${itemData.inn} · ${itemData.sourceFileName || 'файл'}`;
                 } else if (itemData.phonesJoined) {
-                    result.title = `${pfx}Тел. ${itemData.phonesJoined} · ${itemData.sourceFileName || 'файл'}`;
+                    result.title = `Тел. ${itemData.phonesJoined} · ${itemData.sourceFileName || 'файл'}`;
                 } else if (itemData.kpp) {
-                    result.title = `${pfx}КПП ${itemData.kpp} · ${itemData.sourceFileName || 'файл'}`;
+                    result.title = `КПП ${itemData.kpp} · ${itemData.sourceFileName || 'файл'}`;
                 } else {
-                    result.title = `${pfx}${itemData.sourceFileName || 'Запись аналитики'}`;
+                    result.title = `${itemData.sourceFileName || 'Запись аналитики'}`;
                 }
             }
             result.description = (

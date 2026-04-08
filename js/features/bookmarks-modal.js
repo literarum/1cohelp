@@ -7,6 +7,7 @@
 import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
 import {
     activateModalFocus,
+    attachModalBackdropWheelScroll,
     deactivateModalFocus,
     enhanceModalAccessibility,
 } from '../ui/modals-manager.js';
@@ -121,7 +122,7 @@ export async function ensureBookmarkModal() {
                         </div>
                     </div>
                 </div>
-                <div class="modal-content-area p-content overflow-y-auto flex-1 min-h-0">
+                <div class="modal-content-area p-content overflow-y-auto overscroll-y-contain flex-1 min-h-0">
                     <form id="bookmarkForm" novalidate>
                         <input type="hidden" id="bookmarkId" name="bookmarkId">
                         <div class="mb-4">
@@ -353,6 +354,8 @@ export async function ensureBookmarkModal() {
             attachBookmarkScreenshotHandlers(elements.form);
         }
     }
+
+    attachModalBackdropWheelScroll(modal, bookmarkModalConfigGlobal.contentAreaSelector);
 
     console.log(`${LOG_PREFIX} Модальное окно для закладок успешно подготовлено/найдено.`);
     return elements;

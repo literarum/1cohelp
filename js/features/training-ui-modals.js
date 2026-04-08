@@ -69,7 +69,7 @@ export function closeTrainingModal() {
  * @param {string} [opts.modalId]
  * @param {boolean} [opts.showUndoRedo]
  * @param {boolean} [opts.showFullscreen]
- * @param {boolean} [opts.closeOnBackdrop] если true — закрытие по клику на оверлей (по умолчанию false)
+ * @param {boolean} [opts.closeOnBackdrop] устарело: закрытие по оверлею отключено глобально
  * @param {boolean} [opts.ultraWide] очень широкая панель (редакторы наставника и т.п.)
  */
 export function mountTrainingModal(opts) {
@@ -117,14 +117,7 @@ export function mountTrainingModal(opts) {
         closeTrainingModal();
         opts.onCancel?.();
     });
-    if (opts.closeOnBackdrop === true) {
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeTrainingModal();
-                opts.onCancel?.();
-            }
-        });
-    }
+    /* Закрытие по клику на оверлей отключено глобально — только крестик / Esc / явные действия. */
 
     const fsBtn = head.querySelector('#trainingModalFsBtn');
     fsBtn?.addEventListener('click', (e) => {
@@ -228,7 +221,7 @@ export function openTrainingManualCardModal(p) {
             <button type="button" id="tcSave" class="px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium">Сохранить карточку</button>
         </div>`;
 
-    mountTrainingModal({ title: 'Новая карточка', subtitle: 'Локально, только на этом устройстве', bodyEl: wrap });
+    mountTrainingModal({ title: 'Новая карточка', bodyEl: wrap });
 
     const front = /** @type {HTMLTextAreaElement} */ (wrap.querySelector('#tcFront'));
     const back = /** @type {HTMLTextAreaElement} */ (wrap.querySelector('#tcBack'));
@@ -253,7 +246,7 @@ export function openTrainingWeakNoteModal(p) {
         <textarea id="twNote" rows="4" maxlength="800"
             class="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
             placeholder="Коротко: триггер, проверка, эскалация…"></textarea>
-        <p class="text-xs text-gray-500 mb-4">До 800 символов. Сохраняется только локально.</p>
+        <p class="text-xs text-gray-500 mb-4">До 800 символов.</p>
         <div class="flex justify-end gap-2">
             <button type="button" id="twCancel" class="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-sm">Отмена</button>
             <button type="button" id="twSave" class="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-medium">Сохранить в слабые места</button>

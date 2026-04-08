@@ -5,6 +5,7 @@
  * Вынесено из script.js (Этап 5)
  */
 
+import { closeClientAnalyticsDetailModal } from '../features/client-analytics.js';
 import { performAlgorithmRedo, performAlgorithmUndo } from '../history/algorithm-history-bridge.js';
 import {
     MODAL_IDS_WITH_HISTORY,
@@ -48,6 +49,8 @@ let hasBlockingModalsOpen = null;
 let searchEscClearHandler = null;
 let altRReloadHandler = null;
 let ctrlRReloadHandler = null;
+/** @type {((e: MouseEvent) => void) | null} */
+let noInnLinkClickCapture = null;
 let openCommandPalette = null;
 let openEngineeringCockpit = null;
 
@@ -101,7 +104,8 @@ export function setHotkeysDependencies(deps) {
  * Обработчик клика по ссылке "Клиент не знает ИНН" (делегирование событий)
  */
 export function handleNoInnLinkEvent(event) {
-    const link = event.target.closest('a[id^="noInnLink_"]');
+    const link =
+        event.target.closest('a#noInnLink') || event.target.closest('a[id^="noInnLink_"]');
     if (link) {
         event.preventDefault();
         if (typeof showNoInnModal === 'function') {
@@ -248,6 +252,12 @@ export function setupHotkeys() {
         }
     };
     document.addEventListener('keydown', ctrlRReloadHandler, false);
+
+    if (noInnLinkClickCapture) {
+        document.removeEventListener('click', noInnLinkClickCapture, true);
+    }
+    noInnLinkClickCapture = (event) => handleNoInnLinkEvent(event);
+    document.addEventListener('click', noInnLinkClickCapture, true);
 
     console.log('Глобальные хоткеи и дополнительные перехватчики инициализированы.');
 }
@@ -592,6 +602,7 @@ export async function handleGlobalHotkey(event) {
     const viewerModal = document.getElementById('screenshotViewerModal');
     const algorithmModal = document.getElementById('algorithmModal');
     const bookmarkDetailModal = document.getElementById('bookmarkDetailModal');
+    const clientAnalyticsDetailModal = document.getElementById('clientAnalyticsDetailModal');
     const reglamentDetailModal = document.getElementById('reglamentDetailModal');
     const reglamentsListDiv = document.getElementById('reglamentsList');
     const backToCategoriesBtn = document.getElementById('backToCategories');
@@ -621,6 +632,9 @@ export async function handleGlobalHotkey(event) {
                 }
                 if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
                     reglamentDetailModal.classList.add('hidden');
+                }
+                if (clientAnalyticsDetailModal && !clientAnalyticsDetailModal.classList.contains('hidden')) {
+                    closeClientAnalyticsDetailModal();
                 }
 
                 requestAnimationFrame(() => {
@@ -730,6 +744,10 @@ export async function handleGlobalHotkey(event) {
         } else if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
             console.log('[GlobalHotkey Esc] Закрытие окна деталей регламента');
             reglamentDetailModal.classList.add('hidden');
+            closedSomethingInChain = true;
+        } else if (clientAnalyticsDetailModal && !clientAnalyticsDetailModal.classList.contains('hidden')) {
+            console.log('[GlobalHotkey Esc] Закрытие карточки аналитики клиентов');
+            closeClientAnalyticsDetailModal();
             closedSomethingInChain = true;
         }
 

@@ -5,45 +5,25 @@
 // ============================================================================
 import {
     DB_NAME,
-    DB_VERSION,
-    CURRENT_SCHEMA_VERSION,
     CATEGORY_INFO_KEY,
     SEDO_CONFIG_KEY,
     BLACKLIST_WARNING_ACCEPTED_KEY,
     USER_PREFERENCES_KEY,
     ARCHIVE_FOLDER_ID,
-    ARCHIVE_FOLDER_NAME,
-    MAX_REFS_PER_WORD,
-    MAX_UPDATE_VISIBLE_TABS_RETRIES,
-    MIN_TOKEN_LEN_FOR_INDEX,
-    FAVORITES_STORE_NAME,
     CLIENT_NOTES_MIN_FONT_SIZE,
     CLIENT_NOTES_MAX_FONT_SIZE,
     CLIENT_NOTES_FONT_SIZE_STEP,
-    SHABLONY_DOC_ID,
-    EXT_LINKS_MIGRATION_KEY,
-    MAIN_ALGO_COLLAPSE_KEY,
     TIMER_STATE_KEY,
-    DIALOG_WATCHDOG_TIMEOUT_NEW,
-    CACHE_TTL,
-    FIELD_WEIGHTS,
     DEFAULT_WELCOME_CLIENT_NOTES_TEXT,
 } from './js/constants.js';
 
 import {
     categoryDisplayInfo as categoryDisplayInfoImported,
     tabsConfig,
-    allPanelIdsForDefault,
     defaultPanelOrder,
     getDefaultUISettings,
     SECTION_GRID_COLS,
     CARD_CONTAINER_CLASSES,
-    LIST_CONTAINER_CLASSES,
-    CARD_ITEM_BASE_CLASSES,
-    LIST_ITEM_BASE_CLASSES,
-    ALGO_BOOKMARK_CARD_CLASSES,
-    LINK_REGLAMENT_CARD_CLASSES,
-    LIST_HOVER_TRANSITION_CLASSES,
     DEFAULT_CIB_LINKS,
     FULLSCREEN_MODAL_CONFIGS,
 } from './js/config.js';
@@ -56,24 +36,15 @@ let categoryDisplayInfo = { ...categoryDisplayInfoImported };
 
 import {
     escapeHtml,
-    escapeHTML,
-    normalizeBrokenEntities,
-    decodeBasicEntitiesOnce,
-    truncateText,
-    highlightText,
-    highlightTextInString,
     highlightElement,
-    highlightTextInElement,
     linkify as linkifyModule,
     createBookmarkDetailUrlSectionElement,
 } from './js/utils/html.js';
 
 import {
     escapeRegExp,
-    base64ToBlob,
     formatExampleForTextarea,
     getSectionName,
-    getStepContentAsText,
     debounce,
     deepEqual as deepEqualModule,
     setupClearButton as setupClearButtonModule,
@@ -85,10 +56,6 @@ import {
 } from './js/utils/clipboard.js';
 
 import {
-    hexToRgb as hexToRgbModule,
-    rgbToHex as rgbToHexModule,
-    rgbToHsb as rgbToHsbModule,
-    hsbToRgb as hsbToRgbModule,
     hexToHsl as hexToHslModule,
     hslToHex as hslToHexModule,
     getLuminance as getLuminanceModule,
@@ -109,7 +76,6 @@ import {
     saveToIndexedDB,
     getFromIndexedDB,
     deleteFromIndexedDB,
-    clearIndexedDBStore,
     getAllFromIndex,
     getAllFromIndexWithKeyVariants,
 } from './js/db/indexeddb.js';
@@ -117,11 +83,7 @@ import {
 import { storeConfigs } from './js/db/stores.js';
 
 import {
-    addToFavoritesDB,
     removeFromFavoritesDB,
-    isFavoriteDB,
-    getAllFavoritesDB,
-    clearAllFavoritesDB,
     loadInitialFavoritesCache,
 } from './js/db/favorites.js';
 
@@ -168,8 +130,6 @@ import {
     setTheme as setThemeModule,
     migrateLegacyThemeVars as migrateLegacyThemeVarsModule,
     applyThemeOverrides as applyThemeOverridesModule,
-    applyThemeClass,
-    onSystemThemeChange,
 } from './js/components/theme.js';
 
 // Timer System
@@ -178,41 +138,28 @@ import {
     toggleTimer,
     resetTimer,
     adjustTimerDuration,
-    showAppNotification,
-    requestAppNotificationPermission,
 } from './js/features/timer.js';
 
 // PDF Attachment System
 import {
-    isPdfFile,
-    setupPdfDragAndDrop,
     addPdfRecords,
     getPdfsForParent,
-    downloadPdfBlob,
-    mountPdfSection,
     renderPdfAttachmentsSection,
     removePdfSectionsFromContainer,
     mountAttachmentAbsentParagraph,
-    initPdfAttachmentSystem,
-    attachAlgorithmAddPdfHandlers,
     attachBookmarkPdfHandlers,
 } from './js/features/pdf-attachments.js';
 
 // Google Docs Integration
 import {
     initGoogleDocSections,
-    loadAndRenderGoogleDoc,
-    renderGoogleDocContent,
-    fetchGoogleDocs,
-    handleShablonySearch,
-    parseShablonyContent,
 } from './js/features/google-docs.js';
 
 // Background Health Tests
 import {
     setBackgroundHealthTestsDependencies,
     initBackgroundHealthTestsSystem,
-} from './js/features/background-health-tests.js';
+} from './js/features/background-health-tests.js?v=20260408health';
 
 // Algorithms PDF Export (PR11)
 import {
@@ -224,7 +171,6 @@ import {
 import {
     setBookmarksPdfExportDependencies,
     exportSingleBookmarkToPdf,
-    exportAllBookmarksToPdf,
 } from './js/features/bookmarks-pdf-export.js';
 
 // FNS Certificate Revocation (PR11)
@@ -266,8 +212,6 @@ import { initBackgroundStatusHUD } from './js/ui/background-status-hud.js';
 // UI modules from PR11
 import {
     setEscapeHandlerDependencies,
-    addEscapeHandler as addEscapeHandlerModule,
-    removeEscapeHandler as removeEscapeHandlerModule,
 } from './js/ui/escape-handler.js';
 import {
     setUnsavedConfirmModalDependencies,
@@ -280,7 +224,6 @@ import {
 import {
     setAppConfirmModalDependencies,
     showAppConfirm as showAppConfirmModule,
-    showAppAlert as showAppAlertModule,
 } from './js/ui/app-confirm-modal.js';
 import { setBackupReminderDependencies } from './js/features/backup-reminder.js';
 import {
@@ -291,9 +234,6 @@ import {
 import {
     setDbMergeDependencies,
     openDbMergeModal,
-    analyzeMergeData,
-    buildMergePlan,
-    applyMergePlan,
 } from './js/features/db-merge.js';
 import {
     setThemeToggleDependencies,
@@ -315,15 +255,8 @@ import {
 
 // SEDO System
 import {
-    DEFAULT_SEDO_DATA,
     initSedoTypesSystem,
-    toggleSedoEditMode,
-    renderSedoTypesContent,
-    saveSedoChanges,
     loadSedoData,
-    filterSedoData,
-    handleSedoSearch,
-    highlightAndScrollSedoItem,
 } from './js/features/sedo.js';
 
 // Command Palette (Ctrl+K)
@@ -342,27 +275,11 @@ import {
 import {
     initSearchSystem,
     performSearch,
-    executeSearch,
-    renderSearchResults,
-    handleSearchResultClick,
-    tokenize,
-    sanitizeQuery,
-    getAlgorithmText,
-    getTextForItem,
-    addToSearchIndex,
-    removeFromSearchIndex,
     updateSearchIndex,
-    updateSearchIndexForItem,
     checkAndBuildIndex,
     buildInitialSearchIndex,
     cleanAndRebuildSearchIndex,
     setSearchDependencies,
-    debouncedSearch,
-    getCachedResults,
-    cacheResults,
-    expandQueryWithSynonyms,
-    searchWithRegex,
-    debug_checkIndex,
     ensureSearchIndexIsBuilt,
     getGlobalSearchResults,
 } from './js/features/search.js';
@@ -425,25 +342,18 @@ import {
     setReglamentsDependencies,
     populateReglamentCategoryDropdowns as populateReglamentCategoryDropdownsModule,
     loadReglaments as loadReglamentsModule,
-    getAllReglaments as getAllReglamentsModule,
-    getReglamentsByCategory as getReglamentsByCategoryModule,
-    createCategoryElement as createCategoryElementModule,
     renderReglamentCategories as renderReglamentCategoriesModule,
     showReglamentsForCategory as showReglamentsForCategoryModule,
     handleReglamentAction as handleReglamentActionModule,
-    deleteReglamentFromList as deleteReglamentFromListModule,
     showReglamentDetail as showReglamentDetailModule,
     showAddReglamentModal as showAddReglamentModalModule,
     editReglament as editReglamentModule,
     initReglamentsSystem as initReglamentsSystemModule,
     loadCategoryInfo,
-    saveCategoryInfo,
 } from './js/components/reglaments.js';
 
 // Bookmark Components
 import {
-    restoreBookmarkFromArchive,
-    moveBookmarkToArchive,
     getCurrentBookmarkFormState,
     setBookmarksDependencies,
     filterBookmarks as filterBookmarksModule,
@@ -451,14 +361,10 @@ import {
     initBookmarkSystem as initBookmarkSystemModule,
     getAllBookmarks as getAllBookmarksModule,
     loadBookmarks as loadBookmarksModule,
-    renderBookmarks as renderBookmarksModule,
     createBookmarkElement as createBookmarkElementModule,
-    renderBookmarkFolders as renderBookmarkFoldersModule,
     handleSaveFolderSubmit as handleSaveFolderSubmitModule,
     showOrganizeFoldersModal as showOrganizeFoldersModalModule,
-    handleDeleteBookmarkFolderClick as handleDeleteBookmarkFolderClickModule,
     loadFoldersListInContainer as loadFoldersListModule,
-    handleBookmarkAction as handleBookmarkActionModule,
     handleViewBookmarkScreenshots as handleViewBookmarkScreenshotsModule,
 } from './js/components/bookmarks.js';
 
@@ -496,7 +402,6 @@ import {
     loadExtLinks as loadExtLinksModule,
     createExtLinkElement as createExtLinkElementModule,
     renderExtLinks as renderExtLinksModule,
-    setExtLinksDependencies,
 } from './js/components/ext-links.js';
 
 // Ext Links Form Submit (extracted from script.js)
@@ -540,7 +445,6 @@ import {
 // Favorites System
 import {
     setFavoritesDependencies,
-    initFavoritesSystem,
     toggleFavorite as toggleFavoriteModule,
     updateFavoriteStatusUI as updateFavoriteStatusUIModule,
     renderFavoritesPage as renderFavoritesPageModule,
@@ -577,14 +481,8 @@ const handleFavoriteActionClick = handleFavoriteActionClickModule;
 import {
     setCibLinksDependencies,
     initCibLinkSystem as initCibLinkSystemModule,
-    initCibLinkModal as initCibLinkModalModule,
     showAddEditCibLinkModal as showAddEditCibLinkModalModule,
-    handleLinkActionClick as handleLinkActionClickModule,
     loadCibLinks as loadCibLinksModule,
-    getAllCibLinks as getAllCibLinksModule,
-    renderCibLinks as renderCibLinksModule,
-    handleCibLinkSubmit as handleCibLinkSubmitModule,
-    deleteCibLink as deleteCibLinkModule,
     filterLinks as filterLinksModule,
 } from './js/features/cib-links.js';
 
@@ -617,8 +515,6 @@ import {
 import {
     setImportExportDependencies,
     clearTemporaryThumbnailsFromContainer as clearTemporaryThumbnailsFromContainerModule,
-    importBookmarks as importBookmarksModule,
-    importReglaments as importReglamentsModule,
     performForcedBackup as performForcedBackupModule,
     handleImportFileChange as handleImportFileChangeModule,
     handleImportButtonClick as handleImportButtonClickModule,
@@ -879,7 +775,7 @@ ExportService.init();
 // UNIFIED_FULLSCREEN_MODAL_CLASSES теперь импортируется из js/ui/modals-manager.js
 // Используем импортированную константу напрямую
 
-const algorithmDetailModalConfig = {
+const _algorithmDetailModalConfig = {
     modalId: 'algorithmModal',
     buttonId: 'toggleFullscreenViewBtn',
     classToggleConfig: {
@@ -917,7 +813,7 @@ const bookmarkModalConfigGlobal = {
     contentAreaSelector: '.modal-content-area',
 };
 
-const editAlgorithmModalConfig = {
+const _editAlgorithmModalConfig = {
     modalId: 'editModal',
     buttonId: 'toggleFullscreenEditBtn',
     classToggleConfig: {
@@ -936,7 +832,7 @@ const editAlgorithmModalConfig = {
     contentAreaSelector: '.p-content.overflow-y-auto.flex-1',
 };
 
-const addAlgorithmModalConfig = {
+const _addAlgorithmModalConfig = {
     modalId: 'addModal',
     buttonId: 'toggleFullscreenAddBtn',
     classToggleConfig: {
@@ -1036,11 +932,11 @@ const hotkeysModalConfig = {
 // getVisibleModals теперь импортируется из js/ui/modals-manager.js
 const getVisibleModals = getVisibleModalsModule;
 
-const SAVE_BUTTON_SELECTORS =
+const _SAVE_BUTTON_SELECTORS =
     'button[type="submit"], #saveAlgorithmBtn, #createAlgorithmBtn, #saveCibLinkBtn, #saveBookmarkBtn, #saveExtLinkBtn';
 
 // hasBlockingModalsOpen, getTopmostModal теперь импортируются из js/ui/modals-manager.js
-const hasBlockingModalsOpen = hasBlockingModalsOpenModule;
+const _hasBlockingModalsOpen = hasBlockingModalsOpenModule;
 const getTopmostModal = getTopmostModalModule;
 
 // Escape handlers для модальных окон
@@ -1162,7 +1058,7 @@ let algorithms = {
 // Устанавливаем loadingOverlayManager для ExportService
 setLoadingOverlayManager(loadingOverlayManager);
 
-function showOverlayForFixedDuration(duration = 2000) {
+function _showOverlayForFixedDuration(duration = 2000) {
     if (loadingOverlayManager.overlayElement) {
         loadingOverlayManager.hideAndDestroy();
     }
@@ -1627,7 +1523,6 @@ setBookmarksDependencies({
     setupClearButton,
     loadFoldersList: loadFoldersListModule,
     removeEscapeHandler,
-    getVisibleModals,
     addEscapeHandler,
     handleSaveFolderSubmit: handleSaveFolderSubmitModule,
     getAllFromIndex,
@@ -1818,7 +1713,7 @@ function setTheme(mode) {
 const renderAllAlgorithms = renderAllAlgorithmsModule;
 
 // renderAlgorithmCards теперь импортируется из js/components/algorithms.js
-const renderAlgorithmCards = renderAlgorithmCardsModule;
+const _renderAlgorithmCards = renderAlgorithmCardsModule;
 
 // renderMainAlgorithm теперь импортируется из js/components/main-algorithm.js
 const renderMainAlgorithm = renderMainAlgorithmModule;
@@ -1832,7 +1727,7 @@ async function loadFromIndexedDB() {
     return loadFromIndexedDBModule();
 }
 
-async function saveDataToIndexedDB() {
+async function _saveDataToIndexedDB() {
     return saveDataToIndexedDBModule();
 }
 
@@ -1912,7 +1807,7 @@ async function _processActualImport(jsonString) {
 }
 
 // Wrapper для модуля Import/Export
-async function performForcedBackup() {
+async function _performForcedBackup() {
     return performForcedBackupModule();
 }
 
@@ -1952,17 +1847,17 @@ function setupTabsOverflow() {
 }
 
 // Wrapper для модуля Tabs Overflow
-function handleMoreTabsBtnClick(e) {
+function _handleMoreTabsBtnClick(e) {
     return handleMoreTabsBtnClickModule(e);
 }
 
 // Wrapper для модуля Tabs Overflow
-function clickOutsideTabsHandler(e) {
+function _clickOutsideTabsHandler(e) {
     return clickOutsideTabsHandlerModule(e);
 }
 
 // Wrapper для модуля Tabs Overflow
-function handleTabsResize() {
+function _handleTabsResize() {
     return handleTabsResizeModule();
 }
 
@@ -1978,7 +1873,7 @@ async function saveNewAlgorithm() {
 // renderAlgorithmCards теперь импортируется из js/components/algorithms.js
 
 // handleNoInnLinkClick теперь импортируется из js/ui/hotkeys-handler.js
-function handleNoInnLinkClick(event) {
+function _handleNoInnLinkClick(event) {
     return handleNoInnLinkClickModule(event);
 }
 
@@ -2012,7 +1907,7 @@ function renderScreenshotThumbnails(
 }
 
 // Wrapper для модуля Screenshots
-function renderScreenshotList(
+function _renderScreenshotList(
     container,
     screenshots,
     onOpenLightbox,
@@ -2040,8 +1935,8 @@ const initCollapseAllButtons = initCollapseAllButtonsModule;
 
 // Функции работы с видами отображения теперь импортируются из js/ui/view-manager.js
 // initViewToggles уже определена выше на строке 973
-const loadViewPreferences = loadViewPreferencesModule;
-const applyDefaultViews = applyDefaultViewsModule;
+const _loadViewPreferences = loadViewPreferencesModule;
+const _applyDefaultViews = applyDefaultViewsModule;
 const saveViewPreference = saveViewPreferenceModule;
 const handleViewToggleClick = handleViewToggleClickModule;
 
@@ -2068,7 +1963,7 @@ const editAlgorithm = editAlgorithmModule;
 // editAlgorithm - imported from algorithms-operations.js module
 
 // Wrapper для модуля algorithms.js
-function initStepSorting(containerElement) {
+function _initStepSorting(containerElement) {
     return initStepSortingModule(containerElement);
 }
 
@@ -2083,7 +1978,7 @@ async function saveAlgorithm() {
 }
 
 // Wrapper для модуля algorithms.js
-function extractStepsDataFromEditForm(containerElement, isMainAlgorithm = false) {
+function _extractStepsDataFromEditForm(containerElement, isMainAlgorithm = false) {
     return extractStepsDataFromEditFormModule(containerElement, isMainAlgorithm);
 }
 
@@ -2103,17 +1998,17 @@ function attachScreenshotHandlers(stepElement) {
 }
 
 // Wrapper для модуля Screenshots
-function renderTemporaryThumbnail(blob, tempIndex, container, stepEl) {
+function _renderTemporaryThumbnail(blob, tempIndex, container, stepEl) {
     return renderTemporaryThumbnailModule(blob, tempIndex, container, stepEl);
 }
 
 // Wrapper для модуля Screenshots
-async function handleImageFileForStepProcessing(fileOrBlob, addCallback, buttonElement = null) {
+async function _handleImageFileForStepProcessing(fileOrBlob, addCallback, buttonElement = null) {
     return handleImageFileForStepProcessingModule(fileOrBlob, addCallback, buttonElement);
 }
 
 // Wrapper для модуля Screenshots
-function renderScreenshotIcon(algorithmId, stepIndex, hasScreenshots = false) {
+function _renderScreenshotIcon(algorithmId, stepIndex, hasScreenshots = false) {
     return renderScreenshotIconModule(algorithmId, stepIndex, hasScreenshots);
 }
 
@@ -2156,7 +2051,7 @@ async function exportClientDataToTxt() {
 }
 
 // Wrapper для модуля Client Data
-function loadClientData(data) {
+function _loadClientData(data) {
     return loadClientDataModule(data);
 }
 
@@ -2182,7 +2077,7 @@ const exportDataBtn = document.getElementById('exportDataBtn');
 exportDataBtn?.addEventListener('click', exportAllData);
 
 // Wrapper для модуля tabs.js
-function createTabButtonElement(tabConfig) {
+function _createTabButtonElement(tabConfig) {
     return createTabButtonElementModule(tabConfig);
 }
 // Wrapper для модуля tabs.js
@@ -2191,14 +2086,14 @@ function ensureTabPresent(panelId, visible = true) {
 }
 
 // Wrapper для модуля bookmarks
-function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
+function _createBookmarkElement(bookmark, folderMap = {}, viewMode = 'cards') {
     return createBookmarkElementModule(bookmark, folderMap, viewMode);
 }
 
 // initBookmarkSystem уже определена выше на строке 961
 
 // Bookmarks modal functions теперь импортируются из js/features/bookmarks-modal.js
-const ensureBookmarkModal = ensureBookmarkModalModule;
+const _ensureBookmarkModal = ensureBookmarkModalModule;
 const showAddBookmarkModal = showAddBookmarkModalModule;
 
 // Bookmarks operations functions теперь импортируются из js/components/bookmarks.js
@@ -2227,7 +2122,7 @@ async function processImageFile(fileOrBlob) {
 }
 
 // Bookmarks form submit function теперь импортируется из js/features/bookmarks-form.js
-const handleBookmarkFormSubmit = handleBookmarkFormSubmitModule;
+const _handleBookmarkFormSubmit = handleBookmarkFormSubmitModule;
 
 // loadBookmarks теперь импортируется из js/components/bookmarks.js
 async function loadBookmarks() {
@@ -2235,7 +2130,7 @@ async function loadBookmarks() {
 }
 
 // Wrapper для модуля bookmarks
-async function getAllBookmarks() {
+async function _getAllBookmarks() {
     return getAllBookmarksModule();
 }
 
@@ -2252,7 +2147,7 @@ async function loadExtLinks() {
 // Now imported from ext-links.js module as createExtLinkElementModule.
 // Use createExtLinkElementModule or the wrapper function below.
 
-function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards') {
+function _createExtLinkElement(link, categoryMap = {}, viewMode = 'cards') {
     // Wrapper function that calls the module version
     return createExtLinkElementModule(link, categoryMap, viewMode);
 }
@@ -2260,21 +2155,21 @@ function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards') {
 // createExtLinkElement_OLD - migrated to js/components/ext-links.js
 
 // Wrapper для модуля ext-links
-async function renderExtLinks(links, categoryInfoMap = {}) {
+async function _renderExtLinks(links, categoryInfoMap = {}) {
     return renderExtLinksModule(links, categoryInfoMap);
 }
 
 // Ext Links functions теперь импортируются из js/features/ext-links-form.js и ext-links-modal.js
-const handleExtLinkFormSubmit = handleExtLinkFormSubmitModule;
-const ensureExtLinkModal = ensureExtLinkModalModule;
+const _handleExtLinkFormSubmit = handleExtLinkFormSubmitModule;
+const _ensureExtLinkModal = ensureExtLinkModalModule;
 const showAddExtLinkModal = showAddExtLinkModalModule;
-const showEditExtLinkModal = showEditExtLinkModalModule;
-const showAddEditExtLinkModal = showAddEditExtLinkModalModule;
+const _showEditExtLinkModal = showEditExtLinkModalModule;
+const _showAddEditExtLinkModal = showAddEditExtLinkModalModule;
 
 // Ext Links Categories functions теперь импортируются из js/features/ext-links-categories.js
 const showOrganizeExtLinkCategoriesModal = showOrganizeExtLinkCategoriesModalModule;
-const handleSaveExtLinkCategorySubmit = handleSaveExtLinkCategorySubmitModule;
-const handleDeleteExtLinkCategoryClick = handleDeleteExtLinkCategoryClickModule;
+const _handleSaveExtLinkCategorySubmit = handleSaveExtLinkCategorySubmitModule;
+const _handleDeleteExtLinkCategoryClick = handleDeleteExtLinkCategoryClickModule;
 const populateExtLinkCategoryFilter = populateExtLinkCategoryFilterModule;
 
 // Ext Links Actions functions теперь импортируются из js/features/ext-links-actions.js
@@ -2282,7 +2177,7 @@ const filterExtLinks = filterExtLinksModule;
 const handleExtLinkAction = handleExtLinkActionModule;
 
 // populateModalControls теперь импортируется из js/ui/ui-settings-modal.js
-function populateModalControls(settings) {
+function _populateModalControls(settings) {
     return populateModalControlsModule(settings);
 }
 
@@ -2316,7 +2211,7 @@ async function applyUISettings() {
 }
 
 // Wrapper для модуля color.js
-function calculateSecondaryColor(hex, percent = 15) {
+function _calculateSecondaryColor(hex, percent = 15) {
     return calculateSecondaryColorModule(hex, percent);
 }
 
@@ -2337,7 +2232,7 @@ if (typeof showNotification === 'undefined') {
 }
 
 // resetUISettingsInModal теперь импортируется из js/ui/ui-settings-modal.js
-async function resetUISettingsInModal() {
+async function _resetUISettingsInModal() {
     return resetUISettingsInModalModule();
 }
 
@@ -2356,7 +2251,7 @@ async function clearAllApplicationData(progressCallback) {
 }
 
 // createPanelItemElement теперь импортируется из js/ui/ui-settings-modal.js
-function createPanelItemElement(id, name, isVisible = true) {
+function _createPanelItemElement(id, name, isVisible = true) {
     return createPanelItemElementModule(id, name, isVisible);
 }
 
@@ -2469,32 +2364,32 @@ setColorPickerDependencies({
 console.log('[script.js] Зависимости модуля Color Picker установлены');
 
 // Wrapper для модуля color.js
-function getLuminance(hex) {
+function _getLuminance(hex) {
     return getLuminanceModule(hex);
 }
 
 // Wrapper для модуля color.js
-function adjustHsl(hsl, l_adjust = 0, s_adjust = 0) {
+function _adjustHsl(hsl, l_adjust = 0, s_adjust = 0) {
     return adjustHslModule(hsl, l_adjust, s_adjust);
 }
 
 // applyPanelOrderAndVisibility теперь импортируется из js/components/tabs.js
-function applyPanelOrderAndVisibility(order, visibility) {
+function _applyPanelOrderAndVisibility(order, visibility) {
     return applyPanelOrderAndVisibilityModule(order, visibility);
 }
 
 // handleModalVisibilityToggle теперь импортируется из js/ui/ui-settings-modal.js
-function handleModalVisibilityToggle(event) {
+function _handleModalVisibilityToggle(event) {
     return handleModalVisibilityToggleModule(event);
 }
 
 // getSettingsFromModal теперь импортируется из js/ui/ui-settings-modal.js
-function getSettingsFromModal() {
+function _getSettingsFromModal() {
     return getSettingsFromModalModule();
 }
 
 // updatePreviewSettingsFromModal теперь импортируется из js/ui/ui-settings-modal.js
-function updatePreviewSettingsFromModal() {
+function _updatePreviewSettingsFromModal() {
     return updatePreviewSettingsFromModalModule();
 }
 
@@ -2578,11 +2473,14 @@ const newClickHandler = async (event) => {
     }
 };
 
-deleteAlgorithmBtn.addEventListener('click', newClickHandler);
-deleteAlgorithmBtn._clickHandler = newClickHandler;
-console.log('Обработчик клика для deleteAlgorithmBtn настроен для использования data-атрибутов.');
+const deleteAlgorithmBtn = document.getElementById('deleteAlgorithmBtn');
+if (deleteAlgorithmBtn) {
+    deleteAlgorithmBtn.addEventListener('click', newClickHandler);
+    deleteAlgorithmBtn._clickHandler = newClickHandler;
+    console.log('Обработчик клика для deleteAlgorithmBtn настроен для использования data-атрибутов.');
+}
 
-const triggerSelectors = [
+const _triggerSelectors = [
     '#editMainBtn',
     '#editAlgorithmBtn',
     '#deleteAlgorithmBtn',
@@ -2686,95 +2584,15 @@ document.addEventListener('click', (event) => {
     }
 
     if (event.target === topmostModal) {
-        const nonClosableModals = [
-            'bookmarkModal',
-            'extLinkModal',
-            'foldersModal',
-            'bookmarkDetailModal',
-            'reglamentModal',
-            'blacklistEntryModal',
-            'blacklistDetailModal',
-        ];
-
-        if (nonClosableModals.includes(topmostModal.id)) {
-            console.log(
-                `[Global Click Handler] Click on overlay for modal "${topmostModal.id}" detected. Closing is PREVENTED for this modal type.`,
-            );
-
-            const innerContainer = topmostModal.querySelector(
-                '.modal-inner-container, .bg-white.dark\\:bg-gray-800',
-            );
-            if (innerContainer) {
-                innerContainer.classList.add('shake-animation');
-                setTimeout(() => innerContainer.classList.remove('shake-animation'), 500);
-            }
-            return;
-        }
-
-        console.log(
-            `[Global Click Handler] Closing modal "${topmostModal.id}" due to click on overlay.`,
+        /* Закрытие по клику на оверлей отключено: только явные кнопки, крестик или Esc. */
+        const innerContainer = topmostModal.querySelector(
+            '.modal-inner-container, .engineering-cockpit-shell, .bg-white.dark\\:bg-gray-800',
         );
-
-        if (
-            topmostModal.id === 'editModal' ||
-            topmostModal.id === 'addModal' ||
-            topmostModal.id === 'customizeUIModal'
-        ) {
-            if (typeof requestCloseModal === 'function') {
-                if (requestCloseModal(topmostModal) !== false) {
-                    topmostModal.classList.add('hidden');
-                    if (typeof removeEscapeHandler === 'function')
-                        removeEscapeHandler(topmostModal);
-                }
-            } else {
-                topmostModal.classList.add('hidden');
-                if (typeof removeEscapeHandler === 'function') removeEscapeHandler(topmostModal);
-            }
-        } else if (
-            topmostModal.id === 'reglamentDetailModal' ||
-            topmostModal.id === 'screenshotViewerModal' ||
-            topmostModal.id === 'noInnModal' ||
-            topmostModal.id === 'hotkeysModal' ||
-            topmostModal.id === 'confirmClearDataModal' ||
-            topmostModal.id === 'cibLinkModal'
-        ) {
-            topmostModal.classList.add('hidden');
-            if (typeof removeEscapeHandler === 'function') {
-                removeEscapeHandler(topmostModal);
-            }
-            if (topmostModal.id === 'screenshotViewerModal') {
-                const state = topmostModal._modalState || {};
-                const images = state.contentArea?.querySelectorAll('img[data-object-url]');
-                images?.forEach((img) => {
-                    if (img.dataset.objectUrl) {
-                        try {
-                            URL.revokeObjectURL(img.dataset.objectUrl);
-                        } catch (revokeError) {
-                            console.warn(
-                                `Error revoking URL on overlay close for ${topmostModal.id}:`,
-                                revokeError,
-                            );
-                        }
-                        delete img.dataset.objectUrl;
-                    }
-                });
-            }
-        } else {
-            console.warn(
-                `[Global Click Handler] Closing unhandled modal "${topmostModal.id}" on overlay click.`,
-            );
-            topmostModal.classList.add('hidden');
-            if (typeof removeEscapeHandler === 'function') {
-                removeEscapeHandler(topmostModal);
-            }
+        if (innerContainer) {
+            innerContainer.classList.add('shake-animation');
+            setTimeout(() => innerContainer.classList.remove('shake-animation'), 500);
         }
-
-        if (getVisibleModals().length === 0) {
-            document.body.classList.remove('modal-open');
-            if (!document.querySelector('div.fixed.inset-0.bg-black.bg-opacity-50:not(.hidden)')) {
-                document.body.classList.remove('overflow-hidden');
-            }
-        }
+        return;
     }
 });
 
@@ -2793,7 +2611,7 @@ const toggleModalFullscreen = toggleModalFullscreenModule;
 
 // getAllExtLinks - imported from ext-links.js module
 
-async function getAllFromIndexedDBWhere(storeName, indexName, indexValue) {
+async function _getAllFromIndexedDBWhere(storeName, indexName, indexValue) {
     console.log(
         `[getAllFromIndexedDBWhere] Вызов обертки для ${storeName} по индексу ${indexName} = ${indexValue}`,
     );
@@ -2823,19 +2641,19 @@ function forceReloadApp() {
 // initReloadButton уже определена выше на строке 964
 
 // Wrapper-ы для модуля algorithms.js (Algorithm Editing State)
-function getCurrentEditState() {
+function _getCurrentEditState() {
     return getCurrentEditStateModule();
 }
-function getCurrentAddState() {
+function _getCurrentAddState() {
     return getCurrentAddStateModule();
 }
 function hasChanges(modalType) {
     return hasChangesModule(modalType);
 }
-function captureInitialEditState(algorithm, section) {
+function _captureInitialEditState(algorithm, section) {
     return captureInitialEditStateModule(algorithm, section);
 }
-function captureInitialAddState() {
+function _captureInitialAddState() {
     return captureInitialAddStateModule();
 }
 
@@ -2855,12 +2673,12 @@ async function loadEmployeeExtension() {
 }
 
 // Wrapper для модуля employee-extension.js
-async function saveEmployeeExtension(extensionValue) {
+async function _saveEmployeeExtension(extensionValue) {
     return saveEmployeeExtensionModule(extensionValue);
 }
 
 // Wrapper для модуля employee-extension.js
-function updateExtensionDisplay(extensionValue) {
+function _updateExtensionDisplay(extensionValue) {
     return updateExtensionDisplayModule(extensionValue);
 }
 
@@ -2872,9 +2690,9 @@ function setupExtensionFieldListeners() {
 // setupHotkeys уже определена выше на строке 966
 
 // toggleActiveSectionView теперь импортируется из js/ui/view-manager.js
-const toggleActiveSectionView = toggleActiveSectionViewModule;
+const _toggleActiveSectionView = toggleActiveSectionViewModule;
 
-function toggleActiveSectionViewOriginal() {
+function _toggleActiveSectionViewOriginal() {
     if (typeof State.currentSection === 'undefined' || !State.currentSection) {
         console.warn(
             'toggleActiveSectionView: Переменная State.currentSection не определена или пуста.',
@@ -2908,7 +2726,7 @@ function toggleActiveSectionViewOriginal() {
         case 'extLinks':
             containerId = 'extLinksContainer';
             break;
-        case 'reglaments':
+        case 'reglaments': {
             const reglamentsListDiv = document.getElementById('reglamentsList');
             if (!reglamentsListDiv || reglamentsListDiv.classList.contains('hidden')) {
                 showNotification('Сначала выберите категорию регламентов.', 'info');
@@ -2916,6 +2734,7 @@ function toggleActiveSectionViewOriginal() {
             }
             containerId = 'reglamentsContainer';
             break;
+        }
         case 'bookmarks':
             containerId = 'bookmarksContainer';
             break;
@@ -2962,16 +2781,16 @@ function toggleActiveSectionViewOriginal() {
 }
 
 // handleNoInnLinkEvent и navigateBackWithinApp теперь импортируются из js/ui/hotkeys-handler.js
-function handleNoInnLinkEvent(event) {
+function _handleNoInnLinkEvent(event) {
     return handleNoInnLinkEventModule(event);
 }
 
-function navigateBackWithinApp() {
+function _navigateBackWithinApp() {
     return navigateBackWithinAppModule();
 }
 
 // handleGlobalHotkey теперь импортируется из js/ui/hotkeys-handler.js
-function handleGlobalHotkey(event) {
+function _handleGlobalHotkey(event) {
     return handleGlobalHotkeyModule(event);
 }
 
@@ -3424,7 +3243,7 @@ async function showBookmarkDetailModal(bookmarkId) {
 // initHotkeysModal уже определена выше на строке 968
 
 // Wrapper для модуля Lightbox
-function showImageAtIndex(index, blobs, stateManager, elements) {
+function _showImageAtIndex(index, blobs, stateManager, elements) {
     return showImageAtIndexModule(index, blobs, stateManager, elements);
 }
 
@@ -3434,14 +3253,14 @@ function openLightbox(blobs, initialIndex) {
 }
 
 // Wrapper для модуля Screenshots
-async function handleViewScreenshotClick(event) {
+async function _handleViewScreenshotClick(event) {
     return handleViewScreenshotClickModule(event);
 }
 
 // Bookmarks DOM operations теперь импортируются из js/features/bookmarks-dom.js
-const addBookmarkToDOM = addBookmarkToDOMModule;
-const updateBookmarkInDOM = updateBookmarkInDOMModule;
-const removeBookmarkFromDOM = removeBookmarkFromDOMModule;
+const _addBookmarkToDOM = addBookmarkToDOMModule;
+const _updateBookmarkInDOM = updateBookmarkInDOMModule;
+const _removeBookmarkFromDOM = removeBookmarkFromDOMModule;
 
 // Wrapper для модуля step-management.js
 function attachStepDeleteHandler(
@@ -3471,7 +3290,7 @@ function deepEqual(obj1, obj2) {
 }
 
 // Wrapper для модуля modal.js
-function openAnimatedModal(modalElement) {
+function _openAnimatedModal(modalElement) {
     return openAnimatedModalModule(modalElement);
 }
 
@@ -3481,7 +3300,7 @@ function closeAnimatedModal(modalElement) {
 }
 
 /**
- * Запрос на закрытие модалки (Escape / клик по оверлею).
+ * Запрос на закрытие модалки (Escape или явное действие пользователя; клик по оверлею не закрывает).
  * Централизованная проверка: предупреждение «Выйти без сохранения» показывается только при наличии несохранённых изменений (реестр unsaved-changes-registry).
  * @param {HTMLElement} modal - модальное окно
  * @returns {boolean} false — закрытие отменено (показан диалог); true — можно закрыть (закрытие выполняет вызывающий код или closeModalNow)
@@ -3598,6 +3417,10 @@ document.addEventListener('click', (e) => {
     }
 });
 
+const algorithmModal = document.getElementById('algorithmModal');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const editMainBtn = document.getElementById('editMainBtn');
+
 closeModalBtn?.addEventListener('click', () => closeAnimatedModal(algorithmModal));
 
 editMainBtn?.addEventListener('click', async () => {
@@ -3635,31 +3458,31 @@ const showAddModal = showAddModalModule;
 
 // initBlacklistSystem уже определена выше на строке 963
 
-async function exportBlacklistToExcel() {
+async function _exportBlacklistToExcel() {
     return exportBlacklistToExcelModule();
 }
 
-async function loadBlacklistedClients() {
+async function _loadBlacklistedClients() {
     return loadBlacklistedClientsModule();
 }
 
-async function handleBlacklistSearchInput() {
+async function _handleBlacklistSearchInput() {
     return handleBlacklistSearchInputModule();
 }
 
-function renderBlacklistTable(entries) {
+function _renderBlacklistTable(entries) {
     return renderBlacklistTableModule(entries);
 }
 
-async function getBlacklistEntriesByInn(inn) {
+async function _getBlacklistEntriesByInn(inn) {
     return getBlacklistEntriesByInnModule(inn);
 }
 
-function handleBlacklistActionClick(event) {
+function _handleBlacklistActionClick(event) {
     return handleBlacklistActionClickModule(event);
 }
 
-async function showBlacklistDetailModal(entryId) {
+async function _showBlacklistDetailModal(entryId) {
     return showBlacklistDetailModalModule(entryId);
 }
 
@@ -3667,31 +3490,31 @@ async function showBlacklistEntryModal(entryId = null) {
     return showBlacklistEntryModalModule(entryId);
 }
 
-async function handleSaveBlacklistEntry(event) {
+async function _handleSaveBlacklistEntry(event) {
     return handleSaveBlacklistEntryModule(event);
 }
 
-async function deleteBlacklistEntry(entryId) {
+async function _deleteBlacklistEntry(entryId) {
     return deleteBlacklistEntryModule(entryId);
 }
 
-async function addBlacklistEntryDB(entry) {
+async function _addBlacklistEntryDB(entry) {
     return addBlacklistEntryDBModule(entry);
 }
 
-async function getBlacklistEntryDB(id) {
+async function _getBlacklistEntryDB(id) {
     return getBlacklistEntryDBModule(id);
 }
 
-async function updateBlacklistEntryDB(entry) {
+async function _updateBlacklistEntryDB(entry) {
     return updateBlacklistEntryDBModule(entry);
 }
 
-async function deleteBlacklistEntryDB(id) {
+async function _deleteBlacklistEntryDB(id) {
     return deleteBlacklistEntryDBModule(id);
 }
 
-async function getAllBlacklistEntriesDB() {
+async function _getAllBlacklistEntriesDB() {
     return getAllBlacklistEntriesDBModule();
 }
 
@@ -3744,7 +3567,7 @@ console.log('[script.js] Зависимости client-data-init установ�
 // ============================================================================
 // createClientNotesInnPreview - imported from client-data.js module
 
-async function checkAndSetWelcomeText() {
+async function _checkAndSetWelcomeText() {
     console.log(
         '[checkAndSetWelcomeText] Проверка условий для отображения приветственного текста...',
     );
@@ -3873,7 +3696,7 @@ async function checkAndSetWelcomeText() {
 // - isFavorite, refreshAllFavoritableSectionsUI, initFavoritesSystem
 
 // Wrapper functions for backward compatibility
-async function toggleFavorite(
+async function _toggleFavorite(
     originalItemId,
     itemType,
     originalItemSection,
@@ -3927,11 +3750,11 @@ function isFavorite(itemType, originalItemId) {
     return isFavoriteModule(itemType, originalItemId);
 }
 
-async function refreshAllFavoritableSectionsUI() {
+async function _refreshAllFavoritableSectionsUI() {
     return refreshAllFavoritableSectionsUIModule();
 }
 
-async function isInnBlacklisted(inn) {
+async function _isInnBlacklisted(inn) {
     return isInnBlacklistedModule(inn);
 }
 
@@ -3943,7 +3766,7 @@ function sortAndRenderBlacklist() {
     return sortAndRenderBlacklistModule();
 }
 
-function renderBlacklistEntries(entries) {
+function _renderBlacklistEntries(entries) {
     // Legacy function - uses renderBlacklistTable from module
     return renderBlacklistTableModule(entries);
 }
@@ -3958,7 +3781,7 @@ function applyCustomBackgroundImage(dataUrl) {
     return applyCustomBackgroundImageModule(dataUrl);
 }
 // Wrapper для модуля background-image.js
-function removeCustomBackgroundImage() {
+function _removeCustomBackgroundImage() {
     return removeCustomBackgroundImageModule();
 }
 // Wrapper для модуля background-image.js
@@ -3995,7 +3818,6 @@ setBookmarksDependencies({
     setupClearButton,
     loadFoldersList,
     removeEscapeHandler,
-    getVisibleModals,
     addEscapeHandler,
     handleSaveFolderSubmit,
     getAllFromIndex,
@@ -4225,6 +4047,10 @@ setBlacklistDependencies({
     NotificationService,
     showAppConfirm: showAppConfirmModule,
     XLSX: window.XLSX,
+    refreshClientAnalyticsPage:
+        typeof renderClientAnalyticsPageModule !== 'undefined'
+            ? renderClientAnalyticsPageModule
+            : null,
 });
 console.log('[script.js] Зависимости модуля Blacklist установлены');
 
@@ -4403,6 +4229,9 @@ setBackgroundHealthTestsDependencies({
     performDBOperation,
     getGlobalSearchResults,
     exportAllData: exportAllDataModule,
+    performSearch,
+    setActiveTab,
+    loadingOverlayManager,
 });
 console.log('[script.js] Зависимости фоновых health-тестов установлены');
 
@@ -4555,7 +4384,10 @@ setAlgorithmsDependencies({
     attachScreenshotHandlers,
     updateStepNumbers,
     toggleStepCollapse,
-    Sortable: typeof Sortable !== 'undefined' ? Sortable : null,
+    Sortable:
+        typeof window !== 'undefined' && typeof window.Sortable !== 'undefined'
+            ? window.Sortable
+            : null,
 });
 console.log('[script.js] Зависимости модуля Algorithm Editing установлены');
 
@@ -4636,6 +4468,9 @@ setModalEntityHistoryDependencies({
     showBlacklistEntryModal,
     refreshBlacklistAfterHistory: async () => {
         sortAndRenderBlacklist();
+        if (typeof renderClientAnalyticsPageModule === 'function') {
+            await renderClientAnalyticsPageModule();
+        }
     },
     ...modalEntityHistoryHandlers,
 });

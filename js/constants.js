@@ -184,6 +184,7 @@ export const FIELD_WEIGHTS = {
         inn: 2.0,
         kpp: 1.5,
         phones: 1.5,
+        emails: 1.5,
         question: 1.2,
         contextSnippet: 1.0,
         sourceFileName: 1.0,

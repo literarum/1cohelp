@@ -75,6 +75,49 @@ export function normalizeRussianPhone(raw) {
  * @param {string} text
  * @returns {string[]}
  */
+/**
+ * Адреса электронной почты в тексте (дедупликация, порядок появления).
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function extractEmailCandidates(text) {
+    if (!text || typeof text !== 'string') return [];
+    const re =
+        /\b[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
+    const out = [];
+    const seen = new Set();
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        const raw = m[0];
+        const key = raw.toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            out.push(raw);
+        }
+    }
+    return out;
+}
+
+/**
+ * Если в пункте только идентификаторы (ИНН/КПП/тел.) без текста вопроса, не дублировать ИНН в поле «вопрос».
+ * @param {string} question
+ * @param {string} inn
+ * @returns {string}
+ */
+export function normalizeQuestionAfterParse(question, inn) {
+    let q = (question || '').replace(/\s+/g, ' ').trim();
+    if (!inn) return q;
+    if (!q) return '';
+    if (q === inn) return '';
+    const onlyDigits = q.replace(/\D/g, '');
+    if (onlyDigits === inn) return '';
+    if (/^(?:ИНН|инн)\s+(\d{10}|\d{12})\s*$/i.test(q)) {
+        const d = q.match(/(\d{10}|\d{12})/);
+        if (d && d[1] === inn) return '';
+    }
+    return q;
+}
+
 export function extractPhoneCandidates(text) {
     if (!text || typeof text !== 'string') return [];
     const out = [];
@@ -360,6 +403,7 @@ export function parseNumberedAppealBlock(blockText) {
             inn: '',
             kpp: null,
             phones: [],
+            emails: [],
             question: '',
             contextSnippet: blockText.slice(0, 500),
             confidence: 'low',
@@ -371,15 +415,17 @@ export function parseNumberedAppealBlock(blockText) {
     const inn = primary ? primary.digits : '';
     const kpp = extractKppFromBlock(body);
     const phones = extractPhoneCandidates(body);
+    const emails = extractEmailCandidates(body);
 
     let confidence = 'low';
     if (inn) confidence = innConfidence(inn);
     else if (phones.length) confidence = 'medium';
     else if (kpp) confidence = 'medium';
 
-    const question =
+    let question =
         extractQuestionFromAppealBody(body, inn, kpp, phones) ||
         extractQuestionHeuristic(body);
+    question = normalizeQuestionAfterParse(question, inn);
 
     const centerIdx = primary ? primary.index : 0;
     const contextSnippet = snippetAround(body, centerIdx, 500);
@@ -388,6 +434,7 @@ export function parseNumberedAppealBlock(blockText) {
         inn,
         kpp,
         phones,
+        emails,
         question,
         contextSnippet,
         confidence,
@@ -414,7 +461,8 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
             if (
                 rec.inn ||
                 (rec.phones && rec.phones.length > 0) ||
-                rec.kpp
+                rec.kpp ||
+                (rec.emails && rec.emails.length > 0)
             ) {
                 out.push(rec);
             }
@@ -440,12 +488,15 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
             const win = snippetAround(block, index, 500);
             const kpp = extractKppFromBlock(block) || extractKppNearInn(win);
             const phones = extractPhoneCandidates(win);
-            const question = extractQuestionHeuristic(block);
+            const emails = extractEmailCandidates(block);
+            let question = extractQuestionHeuristic(block);
+            question = normalizeQuestionAfterParse(question, digits);
 
             results.push({
                 inn: digits,
                 kpp,
                 phones,
+                emails,
                 question,
                 contextSnippet: win,
                 confidence: conf,
@@ -458,11 +509,13 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
         for (const { index, digits } of occ) {
             const conf = innConfidence(digits);
             const win = snippetAround(fullText, index, 500);
+            const qRaw = extractQuestionHeuristic(fullText);
             results.push({
                 inn: digits,
                 kpp: extractKppFromBlock(fullText) || extractKppNearInn(win),
                 phones: extractPhoneCandidates(win),
-                question: extractQuestionHeuristic(fullText),
+                emails: extractEmailCandidates(fullText),
+                question: normalizeQuestionAfterParse(qRaw, digits),
                 contextSnippet: win,
                 confidence: conf,
             });
@@ -476,6 +529,7 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
                 inn: '',
                 kpp: null,
                 phones: phoneOnly,
+                emails: extractEmailCandidates(fullText),
                 question: extractQuestionHeuristic(fullText),
                 contextSnippet: fullText.slice(0, 500).replace(/\s+/g, ' ').trim(),
                 confidence: 'medium',
@@ -490,6 +544,7 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
                 inn: '',
                 kpp: kppOnly,
                 phones: [],
+                emails: extractEmailCandidates(fullText),
                 question: extractQuestionHeuristic(fullText),
                 contextSnippet: fullText.slice(0, 500).replace(/\s+/g, ' ').trim(),
                 confidence: 'medium',

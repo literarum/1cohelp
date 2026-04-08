@@ -289,13 +289,61 @@ header button {
         padding: 0.5rem;
     }
 }
-/* Верхняя панель (шапка): блок с кнопками/поиском — одна строка, без переноса; при нехватке места — горизонтальный скролл */
-#staticHeaderWrapper header > div > div:last-child {
+/* Верхняя панель: одна строка. Горизонтальный скролл только у кластеров кнопок — не у всего ряда,
+   иначе overflow-y:hidden на ряду обрезает выпадающие результаты глобального поиска (#searchResults). */
+#staticHeaderWrapper header > div > div.header-toolbar-row {
     flex-wrap: nowrap !important;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
     min-width: 0;
+    align-items: center;
+}
+
+/*
+ * Кластеры кнопок: прокрутка только на внутреннем ряду (.header-toolbar-cluster-scroll).
+ * Если задать overflow-x: auto на внешнем flex-контейнере, по спецификации часто «ломается»
+ * overflow-y: visible — обрезаются focus-ring, тени и часть вспомогательного UI.
+ */
+/* Внешний кластер: flex-контейнер с одним ребёнком — гарантирует, что внутренний ряд не падает в блочную раскладку
+   (иначе кнопки как inline-block переносятся «лесенкой»). */
+#staticHeaderWrapper header > div > div.header-toolbar-row .header-toolbar-cluster {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+    flex-shrink: 1;
+    max-width: 100%;
+    overflow: visible;
+}
+
+#staticHeaderWrapper header > div > div.header-toolbar-row #topHeaderActions.header-toolbar-cluster {
+    flex-shrink: 0;
+}
+
+#staticHeaderWrapper header > div > div.header-toolbar-row .header-toolbar-cluster-scroll {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+/* Поле поиска: не сжимать ниже зоны под иконку + две кнопки (глобальный #appContent .flex > * { min-width: 0 }) */
+#staticHeaderWrapper header > div > div.header-toolbar-row > div.relative:has(#searchInput) {
+    min-width: min(20rem, 100%);
+    box-sizing: border-box;
+}
+
+#staticHeaderWrapper header #dataTransferControls {
+    flex-wrap: nowrap !important;
 }
 @media (max-width: 640px) {
     #staticHeaderWrapper header .flex.flex-wrap {

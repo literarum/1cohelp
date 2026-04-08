@@ -31,7 +31,22 @@ let deps = {
     updateSearchIndex: null,
     NotificationService: null,
     XLSX: null,
+    /** @type {null | (() => void | Promise<void>)} */
+    refreshClientAnalyticsPage: null,
 };
+
+/**
+ * После изменения ЧС перерисовать «Базу клиентов» (перекрёстная сверка ИНН).
+ */
+async function refreshClientAnalyticsAfterBlacklistChange() {
+    const fn = deps.refreshClientAnalyticsPage;
+    if (typeof fn !== 'function') return;
+    try {
+        await fn();
+    } catch (e) {
+        console.warn('[Blacklist] refreshClientAnalyticsPage:', e);
+    }
+}
 
 /**
  * Устанавливает зависимости для модуля Blacklist
@@ -434,6 +449,7 @@ export async function loadBlacklistedClients() {
         console.error('loadBlacklistedClients: DB not ready.');
         State.allBlacklistEntriesCache = [];
         sortAndRenderBlacklist();
+        await refreshClientAnalyticsAfterBlacklistChange();
         return;
     }
     try {
@@ -447,10 +463,12 @@ export async function loadBlacklistedClients() {
         });
 
         sortAndRenderBlacklist();
+        await refreshClientAnalyticsAfterBlacklistChange();
     } catch (error) {
         console.error('Ошибка загрузки черного списка:', error);
         State.allBlacklistEntriesCache = [];
         sortAndRenderBlacklist();
+        await refreshClientAnalyticsAfterBlacklistChange();
         deps.showNotification?.('Ошибка загрузки черного списка', 'error');
     }
 }
@@ -1007,6 +1025,7 @@ export async function handleSaveBlacklistEntry(event) {
 
         State.allBlacklistEntriesCache = await getAllBlacklistEntriesDB();
         sortAndRenderBlacklist();
+        await refreshClientAnalyticsAfterBlacklistChange();
 
         if (deps.updateSearchIndex) {
             await deps.updateSearchIndex(
@@ -1040,6 +1059,7 @@ export async function deleteBlacklistEntry(entryId) {
 
         State.allBlacklistEntriesCache = await getAllBlacklistEntriesDB();
         await handleBlacklistSearchInput();
+        await refreshClientAnalyticsAfterBlacklistChange();
 
         if (deps.updateSearchIndex && entryToDelete) {
             await deps.updateSearchIndex('blacklistedClients', entryId, entryToDelete, 'delete');

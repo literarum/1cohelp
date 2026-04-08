@@ -175,22 +175,19 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
             'click',
             modalState.closeButtonCancelClickHandler,
         );
-        modalState.overlayElement?.removeEventListener('click', modalState.overlayClickHandler);
+        if (modalState.overlayClickHandler) {
+            modalState.overlayElement?.removeEventListener('click', modalState.overlayClickHandler);
+        }
     }
     modalState.closeButtonXClickHandler = closeModalFunction;
     modalState.closeButtonCancelClickHandler = closeModalFunction;
-    modalState.overlayClickHandler = (e) => {
-        if (e.target === modalState.overlayElement) {
-            closeModalFunction();
-        }
-    };
+    modalState.overlayClickHandler = null;
 
     modalState.closeButtonX.addEventListener('click', modalState.closeButtonXClickHandler);
     modalState.closeButtonCancel.addEventListener(
         'click',
         modalState.closeButtonCancelClickHandler,
     );
-    modalState.overlayElement.addEventListener('click', modalState.overlayClickHandler);
 
     const defaultTitle = `Скриншоты для ${algorithmId}`;
     modalState.titleEl.textContent = `${algorithmTitle || defaultTitle}`;

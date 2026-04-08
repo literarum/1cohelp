@@ -30,7 +30,7 @@ export function setAppConfirmModalDependencies(deps) {
  * @param {string} [options.confirmClass='bg-primary hover:bg-secondary text-white']
  * @param {boolean} [options.messageIsHtml=false] — если true, message вставляется как HTML (innerHTML).
  * @param {boolean} [options.returnAction=false] — если true, возвращает действие:
- *   'confirm' | 'cancel' | 'dismiss' (крестик/Esc/клик по фону).
+ *   'confirm' | 'cancel' | 'dismiss' (крестик или Esc).
  * @returns {Promise<boolean|string>}
  */
 export function showAppConfirm(options = {}) {
@@ -85,7 +85,6 @@ export function showAppConfirm(options = {}) {
 
     return new Promise((resolve) => {
         let settled = false;
-        let onOverlayClick = null;
         let onCloseClick = null;
         const finish = (result, action) => {
             if (settled) return;
@@ -94,7 +93,6 @@ export function showAppConfirm(options = {}) {
             document.body.classList.remove('overflow-hidden', 'modal-open');
             if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
             document.removeEventListener('keydown', onEscape);
-            if (onOverlayClick) modal.removeEventListener('click', onOverlayClick);
             if (closeBtn && onCloseClick) closeBtn.removeEventListener('click', onCloseClick);
             deactivateModalFocus(modal);
             resolve(returnAction ? action : result);
@@ -107,10 +105,6 @@ export function showAppConfirm(options = {}) {
         };
         cancelBtn.addEventListener('click', () => finish(false, 'cancel'));
         confirmBtn.addEventListener('click', () => finish(true, 'confirm'));
-        onOverlayClick = (e) => {
-            if (e.target === modal) finish(false, 'dismiss');
-        };
-        modal.addEventListener('click', onOverlayClick);
         onCloseClick = () => finish(false, 'dismiss');
         if (closeBtn) closeBtn.addEventListener('click', onCloseClick);
 
@@ -165,7 +159,6 @@ export function showAppAlert(options = {}) {
 
     return new Promise((resolve) => {
         let settled = false;
-        let onOverlayClick = null;
         let onCloseClick = null;
         const finish = () => {
             if (settled) return;
@@ -174,7 +167,6 @@ export function showAppAlert(options = {}) {
             document.body.classList.remove('overflow-hidden', 'modal-open');
             if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
             document.removeEventListener('keydown', onEscape);
-            if (onOverlayClick) modal.removeEventListener('click', onOverlayClick);
             if (closeBtn && onCloseClick) closeBtn.removeEventListener('click', onCloseClick);
             deactivateModalFocus(modal);
             resolve();
@@ -186,10 +178,6 @@ export function showAppAlert(options = {}) {
             }
         };
         okBtn.addEventListener('click', finish);
-        onOverlayClick = (e) => {
-            if (e.target === modal) finish();
-        };
-        modal.addEventListener('click', onOverlayClick);
         onCloseClick = () => finish();
         if (closeBtn) closeBtn.addEventListener('click', onCloseClick);
 

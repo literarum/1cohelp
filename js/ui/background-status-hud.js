@@ -2,6 +2,13 @@
 
 import { getRuntimeHubIssuesForHealth } from '../features/runtime-issue-hub.js';
 
+/** Заголовок основной карточки HUD (единый источник для UI и тестов). */
+export const BG_HUD_MAIN_HEADINGS = Object.freeze({
+    initializing: 'Фоновая инициализация...',
+    initComplete: 'Инициализация завершена',
+    problems: 'Обнаружены проблемы',
+});
+
 export function initBackgroundStatusHUD() {
     const STATE = {
         tasks: new Map(),
@@ -37,6 +44,9 @@ export function initBackgroundStatusHUD() {
         _onActivity: null,
         watchdogInfoEl: null,
         watchdogRunNowHandler: null,
+        headingMainEl: null,
+        /** true если app-init завершился с ошибками подсистем/UI (второй контур к диагностике чеклиста). */
+        initHadSubsystemFailures: false,
     };
 
     const DISMISS_AFTER_ACTIVITY_DELAY_MS = 2000;
@@ -46,7 +56,8 @@ export function initBackgroundStatusHUD() {
         const css = `
     #bg-status-hud {
       position: fixed; right: 16px; top: 16px; z-index: 9998;
-      width: 320px; max-width: calc(100vw - 32px);
+      width: min(440px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
       font-family: inherit;
       color: var(--color-text-primary, #111);
     }
@@ -58,8 +69,11 @@ export function initBackgroundStatusHUD() {
       position: relative;
       transition: transform 0.3s ease-out;
     }
-    #bg-status-hud .hud-title { display:flex; align-items:center; gap:8px;
-      font-weight:600; font-size:14px; margin-bottom:8px; }
+    #bg-status-hud .hud-title { display:flex; align-items:center; gap:8px; flex-wrap: nowrap;
+      font-weight:600; font-size:14px; margin-bottom:8px; padding-right: 36px; }
+    #bg-status-hud .hud-title #bg-hud-main-heading {
+      flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     #bg-status-hud .hud-title .dot { width:8px; height:8px; border-radius:9999px;
       background: var(--color-primary, #2563eb); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary, #2563eb) 30%, transparent); }
     #bg-status-hud .hud-sub { font-size:12px; opacity:.8; margin-bottom:8px; }
@@ -100,6 +114,38 @@ export function initBackgroundStatusHUD() {
     #bg-status-hud .hud-watchdog-info {
       color: var(--color-text-primary, #111);
       opacity: .9;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      max-width: 100%;
+    }
+    #bg-status-hud .hud-watchdog-line--status {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      width: 100%;
+      white-space: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    #bg-status-hud .hud-watchdog-line--meta {
+      font-size: 11px;
+      opacity: .92;
+      white-space: nowrap;
+      overflow-x: auto;
+      max-width: 100%;
+      scrollbar-width: thin;
+    }
+    #bg-status-hud .hud-watchdog-msg {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #bg-status-hud .hud-watchdog-heading {
+      flex-shrink: 0;
     }
     #bg-status-hud .hud-watchdog-status {
       display: inline-flex;
@@ -107,6 +153,7 @@ export function initBackgroundStatusHUD() {
       gap: 6px;
       margin-right: 6px;
       font-weight: 600;
+      flex-shrink: 0;
     }
     #bg-status-hud .hud-watchdog-dot {
       width: 8px;
@@ -204,7 +251,7 @@ export function initBackgroundStatusHUD() {
         root.innerHTML = `
     <div class="hud-card">
       <button type="button" id="bg-hud-close" class="hud-close" aria-label="Скрыть">✕</button>
-      <div class="hud-title"><span class="dot"></span><span>Фоновая инициализация...</span></div>
+      <div class="hud-title"><span class="dot" aria-hidden="true"></span><span id="bg-hud-main-heading">${BG_HUD_MAIN_HEADINGS.initializing}</span></div>
       <div class="hud-sub" id="bg-hud-title">Подготовка…</div>
       <div class="hud-progress"><div class="hud-bar" id="bg-hud-bar"></div></div>
       <div class="hud-watchdog">
@@ -219,9 +266,21 @@ export function initBackgroundStatusHUD() {
         STATE.titleEl = root.querySelector('#bg-hud-title');
         STATE.percentEl = root.querySelector('#bg-hud-percent');
         STATE.watchdogInfoEl = root.querySelector('#bg-hud-watchdog-info');
+        STATE.headingMainEl = root.querySelector('#bg-hud-main-heading');
         root.querySelector('#bg-hud-close').addEventListener('click', () => dismissAnimated());
         renderWatchdogInfo();
         updateDetailsButton();
+    }
+
+    function syncHudMainHeading() {
+        if (!STATE.headingMainEl) return;
+        if (STATE.tasks.size > 0) {
+            STATE.headingMainEl.textContent = BG_HUD_MAIN_HEADINGS.initializing;
+            return;
+        }
+        STATE.headingMainEl.textContent = shouldBlockHudSuccessAndAutoDismiss()
+            ? BG_HUD_MAIN_HEADINGS.problems
+            : BG_HUD_MAIN_HEADINGS.initComplete;
     }
 
     function watchdogStatusLabel(severity) {
@@ -239,25 +298,32 @@ export function initBackgroundStatusHUD() {
 
     function renderWatchdogInfo() {
         if (!STATE.watchdogInfoEl) return;
-        const status = STATE.watchdog.statusText || '—';
-        const _lastRun = STATE.watchdog.lastRunAt
-            ? new Date(STATE.watchdog.lastRunAt).toLocaleTimeString('ru-RU')
+        let displayStatus = STATE.watchdog.statusText || '—';
+        let displaySeverity = STATE.watchdog.severity || 'running';
+        if (STATE.initHadSubsystemFailures && displaySeverity === 'ok') {
+            displaySeverity = 'error';
+            if (displayStatus === 'Система в норме') {
+                displayStatus = 'Инициализация завершена с ошибками';
+            }
+        }
+        const lastRunStr = STATE.watchdog.lastRunAt
+            ? new Date(STATE.watchdog.lastRunAt).toLocaleString('ru-RU')
             : '—';
         const lastAutosave = STATE.watchdog.lastAutosaveAt
-            ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleTimeString('ru-RU')
+            ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleString('ru-RU')
             : '—';
-        const severity = STATE.watchdog.severity || 'running';
         const dotClass =
-            severity === 'error'
+            displaySeverity === 'error'
                 ? 'is-error'
-                : severity === 'warn'
+                : displaySeverity === 'warn'
                   ? 'is-warn'
-                  : severity === 'ok'
+                  : displaySeverity === 'ok'
                     ? 'is-ok'
                     : 'is-running';
-        STATE.watchdogInfoEl.innerHTML = `<span class="hud-watchdog-status"><span class="hud-watchdog-dot ${dotClass}"></span>${watchdogStatusLabel(
-            severity,
-        )}</span> ${status} | Автосохранение: ${lastAutosave}`;
+        const statusEscaped = escapeHtml(displayStatus);
+        STATE.watchdogInfoEl.innerHTML = `<div class="hud-watchdog-line hud-watchdog-line--status" role="status"><span class="hud-watchdog-heading" id="bg-hud-watchdog-heading">Самотестирование</span><span aria-hidden="true">·</span><span class="hud-watchdog-status"><span class="hud-watchdog-dot ${dotClass}" aria-hidden="true"></span>${watchdogStatusLabel(
+            displaySeverity,
+        )}</span><span class="hud-watchdog-msg">${statusEscaped}</span></div><div class="hud-watchdog-line hud-watchdog-line--meta">Автосохранение: ${lastAutosave} · Проверка: ${lastRunStr}</div>`;
     }
 
     function computeTopOffset() {
@@ -288,8 +354,8 @@ export function initBackgroundStatusHUD() {
         return (acc / totalWeight) * 100;
     }
 
-    // При успешной самопроверке HUD после «Готово» скрывается после активности пользователя.
-    // При ошибках самопроверки (или watchdog ERROR) автоскрытия нет — только кнопка ✕.
+    // При успешном самотестировании HUD после «Готово» скрывается после активности пользователя.
+    // При ошибках самотестирования (или watchdog ERROR) автоскрытия нет — только кнопка ✕.
 
     function tick() {
         const target = aggregatePercent();
@@ -409,10 +475,11 @@ export function initBackgroundStatusHUD() {
         if (!STATE.titleEl) return;
         if (active.length === 0) {
             STATE.titleEl.textContent = shouldBlockHudSuccessAndAutoDismiss()
-                ? 'Обнаружены ошибки самопроверки'
+                ? 'Обнаружены ошибки самотестирования'
                 : 'Готово';
             STATE.animatingToComplete = true;
             if (!STATE.rafId) STATE.rafId = requestAnimationFrame(tick);
+            syncHudMainHeading();
             return;
         }
         const main = active[0];
@@ -420,6 +487,7 @@ export function initBackgroundStatusHUD() {
         const prefix = main.id === 'app-init' ? 'Выполняется' : 'Индексируется';
         STATE.titleEl.textContent =
             others > 0 ? `${prefix}: ${main.label} + ещё ${others}` : `${prefix}: ${main.label}`;
+        syncHudMainHeading();
     }
 
     function showCompletionCard() {
@@ -434,6 +502,7 @@ export function initBackgroundStatusHUD() {
             <span class="hud-completion-text">Приложение полностью загружено</span>`;
         STATE.container.appendChild(card);
         STATE.completionCardEl = card;
+        syncHudMainHeading();
     }
 
     function effectiveDiagnosticErrors() {
@@ -443,8 +512,9 @@ export function initBackgroundStatusHUD() {
         return [...rt, ...base];
     }
 
-    /** Ошибки самопроверки (включая буфер рантайма) или критический watchdog — без «всё ок» и без автоскрытия. */
+    /** Ошибки самотестирования (включая буфер рантайма) или критический watchdog — без «всё ок» и без автоскрытия. */
     function shouldBlockHudSuccessAndAutoDismiss() {
+        if (STATE.initHadSubsystemFailures) return true;
         if (effectiveDiagnosticErrors().length > 0) return true;
         if (STATE.watchdog.severity === 'error') return true;
         return false;
@@ -462,6 +532,7 @@ export function initBackgroundStatusHUD() {
 
     function updateDetailsButton() {
         const hasIssues =
+            STATE.initHadSubsystemFailures ||
             effectiveDiagnosticErrors().length > 0 ||
             (STATE.diagnostics.warnings?.length || 0) > 0;
         const hasChecks = (STATE.diagnostics.checks?.length || 0) > 0;
@@ -510,15 +581,24 @@ export function initBackgroundStatusHUD() {
         card.style.maxWidth = '92vw';
         card.style.maxHeight = '90vh';
         card.style.minWidth = '288px';
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
-                modal.style.display = 'none';
-            }
-        });
         document.body.appendChild(modal);
         modal.querySelector('#bg-hud-details-close').addEventListener('click', () => {
             modal.style.display = 'none';
         });
+        if (!modal.dataset.escapeCloseAttached) {
+            modal.dataset.escapeCloseAttached = '1';
+            document.addEventListener(
+                'keydown',
+                (e) => {
+                    if (e.key !== 'Escape') return;
+                    const m = document.getElementById('bg-hud-details-modal');
+                    if (!m || m.style.display !== 'flex') return;
+                    m.style.display = 'none';
+                    e.preventDefault();
+                },
+                true,
+            );
+        }
     }
 
     function escapeHtml(str) {
@@ -533,13 +613,32 @@ export function initBackgroundStatusHUD() {
     function openDiagnosticsModal() {
         const { warnings, checks, updatedAt } = STATE.diagnostics;
         const errors = effectiveDiagnosticErrors();
+        let errorsForReport = errors || [];
+        if (STATE.initHadSubsystemFailures) {
+            const hasInitEntry = errorsForReport.some(
+                (e) =>
+                    e?.system === 'app-init' ||
+                    String(e?.title || '').includes('Инициализация приложения'),
+            );
+            if (!hasInitEntry) {
+                errorsForReport = [
+                    ...errorsForReport,
+                    {
+                        title: 'Инициализация приложения',
+                        message:
+                            'Одна или несколько подсистем завершили инициализацию с ошибкой. Подробности — в консоли браузера.',
+                        system: 'app-init',
+                    },
+                ];
+            }
+        }
 
         // Если доступна полноразмерная модалка «Состояние здоровья», используем её,
         // чтобы поведение и размеры были идентичны ручному прогону из настроек.
         if (typeof window !== 'undefined' && typeof window.showHealthReportModal === 'function') {
             const report = {
-                success: !errors?.length,
-                errors: errors || [],
+                success: errorsForReport.length === 0,
+                errors: errorsForReport,
                 warnings: warnings || [],
                 checks: checks || [],
                 startedAt: updatedAt || null,
@@ -582,7 +681,7 @@ export function initBackgroundStatusHUD() {
         };
 
         const errorsList = buildSectionList(
-            errors,
+            errorsForReport,
             '<i class="fas fa-times-circle text-red-500 dark:text-red-400" aria-hidden="true"></i>',
         );
         const warningsList = buildSectionList(
@@ -594,14 +693,24 @@ export function initBackgroundStatusHUD() {
             '<i class="fas fa-check text-primary" aria-hidden="true"></i>',
         );
 
-        const watchdogLabel = watchdogStatusLabel(STATE.watchdog.severity || 'running');
+        let fallbackWdSeverity = STATE.watchdog.severity || 'running';
+        let fallbackWdStatus = STATE.watchdog.statusText || '—';
+        if (STATE.initHadSubsystemFailures && fallbackWdSeverity === 'ok') {
+            fallbackWdSeverity = 'error';
+            if (fallbackWdStatus === 'Система в норме') {
+                fallbackWdStatus = 'Инициализация завершена с ошибками';
+            }
+        }
+        const watchdogLabel = watchdogStatusLabel(fallbackWdSeverity);
         const lastAutosave = STATE.watchdog.lastAutosaveAt
             ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleString('ru-RU')
             : '—';
+        const summaryOkClass =
+            errorsForReport.length === 0 ? 'health-report-summary-ok' : 'health-report-summary-fail';
 
         body.innerHTML = `
             <div class="health-report-body-scroll">
-                <div class="health-report-summary health-report-summary-ok">
+                <div class="health-report-summary ${summaryOkClass}">
                     <div class="health-report-summary-icon"><i class="fas fa-stethoscope" aria-hidden="true"></i></div>
                     <div class="health-report-summary-text">
                         <h3>Диагностика фоновых тестов</h3>
@@ -618,7 +727,7 @@ export function initBackgroundStatusHUD() {
                             <span class="health-report-item-icon"></span>
                             <div>
                                 <div class="health-report-item-title">Уровень: ${esc(watchdogLabel)}</div>
-                                <div class="health-report-item-message">Статус: ${esc(STATE.watchdog.statusText || '—')}</div>
+                                <div class="health-report-item-message">Статус: ${esc(fallbackWdStatus)}</div>
                                 <div class="health-report-item-message">Последнее автосохранение: ${esc(lastAutosave)}</div>
                             </div>
                         </li>
@@ -627,9 +736,9 @@ export function initBackgroundStatusHUD() {
                 <div class="health-report-section health-report-section-errors">
                     <div class="health-report-section-header health-report-section-errors">
                         <span class="health-report-section-icon"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></span>
-                        <span>Ошибки (${errors?.length ?? 0})</span>
+                        <span>Ошибки (${errorsForReport?.length ?? 0})</span>
                     </div>
-                    ${errors?.length ? `<ul class="health-report-section-list">${errorsList}</ul>` : '<div class="health-report-empty">Ошибок не обнаружено.</div>'}
+                    ${errorsForReport?.length ? `<ul class="health-report-section-list">${errorsList}</ul>` : '<div class="health-report-empty">Ошибок не обнаружено.</div>'}
                 </div>
                 <div class="health-report-section health-report-section-warnings health-report-section-collapsible is-collapsed">
                     <div class="health-report-section-header health-report-section-warnings">
@@ -733,9 +842,18 @@ export function initBackgroundStatusHUD() {
             console.log(
                 `[BackgroundStatusHUD] finishTask: ${id} (success: ${success}). Оставшиеся задачи: ${STATE.tasks.size - 1}`,
             );
+            if (id === 'app-init') {
+                STATE.initHadSubsystemFailures = !success;
+            }
             STATE.tasks.delete(id);
             updateTitle();
             maybeFinishAll();
+            if (id === 'app-init') {
+                suppressCompletionUiWhenErrors();
+                updateDetailsButton();
+                syncHudMainHeading();
+                renderWatchdogInfo();
+            }
         },
         reportIndexProgress(processed, total, error) {
             const id = 'search-index-build';
@@ -771,6 +889,10 @@ export function initBackgroundStatusHUD() {
                 checks: [...(STATE.diagnostics.checks || [])],
                 updatedAt: STATE.diagnostics.updatedAt || null,
             };
+        },
+        /** Для второго контура: фоновые тесты не должны считаться «успех», если app-init уже зафиксировал сбои. */
+        getInitHadSubsystemFailures() {
+            return Boolean(STATE.initHadSubsystemFailures);
         },
         getWatchdogSnapshot() {
             return { ...STATE.watchdog };

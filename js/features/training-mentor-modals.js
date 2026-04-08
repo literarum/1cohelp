@@ -212,7 +212,7 @@ export function openMentorQuizPackEditorModal(p) {
     wrap.innerHTML = `
         <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
             Соберите квиз для ученика. Сохранённый пакет можно <strong>выгрузить в файл</strong> и открыть в другом Copilot 1СО.
-            Ученик импортирует файл и нажимает «В учебник» — модуль появится в разделе «Учебник».
+            Ученик импортирует файл и нажимает «Отправить в учебник» — модуль появится в разделе «Учебник».
         </p>
         <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1" for="mqTitle">Название теста</label>

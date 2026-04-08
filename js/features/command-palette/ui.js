@@ -50,9 +50,6 @@ export function getOrCreateModal() {
           </div>
         </div>
     `;
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal && typeof onCloseCallback === 'function') onCloseCallback();
-    });
     modal.classList.add('hidden');
     document.body.appendChild(modal);
     modalEl = modal;

@@ -85,6 +85,10 @@ export const loadingOverlayManager = {
             this.updateProgress(1, 'Загрузка');
             this.overlayElement.style.opacity = '1';
             this.overlayElement.style.display = 'flex';
+            this.overlayElement.style.visibility = '';
+            this.overlayElement.style.pointerEvents = '';
+            this.overlayElement.removeAttribute('aria-hidden');
+            this.overlayElement.removeAttribute('data-loading-overlay-parked');
 
             const canvas = this.overlayElement.querySelector('#loadingCanvas');
             if (canvas) {
@@ -131,6 +135,10 @@ export const loadingOverlayManager = {
             this.updateProgress(1, 'Загрузка');
             this.overlayElement.style.opacity = '1';
             this.overlayElement.style.display = 'flex';
+            this.overlayElement.style.visibility = '';
+            this.overlayElement.style.pointerEvents = '';
+            this.overlayElement.removeAttribute('aria-hidden');
+            this.overlayElement.removeAttribute('data-loading-overlay-parked');
             if (this.animationRunner && !this.animationRunner.isRunning) {
                 this.animationRunner.start();
             }
@@ -257,8 +265,21 @@ export const loadingOverlayManager = {
                         if (earlyToStop.resize) window.removeEventListener('resize', earlyToStop.resize);
                         earlyToStop.isRunning = false;
                     }
-                    if (document.body.contains(currentOverlayElement)) currentOverlayElement.remove();
-                    if (currentStyleElement && document.head.contains(currentStyleElement)) currentStyleElement.remove();
+                    /* Парковка в DOM вместо remove: id оверлея остаются для UI health / полного аудита index. */
+                    if (document.body.contains(currentOverlayElement)) {
+                        currentOverlayElement.style.transition = '';
+                        currentOverlayElement.style.opacity = '';
+                        currentOverlayElement.style.display = 'none';
+                        currentOverlayElement.style.visibility = 'hidden';
+                        currentOverlayElement.style.pointerEvents = 'none';
+                        currentOverlayElement.setAttribute('aria-hidden', 'true');
+                        currentOverlayElement.setAttribute('data-loading-overlay-parked', '1');
+                        if (canvas) {
+                            canvas.style.transition = '';
+                            canvas.style.opacity = '';
+                        }
+                    }
+                    /* #custom-loading-overlay-styles остаётся в head (ранний index + повторный показ). */
                     if (this.overlayElement === currentOverlayElement) this.overlayElement = null;
                     if (this.styleElement === currentStyleElement) this.styleElement = null;
                     resolve();
@@ -274,10 +295,7 @@ export const loadingOverlayManager = {
                     earlyToStop.isRunning = false;
                 }
                 this.overlayElement = null;
-                if (this.styleElement?.parentNode) {
-                    this.styleElement.remove();
-                    this.styleElement = null;
-                }
+                this.styleElement = null;
                 resolve();
             }
         });

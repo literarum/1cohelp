@@ -24,6 +24,10 @@ describe('diagnostic-bundle', () => {
         expect(bundle.app.schemaVersionCurrent).toBeTruthy();
         expect(bundle.app.schemaVersionStored).toBe('1.5');
         expect(bundle.health.hudDiagnostics.updatedAt).toBe('now');
+        expect(bundle.health.orchestration?.schema).toBe('copilot1co-application-health-state-v1');
+        expect(bundle.health.orchestration?.phases).toMatchObject({
+            STARTUP_READINESS: 'startup_readiness',
+        });
         expect(bundle.runtime.hubBufferMeta).toMatchObject({
             capacity: expect.any(Number),
         });

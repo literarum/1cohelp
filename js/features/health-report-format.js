@@ -13,6 +13,7 @@ export const HEALTH_SYSTEM_ORDER = [
     'telemetry',
     'storage_idb',
     'search',
+    'ui_surface',
     'export_import',
     'merge',
     'data_content',
@@ -35,6 +36,7 @@ export const HEALTH_SYSTEM_LABELS = {
     telemetry: 'Телеметрия и наблюдатели',
     storage_idb: 'IndexedDB: структура и транзакции',
     search: 'Поиск и индексация',
+    ui_surface: 'Поверхность интерфейса (DOM, вёрстка поиска, геометрия)',
     export_import: 'Экспорт и резервное копирование',
     merge: 'Слияние баз (совместимость формата)',
     data_content: 'Данные (алгоритмы, закладки, клиент, сторы)',
@@ -55,9 +57,12 @@ export const HEALTH_SYSTEM_LABELS = {
  */
 export function inferSystemFromTitle(title) {
     const t = String(title || '');
+    if (/Поверхность UI/i.test(t)) return 'ui_surface';
+    if (/^SLO\s*\//i.test(t)) return 'telemetry';
     if (/Watchdog\s*\//i.test(t) || /^Watchdog/i.test(t)) return 'watchdog';
     if (/^localStorage$|^sessionStorage$/i.test(t)) return 'runtime';
     if (/^IndexedDB$/i.test(t)) return 'storage_idb';
+    if (/^IndexedDB\s*\(/i.test(t) && /второй контур/i.test(t)) return 'storage_idb';
     if (/Вкладка|Service Worker|Cross-origin isolation/i.test(t)) return 'tab_pwa';
     if (/Поиск|searchIndex|индекс|Индекс/i.test(t)) return 'search';
     if (/Экспорт|Импорт|File System|экспорт|резервн/i.test(t)) return 'export_import';

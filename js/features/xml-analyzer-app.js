@@ -1,4 +1,4 @@
-/* eslint-disable no-dupe-keys, no-dupe-class-members, no-control-regex, no-empty, no-case-declarations, no-unused-vars -- ported from external XML analyzer app */
+/* eslint-disable no-dupe-keys, no-dupe-class-members, no-control-regex, no-case-declarations -- ported from external XML analyzer app */
 const XML_ANALYZER_ID_MAP = {
     'data-input': 'xmlAnalyzerDataInput',
     output: 'xmlAnalyzerOutput',
@@ -1098,7 +1098,9 @@ class ReportAnalyzerApp {
                     this.finalizeAnalysis(analysisResultNode);
                     return;
                 }
-            } catch (jsonError) {}
+            } catch {
+                // not JSON with messages — fall through to XML path
+            }
 
             let xmlStartIndex = rawData.indexOf('<?xml');
             if (xmlStartIndex === -1) xmlStartIndex = rawData.indexOf('<');
@@ -1107,7 +1109,7 @@ class ReportAnalyzerApp {
                 this.dataInputTextarea.value = rawData;
             }
 
-            const { fixedXml, wasFixed } = this._fixBrokenUriEncoding(rawData);
+            const { fixedXml } = this._fixBrokenUriEncoding(rawData);
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(fixedXml, 'application/xml');
 
@@ -2175,7 +2177,7 @@ class ReportAnalyzerApp {
         return wrapper;
     }
 
-    _renderDiagnosticReport(data, systemInfo) {
+    _renderDiagnosticReport(data, _systemInfo) {
         const wrapper = document.createElement('div');
         wrapper.className = 'space-y-4';
 
@@ -2583,7 +2585,7 @@ class ReportAnalyzerApp {
         return html;
     }
 
-    renderDiagnosticReport(xmlDoc, namespace) {
+    renderDiagnosticReport(_xmlDoc, _namespace) {
         return `<div class="content-card text-slate-900 dark:text-white">Отчет 1С пока не парсится на сертификаты.</div>`;
     }
 
@@ -2975,7 +2977,7 @@ class ReportAnalyzerApp {
                     const rawValue = valueNode.textContent.trim();
                     try {
                         value = JSON.parse(rawValue);
-                    } catch (e) {
+                    } catch {
                         value = rawValue;
                     }
                 }
@@ -3171,7 +3173,7 @@ class ReportAnalyzerApp {
                         'mt-1 p-2 bg-slate-100 dark:bg-slate-900 rounded-md text-xs whitespace-pre-wrap break-all';
                     pre.textContent = JSON.stringify(JSON.parse(log.comment), null, 2);
                     commentWrapper.appendChild(pre);
-                } catch (e) {
+                } catch {
                     const p = document.createElement('p');
                     p.className = 'text-sm text-slate-600 dark:text-slate-400 mt-1';
                     p.textContent = this.sanitizeText(log.comment);

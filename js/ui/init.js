@@ -217,15 +217,6 @@ export function initHotkeysModal() {
         okHotkeysModalBtn.dataset.listenerAttached = 'true';
     }
 
-    if (!hotkeysModal.dataset.overlayListenerAttached) {
-        hotkeysModal.addEventListener('click', (event) => {
-            if (event.target === hotkeysModal) {
-                closeModalInternal();
-            }
-        });
-        hotkeysModal.dataset.overlayListenerAttached = 'true';
-    }
-
     // Fullscreen для модалки горячих клавиш вешается централизованно в initFullscreenToggles (modals-manager.js).
 
     console.log('Модальное окно горячих клавиш инициализировано.');

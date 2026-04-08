@@ -51,10 +51,6 @@ export function showUnsavedConfirmModal(message) {
         describedBy: 'unsavedConfirmModalMessage',
     });
 
-    if (modal._unsavedOverlayClickHandler) {
-        modal.removeEventListener('click', modal._unsavedOverlayClickHandler);
-        delete modal._unsavedOverlayClickHandler;
-    }
     if (modal._unsavedCancelClickHandler) {
         cancelBtn.removeEventListener('click', modal._unsavedCancelClickHandler);
         delete modal._unsavedCancelClickHandler;
@@ -80,19 +76,10 @@ export function showUnsavedConfirmModal(message) {
         const onCancel = () => finish(false);
         const onLeave = () => finish(true);
 
-        const onOverlayClick = (e) => {
-            if (e.target === modal) {
-                e.preventDefault();
-                e.stopPropagation();
-                finish(false);
-            }
-        };
-
         function finish(leave) {
             if (settled) return;
             settled = true;
             document.removeEventListener('keydown', onEscape);
-            modal.removeEventListener('click', onOverlayClick);
             cancelBtn.removeEventListener('click', onCancel);
             leaveBtn.removeEventListener('click', onLeave);
             modal.classList.add('hidden');
@@ -107,12 +94,10 @@ export function showUnsavedConfirmModal(message) {
             resolve(leave);
         }
 
-        modal._unsavedOverlayClickHandler = onOverlayClick;
         modal._unsavedCancelClickHandler = onCancel;
         modal._unsavedLeaveClickHandler = onLeave;
         modal._unsavedEscapeKeyHandler = onEscape;
 
-        modal.addEventListener('click', onOverlayClick);
         cancelBtn.addEventListener('click', onCancel);
         leaveBtn.addEventListener('click', onLeave);
         document.addEventListener('keydown', onEscape);

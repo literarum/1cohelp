@@ -207,6 +207,10 @@ export async function appInit(context = 'normal') {
     // eslint-disable-next-line no-async-promise-executor
     return new Promise(async (resolve, reject) => {
         try {
+            if (typeof window !== 'undefined') {
+                window.__copilotAppInitFinished = false;
+                window.__copilotAppInitHudSuccess = undefined;
+            }
             if (typeof initDB === 'function') {
                 await initDB();
                 dbInitialized = true;
@@ -821,6 +825,7 @@ export async function appInit(context = 'normal') {
                 `[appInit V3] Инициализация подсистем UI завершена: ${successCount} успешно, ${errorCount} с ошибками.`,
             );
 
+            let applyInitialUISettingsFailed = false;
             try {
                 if (typeof applyInitialUISettings === 'function') {
                     await applyInitialUISettings();
@@ -828,9 +833,11 @@ export async function appInit(context = 'normal') {
                     console.warn('[appInit V3] Функция applyInitialUISettings не найдена.');
                 }
             } catch (uiSettingsError) {
+                applyInitialUISettingsFailed = true;
                 console.error('[appInit V3] ✗ Ошибка применения UI настроек:', uiSettingsError);
             }
 
+            let finalUIInitFailed = false;
             try {
                 if (typeof initUI === 'function') {
                     await Promise.resolve(initUI());
@@ -838,6 +845,7 @@ export async function appInit(context = 'normal') {
                     console.warn('[appInit V3] ⚠ Функция initUI не найдена.');
                 }
             } catch (finalUIError) {
+                finalUIInitFailed = true;
                 console.error('[appInit V3] ✗ Ошибка в финальной инициализации UI:', finalUIError);
             }
             updateTotalAppInitProgress(STAGE_WEIGHTS_APP_INIT.FINAL_UI, 'FinalUI');
@@ -861,16 +869,32 @@ export async function appInit(context = 'normal') {
                 window.BackgroundStatusHUD.updateTask('app-init', 100, 100);
             }
             // Завершаем задачу HUD сразу по окончании appInit, чтобы таймаут принудительного скрытия не срабатывал
+            const appInitHudSuccess =
+                errorCount === 0 && !applyInitialUISettingsFailed && !finalUIInitFailed;
             if (
                 typeof window.BackgroundStatusHUD !== 'undefined' &&
                 typeof window.BackgroundStatusHUD.finishTask === 'function'
             ) {
-                window.BackgroundStatusHUD.finishTask('app-init', true);
+                window.BackgroundStatusHUD.finishTask('app-init', appInitHudSuccess);
             }
-            console.log('[appInit V3] ✓ Инициализация приложения завершена успешно.');
+            if (appInitHudSuccess) {
+                console.log('[appInit V3] ✓ Инициализация приложения завершена успешно.');
+            } else {
+                console.warn(
+                    '[appInit V3] ⚠ Инициализация завершена с ошибками (подсистемы UI, applyInitialUISettings или initUI). См. логи выше.',
+                );
+            }
+            if (typeof window !== 'undefined') {
+                window.__copilotAppInitFinished = true;
+                window.__copilotAppInitHudSuccess = appInitHudSuccess;
+            }
             resolve(dbInitialized);
         } catch (criticalError) {
             console.error('[appInit V3] ✗ КРИТИЧЕСКАЯ ОШИБКА инициализации:', criticalError);
+            if (typeof window !== 'undefined') {
+                window.__copilotAppInitFinished = true;
+                window.__copilotAppInitHudSuccess = false;
+            }
             if (
                 loadingOverlayManager &&
                 typeof loadingOverlayManager.updateProgress === 'function'

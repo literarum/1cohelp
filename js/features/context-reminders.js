@@ -527,11 +527,20 @@ export function initContextRemindersSystem() {
     const modal = reminderModalEl();
     if (modal && !modal._bound) {
         modal._bound = true;
-        modal.addEventListener('click', (e) => {
-            const inner = document.getElementById('reminderModalInner');
-            if (inner && inner.contains(e.target)) return;
-            closeReminderModal();
-        });
+        if (!modal._reminderEscapeBound) {
+            modal._reminderEscapeBound = true;
+            document.addEventListener(
+                'keydown',
+                (e) => {
+                    if (e.key !== 'Escape') return;
+                    const m = reminderModalEl();
+                    if (!m || m.classList.contains('hidden')) return;
+                    e.preventDefault();
+                    closeReminderModal();
+                },
+                true,
+            );
+        }
         modal.querySelector('#reminderModalCloseBtn')?.addEventListener('click', closeReminderModal);
         modal.querySelector('#reminderModalCancelBtn')?.addEventListener('click', closeReminderModal);
         modal.querySelector('#reminderFormSubmitBtn')?.addEventListener('click', (e) => {

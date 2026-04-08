@@ -1098,7 +1098,7 @@ async function handleMentorImportFile(file) {
     try {
         await saveMentorQuizPack(State, toSave);
         logTrainingEvent('info', 'MENTOR_PACK_IMPORT', toSave.id);
-        deps.showNotification?.('Пакет импортирован. При необходимости нажмите «В учебник».', 'success', {
+        deps.showNotification?.('Пакет импортирован. При необходимости нажмите «Отправить в учебник».', 'success', {
             duration: 4000,
         });
         await renderTrainingPage();
@@ -1363,17 +1363,21 @@ function renderMentorPanel(packs) {
         .map((pk) => {
             const qn = pk.questions?.length || 0;
             const sub = pk.subtitle ? escapeHtml(pk.subtitle) : '';
-            return `<li class="rounded-2xl border border-gray-200 dark:border-gray-600 bg-white/90 dark:bg-gray-800/80 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3">
+            return `<li class="rounded-2xl border border-gray-200 dark:border-gray-600 bg-white/90 dark:bg-gray-800/80 p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div class="min-w-0 flex-1">
                     <h4 class="text-base font-semibold text-gray-900 dark:text-gray-50 truncate">${escapeHtml(pk.title)}</h4>
                     ${sub ? `<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">${sub}</p>` : ''}
                     <p class="text-xs text-gray-500 mt-1">${qn} вопр. · обновл. ${escapeHtml((pk.updatedAt || '').slice(0, 10))}</p>
                 </div>
-                <div class="flex flex-wrap gap-2 shrink-0">
-                    <button type="button" data-training-mentor-edit data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-sm text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700/50">Изменить</button>
-                    <button type="button" data-training-mentor-export data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl bg-slate-700 text-white text-sm font-medium hover:bg-slate-800">Выгрузить JSON</button>
-                    <button type="button" data-training-mentor-publish data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700">В учебник</button>
-                    <button type="button" data-training-mentor-delete data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl text-sm text-red-600 bg-red-500/10 dark:bg-red-950/30 hover:bg-red-500/15">Удалить</button>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 w-full sm:w-auto shrink-0 sm:ml-auto">
+                    <div class="flex flex-wrap gap-2 justify-end">
+                        <button type="button" data-training-mentor-export data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl bg-slate-700 text-white text-sm font-medium hover:bg-slate-800">Выгрузить JSON</button>
+                        <button type="button" data-training-mentor-publish data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700">Отправить в учебник</button>
+                    </div>
+                    <div class="flex items-center gap-1 justify-end sm:ps-3 sm:border-l sm:border-gray-200 dark:sm:border-gray-600">
+                        <button type="button" data-training-mentor-edit data-mentor-pack-id="${escapeHtml(pk.id)}" class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="Изменить пакет" title="Изменить"><i class="fas fa-pen text-sm" aria-hidden="true"></i></button>
+                        <button type="button" data-training-mentor-delete data-mentor-pack-id="${escapeHtml(pk.id)}" class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-red-600 bg-red-500/10 dark:bg-red-950/30 hover:bg-red-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30" aria-label="Удалить пакет" title="Удалить"><i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>
+                    </div>
                 </div>
             </li>`;
         })
@@ -1386,8 +1390,8 @@ function renderMentorPanel(packs) {
             <div class="training-mentor-hero rounded-2xl p-6 shadow-sm">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-gray-50 tracking-tight">Режим наставника</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-300 mt-2 max-w-3xl leading-relaxed">
-                    Здесь вы собираете квиз-тесты, сохраняете их локально и передаёте ученику файлом JSON.
-                    В другом экземпляре приложения ученик открывает этот раздел, нажимает «Загрузить JSON», затем «В учебник» — тест появится в разделе «Учебник» как обычный модуль с мини-квизом.
+                    Здесь вы собираете квиз-тесты и передаёте ученику файлом JSON.
+                    В другом экземпляре приложения ученик открывает этот раздел, нажимает «Загрузить JSON», затем «Отправить в учебник» — тест появится в разделе «Учебник» как обычный модуль с мини-квизом.
                 </p>
                 <div class="mt-4 flex flex-wrap gap-2">
                     <button type="button" data-training-mentor-new class="training-mentor-btn training-mentor-btn--primary inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">

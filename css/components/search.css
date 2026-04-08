@@ -12,6 +12,8 @@
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;
+    /* Выше фиксированного BackgroundStatusHUD (#bg-status-hud z-index 9998) и липкой шапки */
+    z-index: 10050;
     max-height: min(24rem, calc(100vh - 120px - var(--safe-area-top) - var(--safe-area-bottom)));
     width: 100%;
     max-width: 100%;

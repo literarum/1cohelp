@@ -129,7 +129,6 @@ export function setDependencies(deps) {
         setupClearButton: deps.setupClearButton,
         loadFoldersList: deps.loadFoldersList,
         removeEscapeHandler: deps.removeEscapeHandler,
-        getVisibleModals: deps.getVisibleModals,
         addEscapeHandler: deps.addEscapeHandler,
         handleSaveFolderSubmit: deps.handleSaveFolderSubmit,
         getAllFromIndex: deps.getAllFromIndex,

@@ -192,6 +192,26 @@ export async function saveMainAlgoHeadersExpanded(indices) {
 }
 
 /**
+ * Стабильный #noInnLink после динамического рендера (DOM health, палитра команд, модалка «нет ИНН»).
+ * @param {ParentNode | null | undefined} collapsibleBody
+ * @param {object} step
+ */
+function appendNoInnHelpLink(collapsibleBody, step) {
+    const needs =
+        step && (step.showNoInnHelp === true || step.type === 'inn_step');
+    if (!needs || !collapsibleBody) return;
+    const p = document.createElement('p');
+    p.className = 'text-sm text-gray-500 dark:text-gray-400 mt-1 italic';
+    const a = document.createElement('a');
+    a.href = '#';
+    a.id = 'noInnLink';
+    a.className = 'text-primary hover:underline';
+    a.textContent = 'Что делать, если клиент не может назвать ИНН?';
+    p.appendChild(a);
+    collapsibleBody.appendChild(p);
+}
+
+/**
  * Сохраняет список id открытых групп
  */
 export async function saveMainAlgoGroupsOpen(groupIds) {
@@ -399,6 +419,7 @@ export async function renderMainAlgorithm() {
             }
             collapsibleBody.appendChild(exampleDiv);
         }
+        appendNoInnHelpLink(collapsibleBody, step);
         if (Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0) {
             const phonesDiv = document.createElement('div');
             phonesDiv.className = 'mt-2 p-2';
@@ -438,6 +459,7 @@ export async function renderMainAlgorithm() {
             stepDiv.style.cursor = 'pointer';
             stepDiv.addEventListener('click', (e) => {
                 if (e.target.closest('h3')) return;
+                if (e.target.closest('a')) return;
                 const data = algorithms.main.steps[index];
                 if (data) {
                     const text = getStepContentAsText(data);
@@ -547,6 +569,7 @@ export async function renderMainAlgorithm() {
             }
             collapsibleBody.appendChild(exampleDiv);
         }
+        appendNoInnHelpLink(collapsibleBody, step);
         if (Array.isArray(step.phoneNumbers) && step.phoneNumbers.length > 0) {
             const phonesDiv = document.createElement('div');
             phonesDiv.className = 'mt-2 p-2';

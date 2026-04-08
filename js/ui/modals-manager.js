@@ -139,6 +139,48 @@ export function getVisibleModals() {
 }
 
 /**
+ * Снимает блокировку прокрутки страницы, если не осталось видимых модалок.
+ * Единая точка правды вместо разрозненного remove классов (двойной контур с getVisibleModals).
+ */
+export function syncBodyScrollLockAfterModalClose() {
+    requestAnimationFrame(() => {
+        if (getVisibleModals().length === 0) {
+            document.body.classList.remove('modal-open', 'overflow-hidden');
+        }
+    });
+}
+
+/**
+ * Колесо над затемнённым фоном модалки перенаправляет прокрутку в указанный скроллируемый блок
+ * (когда событие не пришло из этого блока — типичный UX для центрированных диалогов).
+ *
+ * @param {HTMLElement} modalElement - корень модалки (fixed inset-0)
+ * @param {string} scrollableSelector - CSS-селектор области с overflow-y: auto/scroll
+ */
+export function attachModalBackdropWheelScroll(modalElement, scrollableSelector) {
+    if (!modalElement || !scrollableSelector || modalElement.dataset.backdropWheelScrollAttached === '1')
+        return;
+    modalElement.dataset.backdropWheelScrollAttached = '1';
+    modalElement.addEventListener(
+        'wheel',
+        (event) => {
+            const scrollable = modalElement.querySelector(scrollableSelector);
+            if (!scrollable) return;
+            if (scrollable.contains(event.target)) return;
+            const { scrollTop, scrollHeight, clientHeight } = scrollable;
+            if (scrollHeight <= clientHeight) return;
+            const delta = event.deltaY;
+            const atTop = scrollTop <= 0;
+            const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+            if ((delta < 0 && atTop) || (delta > 0 && atBottom)) return;
+            scrollable.scrollTop += delta;
+            event.preventDefault();
+        },
+        { passive: false },
+    );
+}
+
+/**
  * Получает верхнее модальное окно по z-index
  * @param {HTMLElement[]} modals - Массив модальных окон
  * @returns {HTMLElement|null} Верхнее модальное окно или null
@@ -558,20 +600,16 @@ export function showNoInnModal(addEscapeHandler, removeEscapeHandler, getVisible
         document.body.appendChild(modal);
 
         modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.closest('.close-modal')) {
-                if (e.target.closest('.close-modal')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-                modal.classList.add('hidden');
-                if (typeof removeEscapeHandler === 'function') {
-                    removeEscapeHandler(modal);
-                }
-                const visibleModals =
-                    typeof getVisibleModals === 'function' ? getVisibleModals() : [];
-                if (visibleModals.length === 0) {
-                    document.body.classList.remove('overflow-hidden');
-                }
+            if (!e.target.closest('.close-modal')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            modal.classList.add('hidden');
+            if (typeof removeEscapeHandler === 'function') {
+                removeEscapeHandler(modal);
+            }
+            const visibleModals = typeof getVisibleModals === 'function' ? getVisibleModals() : [];
+            if (visibleModals.length === 0) {
+                document.body.classList.remove('overflow-hidden');
             }
         });
     }

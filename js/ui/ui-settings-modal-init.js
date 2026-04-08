@@ -460,12 +460,6 @@ export function initUISettingsModalHandlers() {
                 healthReportModal.classList.add('hidden');
                 healthReportModal.style.display = 'none';
             });
-            healthReportModal.addEventListener('click', (e) => {
-                if (e.target === healthReportModal) {
-                    healthReportModal.classList.add('hidden');
-                    healthReportModal.style.display = 'none';
-                }
-            });
             if (!healthReportModal.dataset.escapeAttached) {
                 healthReportModal.dataset.escapeAttached = '1';
                 document.addEventListener(

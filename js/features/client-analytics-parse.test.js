@@ -6,7 +6,7 @@ import {
     isValidInn12Checksum,
     innConfidence,
     normalizeRussianPhone,
-    extractPhoneCandidates,
+    extractEmailCandidates,
     extractKppNearInn,
     parseTxtIntoRecords,
     splitIntoSegments,
@@ -126,5 +126,29 @@ describe('client-analytics-parse', () => {
         expect(rows.length).toBe(1);
         expect(rows[0].inn).toBe('');
         expect(rows[0].kpp).toBe('770701001');
+    });
+
+    it('parseTxtIntoRecords: numbered appeal with only ИНН line yields empty question', () => {
+        const txt = `1). 
+ИНН 7707083893`;
+        const rows = parseTxtIntoRecords(txt, 'inn-only.txt');
+        expect(rows.length).toBe(1);
+        expect(rows[0].inn).toBe('7707083893');
+        expect(rows[0].question).toBe('');
+    });
+
+    it('extractEmailCandidates finds addresses', () => {
+        expect(extractEmailCandidates('Напишите на support@example.com спасибо')).toEqual([
+            'support@example.com',
+        ]);
+    });
+
+    it('parseTxtIntoRecords extracts email in numbered block', () => {
+        const txt = `1). Вопрос по ЭДО
+ИНН 7707083893
+Контакт: client@firma.ru`;
+        const rows = parseTxtIntoRecords(txt, 'mail.txt');
+        expect(rows.length).toBe(1);
+        expect(rows[0].emails).toContain('client@firma.ru');
     });
 });

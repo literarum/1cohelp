@@ -5,6 +5,7 @@ import {
     setRuntimeHubCockpitMirror,
     clearRuntimeHubBuffer,
     getRuntimeHubFaultEntries,
+    getRuntimeHubBufferMeta,
 } from './runtime-issue-hub.js';
 import { mergeHubAndCockpitFaultRows } from './error-stream-merge.js';
 import {
@@ -12,11 +13,18 @@ import {
     diagnosticBundleToJsonString,
     suggestDiagnosticFilename,
 } from './diagnostic-bundle.js';
+import { getVisibleModals, getTopmostModal } from '../ui/modals-manager.js';
 import {
     runManualHealthDiagnosticFromCockpit,
     buildManualDiagnosticFailureReport,
 } from './engineering-cockpit-manual-health.js';
 import { getPwaCockpitBlock } from '../app/pwa-register.js';
+import {
+    buildCockpitLoggingCrosscheck,
+    filterCockpitLogEntries,
+    formatCockpitLogText,
+    isValidCockpitLogFilterLevel,
+} from './engineering-cockpit-logging.js';
 
 const ENGINEERING_PASSWORD = '05213587';
 const LOG_BUFFER_LIMIT = 1500;
@@ -36,6 +44,7 @@ const nativeConsole = {
     info: pickNative('info'),
     warn: pickNative('warn'),
     error: pickNative('error'),
+    debug: pickNative('debug'),
 };
 
 const state = {
@@ -45,6 +54,10 @@ const state = {
     errors: [],
     dbSummary: [],
     currentTab: 'overview',
+    /** @type {string} */
+    logFilter: 'all',
+    /** Монотонный номер записи в буфере (устойчивый к обрезке хвоста при переполнении). */
+    nextLogSeq: 0,
 };
 
 let deps = {
@@ -108,8 +121,14 @@ function pushBounded(arr, item) {
     }
 }
 
+function allocateLogSeq() {
+    state.nextLogSeq += 1;
+    return state.nextLogSeq;
+}
+
 function addLog(level, args) {
     pushBounded(state.logs, {
+        seq: allocateLogSeq(),
         ts: nowIso(),
         level,
         args: Array.from(args).map((arg) => cockpitSerialize(arg, 2400)),
@@ -146,16 +165,15 @@ function installConsoleInterceptors() {
     if (console.__engineeringCockpitInstalled) return;
 
     const patchMethod = (method, nativeMethod) => {
+        const forward =
+            typeof nativeMethod === 'function' ? nativeMethod : nativeConsole.log;
         console[method] = (...args) => {
             addLog(method, args);
             if (method === 'error') {
                 const text = args.map((a) => cockpitSerialize(a, 3500)).join('\n');
                 addRuntimeError('console.error', text || '(пустой вызов console.error)');
-                nativeMethod(...args);
-                return;
             }
-            // Для log/info/warn оставляем тишину в обычной консоли,
-            // но полностью дублируем в машинное отделение.
+            forward(...args);
         };
     };
 
@@ -163,6 +181,7 @@ function installConsoleInterceptors() {
     patchMethod('info', nativeConsole.info);
     patchMethod('warn', nativeConsole.warn);
     patchMethod('error', nativeConsole.error);
+    patchMethod('debug', nativeConsole.debug);
 
     console.__engineeringCockpitInstalled = true;
 }
@@ -180,6 +199,7 @@ function importBootDiagnostics() {
     bootLogs.forEach((entry) => {
         const args = Array.isArray(entry.args) ? entry.args : [entry.args];
         pushBounded(state.logs, {
+            seq: allocateLogSeq(),
             ts: entry.ts || nowIso(),
             level: entry.level || 'boot',
             args: args.map((arg) => safeSerialize(arg)),
@@ -253,6 +273,11 @@ function getSystemOverview() {
             currentTab: state.currentTab,
             unlocked: state.unlocked,
         },
+        logging: buildCockpitLoggingCrosscheck(
+            state.logs,
+            getRuntimeHubBufferMeta(),
+            LOG_BUFFER_LIMIT,
+        ),
         performance: {
             timeOrigin: performance.timeOrigin,
             now: performance.now(),
@@ -289,13 +314,24 @@ async function renderActiveTab() {
     }
     refs.overview.textContent = safeSerialize(overviewData, 200000);
 
-    refs.logs.textContent = state.logs.length
-        ? state.logs
-              .map(
-                  (entry) => `[${entry.ts}] [${entry.level.toUpperCase()}] ${entry.args.join(' ')}`,
-              )
-              .join('\n')
-        : 'Логи пока отсутствуют.';
+    const filterLevel = isValidCockpitLogFilterLevel(state.logFilter)
+        ? state.logFilter
+        : 'all';
+    const filteredLogs = filterCockpitLogEntries(state.logs, filterLevel);
+    if (refs.logMeta) {
+        refs.logMeta.textContent =
+            state.logs.length === 0
+                ? 'Буфер пуст'
+                : `Показано: ${filteredLogs.length} из ${state.logs.length} · фильтр: ${filterLevel}`;
+    }
+    if (!state.logs.length) {
+        refs.logs.textContent = 'Логи пока отсутствуют.';
+    } else if (!filteredLogs.length) {
+        refs.logs.textContent =
+            'Нет записей для выбранного уровня. Смените фильтр или выберите «Все уровни».';
+    } else {
+        refs.logs.textContent = formatCockpitLogText(filteredLogs);
+    }
 
     refs.errors.textContent = buildMergedErrorsText();
 
@@ -378,6 +414,10 @@ function bindUi() {
         ),
         overview: document.getElementById('engineeringCockpitOverview'),
         logs: document.getElementById('engineeringCockpitLogs'),
+        logLevelFilter: document.getElementById('engineeringCockpitLogLevelFilter'),
+        logMeta: document.getElementById('engineeringCockpitLogMeta'),
+        logsScrollEndBtn: document.getElementById('engineeringCockpitLogsScrollEndBtn'),
+        exportLogsBtn: document.getElementById('engineeringCockpitExportLogsBtn'),
         errors: document.getElementById('engineeringCockpitErrors'),
         db: document.getElementById('engineeringCockpitDb'),
         state: document.getElementById('engineeringCockpitState'),
@@ -386,9 +426,18 @@ function bindUi() {
     if (!refs.modal || !refs.closeBtn || !refs.unlockBtn || !refs.passwordInput) return false;
 
     refs.closeBtn.addEventListener('click', closeEngineeringCockpit);
-    refs.modal.addEventListener('click', (event) => {
-        if (event.target === refs.modal) closeEngineeringCockpit();
-    });
+    /* Закрытие кокпита только по кнопке закрытия и Esc — не по клику на оверлей. */
+    const onCockpitDocumentEscape = (event) => {
+        if (event.key !== 'Escape') return;
+        if (!refs.modal || refs.modal.classList.contains('hidden')) return;
+        const visible = getVisibleModals();
+        const top = getTopmostModal(visible);
+        if (!top || top.id !== refs.modal.id) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeEngineeringCockpit();
+    };
+    document.addEventListener('keydown', onCockpitDocumentEscape, true);
 
     refs.unlockBtn.addEventListener('click', () => {
         void tryUnlock();
@@ -397,6 +446,48 @@ function bindUi() {
         if (event.key === 'Enter') {
             event.preventDefault();
             void tryUnlock();
+        }
+    });
+
+    if (refs.logLevelFilter) {
+        refs.logLevelFilter.value = state.logFilter;
+        refs.logLevelFilter.addEventListener('change', () => {
+            const v = refs.logLevelFilter.value;
+            state.logFilter = isValidCockpitLogFilterLevel(v) ? v : 'all';
+            void renderActiveTab();
+        });
+    }
+
+    refs.logsScrollEndBtn?.addEventListener('click', () => {
+        const wrap = refs.modal?.querySelector('.engineering-cockpit-content');
+        if (wrap) {
+            wrap.scrollTo({ top: wrap.scrollHeight, behavior: 'smooth' });
+        }
+    });
+
+    refs.exportLogsBtn?.addEventListener('click', () => {
+        const filterLevel = isValidCockpitLogFilterLevel(state.logFilter)
+            ? state.logFilter
+            : 'all';
+        const filteredLogs = filterCockpitLogEntries(state.logs, filterLevel);
+        const body = formatCockpitLogText(filteredLogs);
+        const header = `Copilot 1СО — машинное отделение · логи\nфильтр: ${filterLevel}\nсформировано: ${nowIso()}\n---\n`;
+        const text = filteredLogs.length ? header + body : header + '(пусто)';
+        try {
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `copilot-cockpit-logs-${filterLevel}-${Date.now()}.txt`;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            deps.showNotification?.('Файл логов сохранён.', 'success');
+        } catch (err) {
+            nativeConsole.error('[engineering-cockpit] log export failed', err);
+            deps.showNotification?.('Не удалось сохранить логи.', 'error');
         }
     });
 

@@ -98,9 +98,20 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
                 title: 'Сеть (NetworkInformation)',
                 message: `Тип: ${eff}, downlink: ${down}, RTT: ${rtt}.`,
             });
+        } else {
+            rows.push({
+                level: 'info',
+                title: 'Сеть (NetworkInformation)',
+                message:
+                    'API недоступен (часто Safari/Firefox). Состояние связи см. в строке «Сеть» (navigator.onLine).',
+            });
         }
-    } catch {
-        /* ignore */
+    } catch (err) {
+        rows.push({
+            level: 'info',
+            title: 'Сеть (NetworkInformation)',
+            message: `Проверка недоступна: ${err?.message || err}.`,
+        });
     }
 
     // sessionStorage
@@ -170,6 +181,12 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
         } catch {
             rows.push({ level: 'info', title: 'Хранилище (persistence)', message: 'Проверка persistence недоступна.' });
         }
+    } else {
+        rows.push({
+            level: 'info',
+            title: 'Хранилище (persistence)',
+            message: 'navigator.storage.persisted недоступен в этом браузере.',
+        });
     }
 
     // JS heap (Chromium)
@@ -208,6 +225,13 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
             level: 'info',
             title: 'Устройство (RAM, оценка)',
             message: `navigator.deviceMemory: ~${navigator.deviceMemory} ГБ (подсказка браузера).`,
+        });
+    } else {
+        rows.push({
+            level: 'info',
+            title: 'Устройство (RAM, оценка)',
+            message:
+                'navigator.deviceMemory недоступен (часто десктоп или Safari/Firefox) — оценка RAM не сообщается.',
         });
     }
 

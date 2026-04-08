@@ -82,7 +82,7 @@ function ensureModal() {
     document.body.appendChild(modal);
 
     modal.addEventListener('click', (event) => {
-        if (event.target === modal || event.target.closest('[data-action="close"]')) {
+        if (event.target.closest('[data-action="close"]')) {
             closeRecentlyDeletedModal();
         }
     });

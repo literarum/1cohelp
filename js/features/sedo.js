@@ -914,41 +914,56 @@ export function renderSedoTypesContent(data, isEditing, searchQuery = '') {
     const buttonsContainer = document.createElement('div');
     buttonsContainer.className = 'flex items-center gap-2';
 
-    // Create buttons based on editing mode
+    const editBtn = document.createElement('button');
+    editBtn.id = 'editSedoTypesBtn';
+    editBtn.type = 'button';
+    editBtn.className =
+        'px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition-colors flex items-center';
+    editBtn.innerHTML = '<i class="fas fa-edit mr-1"></i>Редактировать';
+    editBtn.addEventListener('click', () => toggleSedoEditMode(true));
+
+    const saveBtn = document.createElement('button');
+    saveBtn.id = 'saveSedoTypesBtn';
+    saveBtn.type = 'button';
+    saveBtn.className =
+        'px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors flex items-center';
+    saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Сохранить';
+    saveBtn.addEventListener('click', saveSedoChanges);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.id = 'cancelSedoTypesBtn';
+    cancelBtn.type = 'button';
+    cancelBtn.className =
+        'px-3 py-1.5 text-sm bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-md transition-colors';
+    cancelBtn.innerHTML = '<i class="fas fa-times mr-1"></i>Отмена';
+    cancelBtn.addEventListener('click', () => {
+        currentSedoData = JSON.parse(JSON.stringify(originalSedoDataBeforeEdit));
+        toggleSedoEditMode(false);
+    });
+
     if (isEditing) {
-        const saveBtn = document.createElement('button');
-        saveBtn.className =
-            'px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors';
-        saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Сохранить';
-        saveBtn.addEventListener('click', saveSedoChanges);
+        editBtn.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+        cancelBtn.classList.remove('hidden');
+    } else {
+        editBtn.classList.remove('hidden');
+        saveBtn.classList.add('hidden');
+        cancelBtn.classList.add('hidden');
+    }
 
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className =
-            'px-3 py-1.5 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors';
-        cancelBtn.innerHTML = '<i class="fas fa-times mr-1"></i>Отмена';
-        cancelBtn.addEventListener('click', () => {
-            currentSedoData = JSON.parse(JSON.stringify(originalSedoDataBeforeEdit));
-            toggleSedoEditMode(false);
-        });
+    buttonsContainer.appendChild(editBtn);
+    buttonsContainer.appendChild(saveBtn);
+    buttonsContainer.appendChild(cancelBtn);
 
+    if (isEditing) {
         const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
         resetBtn.className =
             'px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-md transition-colors';
         resetBtn.innerHTML = '<i class="fas fa-undo mr-1"></i>Вернуть по умолчанию';
         resetBtn.title = 'Удалить пользовательские правки и отобразить абсолютные данные из кода';
         resetBtn.addEventListener('click', resetSedoToDefault);
-
-        buttonsContainer.appendChild(saveBtn);
-        buttonsContainer.appendChild(cancelBtn);
         buttonsContainer.appendChild(resetBtn);
-    } else {
-        const editBtn = document.createElement('button');
-        editBtn.id = 'editSedoTypesBtn';
-        editBtn.className =
-            'px-3 py-1.5 text-sm bg-primary hover:bg-secondary text-white rounded-md transition-colors flex items-center';
-        editBtn.innerHTML = '<i class="fas fa-edit mr-1"></i>Редактировать';
-        editBtn.addEventListener('click', () => toggleSedoEditMode(true));
-        buttonsContainer.appendChild(editBtn);
     }
 
     headerContainer.appendChild(titleHeader);

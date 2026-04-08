@@ -11,6 +11,7 @@ import {
     getRuntimeHubPerformanceSignalsForHealth,
 } from './runtime-issue-hub.js';
 import { getPwaCockpitBlock } from '../app/pwa-register.js';
+import { getApplicationHealthStateForExport } from './application-health-state.js';
 
 /**
  * Синхронные «флаги» окружения браузера (первый контур; второй — getHighEntropyValues ниже).
@@ -158,7 +159,8 @@ export async function buildCopilotDiagnosticBundle(ctx = {}) {
         health: {
             hudDiagnostics: hud,
             watchdog: watchdog,
-            note: 'Снимок последней записи HUD (фоновая или ручная диагностика). Актуальный прогон: кнопка «Ручной прогон» в машинном отделении или «Запустить проверку систем» в настройках.',
+            orchestration: getApplicationHealthStateForExport(),
+            note: 'Снимок последней записи HUD (фоновая или ручная диагностика). Поле orchestration — журнал фаз самотестирования и перекрёстные заметки. Актуальный прогон: кнопка «Ручной прогон» в машинном отделении или «Запустить проверку систем» в настройках.',
         },
         runtime: {
             hubBufferMeta: getRuntimeHubBufferMeta(),

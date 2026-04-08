@@ -26,6 +26,10 @@ import {
     parseSearchQueryTagsAndText,
     itemMatchesAllTags,
 } from '../features/global-tags.js';
+import {
+    attachModalBackdropWheelScroll,
+    syncBodyScrollLockAfterModalClose,
+} from '../ui/modals-manager.js';
 
 // Полные классы для бейджей папок (Tailwind не поддерживает динамические имена классов — только явные строки)
 const FOLDER_BADGE_CLASSES = {
@@ -112,7 +116,6 @@ let debounce = null;
 let setupClearButton = null;
 let loadFoldersList = null;
 let removeEscapeHandler = null;
-let getVisibleModals = null;
 let addEscapeHandler = null;
 let handleSaveFolderSubmitDep = null;
 let getAllFromIndex = null;
@@ -139,7 +142,6 @@ export function setBookmarksDependencies(deps) {
     setupClearButton = deps.setupClearButton;
     loadFoldersList = deps.loadFoldersList;
     removeEscapeHandler = deps.removeEscapeHandler;
-    getVisibleModals = deps.getVisibleModals;
     addEscapeHandler = deps.addEscapeHandler;
     handleSaveFolderSubmitDep = deps.handleSaveFolderSubmit;
     getAllFromIndex = deps.getAllFromIndex;
@@ -1326,10 +1328,7 @@ export async function handleSaveFolderSubmit(event) {
             if (typeof removeEscapeHandler === 'function') {
                 removeEscapeHandler(modal);
             }
-            if (typeof getVisibleModals === 'function' && getVisibleModals().length === 0) {
-                document.body.classList.remove('modal-open');
-                document.body.classList.remove('overflow-hidden');
-            }
+            syncBodyScrollLockAfterModalClose();
         }
     } catch (error) {
         console.error('Ошибка при сохранении папки:', error);
@@ -1356,8 +1355,8 @@ export function showOrganizeFoldersModal() {
         modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4';
         modal.innerHTML = `
             <div class="flex items-center justify-center min-h-full">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-                    <div class="p-6">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[min(90vh,720px)] flex flex-col overflow-hidden">
+                    <div class="folders-modal-body p-6 overflow-y-auto min-h-0 overscroll-y-contain flex-1">
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-xl font-bold">Управление папками</h2>
                             <div class="flex items-center gap-1">
@@ -1369,7 +1368,7 @@ export function showOrganizeFoldersModal() {
                             </div>
                         </div>
                         
-                        <div id="foldersList" class="max-h-60 overflow-y-auto mb-4">
+                        <div id="foldersList" class="mb-4">
                             <div class="text-center py-4 text-gray-500">Загрузка папок...</div>
                         </div>
                         
@@ -1439,6 +1438,7 @@ export function showOrganizeFoldersModal() {
             </div>
         `;
         document.body.appendChild(modal);
+        attachModalBackdropWheelScroll(modal, '.folders-modal-body');
 
         modal.addEventListener('click', (e) => {
             if (e.target.closest('.close-modal')) {
@@ -1448,9 +1448,7 @@ export function showOrganizeFoldersModal() {
                 if (typeof removeEscapeHandler === 'function') {
                     removeEscapeHandler(modal);
                 }
-                if (typeof getVisibleModals === 'function' && getVisibleModals().length === 0) {
-                    document.body.classList.remove('modal-open');
-                }
+                syncBodyScrollLockAfterModalClose();
 
                 const form = modal.querySelector('#folderForm');
                 if (form && form.dataset.editingId) {
@@ -1503,6 +1501,8 @@ export function showOrganizeFoldersModal() {
     } else if (modal) {
         console.warn('[showOrganizeFoldersModal] addEscapeHandler function not found.');
     }
+
+    attachModalBackdropWheelScroll(modal, '.folders-modal-body');
 
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');

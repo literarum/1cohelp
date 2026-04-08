@@ -177,14 +177,10 @@ function showReturnToClientModal() {
         modal.classList.add('hidden');
         document.body.classList.remove('overflow-hidden', 'modal-open');
         document.removeEventListener('keydown', onEscape);
-        modal.removeEventListener('click', onOverlayClick);
         if (closeBtn) closeBtn.removeEventListener('click', onCloseClick);
     };
 
     const onCloseClick = () => close();
-    const onOverlayClick = (e) => {
-        if (e.target === modal) close();
-    };
     const onEscape = (e) => {
         if (e.key === 'Escape') {
             e.preventDefault();
@@ -193,7 +189,6 @@ function showReturnToClientModal() {
     };
 
     if (closeBtn) closeBtn.addEventListener('click', onCloseClick);
-    modal.addEventListener('click', onOverlayClick);
     document.addEventListener('keydown', onEscape);
 
     modal.classList.remove('hidden');

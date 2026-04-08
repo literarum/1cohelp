@@ -643,16 +643,7 @@ export function openLightbox(blobs, initialIndex) {
                 'click',
                 currentLightboxInstance._overlayClickHandler,
             );
-        currentLightboxInstance._overlayClickHandler = (event) => {
-            if (event.target === currentLightboxInstance) {
-                if (currentLightboxInstance._closeLightboxFunction)
-                    currentLightboxInstance._closeLightboxFunction();
-            }
-        };
-        currentLightboxInstance.addEventListener(
-            'click',
-            currentLightboxInstance._overlayClickHandler,
-        );
+        currentLightboxInstance._overlayClickHandler = null;
 
         if (elements.prevBtn) {
             if (elements.prevBtn._clickHandler)

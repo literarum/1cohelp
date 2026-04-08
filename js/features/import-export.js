@@ -2015,6 +2015,165 @@ export async function _processActualImport(jsonString) {
 // ЭКСПОРТ ДАННЫХ
 // ============================================================================
 
+/** @param {Blob} blob */
+function blobToBase64ForExport(blob) {
+    return new Promise((resolve, reject) => {
+        if (!(blob instanceof Blob)) return resolve(null);
+        const reader = new FileReader();
+        reader.onerror = (e) => reject(e.target.error);
+        reader.onload = () =>
+            resolve({ base64: reader.result.split(',')[1], type: blob.type });
+        reader.readAsDataURL(blob);
+    });
+}
+
+/**
+ * Имена хранилищ, участвующих в пользовательском экспорте (без searchIndex и корзины).
+ * @param {IDBDatabase} db
+ * @returns {string[]}
+ */
+export function getStoresToReadForExport(db) {
+    if (!db || !db.objectStoreNames) return [];
+    const allStoreNames = Array.from(db.objectStoreNames);
+    return allStoreNames.filter(
+        (storeName) =>
+            storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
+    );
+}
+
+/**
+ * @param {IDBDatabase} db
+ * @param {'batch'|'sequential'} readMode — один multi-store tx vs изолированные последовательные tx (второй контур чтения).
+ * @param {string[]} storesToRead
+ */
+async function readExportStoreResultsFromDb(db, readMode, storesToRead) {
+    if (readMode === 'batch') {
+        const transaction = db.transaction(storesToRead, 'readonly');
+        return await Promise.all(
+            storesToRead.map(
+                (storeName) =>
+                    new Promise((resolve, reject) => {
+                        const request = transaction.objectStore(storeName).getAll();
+                        request.onsuccess = (e) => resolve({ storeName, data: e.target.result });
+                        request.onerror = (e) =>
+                            reject(
+                                new Error(
+                                    `Ошибка чтения из ${storeName}: ${e.target.error?.message}`,
+                                ),
+                            );
+                    }),
+            ),
+        );
+    }
+    const sorted = [...storesToRead].sort((a, b) => a.localeCompare(b));
+    const out = [];
+    for (const storeName of sorted) {
+        const row = await new Promise((resolve, reject) => {
+            try {
+                const tx = db.transaction(storeName, 'readonly');
+                const request = tx.objectStore(storeName).getAll();
+                request.onsuccess = (e) => resolve({ storeName, data: e.target.result });
+                request.onerror = (e) =>
+                    reject(
+                        new Error(
+                            `Ошибка чтения из ${storeName}: ${e.target.error?.message}`,
+                        ),
+                    );
+            } catch (err) {
+                reject(err instanceof Error ? err : new Error(String(err)));
+            }
+        });
+        out.push(row);
+    }
+    return out;
+}
+
+/**
+ * @param {{ storeName: string, data: unknown }[]} results
+ * @param {{ quiet: boolean }} opts
+ */
+async function applyScreenshotAndPdfBlobConversionForExport(results, { quiet }) {
+    const blobToBase64 = blobToBase64ForExport;
+    const screenshotData = results.find((r) => r.storeName === 'screenshots');
+    if (
+        screenshotData &&
+        Array.isArray(screenshotData.data) &&
+        screenshotData.data.length > 0
+    ) {
+        if (!quiet)
+            deps.NotificationService?.add(
+                `Обработка ${screenshotData.data.length} скриншотов.`,
+                'info',
+                { duration: 2000, id: 'export-screenshot-processing' },
+            );
+        const conversionPromises = screenshotData.data.map(async (item) => {
+            if (item && item.blob instanceof Blob) {
+                try {
+                    const base64Data = await blobToBase64(item.blob);
+                    if (base64Data) return { ...item, blob: base64Data };
+                } catch (convErr) {
+                    throw new Error(
+                        `Не удалось сериализовать скриншот (id=${item.id || 'N/A'}): ${convErr.message || convErr}`,
+                    );
+                }
+            }
+            return item;
+        });
+        screenshotData.data = await Promise.all(conversionPromises);
+    }
+
+    const pdfData = results.find((r) => r.storeName === 'pdfFiles');
+    if (pdfData && Array.isArray(pdfData.data) && pdfData.data.length > 0) {
+        const convertiblePdfCount = pdfData.data.filter(
+            (item) => item && item.blob instanceof Blob,
+        ).length;
+        if (!quiet)
+            deps.NotificationService?.add(
+                `Обработка ${convertiblePdfCount} PDF-файлов.`,
+                'info',
+                { duration: 2000, id: 'export-pdf-processing' },
+            );
+        const pdfConversionPromises = pdfData.data.map(async (item) => {
+            if (item && item.blob instanceof Blob) {
+                try {
+                    const base64Data = await blobToBase64(item.blob);
+                    if (base64Data) return { ...item, blob: base64Data };
+                } catch (convErr) {
+                    throw new Error(
+                        `Не удалось сериализовать PDF (id=${item.id || 'N/A'}): ${convErr.message || convErr}`,
+                    );
+                }
+            }
+            return item;
+        });
+        pdfData.data = await Promise.all(pdfConversionPromises);
+    }
+}
+
+/**
+ * Публичный API слоя экспорта: снимок данных для файла, сухого прогона и дифференциальной проверки.
+ * @param {IDBDatabase} db
+ * @param {{ quiet?: boolean, readMode?: 'batch'|'sequential' }} [options]
+ */
+export async function buildExportDataObjectFromDb(db, options = {}) {
+    const { quiet = false, readMode = 'batch' } = options;
+    const storesToRead = getStoresToReadForExport(db);
+    if (storesToRead.length === 0) return null;
+
+    const results = await readExportStoreResultsFromDb(db, readMode, storesToRead);
+    await applyScreenshotAndPdfBlobConversionForExport(results, { quiet });
+
+    const exportData = {
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        exportDate: new Date().toISOString(),
+        data: {},
+    };
+    results.forEach((result) => {
+        exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
+    });
+    return exportData;
+}
+
 /**
  * Экспортирует все данные из IndexedDB в JSON файл
  * @param {Object} options - Опции экспорта
@@ -2073,10 +2232,7 @@ export async function exportAllData(options = {}) {
             throw new Error('База данных не доступна');
         }
 
-        const allStoreNames = Array.from(State.db.objectStoreNames);
-        const storesToRead = allStoreNames.filter(
-            (storeName) => storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
-        );
+        const storesToRead = getStoresToReadForExport(State.db);
 
         if (storesToRead.length === 0) {
             console.warn('[exportAllData] Нет хранилищ для экспорта (кроме searchIndex).');
@@ -2087,115 +2243,12 @@ export async function exportAllData(options = {}) {
             return isForcedBackupMode ? true : false;
         }
 
-        const exportData = {
-            schemaVersion: CURRENT_SCHEMA_VERSION,
-            exportDate: new Date().toISOString(),
-            data: {},
-        };
-
-        const blobToBase64 = (blob) =>
-            new Promise((resolve, reject) => {
-                if (!(blob instanceof Blob)) return resolve(null);
-                const reader = new FileReader();
-                reader.onerror = (e) => reject(e.target.error);
-                reader.onload = () =>
-                    resolve({ base64: reader.result.split(',')[1], type: blob.type });
-                reader.readAsDataURL(blob);
-            });
-
-        let transaction;
+        let exportData;
         try {
-            transaction = State.db.transaction(storesToRead, 'readonly');
-            const dataPromises = storesToRead.map(
-                (storeName) =>
-                    new Promise((resolve, reject) => {
-                        const request = transaction.objectStore(storeName).getAll();
-                        request.onsuccess = (e) => resolve({ storeName, data: e.target.result });
-                        request.onerror = (e) =>
-                            reject(
-                                new Error(
-                                    `Ошибка чтения из ${storeName}: ${e.target.error?.message}`,
-                                ),
-                            );
-                    }),
-            );
-            const results = await Promise.all(dataPromises);
-
-            const screenshotData = results.find((r) => r.storeName === 'screenshots');
-            if (
-                screenshotData &&
-                Array.isArray(screenshotData.data) &&
-                screenshotData.data.length > 0
-            ) {
-                if (!isForcedBackupMode)
-                    deps.NotificationService?.add(
-                        `Обработка ${screenshotData.data.length} скриншотов.`,
-                        'info',
-                        { duration: 2000, id: 'export-screenshot-processing' },
-                    );
-                const conversionPromises = screenshotData.data.map(async (item) => {
-                    if (item && item.blob instanceof Blob) {
-                        try {
-                            const base64Data = await blobToBase64(item.blob);
-                            if (base64Data) return { ...item, blob: base64Data };
-                        } catch (convErr) {
-                            throw new Error(
-                                `Не удалось сериализовать скриншот (id=${item.id || 'N/A'}): ${convErr.message || convErr}`,
-                            );
-                        }
-                    }
-                    return item;
-                });
-                screenshotData.data = await Promise.all(conversionPromises);
-            }
-
-            const pdfData = results.find((r) => r.storeName === 'pdfFiles');
-            if (pdfData && Array.isArray(pdfData.data) && pdfData.data.length > 0) {
-                const convertiblePdfCount = pdfData.data.filter(
-                    (item) => item && item.blob instanceof Blob,
-                ).length;
-                if (!isForcedBackupMode)
-                    deps.NotificationService?.add(
-                        `Обработка ${convertiblePdfCount} PDF-файлов.`,
-                        'info',
-                        { duration: 2000, id: 'export-pdf-processing' },
-                    );
-                const pdfConversionPromises = pdfData.data.map(async (item) => {
-                    if (item && item.blob instanceof Blob) {
-                        try {
-                            const base64Data = await blobToBase64(item.blob);
-                            if (base64Data) return { ...item, blob: base64Data };
-                        } catch (convErr) {
-                            throw new Error(
-                                `Не удалось сериализовать PDF (id=${item.id || 'N/A'}): ${convErr.message || convErr}`,
-                            );
-                        }
-                    }
-                    return item;
-                });
-                pdfData.data = await Promise.all(pdfConversionPromises);
-            }
-
-            results.forEach((result) => {
-                exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
+            exportData = await buildExportDataObjectFromDb(State.db, {
+                quiet: isForcedBackupMode,
+                readMode: 'batch',
             });
-
-            // Сухой прогон для диагностики: полный путь чтения + контракт слияния + сериализация без файла/диалога.
-            if (dryRunForHealth === true) {
-                const shape = validateExportedBackupShapeForMerge(exportData);
-                if (!shape.ok) {
-                    throw new Error(shape.message || 'Формат не совместим со слиянием.');
-                }
-                try {
-                    JSON.stringify(exportData);
-                } catch (serErr) {
-                    throw new Error(
-                        `Сериализация полного экспорта невозможна: ${serErr?.message || serErr}`,
-                    );
-                }
-                functionResult = true;
-                return true;
-            }
         } catch (dataPrepError) {
             console.error(
                 '[exportAllData] Ошибка при подготовке данных для экспорта:',
@@ -2210,13 +2263,33 @@ export async function exportAllData(options = {}) {
                         id: 'export-data-prep-failed',
                     },
                 );
-            if (transaction && typeof transaction.abort === 'function')
-                try {
-                    transaction.abort();
-                } catch {
-                    // noop
-                }
             throw dataPrepError;
+        }
+
+        if (!exportData) {
+            console.warn('[exportAllData] Нет данных для экспорта после чтения.');
+            if (!isForcedBackupMode)
+                deps.NotificationService?.add('Нет данных для экспорта.', 'warning', {
+                    id: 'export-no-data',
+                });
+            return isForcedBackupMode ? true : false;
+        }
+
+        // Сухой прогон для диагностики: полный путь чтения + контракт слияния + сериализация без файла/диалога.
+        if (dryRunForHealth === true) {
+            const shape = validateExportedBackupShapeForMerge(exportData);
+            if (!shape.ok) {
+                throw new Error(shape.message || 'Формат не совместим со слиянием.');
+            }
+            try {
+                JSON.stringify(exportData);
+            } catch (serErr) {
+                throw new Error(
+                    `Сериализация полного экспорта невозможна: ${serErr?.message || serErr}`,
+                );
+            }
+            functionResult = true;
+            return true;
         }
 
         const now = new Date();

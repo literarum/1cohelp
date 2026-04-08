@@ -34,6 +34,10 @@
                     typeof window.console.error === 'function'
                         ? window.console.error.bind(window.console)
                         : nativeWarn;
+                const nativeDebug =
+                    typeof window.console.debug === 'function'
+                        ? window.console.debug.bind(window.console)
+                        : nativeLog;
 
                 window.__ENGINEERING_BOOTLOGS__ = window.__ENGINEERING_BOOTLOGS__ || [];
                 window.__ENGINEERING_BOOTERRORS__ = window.__ENGINEERING_BOOTERRORS__ || [];
@@ -50,14 +54,22 @@
 
                 window.console.log = function engineeringLogProxy() {
                     pushBootLog('log', arguments);
+                    nativeLog.apply(window.console, arguments);
                 };
 
                 window.console.info = function engineeringInfoProxy() {
                     pushBootLog('info', arguments);
+                    nativeInfo.apply(window.console, arguments);
                 };
 
                 window.console.warn = function engineeringWarnProxy() {
                     pushBootLog('warn', arguments);
+                    nativeWarn.apply(window.console, arguments);
+                };
+
+                window.console.debug = function engineeringDebugProxy() {
+                    pushBootLog('debug', arguments);
+                    nativeDebug.apply(window.console, arguments);
                 };
 
                 window.console.error = function engineeringErrorProxy() {
@@ -75,14 +87,15 @@
                 window.__ENGINEERING_NATIVE_LOG__ = nativeLog;
                 window.__ENGINEERING_NATIVE_INFO__ = nativeInfo;
                 window.__ENGINEERING_NATIVE_ERROR__ = nativeError;
+                window.__ENGINEERING_NATIVE_DEBUG__ = nativeDebug;
             })();
         </script>
         <link
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260406-232016-ffb1f6f"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260406-232016-ffb1f6f"></script>
+        <script src="js/vendor-config.js?v=legacy-20260408-232333-14f16eb"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260408-232333-14f16eb"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -148,11 +161,11 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260406-232016-ffb1f6f"
+            href="css/tailwind.generated.css?v=legacy-20260408-232333-14f16eb"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260406-232016-ffb1f6f" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260408-232333-14f16eb" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -925,9 +938,13 @@
                             </p>
                         </div>
                         <div
-                            class="flex flex-wrap items-center justify-center md:justify-end gap-x-3 gap-y-2 w-full md:w-auto"
+                            class="header-toolbar-row flex flex-nowrap items-center justify-center md:justify-end gap-x-3 gap-y-2 w-full md:w-auto min-w-0"
                         >
-                            <div class="flex items-center gap-x-2">
+                            <div class="header-toolbar-cluster min-w-0 shrink">
+                                <div
+                                    class="header-toolbar-cluster-scroll flex flex-row flex-nowrap items-center gap-x-3"
+                                >
+                                <div class="flex items-center gap-x-2 flex-shrink-0">
                                 <button
                                     id="showFavoritesHeaderBtn"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -994,7 +1011,7 @@
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
-                            </div>
+                                </div>
                             <div
                                 class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
                                 aria-hidden="true"
@@ -1007,6 +1024,8 @@
                                 <i class="fas fa-sun text-yellow-500 hidden dark:inline"></i>
                                 <i class="fas fa-moon text-blue-300 dark:hidden"></i>
                             </button>
+                                </div>
+                            </div>
                             <div
                                 class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:max-w-[24rem] flex-shrink-0"
                             >
@@ -1043,7 +1062,14 @@
                                     class="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg hidden max-h-96 overflow-y-auto"
                                 ></div>
                             </div>
-                            <div id="topHeaderActions" class="flex flex-wrap items-center gap-2 flex-shrink-0">
+                            <div
+                                id="topHeaderActions"
+                                class="header-toolbar-cluster flex-shrink-0"
+                                data-health-surface="header-actions"
+                            >
+                                <div
+                                    class="header-toolbar-cluster-scroll flex flex-row flex-nowrap items-center gap-2"
+                                >
                                 <button
                                     id="openCommandPaletteBtn"
                                     type="button"
@@ -1111,6 +1137,7 @@
                                     accept=".json"
                                     class="hidden"
                                 />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1287,9 +1314,12 @@
                         <div class="relative group ml-auto md:ml-1 shrink-0">
                             <button
                                 id="moreTabsBtn"
+                                type="button"
                                 class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
+                                aria-label="Дополнительные вкладки"
+                                title="Дополнительные вкладки"
                             >
-                                <i class="fas fa-ellipsis-h"></i>
+                                <i class="fas fa-ellipsis-h" aria-hidden="true"></i>
                             </button>
                             <div
                                 id="moreTabsDropdown"
@@ -2064,9 +2094,64 @@
                         </div>
                     </div>
 
-                    <div id="clientAnalyticsFilesSection" class="mb-4" hidden>
-                        <h3 class="client-analytics-files-heading">Загруженные файлы</h3>
-                        <ul id="clientAnalyticsFilesList" class="space-y-1"></ul>
+                    <div
+                        id="clientAnalyticsIngestPanel"
+                        class="mb-4 hidden rounded-xl border border-gray-200 dark:border-gray-600 bg-white/90 dark:bg-gray-900/50 shadow-sm px-4 py-3"
+                        role="status"
+                        aria-live="polite"
+                        aria-hidden="true"
+                    >
+                        <div class="flex justify-between items-baseline gap-3 mb-2">
+                            <span
+                                id="clientAnalyticsIngestPhase"
+                                class="text-xs font-medium text-gray-600 dark:text-gray-300"
+                            ></span>
+                            <span
+                                id="clientAnalyticsIngestPercent"
+                                class="text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                            >0%</span>
+                        </div>
+                        <div
+                            class="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden"
+                            aria-hidden="true"
+                        >
+                            <div
+                                id="clientAnalyticsIngestBar"
+                                class="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+                                style="width: 0%"
+                                role="progressbar"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow="0"
+                            ></div>
+                        </div>
+                    </div>
+
+                    <div id="clientAnalyticsFilesSection" class="client-analytics-files-panel mb-4" hidden>
+                        <div class="client-analytics-files-head-row">
+                            <h3 class="client-analytics-files-heading">Загруженные файлы</h3>
+                            <span
+                                id="clientAnalyticsFilesBadge"
+                                class="client-analytics-files-badge"
+                                hidden
+                            ></span>
+                        </div>
+                        <p
+                            id="clientAnalyticsFilesScrollHint"
+                            class="client-analytics-files-scroll-hint"
+                            hidden
+                        ></p>
+                        <div
+                            id="clientAnalyticsFilesScrollOuter"
+                            class="client-analytics-files-scroll-outer"
+                        >
+                            <ul
+                                id="clientAnalyticsFilesList"
+                                class="client-analytics-files-list space-y-0"
+                                role="list"
+                                aria-describedby="clientAnalyticsFilesScrollHint"
+                            ></ul>
+                        </div>
                     </div>
 
                     <div
@@ -4133,12 +4218,50 @@
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="logs">
                                 <div class="engineering-cockpit-panel">
-                                    <div class="engineering-cockpit-panel-toolbar">
+                                    <div class="engineering-cockpit-panel-toolbar engineering-cockpit-panel-toolbar--logs">
+                                        <label class="engineering-cockpit-sr-only" for="engineeringCockpitLogLevelFilter"
+                                            >Уровень логов</label
+                                        >
+                                        <select
+                                            id="engineeringCockpitLogLevelFilter"
+                                            class="engineering-cockpit-log-filter"
+                                            title="Показать только выбранный уровень"
+                                            aria-label="Фильтр уровня логов"
+                                        >
+                                            <option value="all">Все уровни</option>
+                                            <option value="log">log</option>
+                                            <option value="info">info</option>
+                                            <option value="warn">warn</option>
+                                            <option value="error">error</option>
+                                            <option value="debug">debug</option>
+                                            <option value="boot">boot</option>
+                                        </select>
+                                        <span
+                                            id="engineeringCockpitLogMeta"
+                                            class="engineering-cockpit-log-meta"
+                                            aria-live="polite"
+                                        ></span>
+                                        <button
+                                            type="button"
+                                            id="engineeringCockpitLogsScrollEndBtn"
+                                            class="engineering-cockpit-toolbar-btn engineering-cockpit-toolbar-btn--compact"
+                                            title="Прокрутить к последним записям"
+                                        >
+                                            В конец
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="engineeringCockpitExportLogsBtn"
+                                            class="engineering-cockpit-toolbar-btn engineering-cockpit-toolbar-btn--compact"
+                                            title="Сохранить отфильтрованные логи в текстовый файл"
+                                        >
+                                            Скачать .txt
+                                        </button>
                                         <button
                                             type="button"
                                             class="engineering-cockpit-icon-btn"
                                             data-cockpit-copy="engineeringCockpitLogs"
-                                            title="Копировать все логи раздела"
+                                            title="Копировать отфильтрованные логи"
                                             aria-label="Копировать логи в буфер обмена"
                                         >
                                             <i class="far fa-copy" aria-hidden="true"></i>
@@ -4147,6 +4270,7 @@
                                     <pre
                                         id="engineeringCockpitLogs"
                                         class="engineering-cockpit-pre"
+                                        tabindex="0"
                                     ></pre>
                                 </div>
                             </section>
@@ -4598,7 +4722,7 @@
                                 Напоминания
                             </h2>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-xl">
-                                Локально на устройстве: «вернуться к закладке через N дней», перезвон,
+                                «Вернуться к закладке через N дней», перезвон,
                                 уточнение по задаче — без сервера.
                             </p>
                         </div>
@@ -5109,7 +5233,10 @@
                         ×
                     </button>
                 </header>
-                <div id="clientAnalyticsDetailBody" class="flex-grow p-4 overflow-y-auto text-gray-800 dark:text-gray-200"></div>
+                <div
+                    id="clientAnalyticsDetailBody"
+                    class="flex-grow flex flex-col min-h-0 text-gray-800 dark:text-gray-200"
+                ></div>
             </div>
         </div>
 
@@ -5186,7 +5313,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260406-232016-ffb1f6f"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260406-232016-ffb1f6f"></script>
+        <script type="module" src="./script.js?v=legacy-20260408-232333-14f16eb"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260408-232333-14f16eb"></script>
     </body>
 </html>

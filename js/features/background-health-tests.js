@@ -11,6 +11,10 @@ import { REVOCATION_API_BASE_URL } from '../config.js';
 import { probeHelperAvailability } from './revocation-helper-probe.js';
 import { runSearchAndIndexHealthTests } from './search-health-tests.js';
 import {
+    runUiSurfaceHealthSuite,
+    runWatchdogLightUiSurfaceCheck,
+} from './ui-surface-health-suite.js';
+import {
     getRuntimeHubIssueCount,
     getRuntimeHubIssuesForHealth,
     getRuntimeHubPerformanceSignalCount,
@@ -20,10 +24,24 @@ import {
     runPlatformHealthProbeSuite,
 } from './platform-health-probes.js';
 import { runLightDataIntegrityPass } from './data-integrity-pass.js';
+import { runExportImportDifferentialCheck } from './export-differential-check.js?v=20260406health';
+import {
+    evaluateClientSloAgainstBudgets,
+    recordClientSloSample,
+} from './client-slo-budgets.js?v=20260406health';
+import {
+    recordApplicationHealthSnapshot,
+    HEALTH_PHASE,
+    clientDataHealthProbeRecordsMatch,
+    getApplicationHealthStateForExport,
+} from './application-health-state.js';
+import { runLocalStorageHealthProbe } from './health-localstorage-probe.js';
 
 let deps = {};
 /** Счётчик циклов watchdog (interval) для периодического второго контура целостности данных */
 let watchdogDataIntegrityCycleCount = 0;
+/** Редкий дифференциальный контур экспорта в watchdog (тяжёлый — только счётчики). */
+let watchdogExportDiffCycleCount = 0;
 const WATCHDOG_INTERVAL_MS = 60000;
 const AUTOSAVE_STALE_MS = 45000;
 const REQUIRED_STORES = [
@@ -37,6 +55,8 @@ const REQUIRED_STORES = [
 
 /** Таймаут сухого прогона экспорта (большие PDF/скриншоты в base64). */
 const EXPORT_DRY_RUN_TIMEOUT_MS = 120000;
+/** Таймаут полного дифференциального сравнения снимков экспорта при старте. */
+const EXPORT_DIFFERENTIAL_FULL_TIMEOUT_MS = 180000;
 
 /**
  * Второй контур надёжности экспорта: тот же путь чтения, что и у пользовательского экспорта, без файла.
@@ -55,10 +75,19 @@ async function runExportPipelineDryRunCheck(depsBag, reportFn, runWithTimeoutFn)
         return;
     }
     try {
+        const t0 =
+            typeof performance !== 'undefined' && typeof performance.now === 'function'
+                ? performance.now()
+                : Date.now();
         const ok = await runWithTimeoutFn(
             depsBag.exportAllData({ dryRunForHealth: true, isForcedBackupMode: true }),
             EXPORT_DRY_RUN_TIMEOUT_MS,
         );
+        const elapsedMs =
+            typeof performance !== 'undefined' && typeof performance.now === 'function'
+                ? performance.now() - t0
+                : Date.now() - t0;
+        recordClientSloSample({ exportDryRunMs: elapsedMs, ts: Date.now() });
         if (ok) {
             reportFn(
                 'info',
@@ -82,6 +111,45 @@ async function runExportPipelineDryRunCheck(depsBag, reportFn, runWithTimeoutFn)
         }
     } catch (err) {
         reportFn('error', 'Экспорт (сухой прогон)', err?.message || String(err), { system: 'export_import' });
+    }
+}
+
+/**
+ * Второй контур IndexedDB: та же запись clientData через performDBOperation.get и через обёртку.
+ */
+async function verifyClientDataHealthProbeDualRead(depsBag, testId, recordFromWrapper, reportFn, runWithTimeoutFn) {
+    if (!recordFromWrapper) return;
+    if (typeof depsBag.performDBOperation !== 'function') {
+        reportFn(
+            'warn',
+            'IndexedDB (второй контур)',
+            'performDBOperation недоступен — транзакционное подтверждение зонда пропущено.',
+            { system: 'storage_idb' },
+        );
+        return;
+    }
+    try {
+        const viaTxn = await runWithTimeoutFn(
+            depsBag.performDBOperation('clientData', 'readonly', (store) => store.get(testId)),
+            5000,
+        );
+        if (!clientDataHealthProbeRecordsMatch(viaTxn, recordFromWrapper)) {
+            reportFn(
+                'error',
+                'IndexedDB (второй контур)',
+                'Расхождение между обёрткой чтения и транзакцией объекта clientData.',
+                { system: 'storage_idb' },
+            );
+        } else {
+            reportFn(
+                'info',
+                'IndexedDB (второй контур)',
+                'Два контура чтения тестовой записи clientData совпали.',
+                { system: 'storage_idb' },
+            );
+        }
+    } catch (err) {
+        reportFn('error', 'IndexedDB (второй контур)', err?.message || String(err), { system: 'storage_idb' });
     }
 }
 
@@ -121,6 +189,39 @@ function waitUntilAppAvailable(timeoutMs = 10000) {
                 return;
             }
             requestAnimationFrame(tick);
+        };
+        tick();
+    });
+}
+
+/**
+ * Второй контур к finishHud: не фиксировать итог «Фоновая диагностика», пока app-init не выставил флаги на window.
+ * Если app-init не запускался (__copilotAppInitFinished !== false), сразу resolve (тесты, неполная загрузка).
+ * @param {number} [timeoutMs]
+ * @returns {Promise<{ ok: boolean, timedOut?: boolean, skipped?: boolean }>}
+ */
+export function waitUntilAppInitFinished(timeoutMs = 120000) {
+    const w = typeof window !== 'undefined' ? window : {};
+    return new Promise((resolve) => {
+        if (w.__copilotAppInitFinished === true) {
+            resolve({ ok: true });
+            return;
+        }
+        if (w.__copilotAppInitFinished !== false) {
+            resolve({ ok: true, skipped: true });
+            return;
+        }
+        const started = Date.now();
+        const tick = () => {
+            if (w.__copilotAppInitFinished === true) {
+                resolve({ ok: true });
+                return;
+            }
+            if (Date.now() - started >= timeoutMs) {
+                resolve({ ok: false, timedOut: true });
+                return;
+            }
+            setTimeout(tick, 50);
         };
         tick();
     });
@@ -187,6 +288,19 @@ export function initBackgroundHealthTestsSystem() {
         if (level === 'error') results.errors.push(entry);
         if (level === 'warn') results.warnings.push(entry);
         results.checks.push(entry);
+    };
+
+    const emitCrossLayerObservabilityNotes = () => {
+        try {
+            const exp = getApplicationHealthStateForExport();
+            for (const note of exp.crossCheckNotes) {
+                report('warn', 'Перекрёстная проверка состояния', note, {
+                    system: 'observability',
+                });
+            }
+        } catch {
+            /* ignore */
+        }
     };
 
     const updateHud = (progress) => {
@@ -257,6 +371,10 @@ export function initBackgroundHealthTestsSystem() {
         });
 
         watchdogInFlight = (async () => {
+            const cycleStartedAt =
+                typeof performance !== 'undefined' && typeof performance.now === 'function'
+                    ? performance.now()
+                    : Date.now();
             const cycleChecks = [];
             const addCheck = (level, title, message, system) => {
                 cycleChecks.push({
@@ -332,6 +450,10 @@ export function initBackgroundHealthTestsSystem() {
             } catch (err) {
                 addCheck('error', 'Watchdog / IndexedDB', err.message);
             }
+
+            runLocalStorageHealthProbe((level, title, message, meta) => {
+                addCheck(level, title, message, meta?.system);
+            });
 
             // Watchdog 2: здоровье автосохранения notes
             try {
@@ -445,6 +567,22 @@ export function initBackgroundHealthTestsSystem() {
                 );
             }
 
+            // Watchdog 5.5: пассивная проверка вёрстки дропдауна поиска (без открытия панели и без смены вкладок).
+            // Стартовый пакет поверхности — см. runUiSurfaceHealthSuite (по умолчанию тоже ненавязчивый).
+            try {
+                await runWithTimeout(
+                    runWatchdogLightUiSurfaceCheck(deps, addCheck, runWithTimeout),
+                    15000,
+                );
+            } catch (err) {
+                addCheck(
+                    'error',
+                    'Watchdog / Поверхность UI / поиск',
+                    err?.message || String(err),
+                    'ui_surface',
+                );
+            }
+
             // Watchdog 6: независимый контур зондов среды (дублирует стартовые тесты 1.x + память, вкладка, SW)
             try {
                 const envRows = await collectPlatformHealthProbeRows(runWithTimeout, {
@@ -488,11 +626,71 @@ export function initBackgroundHealthTestsSystem() {
                 }
             }
 
+            // Watchdog 8: лёгкий дифференциальный контур (только счётчики batch vs cursor) — редко, чтобы не грузить CPU.
+            if (source === 'interval') {
+                watchdogExportDiffCycleCount += 1;
+                if (watchdogExportDiffCycleCount % 12 === 0 && deps.State?.db) {
+                    try {
+                        const diffLite = await runWithTimeout(
+                            runExportImportDifferentialCheck(deps.State.db, {
+                                quiet: true,
+                                deepExportCompare: false,
+                            }),
+                            45000,
+                        );
+                        if (diffLite?.ok) {
+                            addCheck(
+                                'info',
+                                'Watchdog / Экспорт (дифф. счётчики)',
+                                diffLite.detail ||
+                                    'Счётчики записей: batch count и cursor совпали.',
+                                'export_import',
+                            );
+                        } else {
+                            addCheck(
+                                'error',
+                                'Watchdog / Экспорт (дифф. счётчики)',
+                                diffLite?.detail || 'Расхождение контуров подсчёта.',
+                                'export_import',
+                            );
+                        }
+                    } catch (diffErr) {
+                        addCheck(
+                            'warn',
+                            'Watchdog / Экспорт (дифф. счётчики)',
+                            diffErr?.message || String(diffErr),
+                            'export_import',
+                        );
+                    }
+                }
+            }
+
+            const hasErrorsBeforeSlo = cycleChecks.some((entry) => entry.level === 'error');
+            const cycleElapsedMs =
+                typeof performance !== 'undefined' && typeof performance.now === 'function'
+                    ? performance.now() - cycleStartedAt
+                    : Date.now() - cycleStartedAt;
+            recordClientSloSample({
+                ts: Date.now(),
+                watchdogCycleMs: cycleElapsedMs,
+                runtimeFaultCount: getRuntimeHubIssueCount(),
+                watchdogHadError: hasErrorsBeforeSlo,
+            });
+            for (const sloWarn of evaluateClientSloAgainstBudgets().warnings) {
+                cycleChecks.push({
+                    level: 'warn',
+                    title: 'SLO / Клиент',
+                    message: sloWarn,
+                    system: 'telemetry',
+                });
+            }
+
             // Обновляем диагностику, добавляя watchdog-результаты к уже собранным.
             if (hud?.setDiagnostics) {
                 const notReplacedByWatchdogCycle = (entry) =>
                     !entry.title.startsWith('Watchdog / ') &&
-                    !entry.title.startsWith('Целостность данных /');
+                    !entry.title.startsWith('Целостность данных /') &&
+                    !entry.title.startsWith('SLO / ');
                 const mergedChecks = [
                     ...results.checks.filter(notReplacedByWatchdogCycle),
                     ...cycleChecks.map(({ title, message, system }) => ({ title, message, system })),
@@ -519,6 +717,18 @@ export function initBackgroundHealthTestsSystem() {
             }
             const hasErrors = cycleChecks.some((entry) => entry.level === 'error');
             const hasWarnings = cycleChecks.some((entry) => entry.level === 'warn');
+            recordApplicationHealthSnapshot({
+                phase: HEALTH_PHASE.PERIODIC_LIVENESS,
+                source,
+                errorCount: cycleChecks.filter((entry) => entry.level === 'error').length,
+                warnCount: cycleChecks.filter((entry) => entry.level === 'warn').length,
+                checkCount: cycleChecks.length,
+                runtimeFaultCount: getRuntimeHubIssueCount(),
+                watchdogSeverity: hasErrors ? 'error' : hasWarnings ? 'warn' : 'ok',
+                errors: cycleChecks
+                    .filter((entry) => entry.level === 'error')
+                    .map(({ title, message, system }) => ({ title, message, system })),
+            });
             setWatchdogHudStatus({
                 statusText: hasErrors
                     ? 'Проблемы обнаружены'
@@ -570,7 +780,28 @@ export function initBackgroundHealthTestsSystem() {
                 // Тесты 1–1.5: среда исполнения (единый модуль; второй контур дублируется в watchdog)
                 await runPlatformHealthProbeSuite(runWithTimeout, report, { probeTag: 'startup' });
 
-                updateHud(20);
+                updateHud(18);
+
+                // Тест 2.0: поверхность UI — один раз при старте, как можно раньше (часто параллельно оверлею загрузки).
+                // syntheticButtonClicks по умолчанию выключены — без программных кликов и без системного диалога выбора файла.
+                if (!initBackgroundHealthTestsSystem._startupUiSurfaceSuiteDone) {
+                    initBackgroundHealthTestsSystem._startupUiSurfaceSuiteDone = true;
+                    try {
+                        await runWithTimeout(
+                            runUiSurfaceHealthSuite(deps, report, runWithTimeout),
+                            180000,
+                        );
+                    } catch (uiErr) {
+                        report(
+                            'warn',
+                            'Поверхность UI',
+                            uiErr?.message || String(uiErr),
+                            { system: 'ui_surface' },
+                        );
+                    }
+                }
+
+                updateHud(22);
 
                 // Тест 2: запись/чтение IndexedDB
                 const testId = `health-${Date.now()}`;
@@ -594,6 +825,7 @@ export function initBackgroundHealthTestsSystem() {
                         report('error', 'IndexedDB', 'Запись не найдена после сохранения.');
                     } else {
                         report('info', 'IndexedDB', 'Запись и чтение работают.');
+                        await verifyClientDataHealthProbeDualRead(deps, testId, record, report, runWithTimeout);
                     }
                 } catch (err) {
                     report('error', 'IndexedDB', err.message);
@@ -604,6 +836,8 @@ export function initBackgroundHealthTestsSystem() {
                         // cleanup failure should not fail health check sequence
                     }
                 }
+
+                runLocalStorageHealthProbe(report);
 
                 // Тест 2.1: резервный контур — хранилища «База клиентов и аналитика»
                 let caFileId = null;
@@ -655,10 +889,55 @@ export function initBackgroundHealthTestsSystem() {
 
                 // Тест 3: индексация и поиск (расширенный набор проверок)
                 await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
-                updateHud(50);
+                updateHud(48);
 
                 // Тест 3.1: цепочка экспорта (импорт/слияние читают тот же JSON — критический контур)
                 await runExportPipelineDryRunCheck(deps, report, runWithTimeout);
+                updateHud(55);
+
+                // Тест 3.2: дифференциальный контур экспорта (batch tx vs sequential tx + ограниченное хэш-сравнение)
+                try {
+                    const db = deps.State?.db;
+                    if (db) {
+                        const diffResult = await runWithTimeout(
+                            runExportImportDifferentialCheck(db, {
+                                quiet: true,
+                                deepExportCompare: true,
+                            }),
+                            EXPORT_DIFFERENTIAL_FULL_TIMEOUT_MS,
+                        );
+                        if (diffResult?.ok) {
+                            report(
+                                'info',
+                                'Экспорт (дифференциальный контур)',
+                                diffResult.detail ||
+                                    'Два независимых чтения IndexedDB и каноническое сравнение совпали.',
+                                { system: 'export_import' },
+                            );
+                        } else {
+                            report(
+                                'error',
+                                'Экспорт (дифференциальный контур)',
+                                diffResult?.detail || 'Сбой дифференциальной проверки.',
+                                { system: 'export_import' },
+                            );
+                        }
+                    } else {
+                        report(
+                            'warn',
+                            'Экспорт (дифференциальный контур)',
+                            'База недоступна — проверка пропущена.',
+                            { system: 'export_import' },
+                        );
+                    }
+                } catch (diffErr) {
+                    report(
+                        'warn',
+                        'Экспорт (дифференциальный контур)',
+                        diffErr?.message || String(diffErr),
+                        { system: 'export_import' },
+                    );
+                }
                 updateHud(60);
 
                 // Тест 4: доступность и структура базы алгоритмов
@@ -732,7 +1011,11 @@ export function initBackgroundHealthTestsSystem() {
                         5000,
                     );
                     if (!current) {
-                        report('warn', 'clientData', 'Запись current отсутствует.');
+                        report(
+                            'info',
+                            'clientData',
+                            'Запись current отсутствует (ожидаемо до первого ввода) — используются дефолты.',
+                        );
                     } else {
                         report('info', 'clientData', 'Запись current доступна.');
                     }
@@ -949,7 +1232,7 @@ export function initBackgroundHealthTestsSystem() {
                     );
                     if (!uiSettings) {
                         report(
-                            'warn',
+                            'info',
                             'UI настройки',
                             'Сохраненные uiSettings отсутствуют, используются дефолты.',
                         );
@@ -1110,27 +1393,71 @@ export function initBackgroundHealthTestsSystem() {
             } catch (err) {
                 report('error', 'Фоновая диагностика', err.message);
             } finally {
-                updateHud(100);
-                // Задача watchdog-first: HUD не показывает completion до завершения первого цикла
-                hud?.startTask?.('watchdog-first', 'Watchdog', { weight: 0.1, total: 100 });
-                finishHud(
-                    results.errors.length === 0 && getRuntimeHubIssueCount() === 0,
-                );
+                void (async () => {
+                    try {
+                        updateHud(100);
+                        // Задача watchdog-first: HUD не показывает completion до завершения первого цикла
+                        hud?.startTask?.('watchdog-first', 'Watchdog', { weight: 0.1, total: 100 });
 
-                // После стартовой диагностики запускаем постоянный watchdog.
-                runWatchdogCycle('startup')
-                    .then(() => {
-                        hud?.finishTask?.('watchdog-first', true);
-                    })
-                    .catch((err) => {
-                        console.error('[BackgroundHealthTests] Ошибка watchdog-цикла:', err);
-                        hud?.finishTask?.('watchdog-first', false);
-                    });
-                initBackgroundHealthTestsSystem._watchdogIntervalId = setInterval(() => {
-                    runWatchdogCycle('interval').catch((err) => {
-                        console.error('[BackgroundHealthTests] Ошибка watchdog-цикла:', err);
-                    });
-                }, WATCHDOG_INTERVAL_MS);
+                        const initWait = await waitUntilAppInitFinished(120000);
+                        if (initWait.timedOut) {
+                            report(
+                                'error',
+                                'Инициализация приложения',
+                                'Таймаут ожидания завершения app-init перед фиксацией результата фоновой диагностики (120 с).',
+                                { system: 'app_init' },
+                            );
+                        }
+
+                        const w = typeof window !== 'undefined' ? window : {};
+                        const initFailedKnown =
+                            (w.__copilotAppInitFinished === true &&
+                                w.__copilotAppInitHudSuccess === false) ||
+                            (typeof hud?.getInitHadSubsystemFailures === 'function' &&
+                                hud.getInitHadSubsystemFailures());
+
+                        finishHud(
+                            results.errors.length === 0 &&
+                                getRuntimeHubIssueCount() === 0 &&
+                                !initFailedKnown,
+                        );
+
+                        recordApplicationHealthSnapshot({
+                            phase: HEALTH_PHASE.STARTUP_READINESS,
+                            source: 'startup',
+                            errorCount: results.errors.length,
+                            warnCount: results.warnings.length,
+                            checkCount: results.checks.length,
+                            runtimeFaultCount: getRuntimeHubIssueCount(),
+                            errors: [...results.errors],
+                        });
+
+                        // После стартовой диагностики запускаем постоянный watchdog.
+                        runWatchdogCycle('startup')
+                            .then(() => {
+                                hud?.finishTask?.('watchdog-first', true);
+                            })
+                            .catch((err) => {
+                                console.error('[BackgroundHealthTests] Ошибка watchdog-цикла:', err);
+                                hud?.finishTask?.('watchdog-first', false);
+                            });
+                        initBackgroundHealthTestsSystem._watchdogIntervalId = setInterval(() => {
+                            runWatchdogCycle('interval').catch((err) => {
+                                console.error('[BackgroundHealthTests] Ошибка watchdog-цикла:', err);
+                            });
+                        }, WATCHDOG_INTERVAL_MS);
+                    } catch (finalizeErr) {
+                        console.error(
+                            '[BackgroundHealthTests] Ошибка при финализации стартовой диагностики:',
+                            finalizeErr,
+                        );
+                        try {
+                            finishHud(false);
+                        } catch {
+                            /* ignore */
+                        }
+                    }
+                })();
             }
         })();
     };
@@ -1153,6 +1480,8 @@ export function initBackgroundHealthTestsSystem() {
             // Тесты 1–1.5: среда исполнения (см. platform-health-probes.js)
             await runPlatformHealthProbeSuite(runWithTimeout, report, { probeTag: 'manual' });
 
+            runLocalStorageHealthProbe(report);
+
             // Тест 2: IndexedDB запись/чтение
             const testId = `health-manual-${Date.now()}`;
             try {
@@ -1171,6 +1500,7 @@ export function initBackgroundHealthTestsSystem() {
                     report('error', 'IndexedDB', 'Запись не найдена после сохранения.');
                 } else {
                     report('info', 'IndexedDB', 'Запись и чтение работают.');
+                    await verifyClientDataHealthProbeDualRead(deps, testId, record, report, runWithTimeout);
                 }
             } catch (err) {
                 report('error', 'IndexedDB', err.message);
@@ -1185,8 +1515,64 @@ export function initBackgroundHealthTestsSystem() {
             // Тест 3: индексация и поиск (расширенный набор проверок)
             await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
 
+            // Тест 3.0a: поверхность UI — полный режим (явный запрос пользователя из настроек)
+            try {
+                await runWithTimeout(
+                    runUiSurfaceHealthSuite(deps, report, runWithTimeout, { intrusiveUi: true }),
+                    180000,
+                );
+            } catch (uiErr) {
+                report('warn', 'Поверхность UI', uiErr?.message || String(uiErr), {
+                    system: 'ui_surface',
+                });
+            }
+
             // Тест 3.1: цепочка экспорта (без записи файла)
             await runExportPipelineDryRunCheck(deps, report, runWithTimeout);
+
+            // Тест 3.2: дифференциальный контур экспорта
+            try {
+                const db = deps.State?.db;
+                if (db) {
+                    const diffResult = await runWithTimeout(
+                        runExportImportDifferentialCheck(db, {
+                            quiet: true,
+                            deepExportCompare: true,
+                        }),
+                        EXPORT_DIFFERENTIAL_FULL_TIMEOUT_MS,
+                    );
+                    if (diffResult?.ok) {
+                        report(
+                            'info',
+                            'Экспорт (дифференциальный контур)',
+                            diffResult.detail ||
+                                'Два независимых чтения IndexedDB и каноническое сравнение совпали.',
+                            { system: 'export_import' },
+                        );
+                    } else {
+                        report(
+                            'error',
+                            'Экспорт (дифференциальный контур)',
+                            diffResult?.detail || 'Сбой дифференциальной проверки.',
+                            { system: 'export_import' },
+                        );
+                    }
+                } else {
+                    report(
+                        'warn',
+                        'Экспорт (дифференциальный контур)',
+                        'База недоступна — проверка пропущена.',
+                        { system: 'export_import' },
+                    );
+                }
+            } catch (diffErr) {
+                report(
+                    'warn',
+                    'Экспорт (дифференциальный контур)',
+                    diffErr?.message || String(diffErr),
+                    { system: 'export_import' },
+                );
+            }
 
             // Тест 4: алгоритмы (хранятся под ключом 'all' в data.main)
             try {
@@ -1442,7 +1828,11 @@ export function initBackgroundHealthTestsSystem() {
                     5000,
                 );
                 if (!uiSettings) {
-                    report('warn', 'UI настройки', 'Сохранённые uiSettings отсутствуют.');
+                    report(
+                        'info',
+                        'UI настройки',
+                        'Сохранённые uiSettings отсутствуют — используются дефолты.',
+                    );
                 } else {
                     const hasOrder =
                         Array.isArray(uiSettings.panelOrder) && uiSettings.panelOrder.length > 0;
@@ -1616,6 +2006,16 @@ export function initBackgroundHealthTestsSystem() {
             });
 
             const mergedErrs = mergeRuntimeHubErrorsForReport(results.errors);
+            recordApplicationHealthSnapshot({
+                phase: HEALTH_PHASE.MANUAL_DEEP,
+                source: 'manual_full',
+                errorCount: mergedErrs.length,
+                warnCount: results.warnings.length,
+                checkCount: results.checks.length,
+                runtimeFaultCount: getRuntimeHubIssueCount(),
+                errors: mergedErrs,
+            });
+            emitCrossLayerObservabilityNotes();
             return {
                 errors: mergedErrs,
                 warnings: [...results.warnings],
@@ -1627,6 +2027,16 @@ export function initBackgroundHealthTestsSystem() {
         } catch (err) {
             report('error', 'Ручной прогон', err.message);
             const mergedErrs = mergeRuntimeHubErrorsForReport(results.errors);
+            recordApplicationHealthSnapshot({
+                phase: HEALTH_PHASE.MANUAL_DEEP,
+                source: 'manual_full',
+                errorCount: mergedErrs.length,
+                warnCount: results.warnings.length,
+                checkCount: results.checks.length,
+                runtimeFaultCount: getRuntimeHubIssueCount(),
+                errors: mergedErrs,
+            });
+            emitCrossLayerObservabilityNotes();
             return {
                 errors: mergedErrs,
                 warnings: [...results.warnings],
