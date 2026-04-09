@@ -94,8 +94,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260409-100631-85957d4"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260409-100631-85957d4"></script>
+        <script src="js/vendor-config.js?v=legacy-20260409-232557-616fed0"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260409-232557-616fed0"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,11 +161,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260409-100631-85957d4"
+            href="css/tailwind.generated.css?v=legacy-20260409-232557-616fed0"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260409-100631-85957d4" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260409-232557-616fed0" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260409-232557-616fed0" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -246,7 +247,7 @@
                         snapshot && typeof snapshot.background === 'string'
                             ? snapshot.background
                             : isDarkTone
-                              ? '#030308'
+                              ? '#020206'
                               : '#f8fafc';
 
                     root.dataset.loadingOverlayTheme = tone;
@@ -284,7 +285,7 @@
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             html {
-                background-color: var(--loading-overlay-bg, #030308);
+                background-color: var(--loading-overlay-bg, #020206);
             }
             #custom-loading-overlay {
                 margin: 0;
@@ -297,7 +298,7 @@
                 width: 100%;
                 height: 100%;
                 z-index: 99999;
-                background-color: var(--loading-overlay-bg, #030308);
+                background-color: var(--loading-overlay-bg, #020206);
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -929,7 +930,7 @@
             <div id="staticHeaderWrapper">
                 <header class="mb-4">
                     <div
-                        class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-3"
+                        class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-3"
                     >
                         <div>
                             <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
@@ -938,7 +939,7 @@
                             </p>
                         </div>
                         <div
-                            class="header-toolbar-row flex flex-nowrap items-center justify-center md:justify-end gap-x-3 gap-y-2 w-full md:w-auto min-w-0"
+                            class="header-toolbar-row flex flex-col gap-y-3 gap-x-3 w-full min-w-0 items-stretch justify-start md:flex-1 md:min-w-0 md:flex-row md:flex-nowrap md:items-center md:justify-between"
                         >
                             <div class="header-toolbar-cluster min-w-0 shrink">
                                 <div
@@ -993,7 +994,7 @@
                                     </button>
                                     <span
                                         id="timerDisplay"
-                                        class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-baseline text-base"
+                                        class="font-mono px-2 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-center justify-center text-sm leading-none"
                                     >
                                     </span>
                                     <button
@@ -1027,7 +1028,7 @@
                                 </div>
                             </div>
                             <div
-                                class="relative w-full order-last sm:order-none sm:w-auto sm:min-w-[180px] md:w-[20rem] lg:max-w-[24rem] flex-shrink-0"
+                                class="relative w-full min-w-0 flex-shrink-0 md:flex-1 md:min-w-[12rem] md:max-w-[32rem]"
                             >
                                 <input
                                     type="text"
@@ -2028,9 +2029,17 @@
             >
                 <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                     <div class="client-analytics-section-head">
-                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                            База клиентов и аналитика
-                        </h2>
+                        <div class="flex flex-col gap-2 min-w-0">
+                            <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                База клиентов и аналитика
+                            </h2>
+                            <span
+                                id="clientAnalyticsRecordCount"
+                                class="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-primary/10 text-primary dark:bg-primary/20"
+                            >
+                                Карточек в базе: 0
+                            </span>
+                        </div>
                         <div class="client-analytics-toolbar">
                             <div
                                 class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5"
@@ -2093,6 +2102,25 @@
                             </label>
                         </div>
                     </div>
+                    <div class="mb-4 flex items-center gap-2">
+                        <label for="clientAnalyticsSearchInput" class="sr-only"
+                            >Поиск по базе клиентов</label
+                        >
+                        <input
+                            type="search"
+                            id="clientAnalyticsSearchInput"
+                            placeholder="Поиск по ИНН, КПП, телефону, e-mail, вопросу, фрагменту, файлу..."
+                            class="flex-grow px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                            autocomplete="off"
+                        />
+                        <button
+                            id="clearClientAnalyticsSearchBtn"
+                            title="Очистить поиск"
+                            class="p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 hidden"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
 
                     <div
                         id="clientAnalyticsIngestPanel"
@@ -2129,12 +2157,19 @@
 
                     <div id="clientAnalyticsFilesSection" class="client-analytics-files-panel mb-4" hidden>
                         <div class="client-analytics-files-head-row">
-                            <h3 class="client-analytics-files-heading">Загруженные файлы</h3>
-                            <span
-                                id="clientAnalyticsFilesBadge"
-                                class="client-analytics-files-badge"
-                                hidden
-                            ></span>
+                            <button
+                                type="button"
+                                id="clientAnalyticsFilesToggleBtn"
+                                class="client-analytics-files-toggle-btn"
+                                aria-expanded="false"
+                            >
+                                <span class="client-analytics-files-heading">Загруженные файлы</span>
+                                <i
+                                    class="fas fa-chevron-down client-analytics-files-toggle-icon"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <span id="clientAnalyticsFilesBadge" class="client-analytics-files-badge" hidden></span>
                         </div>
                         <p
                             id="clientAnalyticsFilesScrollHint"
@@ -3306,15 +3341,18 @@
             <!-- Окно Кастомизация (тема, цвета, скругление, отступы, фон) -->
             <div
                 id="appCustomizationModal"
-                class="app-customization-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 sm:p-6 overflow-y-auto flex items-center justify-center"
+                class="app-customization-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-2 sm:p-4 overflow-y-auto flex items-center justify-center"
                 role="dialog"
                 aria-labelledby="appCustomizationModalTitle"
                 aria-describedby="appCustomizationModalDesc"
                 aria-modal="true"
             >
-                <div class="flex items-center justify-center min-h-full w-full max-w-[min(42rem,calc(100vw-2rem))]">
+                <div
+                    id="appCustomizationModalShell"
+                    class="flex items-center justify-center min-h-full w-full max-w-[min(56rem,calc(100vw-1rem))]"
+                >
                     <div
-                        class="app-customization-panel bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden modal-inner-container"
+                        class="app-customization-panel bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 max-w-4xl w-full flex flex-col overflow-hidden modal-inner-container"
                     >
                         <div
                             class="app-customization-header p-content flex-shrink-0 border-b border-gray-200/90 dark:border-gray-700/90 bg-gray-50/80 dark:bg-gray-900/40"
@@ -3342,15 +3380,27 @@
                                         </p>
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    id="closeAppCustomizationModalBtn"
-                                    class="app-customization-icon-btn p-2.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-                                    title="Закрыть"
-                                    aria-label="Закрыть"
-                                >
-                                    <i class="fas fa-times text-lg leading-none"></i>
-                                </button>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <button
+                                        type="button"
+                                        id="toggleFullscreenAppCustomizationBtn"
+                                        class="app-customization-icon-btn p-2.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+                                        title="Развернуть на весь экран"
+                                        aria-label="Развернуть на весь экран"
+                                        aria-expanded="false"
+                                    >
+                                        <i class="fas fa-expand text-lg leading-none" aria-hidden="true"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="closeAppCustomizationModalBtn"
+                                        class="app-customization-icon-btn p-2.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+                                        title="Закрыть"
+                                        aria-label="Закрыть"
+                                    >
+                                        <i class="fas fa-times text-lg leading-none"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="p-content overflow-y-auto flex-1 app-customization-scroll">
@@ -3452,6 +3502,51 @@
                                             ></div>
                                             <span class="app-customization-swatch-caption">Текущий цвет</span>
                                         </div>
+                                        <div class="app-customization-hex-tools mt-3 space-y-2">
+                                            <div class="flex flex-wrap items-end gap-2">
+                                                <div class="flex-1 min-w-[9.5rem]">
+                                                    <label
+                                                        for="color-hex-input"
+                                                        class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                                                    >
+                                                        HEX
+                                                    </label>
+                                                    <input
+                                                        id="color-hex-input"
+                                                        type="text"
+                                                        inputmode="text"
+                                                        autocomplete="off"
+                                                        spellcheck="false"
+                                                        maxlength="7"
+                                                        aria-label="HEX-код цвета"
+                                                        aria-describedby="color-accessibility-hint"
+                                                        class="app-customization-hex-input w-full font-mono text-sm px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900/80 text-gray-900 dark:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 dark:focus-visible:ring-offset-gray-900"
+                                                        placeholder="#9933FF"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    id="color-hex-copy-btn"
+                                                    class="shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 dark:focus-visible:ring-offset-gray-900 transition-colors"
+                                                >
+                                                    Копировать
+                                                </button>
+                                            </div>
+                                            <p
+                                                id="color-accessibility-hint"
+                                                class="app-customization-a11y-hint text-xs leading-snug text-gray-500 dark:text-gray-400 min-h-[2.5rem]"
+                                                role="status"
+                                                aria-live="polite"
+                                            ></p>
+                                        </div>
+                                        <div
+                                            id="color-picker-live-region"
+                                            class="sr-only"
+                                            role="status"
+                                            aria-live="polite"
+                                            aria-atomic="true"
+                                            data-purpose="color-picker-announcements"
+                                        ></div>
                                         <div class="space-y-3 mt-4 app-customization-sliders">
                                             <div>
                                                 <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
@@ -3507,7 +3602,7 @@
                                             </div>
                                             <div>
                                                 <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                                                    <label for="brightness-value">Яркость</label>
+                                                    <label for="brightness-value">Светлота</label>
                                                     <input
                                                         id="brightness-value"
                                                         type="text"
@@ -3529,6 +3624,60 @@
                                                         class="absolute w-5 h-5 rounded-full border-2 border-white shadow-md pointer-events-none"
                                                         style="left: 88%"
                                                     ></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div
+                                            id="customization-dual-theme-preview"
+                                            class="customization-dual-theme-preview mt-5"
+                                            role="group"
+                                            aria-label="Предпросмотр в светлой и тёмной теме"
+                                        >
+                                            <p class="customization-dual-theme-preview__title text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                                Предпросмотр в приложении
+                                            </p>
+                                            <div class="customization-dual-theme-preview__row grid grid-cols-2 gap-3">
+                                                <div
+                                                    id="customization-preview-light"
+                                                    class="customization-theme-preview-card rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
+                                                    data-preview-mode="light"
+                                                >
+                                                    <div
+                                                        class="customization-theme-preview-card__tag text-[10px] uppercase tracking-wide px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                                                    >
+                                                        Светлая тема
+                                                    </div>
+                                                    <div class="customization-theme-preview-card__body p-2 space-y-2">
+                                                        <div
+                                                            data-role="accent"
+                                                            class="customization-theme-preview-card__accent h-1.5 rounded-full opacity-0"
+                                                            aria-hidden="true"
+                                                        ></div>
+                                                        <p class="customization-theme-preview-card__sample text-xs font-medium leading-tight">
+                                                            Образец текста и кнопки
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    id="customization-preview-dark"
+                                                    class="customization-theme-preview-card rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
+                                                    data-preview-mode="dark"
+                                                >
+                                                    <div
+                                                        class="customization-theme-preview-card__tag text-[10px] uppercase tracking-wide px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                                                    >
+                                                        Тёмная тема
+                                                    </div>
+                                                    <div class="customization-theme-preview-card__body p-2 space-y-2">
+                                                        <div
+                                                            data-role="accent"
+                                                            class="customization-theme-preview-card__accent h-1.5 rounded-full opacity-0"
+                                                            aria-hidden="true"
+                                                        ></div>
+                                                        <p class="customization-theme-preview-card__sample text-xs font-medium leading-tight">
+                                                            Образец текста и кнопки
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -5313,7 +5462,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260409-100631-85957d4"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260409-100631-85957d4"></script>
+        <script type="module" src="./script.js?v=legacy-20260409-232557-616fed0"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260409-232557-616fed0"></script>
     </body>
 </html>

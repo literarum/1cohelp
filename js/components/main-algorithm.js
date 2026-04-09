@@ -14,6 +14,7 @@ import {
     collectCollapsedMainAlgoIndicesFromDom,
     isMainStepCollapsibleInView,
 } from './main-algo-collapse-persist.js';
+import { stepNeedsNoInnHelpLink } from './main-algo-inn-link.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
@@ -197,9 +198,7 @@ export async function saveMainAlgoHeadersExpanded(indices) {
  * @param {object} step
  */
 function appendNoInnHelpLink(collapsibleBody, step) {
-    const needs =
-        step && (step.showNoInnHelp === true || step.type === 'inn_step');
-    if (!needs || !collapsibleBody) return;
+    if (!stepNeedsNoInnHelpLink(step) || !collapsibleBody) return;
     const p = document.createElement('p');
     p.className = 'text-sm text-gray-500 dark:text-gray-400 mt-1 italic';
     const a = document.createElement('a');
@@ -209,6 +208,26 @@ function appendNoInnHelpLink(collapsibleBody, step) {
     a.textContent = 'Что делать, если клиент не может назвать ИНН?';
     p.appendChild(a);
     collapsibleBody.appendChild(p);
+}
+
+/**
+ * Резервный контур: если после рендера #noInnLink отсутствует (редкий сбой вёрстки/данных), вставляем в первый подходящий шаг.
+ * Экспорт для unit-теста резерва на шагах без .collapsible-body (режим «только телефоны»).
+ */
+export function repairMissingNoInnLinkIfNeeded(container, mainSteps) {
+    if (!container || !Array.isArray(mainSteps)) return;
+    if (container.querySelector('#noInnLink')) return;
+    const stepEls = container.querySelectorAll('.algorithm-step');
+    for (let i = 0; i < mainSteps.length && i < stepEls.length; i++) {
+        if (!stepNeedsNoInnHelpLink(mainSteps[i])) continue;
+        const stepEl = stepEls[i];
+        const body = stepEl.querySelector('.collapsible-body');
+        const target = body || stepEl;
+        if (target && !target.querySelector('#noInnLink')) {
+            appendNoInnHelpLink(target, mainSteps[i]);
+            return;
+        }
+    }
 }
 
 /**
@@ -241,8 +260,6 @@ export async function renderMainAlgorithm() {
         return;
     }
 
-    mainAlgorithmContainer.innerHTML = '';
-
     if (
         !algorithms ||
         typeof algorithms !== 'object' ||
@@ -250,6 +267,7 @@ export async function renderMainAlgorithm() {
         typeof algorithms.main !== 'object' ||
         !Array.isArray(algorithms.main.steps)
     ) {
+        mainAlgorithmContainer.innerHTML = '';
         console.error(
             '[renderMainAlgorithm v9] Данные главного алгоритма (algorithms.main.steps) отсутствуют или невалидны:',
             algorithms?.main,
@@ -287,6 +305,9 @@ export async function renderMainAlgorithm() {
               )
             : [];
     const collapsedSet = new Set(validIndices);
+
+    /* Очистка только после await: иначе #noInnLink из разметки исчезает на время I/O и DOM-health даёт ложное «элемент отсутствует». */
+    mainAlgorithmContainer.innerHTML = '';
 
     if (mainSteps.length === 0) {
         const emptyP = document.createElement('p');
@@ -677,6 +698,8 @@ export async function renderMainAlgorithm() {
     }
 
     mainAlgorithmContainer.appendChild(fragment);
+
+    repairMissingNoInnLinkIfNeeded(mainAlgorithmContainer, mainSteps);
 
     // Обновление заголовка
     const mainTitleElement = document.querySelector('#mainContent > div > div:nth-child(1) h2');

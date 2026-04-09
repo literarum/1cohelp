@@ -121,7 +121,8 @@ export function inferDomZoneLabel(id) {
     }
     if (id.startsWith('xmlAnalyzer')) return 'XML-анализатор';
     if (id.startsWith('fnsCert')) return 'Проверка сертификата ФНС';
-    if (id.startsWith('clientAnalytics')) return 'Аналитика клиентов';
+    /* clearClientAnalyticsSearchBtn и прочие id с подстрокой ClientAnalytics */
+    if (id.startsWith('clientAnalytics') || /clientanalytics/i.test(id)) return 'Аналитика клиентов';
     if (id.startsWith('reminder')) return 'Напоминания';
     if (id.includes('Modal') || id.includes('Lightbox') || id === 'screenshotLightbox') {
         return 'Модальные окна';

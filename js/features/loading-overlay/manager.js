@@ -64,7 +64,7 @@ export const loadingOverlayManager = {
         const snapshot = this.readStoredOverlaySnapshot();
         applyLoadingOverlayThemeVars(normalizedTheme, snapshot, { setHtmlBackground: true });
         if (this.overlayElement) {
-            this.overlayElement.style.backgroundColor = 'var(--loading-overlay-bg, #030308)';
+            this.overlayElement.style.backgroundColor = 'var(--loading-overlay-bg, #020206)';
         }
         if (
             window._earlySphereAnimation &&
@@ -211,7 +211,7 @@ export const loadingOverlayManager = {
         this.overlayElement.innerHTML = overlayHTML;
         this.overlayElement.style.cssText =
             'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;' +
-            'background-color:var(--loading-overlay-bg, #030308);display:flex;justify-content:center;align-items:center;';
+            'background-color:var(--loading-overlay-bg, #020206);display:flex;justify-content:center;align-items:center;';
 
         this.styleElement = document.createElement('style');
         this.styleElement.id = 'custom-loading-overlay-styles';

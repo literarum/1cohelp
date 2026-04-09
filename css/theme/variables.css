@@ -112,7 +112,7 @@ html.dark {
 /* ----------------------------------- */
 :root {
     /* Фон первого кадра до загрузки темы (совпадает с тёмной темой по умолчанию) */
-    --color-initial-bg: #030308;
+    --color-initial-bg: #020206;
 
     --color-primary-default: #9933ff;
     --color-secondary-default: #7b2fdf;

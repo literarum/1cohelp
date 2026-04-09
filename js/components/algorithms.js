@@ -3,6 +3,7 @@
 import { escapeHtml } from '../utils/html.js';
 import { getSectionName, formatExampleForTextarea, deepEqual } from '../utils/helpers.js';
 import { renderMainAlgorithm } from './main-algorithm.js';
+import { isLikelyInnClarificationStep } from './main-algo-inn-link.js';
 import { SCREENSHOT_EDIT_FIELD } from '../ui/screenshot-attachment-field.js';
 
 // ============================================================================
@@ -517,6 +518,9 @@ export function normalizeAlgorithmSteps(stepsArray) {
         };
 
         if (step.type === 'inn_step') {
+            newStep.showNoInnHelp = true;
+        }
+        if (!newStep.showNoInnHelp && isLikelyInnClarificationStep(step)) {
             newStep.showNoInnHelp = true;
         }
         if (step.type && step.type !== 'inn_step') {

@@ -6,6 +6,7 @@
  */
 
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
+import { isLikelyInnClarificationStep } from '../components/main-algo-inn-link.js';
 import { State } from './state.js';
 
 let dependencies = {};
@@ -163,6 +164,9 @@ export async function loadFromIndexedDB() {
                         if (step.type === 'inn_step') {
                             newStep.showNoInnHelp = true;
                             delete newStep.type;
+                        }
+                        if (!newStep.showNoInnHelp && isLikelyInnClarificationStep(newStep)) {
+                            newStep.showNoInnHelp = true;
                         }
                         return newStep;
                     });

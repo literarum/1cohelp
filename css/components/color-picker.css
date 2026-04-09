@@ -23,6 +23,15 @@
     background-color: var(--color-primary, #9333ea);
 }
 
+.app-customization-hex-input[aria-invalid='true'] {
+    border-color: var(--color-red-solid, #ef4444);
+    box-shadow: 0 0 0 1px var(--color-red-border, #fca5a5);
+}
+
+html.dark .app-customization-hex-input[aria-invalid='true'] {
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.45);
+}
+
 #hue-slider-gradient {
     background-image: linear-gradient(
         to right,
@@ -59,6 +68,34 @@
     overflow: visible;
     width: 100%;
     max-width: 100%;
+    /* Не даём flex/grid сжать дорожку до пары пикселей — иначе координата указателя даёт скачок по HSL. */
+    min-width: 80px;
+    /* Предотвращает скролл страницы при перетаскивании на touch (Pointer Events best practice). */
+    touch-action: none;
+}
+
+/* Предпросмотр светлая / тёмная тема в модалке кастомизации */
+.customization-dual-theme-preview__title {
+    letter-spacing: 0.02em;
+}
+
+.customization-theme-preview-card__sample {
+    min-height: 2.25rem;
+    display: flex;
+    align-items: center;
+}
+
+#appCustomizationModal .customization-theme-preview-card__accent {
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+/* Фокус клавиатуры на слайдерах HSL (role="slider") */
+#appCustomizationModal #advancedColorPicker .app-customization-sliders [role='slider']:focus {
+    outline: none;
+}
+#appCustomizationModal #advancedColorPicker .app-customization-sliders [role='slider']:focus-visible {
+    outline: 2px solid var(--color-primary, #9933ff);
+    outline-offset: 3px;
 }
 
 /* Не fixed rounded-full (9999px): при --border-radius: 0 дорожки прямоугольные, иначе «капсула» от глобального радиуса */

@@ -42,6 +42,10 @@ describe('ui-health-surface-registry', () => {
         expect(inferDomZoneLabel('dbMergeModal')).toContain('Слияние');
     });
 
+    it('inferDomZoneLabel: clearClientAnalyticsSearchBtn — зона аналитики клиентов', () => {
+        expect(inferDomZoneLabel('clearClientAnalyticsSearchBtn')).toBe('Аналитика клиентов');
+    });
+
     it('hasHiddenAncestor учитывает .hidden', () => {
         document.body.innerHTML =
             '<div id="x" class="hidden"><button id="b" type="button">x</button></div>';

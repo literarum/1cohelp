@@ -6,6 +6,7 @@ import {
     classifySearchPanelContent,
     detectSearchDropdownVerticalClip,
     runFullSurfaceDomAudit,
+    runFullSurfaceDomAuditAsync,
     runSearchUiDualContourCheck,
     runUiSurfaceHealthSuite,
 } from './ui-surface-health-suite.js';
@@ -60,6 +61,17 @@ describe('ui-surface-health-suite', () => {
             document.body.innerHTML = '<div id="x"></div>';
             const report = vi.fn();
             runFullSurfaceDomAudit(report);
+            const err = report.mock.calls.find((c) => c[0] === 'error');
+            expect(err).toBeDefined();
+            expect(err[2]).toMatch(/Отсутствуют/);
+        });
+    });
+
+    describe('runFullSurfaceDomAuditAsync', () => {
+        it('при document.complete вызывает report (тот же контур отчёта, что и sync)', async () => {
+            document.body.innerHTML = '<div id="x"></div>';
+            const report = vi.fn();
+            await runFullSurfaceDomAuditAsync(report);
             const err = report.mock.calls.find((c) => c[0] === 'error');
             expect(err).toBeDefined();
             expect(err[2]).toMatch(/Отсутствуют/);

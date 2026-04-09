@@ -303,6 +303,8 @@ export function toggleModalFullscreen(
             icon.classList.add('fa-compress');
         }
         buttonElement.title = 'Свернуть';
+        buttonElement.setAttribute('aria-label', 'Свернуть');
+        buttonElement.setAttribute('aria-expanded', 'true');
     } else {
         modalElement.classList.remove('is-fullscreen');
         if (icon) {
@@ -310,7 +312,86 @@ export function toggleModalFullscreen(
             icon.classList.add('fa-expand');
         }
         buttonElement.title = 'Развернуть на весь экран';
+        buttonElement.setAttribute('aria-label', 'Развернуть на весь экран');
+        buttonElement.setAttribute('aria-expanded', 'false');
     }
+}
+
+/**
+ * Если модалка в `is-fullscreen`, возвращает обычные классы (централизованно, без смены `hidden`).
+ * Вызывать при закрытии окна или перед повторным открытием, чтобы не застревало в полноэкранной вёрстке.
+ * @param {string} modalId
+ * @param {Object} config - тот же объект, что в FULLSCREEN_MODAL_CONFIGS
+ */
+export function collapseModalFullscreenIfActive(modalId, config) {
+    const modalElement = document.getElementById(modalId);
+    if (!modalElement || !config || !modalElement.classList.contains('is-fullscreen')) return;
+    toggleModalFullscreen(
+        config.modalId,
+        config.buttonId,
+        config.classToggleConfig,
+        config.innerContainerSelector,
+        config.contentAreaSelector,
+    );
+}
+
+/**
+ * Привязать один обработчик fullscreen по конфигу (идемпотентно).
+ * @param {Object} config - как в FULLSCREEN_MODAL_CONFIGS
+ * @param {{ silent?: boolean }} [options] - silent: без console (для повторной привязки при открытии модалки)
+ * @returns {boolean} true, если кнопка и модалка найдены и обработчик повешен
+ */
+export function attachFullscreenToggleForConfig(config, options = {}) {
+    const silent = Boolean(options.silent);
+    const button = document.getElementById(config.buttonId);
+    const modal = document.getElementById(config.modalId);
+
+    if (button && modal) {
+        if (button._fullscreenToggleHandler) {
+            button.removeEventListener('click', button._fullscreenToggleHandler);
+        }
+
+        button._fullscreenToggleHandler = () => {
+            toggleModalFullscreen(
+                config.modalId,
+                config.buttonId,
+                config.classToggleConfig,
+                config.innerContainerSelector,
+                config.contentAreaSelector,
+            );
+        };
+
+        button.addEventListener('click', button._fullscreenToggleHandler);
+        if (!silent) {
+            console.log(
+                `Fullscreen toggle handler attached to #${config.buttonId} for #${config.modalId}.`,
+            );
+        }
+        return true;
+    }
+
+    if (!silent) {
+        if (!button) {
+            console.debug(
+                `[initFullscreenToggles] Button #${config.buttonId} not found (may be created later).`,
+            );
+        }
+        if (!modal) {
+            console.debug(
+                `[initFullscreenToggles] Modal #${config.modalId} not found for #${config.buttonId}.`,
+            );
+        }
+    }
+    return false;
+}
+
+/**
+ * Повторная привязка без логов: на старте init иногда не находит #toggleFullscreenAppCustomizationBtn
+ * (порядок загрузки / кэш), а к открытию окна узел уже в DOM.
+ * @param {Object} config
+ */
+export function ensureFullscreenToggleForConfig(config) {
+    attachFullscreenToggleForConfig(config, { silent: true });
 }
 
 /**
@@ -325,45 +406,7 @@ export function initFullscreenToggles(modalConfigs) {
 
     console.log('[initFullscreenToggles] Initializing fullscreen toggles for modals...');
 
-    const attachHandler = (config) => {
-        const button = document.getElementById(config.buttonId);
-        const modal = document.getElementById(config.modalId);
-
-        if (button && modal) {
-            // Удаляем старый обработчик, если есть
-            if (button._fullscreenToggleHandler) {
-                button.removeEventListener('click', button._fullscreenToggleHandler);
-            }
-
-            // Создаем новый обработчик
-            button._fullscreenToggleHandler = () => {
-                toggleModalFullscreen(
-                    config.modalId,
-                    config.buttonId,
-                    config.classToggleConfig,
-                    config.innerContainerSelector,
-                    config.contentAreaSelector,
-                );
-            };
-
-            button.addEventListener('click', button._fullscreenToggleHandler);
-            console.log(
-                `Fullscreen toggle handler attached to #${config.buttonId} for #${config.modalId}.`,
-            );
-        } else {
-            // Модалки/кнопки создаются динамически (bookmarkModal, reglamentModal и т.д.) — не логируем как ошибку
-            if (!button)
-                console.debug(
-                    `[initFullscreenToggles] Button #${config.buttonId} not found (may be created later).`,
-                );
-            if (!modal)
-                console.debug(
-                    `[initFullscreenToggles] Modal #${config.modalId} not found for #${config.buttonId}.`,
-                );
-        }
-    };
-
-    modalConfigs.forEach(attachHandler);
+    modalConfigs.forEach((c) => attachFullscreenToggleForConfig(c));
     console.log('[initFullscreenToggles] Finished attaching handlers for modals.');
 }
 

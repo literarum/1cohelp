@@ -296,16 +296,33 @@ export function initBackgroundStatusHUD() {
         }
     }
 
-    function renderWatchdogInfo() {
-        if (!STATE.watchdogInfoEl) return;
+    /**
+     * Второй контур HUD: строка самотестирования не должна показывать OK / «в норме», если
+     * shouldBlockHudSuccessAndAutoDismiss() уже истинно (ошибки диагностики, init, watchdog).
+     */
+    function getResolvedWatchdogLineDisplay() {
         let displayStatus = STATE.watchdog.statusText || '—';
         let displaySeverity = STATE.watchdog.severity || 'running';
-        if (STATE.initHadSubsystemFailures && displaySeverity === 'ok') {
+        if (shouldBlockHudSuccessAndAutoDismiss() && displaySeverity !== 'error') {
             displaySeverity = 'error';
-            if (displayStatus === 'Система в норме') {
+            const errN = effectiveDiagnosticErrors().length;
+            if (errN > 0) {
+                displayStatus = 'Обнаружены ошибки самотестирования';
+            } else if (STATE.initHadSubsystemFailures) {
                 displayStatus = 'Инициализация завершена с ошибками';
+            } else if (
+                displayStatus === 'Система в норме' ||
+                displayStatus === 'Есть предупреждения'
+            ) {
+                displayStatus = 'Проблемы обнаружены';
             }
         }
+        return { displayStatus, displaySeverity };
+    }
+
+    function renderWatchdogInfo() {
+        if (!STATE.watchdogInfoEl) return;
+        const { displayStatus, displaySeverity } = getResolvedWatchdogLineDisplay();
         const lastRunStr = STATE.watchdog.lastRunAt
             ? new Date(STATE.watchdog.lastRunAt).toLocaleString('ru-RU')
             : '—';
@@ -693,14 +710,8 @@ export function initBackgroundStatusHUD() {
             '<i class="fas fa-check text-primary" aria-hidden="true"></i>',
         );
 
-        let fallbackWdSeverity = STATE.watchdog.severity || 'running';
-        let fallbackWdStatus = STATE.watchdog.statusText || '—';
-        if (STATE.initHadSubsystemFailures && fallbackWdSeverity === 'ok') {
-            fallbackWdSeverity = 'error';
-            if (fallbackWdStatus === 'Система в норме') {
-                fallbackWdStatus = 'Инициализация завершена с ошибками';
-            }
-        }
+        const { displayStatus: fallbackWdStatus, displaySeverity: fallbackWdSeverity } =
+            getResolvedWatchdogLineDisplay();
         const watchdogLabel = watchdogStatusLabel(fallbackWdSeverity);
         const lastAutosave = STATE.watchdog.lastAutosaveAt
             ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleString('ru-RU')
@@ -788,7 +799,7 @@ export function initBackgroundStatusHUD() {
                 btn.setAttribute('aria-expanded', String(expanded));
                 btn.title = expanded ? 'Свернуть' : 'Развернуть';
                 btn.setAttribute('aria-label', expanded ? 'Свернуть раздел' : 'Развернуть раздел');
-                btn.textContent = expanded ? '\u9660' : '\u9654';
+                btn.textContent = expanded ? '\u25BC' : '\u25B6';
             }
         });
     }
@@ -880,6 +891,8 @@ export function initBackgroundStatusHUD() {
             updateDetailsButton();
             suppressCompletionUiWhenErrors();
             updateTitle();
+            syncHudMainHeading();
+            renderWatchdogInfo();
         },
         /** Снимок последней диагностики (фон / ручной прогон) для экспорта пакета. */
         getDiagnosticsSnapshot() {
@@ -914,6 +927,8 @@ export function initBackgroundStatusHUD() {
             updateDetailsButton();
             suppressCompletionUiWhenErrors();
             updateTitle();
+            syncHudMainHeading();
+            renderWatchdogInfo();
         },
     };
 

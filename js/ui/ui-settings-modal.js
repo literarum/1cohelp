@@ -1,6 +1,6 @@
 'use strict';
 
-import { THEME_DEFAULTS } from '../config.js';
+import { resolveHexForCustomizationTarget } from './color-picker.js';
 
 /**
  * Модуль работы с модальным окном настроек UI
@@ -70,9 +70,15 @@ export function populateCustomizationModalControls(settings) {
         settings = { ...DEFAULT_UI_SETTINGS, themeMode: State?.userPreferences?.theme };
     }
 
-    const themeVal = settings.theme || settings.themeMode || 'dark';
+    const themeValRaw = settings.theme || settings.themeMode || 'dark';
+    const effectiveThemeVal =
+        themeValRaw === 'auto'
+            ? document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light'
+            : themeValRaw;
     const themeRadio = modal.querySelector(
-        `input[name="themeMode"][value="${themeVal === 'auto' ? 'dark' : themeVal}"]`,
+        `input[name="themeMode"][value="${effectiveThemeVal}"]`,
     );
     if (themeRadio) themeRadio.checked = true;
 
@@ -88,11 +94,8 @@ export function populateCustomizationModalControls(settings) {
     if (targetRadio) targetRadio.checked = true;
 
     if (typeof setColorPickerStateFromHex === 'function') {
-        const hex =
-            settings.primaryColor ||
-            (State?.currentPreviewSettings?.primaryColor) ||
-            DEFAULT_UI_SETTINGS?.primaryColor;
-        setColorPickerStateFromHex(hex || THEME_DEFAULTS.primary);
+        const hex = resolveHexForCustomizationTarget(settings, State);
+        setColorPickerStateFromHex(hex);
     }
 }
 

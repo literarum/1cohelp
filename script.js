@@ -26,6 +26,8 @@ import {
     CARD_CONTAINER_CLASSES,
     DEFAULT_CIB_LINKS,
     FULLSCREEN_MODAL_CONFIGS,
+    appCustomizationModalConfig,
+    THEME_DEFAULTS,
 } from './js/config.js';
 
 // Настройки UI по умолчанию (используются в loadUserPreferences, applyUISettings и др.)
@@ -638,6 +640,7 @@ import {
     getTopmostModal as getTopmostModalModule,
     hasBlockingModalsOpen as hasBlockingModalsOpenModule,
     toggleModalFullscreen as toggleModalFullscreenModule,
+    collapseModalFullscreenIfActive as collapseModalFullscreenIfActiveModule,
     initFullscreenToggles as initFullscreenTogglesModule,
     initDraggableVerticalSplitters as initDraggableVerticalSplittersModule,
     initBeforeUnloadHandler as initBeforeUnloadHandlerModule,
@@ -714,6 +717,7 @@ import {
     setColorPickerDependencies,
     setColorPickerStateFromHex as setColorPickerStateFromHexModule,
     initColorPicker as initColorPickerModule,
+    refreshCustomizationPickerAfterThemeChange as refreshCustomizationPickerAfterThemeChangeModule,
 } from './js/ui/color-picker.js';
 
 // Algorithms Renderer
@@ -948,6 +952,12 @@ function addEscapeHandler(modalElement) {
             const visibleModals = getVisibleModals();
             const topmost = getTopmostModal(visibleModals);
             if (topmost && topmost.id === modalElement.id) {
+                if (modalElement.id === 'appCustomizationModal') {
+                    collapseModalFullscreenIfActiveModule(
+                        'appCustomizationModal',
+                        appCustomizationModalConfig,
+                    );
+                }
                 modalElement.classList.add('hidden');
                 removeEscapeHandler(modalElement);
                 event.stopPropagation();
@@ -2360,6 +2370,8 @@ setColorPickerDependencies({
     hexToHsl,
     hslToHex,
     DEFAULT_UI_SETTINGS,
+    adjustHsl: adjustHslModule,
+    THEME_DEFAULTS,
 });
 console.log('[script.js] Зависимости модуля Color Picker установлены');
 
@@ -4347,6 +4359,7 @@ setUISettingsModalInitDependencies({
     updatePreviewSettingsFromModal: updatePreviewSettingsFromModalModule,
     applyPreviewSettings: typeof applyPreviewSettings !== 'undefined' ? applyPreviewSettings : null,
     initColorPicker: initColorPickerModule,
+    refreshCustomizationPickerAfterThemeChange: refreshCustomizationPickerAfterThemeChangeModule,
     showUnsavedConfirmModal: showUnsavedConfirmModalModule,
     shouldConfirmBeforeClose,
     setupExtensionFieldListeners:

@@ -65,6 +65,37 @@ html.dark #clientAnalyticsContent .client-analytics-files-panel {
     padding: 0 0.25rem;
 }
 
+#clientAnalyticsContent .client-analytics-files-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 0;
+    background: transparent;
+    padding: 0.125rem 0.25rem;
+    margin: 0;
+    border-radius: 0.375rem;
+    cursor: pointer;
+}
+
+#clientAnalyticsContent .client-analytics-files-toggle-btn:focus-visible {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 1px;
+}
+
+#clientAnalyticsContent .client-analytics-files-toggle-icon {
+    font-size: 0.7rem;
+    color: var(--color-text-secondary, #6b7280);
+    transition: transform 160ms ease;
+}
+
+#clientAnalyticsContent .client-analytics-files-toggle-btn[aria-expanded='true'] .client-analytics-files-toggle-icon {
+    transform: rotate(180deg);
+}
+
+html.dark #clientAnalyticsContent .client-analytics-files-toggle-icon {
+    color: var(--color-text-secondary, #9ca3af);
+}
+
 #clientAnalyticsContent .client-analytics-files-heading {
     font-size: 0.8125rem;
     font-weight: 600;

@@ -5,6 +5,8 @@ import {
     buildHealthSubsystemSummaryHtml,
 } from '../features/health-report-format.js';
 import { onBackupReminderReEnabled } from '../features/backup-reminder.js';
+import { appCustomizationModalConfig } from '../config.js';
+import { collapseModalFullscreenIfActive, ensureFullscreenToggleForConfig } from './modals-manager.js';
 
 let deps = {
     State: null,
@@ -21,6 +23,7 @@ let deps = {
     updatePreviewSettingsFromModal: null,
     applyPreviewSettings: null,
     initColorPicker: null,
+    refreshCustomizationPickerAfterThemeChange: null,
     showUnsavedConfirmModal: null,
     shouldConfirmBeforeClose: null,
     setupExtensionFieldListeners: null,
@@ -212,6 +215,11 @@ export function initUISettingsModalHandlers() {
         if (openAppCustomizationModalBtn && appCustomizationModal && !openAppCustomizationModalBtn.dataset.customizationListenerAttached) {
             openAppCustomizationModalBtn.addEventListener('click', () => {
                 if (appCustomizationModal.classList.contains('hidden')) {
+                    ensureFullscreenToggleForConfig(appCustomizationModalConfig);
+                    collapseModalFullscreenIfActive(
+                        'appCustomizationModal',
+                        appCustomizationModalConfig,
+                    );
                     if (typeof deps.populateCustomizationModalControls === 'function') {
                         deps.populateCustomizationModalControls(
                             deps.State?.currentPreviewSettings || deps.State?.userPreferences,
@@ -231,6 +239,10 @@ export function initUISettingsModalHandlers() {
         }
         if (closeAppCustomizationModalBtn && appCustomizationModal) {
             closeAppCustomizationModalBtn.addEventListener('click', () => {
+                collapseModalFullscreenIfActive(
+                    'appCustomizationModal',
+                    appCustomizationModalConfig,
+                );
                 if (typeof deps.closeAnimatedModal === 'function') {
                     deps.closeAnimatedModal(appCustomizationModal);
                 }
@@ -246,6 +258,9 @@ export function initUISettingsModalHandlers() {
                             deps.applyPreviewSettings(deps.State.currentPreviewSettings);
                         }
                         deps.State.isUISettingsDirty = true;
+                        if (typeof deps.refreshCustomizationPickerAfterThemeChange === 'function') {
+                            deps.refreshCustomizationPickerAfterThemeChange();
+                        }
                     }
                 }
             });
@@ -448,7 +463,7 @@ export function initUISettingsModalHandlers() {
                         'aria-label',
                         expanded ? 'Свернуть раздел' : 'Развернуть раздел',
                     );
-                    btn.textContent = expanded ? '\u9660' : '\u9654';
+                    btn.textContent = expanded ? '\u25BC' : '\u25B6';
                 }
             });
         }

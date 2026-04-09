@@ -290,10 +290,45 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 
 /* Модальное окно кастомизации (тема, цвета, скругление, отступы, фон) */
 #appCustomizationModal .modal-inner-container {
-    max-height: min(90vh, 640px);
+    /* Почти вся высота окна: убран жёсткий потолок 640px, из‑за которого была постоянная прокрутка */
+    max-height: min(94vh, calc(100vh - 1rem));
+    max-width: min(56rem, calc(100vw - 1rem - var(--safe-area-left, 0px) - var(--safe-area-right, 0px)));
     display: flex;
     flex-direction: column;
 }
+@supports (height: 100dvh) {
+    #appCustomizationModal .modal-inner-container {
+        max-height: min(96dvh, calc(100svh - 1.25rem));
+    }
+}
+
+/* Полноэкранная кастомизация: между оверлеем и панелью есть оболочка #appCustomizationModalShell */
+#appCustomizationModal.is-fullscreen.app-customization-overlay {
+    align-items: stretch !important;
+    justify-content: stretch !important;
+}
+
+#appCustomizationModal.is-fullscreen #appCustomizationModalShell {
+    max-width: none !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto;
+    /* Снять центрирование с разметки — иначе панель остаётся «карточкой» по центру */
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+}
+
+/* Базовое правило #appCustomizationModal .modal-inner-container задаёт max-width: 56rem — сильнее, чем Tailwind max-w-none */
+#appCustomizationModal.is-fullscreen .app-customization-panel.modal-inner-container {
+    max-width: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
 #appCustomizationModal .p-content.overflow-y-auto.flex-1 {
     flex: 1 1 auto;
     min-height: 0;
@@ -838,7 +873,8 @@ body.app-backup-warning-perimeter-pulse::before {
         #bookmarkDetailModal #bookmarkDetailOuterContent,
         #addModal .p-content.overflow-y-auto.flex-1,
         #editModal .p-content.overflow-y-auto.flex-1,
-        #reminderModal #reminderModalBody
+        #reminderModal #reminderModalBody,
+        #appCustomizationModal .app-customization-scroll
     ) {
     flex-grow: 1;
     overflow-y: auto;

@@ -26,6 +26,7 @@ import {
     buildMaxBlacklistLevelByInnMap,
     getBlacklistLevelForClientInn,
     frogBadgeLabelsForLevel,
+    normalizeInnForBlacklistLookup,
 } from './client-analytics-blacklist-crosscheck.js';
 
 let deps = {
@@ -33,6 +34,9 @@ let deps = {
     updateSearchIndex: null,
     applyCurrentView: null,
 };
+
+let clientAnalyticsSearchQuery = '';
+let clientAnalyticsFilesCollapsed = true;
 
 /**
  * @param {Object} d
@@ -80,6 +84,103 @@ export function pluralRuFiles(n) {
     return `${n} файлов`;
 }
 
+function normalizeSearchText(value) {
+    return String(value ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+export function buildClientAnalyticsSearchIndexLine(record) {
+    if (!record || typeof record !== 'object') return '';
+    const chunks = [
+        record.inn,
+        record.kpp,
+        Array.isArray(record.phones) ? record.phones.join(' ') : record.phones,
+        Array.isArray(record.emails) ? record.emails.join(' ') : record.emails,
+        record.question,
+        record.contextSnippet,
+        record.sourceFileName,
+        record.uploadedAt,
+        record.confidence,
+        record.listItemIndex != null ? String(record.listItemIndex) : '',
+    ];
+    return normalizeSearchText(chunks.filter(Boolean).join(' '));
+}
+
+export function filterClientAnalyticsRecordsByQuery(records, query) {
+    const prepared = Array.isArray(records) ? records : [];
+    const q = normalizeSearchText(query);
+    if (!q) return prepared;
+    const tokens = q.split(' ').filter(Boolean);
+    if (!tokens.length) return prepared;
+    return prepared.filter((record) => {
+        const line = buildClientAnalyticsSearchIndexLine(record);
+        return tokens.every((token) => line.includes(token));
+    });
+}
+
+export function buildClientAnalyticsStructureSignature(parsedRecords) {
+    const rows = (Array.isArray(parsedRecords) ? parsedRecords : []).map((record) => ({
+        inn: String(record?.inn || '').trim(),
+        kpp: String(record?.kpp || '').trim(),
+        phones: [...new Set(Array.isArray(record?.phones) ? record.phones.map(String) : [])].sort(),
+        emails: [...new Set(Array.isArray(record?.emails) ? record.emails.map(String) : [])].sort(),
+        question: String(record?.question || '').replace(/\s+/g, ' ').trim(),
+        confidence: String(record?.confidence || 'medium'),
+        listItemIndex:
+            record?.listItemIndex != null && Number.isFinite(record.listItemIndex)
+                ? Number(record.listItemIndex)
+                : null,
+    }));
+    rows.sort((a, b) => {
+        const ak = `${a.inn}|${a.kpp}|${a.phones.join(',')}|${a.emails.join(',')}|${a.question}|${a.listItemIndex ?? ''}`;
+        const bk = `${b.inn}|${b.kpp}|${b.phones.join(',')}|${b.emails.join(',')}|${b.question}|${b.listItemIndex ?? ''}`;
+        return ak.localeCompare(bk, 'ru');
+    });
+    return JSON.stringify(rows);
+}
+
+export function decideClientAnalyticsDuplicateReason(candidate, existingFiles) {
+    const files = Array.isArray(existingFiles) ? existingFiles : [];
+    const normalizedName = String(candidate?.name || '').trim().toLowerCase();
+    if (!normalizedName) return null;
+
+    const byName = files.find((file) => String(file?.fileName || '').trim().toLowerCase() === normalizedName);
+    if (byName) return { kind: 'name', fileName: byName.fileName || '' };
+
+    if (candidate?.textSha256) {
+        const byContent = files.find((file) => file?.textSha256 && file.textSha256 === candidate.textSha256);
+        if (byContent) return { kind: 'content', fileName: byContent.fileName || '' };
+    }
+
+    if (candidate?.structureSha256 && Number.isFinite(candidate?.recordCount)) {
+        const byStructure = files.find(
+            (file) =>
+                file?.recordsStructureSha256 &&
+                file.recordsStructureSha256 === candidate.structureSha256 &&
+                Number(file.recordsCount || 0) === Number(candidate.recordCount),
+        );
+        if (byStructure) return { kind: 'structure', fileName: byStructure.fileName || '' };
+    }
+
+    return null;
+}
+
+function duplicateReasonToMessage(reason, fileName) {
+    if (!reason) return '';
+    const quoted = reason.fileName ? ` «${reason.fileName}»` : '';
+    if (reason.kind === 'name') {
+        return `Файл «${fileName}» уже загружен (дубль по имени${quoted ? `, найдено${quoted}` : ''}). Переименуйте файл, если это новая версия.`;
+    }
+    if (reason.kind === 'content') {
+        return `Файл «${fileName}» уже присутствует в базе (полное совпадение содержимого${quoted ? ` с${quoted}` : ''}).`;
+    }
+    return `Файл «${fileName}» уже присутствует в базе (совпадает внутренняя структура данных${quoted ? ` с${quoted}` : ''}).`;
+}
+
 /**
  * Бейдж, подсказка про прокрутку, градиент «есть ещё ниже», aria-label (двойная подсказка к скроллбару).
  * @param {number} fileCount
@@ -94,6 +195,13 @@ function updateClientAnalyticsFilesListChrome(fileCount) {
         sectionEl.dataset.fileCount = String(fileCount);
     }
     if (!listEl) return;
+
+    const toggleBtn = document.getElementById('clientAnalyticsFilesToggleBtn');
+    if (toggleBtn) {
+        const stateLabel = clientAnalyticsFilesCollapsed ? 'Развернуть' : 'Свернуть';
+        toggleBtn.setAttribute('aria-expanded', clientAnalyticsFilesCollapsed ? 'false' : 'true');
+        toggleBtn.title = `${stateLabel} список загруженных файлов`;
+    }
 
     if (!fileCount) {
         if (badgeEl) {
@@ -124,10 +232,19 @@ function updateClientAnalyticsFilesListChrome(fileCount) {
 
     const apply = () => {
         const clip = listEl.scrollHeight > listEl.clientHeight + 2;
-        if (outerEl) outerEl.classList.toggle('client-analytics-files-scroll-outer--clip', clip);
-        listEl.classList.toggle('client-analytics-files-list--scrollable', clip);
+        if (outerEl) {
+            outerEl.hidden = clientAnalyticsFilesCollapsed;
+            outerEl.classList.toggle(
+                'client-analytics-files-scroll-outer--clip',
+                clip && !clientAnalyticsFilesCollapsed,
+            );
+        }
+        listEl.classList.toggle(
+            'client-analytics-files-list--scrollable',
+            clip && !clientAnalyticsFilesCollapsed,
+        );
         if (hintEl) {
-            hintEl.hidden = false;
+            hintEl.hidden = clientAnalyticsFilesCollapsed;
             hintEl.textContent = clip
                 ? `В списке ${label}; показана только часть — прокрутите список вниз, чтобы увидеть остальные.`
                 : `В списке ${label}.`;
@@ -212,11 +329,34 @@ export async function ingestTxtFile(file, opts = {}) {
     });
     const textSha256 = await sha256HexUtf8(text);
     const uploadedAt = new Date().toISOString();
+    updateClientAnalyticsIngestProgress({
+        phase: 'Разбор текста (ИНН, телефоны, почта)…',
+        percent: 30,
+        fileLabel,
+    });
+    const parsed = parseTxtIntoRecords(text, file.name);
+    const structureSignature = buildClientAnalyticsStructureSignature(parsed);
+    const recordsStructureSha256 = await sha256HexUtf8(structureSignature);
+    const existingFiles = await getAllFromIndexedDB('clientAnalyticsFiles');
+    const duplicateReason = decideClientAnalyticsDuplicateReason(
+        {
+            name: file.name,
+            textSha256,
+            structureSha256: recordsStructureSha256,
+            recordCount: parsed.length,
+        },
+        existingFiles,
+    );
+    if (duplicateReason) {
+        throw new Error(duplicateReasonToMessage(duplicateReason, file.name));
+    }
 
     const fileRow = {
         fileName: file.name,
         uploadedAt,
         textSha256,
+        recordsStructureSha256,
+        recordsCount: parsed.length,
         charCount: text.length,
         parseStatus: 'ok',
         parseError: null,
@@ -237,12 +377,10 @@ export async function ingestTxtFile(file, opts = {}) {
     }
 
     updateClientAnalyticsIngestProgress({
-        phase: 'Разбор текста (ИНН, телефоны, почта)…',
+        phase: 'Проверка дубликатов завершена, сохранение записей…',
         percent: 40,
         fileLabel,
     });
-
-    const parsed = parseTxtIntoRecords(text, file.name);
     let recordCount = 0;
 
     try {
@@ -480,7 +618,14 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0) {
             `${titlePlain}. ${frogBadgeLabelsForLevel(bl).aria}.`,
         );
     }
-    const frogBadge = bl > 0 ? frogBlacklistBadgeHtml(bl) : '';
+    const frogBadge =
+        bl > 0 && rec.inn
+            ? `<button type="button" class="inline-flex items-center p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded" data-action="open-blacklist-by-inn" data-inn="${escapeHtml(rec.inn)}" title="Открыть запись в черном списке по ИНН">${frogBlacklistBadgeHtml(
+                  bl,
+              )}</button>`
+            : bl > 0
+              ? frogBlacklistBadgeHtml(bl)
+              : '';
     const phones = (rec.phones || []).length
         ? escapeHtml(rec.phones.join(', '))
         : '—';
@@ -553,6 +698,16 @@ export async function renderClientAnalyticsPage() {
             const tb = new Date(b.uploadedAt || 0).getTime();
             return tb - ta;
         });
+    const totalRecords = sorted.length;
+    const filtered = filterClientAnalyticsRecordsByQuery(sorted, clientAnalyticsSearchQuery);
+    const countEl = document.getElementById('clientAnalyticsRecordCount');
+    if (countEl) {
+        const found = filtered.length;
+        countEl.textContent =
+            clientAnalyticsSearchQuery.trim().length > 0
+                ? `Карточек: ${totalRecords} · найдено: ${found}`
+                : `Карточек в базе: ${totalRecords}`;
+    }
 
     const viewMode =
         (State.viewPreferences && State.viewPreferences['clientAnalyticsContainer']) ||
@@ -568,12 +723,16 @@ export async function renderClientAnalyticsPage() {
         container.classList.add('gap-4', 'auto-rows-fr');
     }
 
-    if (sorted.length === 0) {
+    if (filtered.length === 0) {
         container.innerHTML =
-            '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">Записей пока нет. Загрузите один или несколько .txt файлов выше.</p>';
+            clientAnalyticsSearchQuery.trim().length > 0
+                ? `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">По запросу «${escapeHtml(
+                      clientAnalyticsSearchQuery,
+                  )}» ничего не найдено.</p>`
+                : '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">Записей пока нет. Загрузите один или несколько .txt файлов выше.</p>';
     } else {
         const frag = document.createDocumentFragment();
-        for (const rec of sorted) {
+        for (const rec of filtered) {
             const blLevel = getBlacklistLevelForClientInn(rec.inn, blacklistLevelByInn);
             frag.appendChild(createRecordCardElement(rec, viewMode, blLevel));
         }
@@ -619,6 +778,30 @@ export async function renderClientAnalyticsPage() {
     }
 }
 
+export async function navigateToBlacklistByInn(inn, options = {}) {
+    const key = normalizeInnForBlacklistLookup(inn);
+    if (!key) return false;
+    const setTab = options.setActiveTabFn || (typeof window !== 'undefined' ? window.setActiveTab : null);
+    if (typeof setTab === 'function') {
+        await Promise.resolve(setTab('blacklistedClients', true));
+    }
+    const applySearch = () => {
+        const input = document.getElementById('blacklistSearchInput');
+        if (!input) return false;
+        input.value = key;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+        return true;
+    };
+    if (applySearch()) return true;
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            applySearch();
+        }, 60);
+    });
+    return true;
+}
+
 /**
  * Показ модального окна с полными полями записи.
  * @param {number} recordId
@@ -636,6 +819,7 @@ export async function showClientAnalyticsDetailModal(recordId) {
     const rawPreview = file && file.rawText ? file.rawText.slice(0, 8000) : '';
 
     let frogBannerHtml = '';
+    let detailInnBadgeHtml = '';
     if (State.db && rec.inn) {
         try {
             const blEntries = await getAllFromIndexedDB('blacklistedClients');
@@ -644,6 +828,9 @@ export async function showClientAnalyticsDetailModal(recordId) {
             if (dBl > 0) {
                 const { short, aria } = frogBadgeLabelsForLevel(dBl);
                 const live = dBl === 3 ? 'assertive' : 'polite';
+                detailInnBadgeHtml = `<button type="button" class="inline-flex items-center p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded" data-action="open-blacklist-by-inn" data-inn="${escapeHtml(
+                    rec.inn,
+                )}" title="Открыть запись в черном списке по ИНН">${frogBlacklistBadgeHtml(dBl)}</button>`;
                 frogBannerHtml = `
   <div class="client-analytics-frog-banner client-analytics-frog-banner--l${dBl} mx-4 mt-4 mb-0 rounded-lg border px-3 py-2.5 text-sm" role="status" aria-live="${live}">
     <p class="font-semibold m-0">${escapeHtml(short)}</p>
@@ -661,7 +848,7 @@ ${frogBannerHtml}
   <div class="client-analytics-detail-scroll flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-2 custom-scrollbar">
     <dl class="space-y-2 text-sm">
       <div><dt class="font-semibold text-gray-700 dark:text-gray-300">Пункт в файле</dt><dd>${rec.listItemIndex != null ? escapeHtml(String(rec.listItemIndex)) : '—'}</dd></div>
-      <div><dt class="font-semibold text-gray-700 dark:text-gray-300">ИНН</dt><dd>${escapeHtml(rec.inn || '—')}</dd></div>
+      <div><dt class="font-semibold text-gray-700 dark:text-gray-300">ИНН</dt><dd class="flex flex-wrap items-center gap-2">${escapeHtml(rec.inn || '—')}${detailInnBadgeHtml}</dd></div>
       <div><dt class="font-semibold">КПП</dt><dd>${escapeHtml(rec.kpp || '—')}</dd></div>
       <div><dt class="font-semibold">Телефоны</dt><dd>${escapeHtml((rec.phones || []).join(', ') || '—')}</dd></div>
       <div><dt class="font-semibold">E-mail</dt><dd>${escapeHtml((rec.emails || []).join(', ') || '—')}</dd></div>
@@ -815,6 +1002,14 @@ export function initClientAnalyticsUi() {
     }
 
     document.addEventListener('click', (e) => {
+        const openBlacklist = e.target.closest('[data-action="open-blacklist-by-inn"]');
+        if (openBlacklist) {
+            e.preventDefault();
+            e.stopPropagation();
+            const inn = openBlacklist.getAttribute('data-inn') || '';
+            void navigateToBlacklistByInn(inn);
+            return;
+        }
         const delRec = e.target.closest('.delete-ca-record');
         if (delRec && delRec.dataset.id) {
             e.stopPropagation();
@@ -845,5 +1040,43 @@ export function initClientAnalyticsUi() {
     const closeBtn = document.getElementById('clientAnalyticsDetailCloseBtn');
     if (closeBtn) {
         closeBtn.addEventListener('click', closeClientAnalyticsDetailModal);
+    }
+
+    const searchInput = document.getElementById('clientAnalyticsSearchInput');
+    const clearSearchBtn = document.getElementById('clearClientAnalyticsSearchBtn');
+    if (searchInput && !searchInput._clientAnalyticsSearchBound) {
+        searchInput._clientAnalyticsSearchBound = true;
+        searchInput.addEventListener('input', async () => {
+            clientAnalyticsSearchQuery = searchInput.value || '';
+            if (clearSearchBtn) {
+                clearSearchBtn.classList.toggle('hidden', clientAnalyticsSearchQuery.trim().length === 0);
+            }
+            await renderClientAnalyticsPage();
+        });
+    }
+    if (clearSearchBtn && !clearSearchBtn._clientAnalyticsSearchBound) {
+        clearSearchBtn._clientAnalyticsSearchBound = true;
+        clearSearchBtn.addEventListener('click', async () => {
+            if (!searchInput) return;
+            searchInput.value = '';
+            clientAnalyticsSearchQuery = '';
+            clearSearchBtn.classList.add('hidden');
+            searchInput.focus();
+            await renderClientAnalyticsPage();
+        });
+    }
+    if (clearSearchBtn) {
+        clearSearchBtn.classList.toggle('hidden', clientAnalyticsSearchQuery.trim().length === 0);
+    }
+
+    const filesToggleBtn = document.getElementById('clientAnalyticsFilesToggleBtn');
+    if (filesToggleBtn && !filesToggleBtn._clientAnalyticsToggleBound) {
+        filesToggleBtn._clientAnalyticsToggleBound = true;
+        filesToggleBtn.addEventListener('click', () => {
+            clientAnalyticsFilesCollapsed = !clientAnalyticsFilesCollapsed;
+            const sec = document.getElementById('clientAnalyticsFilesSection');
+            const n = parseInt(sec?.dataset?.fileCount || '0', 10);
+            updateClientAnalyticsFilesListChrome(Number.isFinite(n) ? n : 0);
+        });
     }
 }

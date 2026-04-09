@@ -1,6 +1,34 @@
 'use strict';
 
 import { THEME_DEFAULTS } from '../config.js';
+import {
+    normalizeHex6,
+    normalizeColorToHex,
+    applyPrimaryPairWithVerification,
+} from './color-settings-engine.js';
+
+/** Множители для пары фонов светлая/тёмная тема (должны совпадать с логикой buildPalette). */
+export const UI_BG_THEME_FACTORS = Object.freeze({ darkRel: 0.75, lightRel: 0.2 });
+
+/**
+ * По базовому цвету фона (пипетка) возвращает вычисленные фоны для светлой и тёмной темы.
+ */
+export function deriveThemeBackgroundPairFromHex(bgHex, hexToHslFn, hslToHexFn, adjustHslFn, options = {}) {
+    const baseHsl = hexToHslFn(bgHex);
+    if (!baseHsl) return { light: bgHex, dark: bgHex };
+    const { darkRel, lightRel } = UI_BG_THEME_FACTORS;
+    const computedLight = hslToHexFn(
+        ...Object.values(adjustHslFn(baseHsl, Math.round((100 - baseHsl.l) * lightRel), 0)),
+    );
+    const computedDark = hslToHexFn(
+        ...Object.values(adjustHslFn(baseHsl, -Math.round(baseHsl.l * darkRel), 0)),
+    );
+
+    const activeTheme = options?.activeTheme;
+    if (activeTheme === 'dark') return { light: computedLight, dark: bgHex };
+    if (activeTheme === 'light') return { light: bgHex, dark: computedDark };
+    return { light: computedLight, dark: computedDark };
+}
 
 /**
  * Модуль применения предпросмотра настроек UI
@@ -44,32 +72,47 @@ export async function applyPreviewSettings(settings) {
     const { style } = root;
     const body = document.body;
 
-    let primary =
+    let primaryRaw =
         settings?.primaryColor || (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor);
-    if (typeof primary !== 'string' || !/^#[a-fA-F0-9]{3}([a-fA-F0-9]{3})?$/.test(primary.trim())) {
-        primary = (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor) || THEME_DEFAULTS.primary;
+    if (typeof primaryRaw !== 'string' || !/^#[a-fA-F0-9]{3}([a-fA-F0-9]{3})?$/.test(primaryRaw.trim())) {
+        primaryRaw = (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor) || THEME_DEFAULTS.primary;
     }
-    primary = primary.trim();
-    style.setProperty('--color-primary', primary);
-    if (typeof calculateSecondaryColor === 'function') {
-        try {
-            style.setProperty('--color-secondary', calculateSecondaryColor(primary));
-        } catch {
-            style.setProperty('--color-secondary', primary);
-        }
+    const primaryNorm = normalizeHex6(primaryRaw.trim()) || normalizeHex6(THEME_DEFAULTS.primary);
+    const { primary, secondary, verified } = applyPrimaryPairWithVerification(
+        style,
+        primaryNorm,
+        calculateSecondaryColor,
+    );
+    if (typeof document !== 'undefined' && document.documentElement === root && !verified) {
+        console.warn(
+            '[color-settings] Повторная проверка --color-primary/--color-secondary не сошлась с записанным значением.',
+            { primary, secondary },
+        );
     }
 
     const bgHex =
-        settings?.isBackgroundCustom && settings?.backgroundColor ? settings.backgroundColor : null;
+        settings?.isBackgroundCustom && settings?.backgroundColor
+            ? normalizeColorToHex(settings.backgroundColor)
+            : null;
     const isTextCustom = !!settings?.isTextCustom && !!settings?.customTextColor;
-    const customText = isTextCustom ? settings.customTextColor : null;
+    const customText = isTextCustom ? normalizeColorToHex(settings.customTextColor) : null;
 
-    const darkRelFactor = 0.75;
-    const lightRelFactor = 0.2;
+    const darkRelFactor = UI_BG_THEME_FACTORS.darkRel;
+    const lightRelFactor = UI_BG_THEME_FACTORS.lightRel;
+    const mode = settings?.theme || settings?.themeMode || DEFAULT_UI_SETTINGS?.themeMode || 'dark';
+    const activeTheme =
+        mode === 'dark'
+            ? 'dark'
+            : mode === 'light'
+              ? 'light'
+              : typeof window !== 'undefined' &&
+                  window.matchMedia?.('(prefers-color-scheme: dark)')?.matches
+                ? 'dark'
+                : 'light';
 
-    const buildPalette = (isDark) => {
-        if (!bgHex) return null;
-        const hsl = hexToHsl(bgHex);
+    const buildPalette = (themeBgHex, isDark) => {
+        if (!themeBgHex) return null;
+        const hsl = hexToHsl(themeBgHex);
         if (!hsl) return null;
         const darkBoost = Math.round(hsl.l * darkRelFactor);
         const lightBoost = Math.round((100 - hsl.l) * lightRelFactor);
@@ -98,7 +141,9 @@ export async function applyPreviewSettings(settings) {
         const surf2 = hslToHex(
             ...Object.values(adjustHsl(hsl, isDark ? -(10 + darkBoost) : 10 + lightBoost, -8)),
         );
-        const border = hslToHex(...Object.values(adjustHsl(hsl, isDark ? 12 : -12, -10)));
+        const borderL = isDark ? Math.min(72, hsl.l + 8) : Math.max(20, hsl.l - 22);
+        const borderS = Math.max(0, Math.min(100, hsl.s - (isDark ? 18 : 10)));
+        const border = hslToHex(hsl.h, borderS, borderL);
         const input = hslToHex(...Object.values(adjustHsl(hsl, isDark ? 3 : -3, -5)));
         const hover = hslToHex(
             ...Object.values(adjustHsl(hexToHsl(surf1), isDark ? 6 : -6, isDark ? -6 : 6)),
@@ -107,47 +152,45 @@ export async function applyPreviewSettings(settings) {
         return { textP, textS, surf1, surf2, border, input, hover };
     };
 
-    const palLight = buildPalette(false);
-    const palDark = buildPalette(true);
+    if (bgHex) {
+        const { light: bgLight, dark: bgDark } = deriveThemeBackgroundPairFromHex(
+            bgHex,
+            hexToHsl,
+            hslToHex,
+            adjustHsl,
+            { activeTheme },
+        );
+        const palLight = buildPalette(bgLight, false);
+        const palDark = buildPalette(bgDark, true);
 
-    if (bgHex && palLight && palDark) {
-        body.classList.add('custom-background-active');
+        if (palLight && palDark) {
+            body.classList.add('custom-background-active');
 
-        const baseHsl = hexToHsl(bgHex);
-        const bgLight = baseHsl
-            ? hslToHex(
-                  ...Object.values(
-                      adjustHsl(baseHsl, Math.round((100 - baseHsl.l) * lightRelFactor), 0),
-                  ),
-              )
-            : bgHex;
-        const bgDark = baseHsl
-            ? hslToHex(
-                  ...Object.values(adjustHsl(baseHsl, -Math.round(baseHsl.l * darkRelFactor), 0)),
-              )
-            : bgHex;
-        style.setProperty('--override-background-light', bgLight);
-        style.setProperty('--override-background-dark', bgDark);
+            style.setProperty('--override-background-light', bgLight);
+            style.setProperty('--override-background-dark', bgDark);
 
-        style.setProperty('--override-text-primary-light', palLight.textP);
-        style.setProperty('--override-text-secondary-light', palLight.textS);
-        style.setProperty('--override-surface-1-light', palLight.surf1);
-        style.setProperty('--override-surface-2-light', palLight.surf2);
-        style.setProperty('--override-border-light', palLight.border);
-        style.setProperty('--override-input-bg-light', palLight.input);
-        style.setProperty('--override-hover-light', palLight.hover);
-        style.setProperty('--override-scrollbar-track-light', palLight.surf2);
-        style.setProperty('--override-scrollbar-thumb-light', palLight.border);
+            style.setProperty('--override-text-primary-light', palLight.textP);
+            style.setProperty('--override-text-secondary-light', palLight.textS);
+            style.setProperty('--override-surface-1-light', palLight.surf1);
+            style.setProperty('--override-surface-2-light', palLight.surf2);
+            style.setProperty('--override-border-light', palLight.border);
+            style.setProperty('--override-input-bg-light', palLight.input);
+            style.setProperty('--override-hover-light', palLight.hover);
+            style.setProperty('--override-scrollbar-track-light', palLight.surf2);
+            style.setProperty('--override-scrollbar-thumb-light', palLight.border);
 
-        style.setProperty('--override-text-primary-dark', palDark.textP);
-        style.setProperty('--override-text-secondary-dark', palDark.textS);
-        style.setProperty('--override-surface-1-dark', palDark.surf1);
-        style.setProperty('--override-surface-2-dark', palDark.surf2);
-        style.setProperty('--override-border-dark', palDark.border);
-        style.setProperty('--override-input-bg-dark', palDark.input);
-        style.setProperty('--override-hover-dark', palDark.hover);
-        style.setProperty('--override-scrollbar-track-dark', palDark.surf2);
-        style.setProperty('--override-scrollbar-thumb-dark', palDark.border);
+            style.setProperty('--override-text-primary-dark', palDark.textP);
+            style.setProperty('--override-text-secondary-dark', palDark.textS);
+            style.setProperty('--override-surface-1-dark', palDark.surf1);
+            style.setProperty('--override-surface-2-dark', palDark.surf2);
+            style.setProperty('--override-border-dark', palDark.border);
+            style.setProperty('--override-input-bg-dark', palDark.input);
+            style.setProperty('--override-hover-dark', palDark.hover);
+            style.setProperty('--override-scrollbar-track-dark', palDark.surf2);
+            style.setProperty('--override-scrollbar-thumb-dark', palDark.border);
+        } else {
+            body.classList.remove('custom-background-active');
+        }
     } else {
         body.classList.remove('custom-background-active');
         [

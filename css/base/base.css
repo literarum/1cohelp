@@ -289,13 +289,38 @@ header button {
         padding: 0.5rem;
     }
 }
-/* Верхняя панель: одна строка. Горизонтальный скролл только у кластеров кнопок — не у всего ряда,
-   иначе overflow-y:hidden на ряду обрезает выпадающие результаты глобального поиска (#searchResults). */
+/* Верхняя панель: до md — колонка; с md — одна строка (см. также Tailwind md:flex-row на разметке).
+   Важно: не задавать flex-direction:column без медиа — иначе ID-селектор перебивает md:flex-row по специфичности. */
 #staticHeaderWrapper header > div > div.header-toolbar-row {
-    flex-wrap: nowrap !important;
     overflow: visible;
     min-width: 0;
-    align-items: center;
+}
+
+@media (max-width: 767.98px) {
+    #staticHeaderWrapper header > div > div.header-toolbar-row {
+        flex-direction: column;
+        flex-wrap: wrap;
+        align-items: stretch;
+    }
+
+    #staticHeaderWrapper header > div > div.header-toolbar-row > #topHeaderActions .header-toolbar-cluster-scroll {
+        justify-content: flex-end;
+    }
+}
+
+@media (min-width: 768px) {
+    /*
+     * Трёхзонная шапка: сетка стабильнее flex + space-between при flex-1 и max-width у поиска
+     * (иначе «пустые» промежутки распределяются непредсказуемо).
+     */
+    #staticHeaderWrapper header > div > div.header-toolbar-row {
+        display: grid;
+        grid-template-columns: minmax(0, auto) minmax(12rem, 1fr) auto;
+        align-items: center;
+        column-gap: 0.75rem;
+        row-gap: 0.75rem;
+        flex-wrap: nowrap !important;
+    }
 }
 
 /*
@@ -334,6 +359,31 @@ header button {
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
+}
+
+/* header-toolbar-icon-btn: единая ось и размер квадрата для всех кнопок-иконок в ряду (таймер / избранное / тема) */
+#staticHeaderWrapper header .header-toolbar-cluster-scroll button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+    box-sizing: border-box;
+}
+
+#staticHeaderWrapper header .header-toolbar-cluster-scroll button i {
+    line-height: 1;
+    vertical-align: 0;
+}
+
+#staticHeaderWrapper header #timerDisplay {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    line-height: 1.25;
+    box-sizing: border-box;
 }
 
 /* Поле поиска: не сжимать ниже зоны под иконку + две кнопки (глобальный #appContent .flex > * { min-width: 0 }) */

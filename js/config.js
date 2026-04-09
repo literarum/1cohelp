@@ -323,6 +323,53 @@ export const dbMergeModalConfig = {
     contentAreaSelector: '#dbMergeStepContainer',
 };
 
+/** Окно «Кастомизация» (тема, цвета, скругление) — тот же паттерн, что hotkeys */
+export const appCustomizationModalConfig = {
+    modalId: 'appCustomizationModal',
+    buttonId: 'toggleFullscreenAppCustomizationBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-2', 'sm:p-4', 'overflow-y-auto', 'flex', 'items-center', 'justify-center'],
+            /* bg-white / dark:bg-gray-800 только в разметке — не трогать при fullscreen (иначе панель становится прозрачной) */
+            innerContainer: [
+                'rounded-2xl',
+                'shadow-2xl',
+                'ring-1',
+                'ring-black/5',
+                'dark:ring-white/10',
+                'max-w-4xl',
+                'w-full',
+                'flex',
+                'flex-col',
+                'overflow-hidden',
+            ],
+            contentArea: ['p-content', 'overflow-y-auto', 'flex-1'],
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: [
+                ...UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+                'flex',
+                'flex-col',
+                'min-h-0',
+                'ring-0',
+            ],
+            contentArea: [
+                'p-content',
+                'h-full',
+                'max-h-full',
+                'flex-1',
+                'min-h-0',
+                'overflow-y-auto',
+                'flex',
+                'flex-col',
+            ],
+        },
+    },
+    innerContainerSelector: '.app-customization-panel.modal-inner-container',
+    contentAreaSelector: '.app-customization-scroll',
+};
+
 export const engineeringCockpitModalConfig = {
     modalId: 'engineeringCockpitModal',
     buttonId: 'toggleFullscreenEngineeringCockpitBtn',
@@ -372,6 +419,7 @@ export const FULLSCREEN_MODAL_CONFIGS = [
     healthReportModalConfig,
     dbMergeModalConfig,
     engineeringCockpitModalConfig,
+    appCustomizationModalConfig,
 ];
 
 export const SAVE_BUTTON_SELECTORS =
@@ -456,11 +504,14 @@ export const BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS = [
 // КОНСТАНТЫ ТЕМЫ (единственный источник для JS; значения синхронизированы с css/theme/variables.css)
 // ============================================================================
 export const THEME_DEFAULTS = Object.freeze({
-    initialBg: '#030308',
+    /** Первый кадр до применения темы; совпадает с --color-initial-bg в variables.css */
+    initialBg: '#020206',
     primary: '#9933ff',
     secondary: '#7b2fdf',
-    backgroundDark: '#030308',
-    backgroundLight: '#f8fafc',
+    /** Семантический фон тёмной темы; совпадает с --palette-dark-bg в css/theme/variables.css */
+    backgroundDark: '#12121f',
+    /** Семантический фон светлой темы; совпадает с --default-background-light */
+    backgroundLight: '#f9fafb',
     primaryDark: '#8a2be2',
     primaryLight: '#4f46e5',
     secondaryDark: '#a020f0',

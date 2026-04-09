@@ -86,6 +86,71 @@ function sleep(ms) {
 }
 
 /**
+ * Двухконтурная готовность DOM для аудита id: событие load + два кадра отрисовки
+ * (устраняет ложные «отсутствует id» при раннем прогоне до завершения парсинга/раскладки).
+ */
+export async function waitForUiSurfaceDomProbeReady() {
+    if (typeof document === 'undefined') return;
+    await new Promise((resolve) => {
+        if (document.readyState === 'complete') {
+            resolve();
+            return;
+        }
+        const w = typeof window !== 'undefined' ? window : null;
+        if (w && typeof w.addEventListener === 'function') {
+            w.addEventListener('load', () => resolve(), { once: true });
+        } else {
+            resolve();
+        }
+    });
+    await new Promise((resolve) => {
+        if (typeof requestAnimationFrame !== 'function') {
+            resolve();
+            return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+}
+
+/**
+ * @param {function(...args): void} report
+ * @param {{ allIds: string[], indexCount: number }} meta
+ * @param {string[]} missing
+ */
+function emitSurfaceDomAuditResults(report, meta, missing) {
+    const r = (level, title, message, extra = {}) =>
+        report(level, title, message, { system: 'ui_surface', ...extra });
+
+    if (meta.dataHealthAttributeOrphans > 0) {
+        r(
+            'warn',
+            'Поверхность UI / автоподхват',
+            `${meta.dataHealthAttributeOrphans} узел(ов) с атрибутом ${HEALTH_SURFACE_DATA_ATTR} без id — задайте id, чтобы элемент вошёл в мониторинг.`,
+        );
+    }
+
+    if (!missing.length) {
+        r(
+            'info',
+            'Поверхность UI / DOM',
+            `Полный аудит: ${meta.allIds.length} id (index ${meta.indexCount} + рантайм + динамика), все в DOM.`,
+        );
+        return;
+    }
+
+    const buckets = bucketMissingIdsByZone(missing);
+    for (const [zone, ids] of Object.entries(buckets)) {
+        const sample = ids.slice(0, 16).join(', ');
+        const more = ids.length > 16 ? ` … (+${ids.length - 16})` : '';
+        r(
+            'error',
+            `Поверхность UI / DOM / ${zone}`,
+            `Отсутствуют ${ids.length} элемент(ов): ${sample}${more}`,
+        );
+    }
+}
+
+/**
  * @param {object} deps
  * @param {function(...args): void} report — (level, title, message, meta?)
  * @param {function(Promise, number): Promise} [runWithTimeout]
@@ -234,6 +299,8 @@ export async function runSearchUiDualContourCheck(deps, report, runWithTimeout, 
 
 /**
  * Полный DOM-аудит: все id из index (сгенерированный список) + рантайм + data-health-surface.
+ * Синхронный контур (юнит-тесты, ручной вызов). Для живого приложения предпочтительнее
+ * {@link runFullSurfaceDomAuditAsync} из runUiSurfaceHealthSuite.
  * @param {function(...args): void} report
  */
 export function runFullSurfaceDomAudit(report) {
@@ -246,34 +313,51 @@ export function runFullSurfaceDomAudit(report) {
     }
 
     const meta = resolveMonitoredDomIds(document);
-    if (meta.dataHealthAttributeOrphans > 0) {
-        r(
-            'warn',
-            'Поверхность UI / автоподхват',
-            `${meta.dataHealthAttributeOrphans} узел(ов) с атрибутом ${HEALTH_SURFACE_DATA_ATTR} без id — задайте id, чтобы элемент вошёл в мониторинг.`,
-        );
-    }
-
     const missing = meta.allIds.filter((id) => !document.getElementById(id));
-    if (!missing.length) {
-        r(
-            'info',
-            'Поверхность UI / DOM',
-            `Полный аудит: ${meta.allIds.length} id (index ${meta.indexCount} + рантайм + динамика), все в DOM.`,
-        );
+    emitSurfaceDomAuditResults(report, meta, missing);
+}
+
+/**
+ * Асинхронный DOM-аудит с резервным контуром: ожидание load + 2× rAF и повторная выборка missing.
+ * @param {function(...args): void} report
+ */
+export async function runFullSurfaceDomAuditAsync(report) {
+    const r = (level, title, message, extra = {}) =>
+        report(level, title, message, { system: 'ui_surface', ...extra });
+
+    if (typeof document === 'undefined') {
+        r('warn', 'Поверхность UI / DOM', 'document недоступен.');
         return;
     }
 
-    const buckets = bucketMissingIdsByZone(missing);
-    for (const [zone, ids] of Object.entries(buckets)) {
-        const sample = ids.slice(0, 16).join(', ');
-        const more = ids.length > 16 ? ` … (+${ids.length - 16})` : '';
+    await waitForUiSurfaceDomProbeReady();
+    const meta = resolveMonitoredDomIds(document);
+    let missing = meta.allIds.filter((id) => !document.getElementById(id));
+
+    if (missing.length > 0) {
         r(
-            'error',
-            `Поверхность UI / DOM / ${zone}`,
-            `Отсутствуют ${ids.length} элемент(ов): ${sample}${more}`,
+            'info',
+            'Поверхность UI / DOM',
+            `Первичный проход: не найдено ${missing.length} id — повтор после отложенного кадра (резервный контур).`,
         );
+        await new Promise((resolve) => {
+            if (typeof requestAnimationFrame !== 'function') {
+                resolve();
+                return;
+            }
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        missing = meta.allIds.filter((id) => !document.getElementById(id));
+        if (missing.length === 0) {
+            r(
+                'info',
+                'Поверхность UI / DOM',
+                'После резервного кадра все id обнаружены (устранена гонка с парсингом/вставкой DOM).',
+            );
+        }
     }
+
+    emitSurfaceDomAuditResults(report, meta, missing);
 }
 
 /**
@@ -348,7 +432,7 @@ export async function runUiSurfaceHealthSuite(deps, report, runWithTimeout, opti
         );
     }
 
-    runFullSurfaceDomAudit(report);
+    await runFullSurfaceDomAuditAsync(report);
     if (intrusiveUi) {
         runFullInteractiveLayoutProbe(report);
     } else {

@@ -64,4 +64,32 @@ describe('background-status-hud', () => {
         expect(info.textContent).toMatch(/ERROR/);
         expect(info.textContent).toContain('Инициализация завершена с ошибками');
     });
+
+    it('при ошибках диагностики (без сбоя app-init) не показывает OK и «Система в норме», если watchdog ещё ok', () => {
+        hud.startTask('app-init', 'App', { total: 1 });
+        hud.finishTask('app-init', true);
+        hud.setWatchdogStatus({
+            severity: 'ok',
+            statusText: 'Система в норме',
+            running: false,
+            lastRunAt: Date.now(),
+        });
+        hud.setDiagnostics({
+            errors: [
+                {
+                    title: 'Поверхность UI / DOM',
+                    message: 'Отсутствуют 1 элемент(ов): noInnLink',
+                    system: 'ui_surface',
+                },
+            ],
+            warnings: [],
+            checks: [],
+            updatedAt: 'test',
+        });
+        const info = document.getElementById('bg-hud-watchdog-info');
+        expect(info).toBeTruthy();
+        expect(info.textContent).not.toContain('Система в норме');
+        expect(info.textContent).toMatch(/ERROR/);
+        expect(info.textContent).toContain('Обнаружены ошибки самотестирования');
+    });
 });
