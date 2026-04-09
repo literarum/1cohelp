@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Переопределения встроенных учебных треков (IndexedDB). Без записи — используется TRAINING_TRACKS из кода.
+ * Переопределения встроенных учебных треков (IndexedDB). Без записи — используется TRAINING_TRACKS из кода (по умолчанию пустой каталог).
  */
 
 import { TRAINING_TRACKS } from './training-curriculum.js';

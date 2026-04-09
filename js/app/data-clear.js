@@ -83,6 +83,22 @@ export async function clearAllApplicationData(progressCallback) {
             localStorage.removeItem(key);
             console.log(`Removed prefixed key from LocalStorage: ${key}`);
         });
+
+        // Резервные зеркала «Учёбы» и прочие ключи пространства имён copilot1co: (ниже по регистру, чем Copilot1CO_)
+        // — иначе после deleteDatabase() данные восстанавливаются из localStorage при следующей загрузке.
+        const copilotNsPrefix = 'copilot1co:';
+        const keysCopilotNamespace = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(copilotNsPrefix)) {
+                keysCopilotNamespace.push(key);
+            }
+        }
+        keysCopilotNamespace.forEach((key) => {
+            localStorage.removeItem(key);
+            console.log(`Removed copilot1co-namespaced key from LocalStorage: ${key}`);
+        });
+
         console.log('LocalStorage очищен.');
     } catch (error) {
         console.error('Error clearing LocalStorage:', error);

@@ -69,17 +69,15 @@ describe('training-store', () => {
         expect(n.trackProgress.a).toBeDefined();
     });
 
-    it('normalizeHiddenBuiltinTrackIds keeps only known builtin ids', () => {
-        expect(normalizeHiddenBuiltinTrackIds(['onboarding-safety', 'bogus', null])).toEqual([
-            'onboarding-safety',
-        ]);
+    it('normalizeHiddenBuiltinTrackIds keeps only known builtin ids (empty when catalog empty)', () => {
+        expect(normalizeHiddenBuiltinTrackIds(['legacy-builtin', 'bogus', null])).toEqual([]);
     });
 
     it('normalizeTrainingProgress normalizes hiddenBuiltinTrackIds', () => {
         const n = normalizeTrainingProgress({
-            hiddenBuiltinTrackIds: ['onboarding-safety', 'not-a-real-builtin'],
+            hiddenBuiltinTrackIds: ['legacy-builtin', 'not-a-real-builtin'],
         });
-        expect(n.hiddenBuiltinTrackIds).toEqual(['onboarding-safety']);
+        expect(n.hiddenBuiltinTrackIds).toEqual([]);
     });
 
     it('mergeTrackProgressMaps unions ack, quizPassed, max quizRuns', () => {
@@ -239,18 +237,13 @@ describe('applyQuizRetake', () => {
 });
 
 describe('training-curriculum', () => {
-    it('tracks have textbook steps and quizzes', () => {
-        expect(TRAINING_TRACKS.length).toBeGreaterThan(0);
-        const t = TRAINING_TRACKS[0];
-        expect(t.steps.length).toBeGreaterThan(0);
-        expect(t.steps[0].quiz?.length).toBeGreaterThan(0);
+    it('ships with empty builtin catalog (no default textbook cards)', () => {
+        expect(TRAINING_TRACKS.length).toBe(0);
     });
 
-    it('getTrackById / getStepById', () => {
-        const tr = getTrackById('onboarding-safety');
-        expect(tr?.title).toBeTruthy();
-        const st = getStepById('onboarding-safety', 's1');
-        expect(st?.title).toBeTruthy();
+    it('getTrackById / getStepById return null for unknown ids', () => {
+        expect(getTrackById('no-such-track')).toBeNull();
+        expect(getStepById('no-such-track', 's1')).toBeNull();
     });
 
     it('trainingStepKey stable', () => {
