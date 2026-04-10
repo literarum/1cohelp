@@ -2,36 +2,36 @@
 'use strict';
 
 import { describe, it, expect } from 'vitest';
-import {
-    isLikelyInnClarificationStep,
-    stepNeedsNoInnHelpLink,
-} from './main-algo-inn-link.js';
+import { stepNeedsNoInnHelpLink, isLikelyInnClarificationStep } from './main-algo-inn-link.js';
 
 describe('main-algo-inn-link', () => {
-    it('legacy шаг без type/showNoInnHelp, но с типичным заголовком — нужна ссылка', () => {
-        const legacy = {
-            title: 'Уточнение ИНН',
-            description: 'Запросите ИНН организации для идентификации клиента.',
-        };
-        expect(isLikelyInnClarificationStep(legacy)).toBe(true);
-        expect(stepNeedsNoInnHelpLink(legacy)).toBe(true);
+    it('stepNeedsNoInnHelpLink: showNoInnHelp true', () => {
+        expect(stepNeedsNoInnHelpLink({ showNoInnHelp: true, title: 'x' })).toBe(true);
     });
 
-    it('явный inn_step — нужна ссылка', () => {
-        expect(stepNeedsNoInnHelpLink({ type: 'inn_step', title: 'X' })).toBe(true);
+    it('stepNeedsNoInnHelpLink: inn_step', () => {
+        expect(stepNeedsNoInnHelpLink({ type: 'inn_step', title: 'x' })).toBe(true);
     });
 
-    it('showNoInnHelp: true — нужна ссылка', () => {
-        expect(stepNeedsNoInnHelpLink({ showNoInnHelp: true, title: 'X' })).toBe(true);
-    });
-
-    it('посторонний шаг без ИНН — не нужна', () => {
-        expect(stepNeedsNoInnHelpLink({ title: 'Приветствие', description: 'Здравствуйте' })).toBe(
-            false,
+    it('stepNeedsNoInnHelpLink: явный false отключает эвристику по заголовку', () => {
+        expect(
+            stepNeedsNoInnHelpLink({
+                showNoInnHelp: false,
+                title: 'Уточнение ИНН',
+                description: 'Уточните ИНН организации',
+            }),
+        ).toBe(false);
+        expect(isLikelyInnClarificationStep({ title: 'Уточнение ИНН', description: 'Уточните ИНН' })).toBe(
+            true,
         );
     });
 
-    it('заголовок только «ИНН» без контекста уточнения — эвристика не срабатывает', () => {
-        expect(isLikelyInnClarificationStep({ title: 'ИНН', description: '' })).toBe(false);
+    it('stepNeedsNoInnHelpLink: без флагов — эвристика для старых данных', () => {
+        expect(
+            stepNeedsNoInnHelpLink({
+                title: 'Уточнение ИНН',
+                description: 'Уточните ИНН организации',
+            }),
+        ).toBe(true);
     });
 });

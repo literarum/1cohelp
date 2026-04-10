@@ -4,6 +4,10 @@
  * Команды открытия модальных окон из палитры: основной вызов (window.*) и резерв — клик по кнопке в DOM.
  */
 
+import { NavigationSource } from '../contextual-back-navigation.js';
+
+const NAV_FROM_PALETTE = { navigationSource: NavigationSource.PROGRAMMATIC };
+
 function normalizeText(s) {
     if (typeof s !== 'string') return '';
     return s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -53,7 +57,7 @@ function tryClickIds(ids) {
  */
 function openXmlCertManagerArea(deps) {
     if (typeof deps.setActiveTab === 'function') {
-        deps.setActiveTab('xmlAnalyzer');
+        deps.setActiveTab('xmlAnalyzer', false, NAV_FROM_PALETTE);
     }
     requestAnimationFrame(() => {
         document.getElementById('xmlAnalyzerCertManagerWrapper')?.scrollIntoView({

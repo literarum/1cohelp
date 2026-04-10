@@ -12,6 +12,10 @@
  */
 
 import { INDEX_HTML_UNIQUE_ELEMENT_IDS } from './ui-health-index-ids.js';
+import { stepNeedsNoInnHelpLink } from '../components/main-algo-inn-link.js';
+
+/** id ссылки «нет ИНН» в главном алгоритме: в index.html есть заглушка, после render — только при необходимости шагов. */
+export const NO_INN_LINK_DOM_ID = 'noInnLink';
 
 /** Атрибут для автоматического включения элемента (с id) в мониторинг DOM. */
 export const HEALTH_SURFACE_DATA_ATTR = 'data-health-surface';
@@ -77,6 +81,7 @@ export function resolveMonitoredDomIds(doc) {
  */
 export function inferDomZoneLabel(id) {
     if (id === 'bg-status-hud') return 'HUD / фоновый статус';
+    if (id === NO_INN_LINK_DOM_ID) return 'Главная / главный алгоритм';
     if (/Tab$/.test(id) || id === 'moreTabsBtn' || id === 'moreTabsDropdown')
         return 'Панель вкладок';
     if (
@@ -129,6 +134,29 @@ export function inferDomZoneLabel(id) {
     }
     if (id.startsWith('scroll') && id.includes('Btn')) return 'Плавающая прокрутка';
     return 'Прочая разметка';
+}
+
+/**
+ * Нужен ли в DOM стабильный #noInnLink по данным шагов главного алгоритма (согласовано с renderMainAlgorithm).
+ * @param {unknown} mainSteps
+ * @returns {boolean}
+ */
+export function mainStepsRequireNoInnHelpLinkInDom(mainSteps) {
+    if (!Array.isArray(mainSteps)) return false;
+    return mainSteps.some((s) => stepNeedsNoInnHelpLink(s));
+}
+
+/**
+ * Убирает из списка «отсутствующих» id, необязательные при текущих данных главного алгоритма.
+ * @param {string[]} missingIds
+ * @param {unknown} mainSteps — algorithms.main.steps или null/undefined если недоступно
+ * @returns {string[]}
+ */
+export function filterDomAuditMissingIdsForConditionalMainAlgo(missingIds, mainSteps) {
+    if (!Array.isArray(missingIds) || missingIds.length === 0) return missingIds;
+    if (!missingIds.includes(NO_INN_LINK_DOM_ID)) return missingIds;
+    if (mainStepsRequireNoInnHelpLinkInDom(mainSteps)) return missingIds;
+    return missingIds.filter((id) => id !== NO_INN_LINK_DOM_ID);
 }
 
 /**

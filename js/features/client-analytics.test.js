@@ -3,12 +3,70 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     pluralRuFiles,
+    pluralRuAppeals,
+    groupClientAnalyticsRecordsForDisplay,
     buildClientAnalyticsSearchIndexLine,
     filterClientAnalyticsRecordsByQuery,
     buildClientAnalyticsStructureSignature,
     decideClientAnalyticsDuplicateReason,
     navigateToBlacklistByInn,
 } from './client-analytics.js';
+
+describe('client-analytics pluralRuAppeals', () => {
+    it('declines appeal count in Russian', () => {
+        expect(pluralRuAppeals(1)).toBe('1 обращение');
+        expect(pluralRuAppeals(2)).toBe('2 обращения');
+        expect(pluralRuAppeals(4)).toBe('4 обращения');
+        expect(pluralRuAppeals(5)).toBe('5 обращений');
+        expect(pluralRuAppeals(11)).toBe('11 обращений');
+        expect(pluralRuAppeals(21)).toBe('21 обращение');
+        expect(pluralRuAppeals(22)).toBe('22 обращения');
+    });
+});
+
+describe('client-analytics groupClientAnalyticsRecordsForDisplay', () => {
+    it('merges records with the same normalized INN into one stack', () => {
+        const { innStacks, noInnRecords } = groupClientAnalyticsRecordsForDisplay([
+            {
+                id: 1,
+                inn: '7707083893',
+                uploadedAt: '2026-01-01T10:00:00.000Z',
+                question: 'Первый',
+            },
+            {
+                id: 2,
+                inn: 'ИНН 7707083893',
+                uploadedAt: '2026-02-01T10:00:00.000Z',
+                question: 'Второй',
+            },
+        ]);
+        expect(noInnRecords).toHaveLength(0);
+        expect(innStacks).toHaveLength(1);
+        expect(innStacks[0].innKey).toBe('7707083893');
+        expect(innStacks[0].records.map((r) => r.id)).toEqual([2, 1]);
+    });
+
+    it('keeps distinct INNs as separate stacks and sorts stacks by newest appeal', () => {
+        const { innStacks } = groupClientAnalyticsRecordsForDisplay([
+            { id: 1, inn: '1111111111', uploadedAt: '2026-01-05T00:00:00.000Z', question: 'a' },
+            { id: 2, inn: '2222222222', uploadedAt: '2026-01-10T00:00:00.000Z', question: 'b' },
+            { id: 3, inn: '1111111111', uploadedAt: '2026-01-03T00:00:00.000Z', question: 'c' },
+        ]);
+        expect(innStacks).toHaveLength(2);
+        expect(innStacks[0].innKey).toBe('2222222222');
+        expect(innStacks[1].innKey).toBe('1111111111');
+        expect(innStacks[1].records.map((r) => r.id)).toEqual([1, 3]);
+    });
+
+    it('places records without extractable INN into noInnRecords', () => {
+        const { innStacks, noInnRecords } = groupClientAnalyticsRecordsForDisplay([
+            { id: 1, inn: '', phones: ['79001234567'], uploadedAt: '2026-01-01T00:00:00.000Z' },
+        ]);
+        expect(innStacks).toHaveLength(0);
+        expect(noInnRecords).toHaveLength(1);
+        expect(noInnRecords[0].id).toBe(1);
+    });
+});
 
 describe('client-analytics pluralRuFiles', () => {
     it('declines file count in Russian', () => {
@@ -137,7 +195,11 @@ describe('client-analytics blacklist navigation', () => {
         const setActiveTabFn = vi.fn(async () => {});
         const result = await navigateToBlacklistByInn('ИНН: 7707083893', { setActiveTabFn });
         expect(result).toBe(true);
-        expect(setActiveTabFn).toHaveBeenCalledWith('blacklistedClients', true);
+        expect(setActiveTabFn).toHaveBeenCalledWith(
+            'blacklistedClients',
+            true,
+            expect.objectContaining({ navigationSource: 'programmatic' }),
+        );
         expect(dispatchEvent).toHaveBeenCalledTimes(1);
         expect(focus).toHaveBeenCalledTimes(1);
     });

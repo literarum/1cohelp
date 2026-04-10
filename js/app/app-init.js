@@ -13,6 +13,8 @@ import {
 } from '../config/revocation-sources.js';
 import { getCoreService, notify } from '../core/kernel.js';
 import { initBackupReminderScheduler } from '../features/backup-reminder.js';
+import { initContextualBackNavigation } from '../features/contextual-back-navigation.js';
+import { tabsConfig } from '../config.js';
 
 let dependencies = {};
 
@@ -847,6 +849,23 @@ export async function appInit(context = 'normal') {
             } catch (finalUIError) {
                 finalUIInitFailed = true;
                 console.error('[appInit V3] ✗ Ошибка в финальной инициализации UI:', finalUIError);
+            }
+            try {
+                const sectionExtraTitles = {
+                    favorites: 'Избранное',
+                    reminders: 'Напоминания',
+                    uiSettingsControl: 'Настройки интерфейса',
+                };
+                initContextualBackNavigation({
+                    getSectionTitle: (id) =>
+                        sectionExtraTitles[id] ||
+                        tabsConfig.find((t) => t.id === id)?.name ||
+                        id,
+                    showReglamentsForCategory,
+                    setActiveTab,
+                });
+            } catch (ctxBackError) {
+                console.error('[appInit V3] ✗ Ошибка инициализации контекстной навигации «назад»:', ctxBackError);
             }
             updateTotalAppInitProgress(STAGE_WEIGHTS_APP_INIT.FINAL_UI, 'FinalUI');
 

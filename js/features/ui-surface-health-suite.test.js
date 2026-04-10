@@ -11,6 +11,7 @@ import {
     runUiSurfaceHealthSuite,
 } from './ui-surface-health-suite.js';
 import { inferSystemFromTitle } from './health-report-format.js';
+import * as uiHealthSurfaceRegistry from './ui-health-surface-registry.js';
 
 describe('ui-surface-health-suite', () => {
     beforeEach(() => {
@@ -64,6 +65,29 @@ describe('ui-surface-health-suite', () => {
             const err = report.mock.calls.find((c) => c[0] === 'error');
             expect(err).toBeDefined();
             expect(err[2]).toMatch(/Отсутствуют/);
+        });
+
+        it('не считает ошибкой только отсутствие noInnLink если шаги не требуют ссылки', () => {
+            document.body.innerHTML = '';
+            const report = vi.fn();
+            const spy = vi.spyOn(uiHealthSurfaceRegistry, 'resolveMonitoredDomIds').mockReturnValue({
+                allIds: [uiHealthSurfaceRegistry.NO_INN_LINK_DOM_ID],
+                indexCount: 1,
+                runtimeExtraCount: 0,
+                dynamicIds: [],
+                dataHealthAttributeOrphans: 0,
+            });
+            try {
+                runFullSurfaceDomAudit(report, { getMainAlgorithmSteps: () => [{ title: 'Шаг' }] });
+                const err = report.mock.calls.find((c) => c[0] === 'error');
+                expect(err).toBeUndefined();
+                const ok = report.mock.calls.find(
+                    (c) => c[0] === 'info' && typeof c[2] === 'string' && c[2].includes('все в DOM'),
+                );
+                expect(ok).toBeDefined();
+            } finally {
+                spy.mockRestore();
+            }
         });
     });
 

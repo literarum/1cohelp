@@ -28,6 +28,7 @@ import {
     frogBadgeLabelsForLevel,
     normalizeInnForBlacklistLookup,
 } from './client-analytics-blacklist-crosscheck.js';
+import { NavigationSource } from './contextual-back-navigation.js';
 
 let deps = {
     showNotification: null,
@@ -82,6 +83,53 @@ export function pluralRuFiles(n) {
     if (m10 === 1 && m100 !== 11) return `${n} файл`;
     if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return `${n} файла`;
     return `${n} файлов`;
+}
+
+/**
+ * @param {number} n
+ * @returns {string}
+ */
+export function pluralRuAppeals(n) {
+    const abs = Math.abs(n);
+    const m10 = abs % 10;
+    const m100 = abs % 100;
+    if (m10 === 1 && m100 !== 11) return `${n} обращение`;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return `${n} обращения`;
+    return `${n} обращений`;
+}
+
+/**
+ * Одна карточка в списке на каждый нормализованный ИНН; записи без извлекаемого ИНН — по одной карточке.
+ *
+ * @param {object[]} records
+ * @returns {{ innStacks: Array<{ innKey: string, records: object[] }>, noInnRecords: object[] }}
+ */
+export function groupClientAnalyticsRecordsForDisplay(records) {
+    const innStacks = new Map();
+    const noInnRecords = [];
+    const list = Array.isArray(records) ? records.filter((r) => r && r.id != null) : [];
+    for (const r of list) {
+        const innKey = normalizeInnForBlacklistLookup(r.inn);
+        if (!innKey) {
+            noInnRecords.push(r);
+            continue;
+        }
+        if (!innStacks.has(innKey)) innStacks.set(innKey, []);
+        innStacks.get(innKey).push(r);
+    }
+    const sortByUploadedDesc = (a, b) =>
+        new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime();
+    for (const arr of innStacks.values()) {
+        arr.sort(sortByUploadedDesc);
+    }
+    noInnRecords.sort(sortByUploadedDesc);
+    const stacks = [...innStacks.entries()].map(([innKey, recs]) => ({ innKey, records: recs }));
+    stacks.sort((a, b) => {
+        const ta = new Date(a.records[0]?.uploadedAt || 0).getTime();
+        const tb = new Date(b.records[0]?.uploadedAt || 0).getTime();
+        return tb - ta;
+    });
+    return { innStacks: stacks, noInnRecords };
 }
 
 function normalizeSearchText(value) {
@@ -672,6 +720,126 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0) {
 }
 
 /**
+ * @param {string} [iso]
+ * @returns {string}
+ */
+function formatClientAnalyticsRuDateTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/**
+ * Карточка: все обращения с одним ИНН (история открывается в модалке).
+ * @param {{ innKey: string, records: object[] }} stack
+ * @param {'cards'|'list'} viewMode
+ * @param {number} [blacklistLevel]
+ * @returns {HTMLElement}
+ */
+function createInnStackCardElement(stack, viewMode, blacklistLevel = 0) {
+    const rec = stack.records[0];
+    const n = stack.records.length;
+    const el = document.createElement('article');
+    const bl =
+        typeof blacklistLevel === 'number' && blacklistLevel >= 1 && blacklistLevel <= 3
+            ? blacklistLevel
+            : 0;
+    const cardClasses = [...CARD_CLASSES];
+    if (bl === 1) cardClasses.push('client-analytics-card--frog-l1');
+    if (bl === 2) cardClasses.push('client-analytics-card--frog-l2');
+    if (bl === 3) cardClasses.push('client-analytics-card--frog-l3');
+    el.className = cardClasses.join(' ');
+    el.dataset.innKey = stack.innKey;
+    el.dataset.role = 'client-analytics-item';
+    el.dataset.stackCount = String(n);
+    if (bl > 0) {
+        el.dataset.blacklistLevel = String(bl);
+    }
+    let title;
+    let titlePlain;
+    if (rec.inn) {
+        title = `ИНН ${escapeHtml(rec.inn)}${rec.kpp ? ` · КПП ${escapeHtml(rec.kpp)}` : ''}`;
+        titlePlain = `ИНН ${rec.inn}${rec.kpp ? ` · КПП ${rec.kpp}` : ''}`;
+    } else {
+        title = `ИНН ${escapeHtml(stack.innKey)}`;
+        titlePlain = `ИНН ${stack.innKey}`;
+    }
+    const appealsBadge =
+        n > 1
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 bg-primary/10 text-primary dark:bg-primary/20 dark:text-blue-100" title="Число обращений по этому ИНН в базе">${escapeHtml(
+                  pluralRuAppeals(n),
+              )}</span>`
+            : '';
+    if (bl > 0) {
+        el.setAttribute(
+            'aria-label',
+            `${titlePlain}. ${pluralRuAppeals(n)}. ${frogBadgeLabelsForLevel(bl).aria}.`,
+        );
+    } else {
+        el.setAttribute('aria-label', `${titlePlain}. ${pluralRuAppeals(n)}. Открыть историю обращений.`);
+    }
+    const frogBadge =
+        bl > 0 && stack.innKey
+            ? `<button type="button" class="inline-flex items-center p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded" data-action="open-blacklist-by-inn" data-inn="${escapeHtml(
+                  rec.inn || stack.innKey,
+              )}" title="Открыть запись в черном списке по ИНН">${frogBlacklistBadgeHtml(bl)}</button>`
+            : bl > 0
+              ? frogBlacklistBadgeHtml(bl)
+              : '';
+    const phones = (rec.phones || []).length ? escapeHtml(rec.phones.join(', ')) : '—';
+    const emails = (rec.emails || []).length ? escapeHtml(rec.emails.join(', ')) : '—';
+    const q = escapeHtml((rec.question || '').slice(0, 280));
+    const fn = escapeHtml(rec.sourceFileName || '');
+    const updated = formatClientAnalyticsRuDateTime(rec.uploadedAt);
+    const historyHint =
+        n > 1
+            ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Последнее: ${escapeHtml(updated)} · нажмите карточку для полной истории</p>`
+            : `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Обновлено: ${escapeHtml(updated)}</p>`;
+    const delBtn =
+        n === 1
+            ? viewMode === 'list'
+                ? `<button type="button" class="${CA_LIST_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить запись" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>`
+                : `<div class="client-analytics-card-actions absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto" data-role="actions">
+  <button type="button" class="${CA_CARD_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить единственное обращение" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>
+</div>`
+            : viewMode === 'list'
+              ? ''
+              : '';
+    el.innerHTML =
+        viewMode === 'list'
+            ? `<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+  <div class="min-w-0 flex-1 pr-2">
+    <div class="flex flex-wrap items-center gap-2">
+    <h3 class="item-title font-semibold text-gray-900 dark:text-gray-100">${title}</h3>
+    ${appealsBadge}
+    ${frogBadge}
+    </div>
+    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Тел.: ${phones}</p>
+    <p class="text-sm text-gray-600 dark:text-gray-400">E-mail: ${emails}</p>
+    <p class="text-sm mt-1 line-clamp-2">${q || '—'}</p>
+    <p class="text-xs text-gray-500 mt-1">${fn}</p>
+    ${historyHint}
+  </div>
+  ${n === 1 ? `<div class="flex gap-2 shrink-0 self-start" data-role="actions">${delBtn}</div>` : '<div class="shrink-0 self-start w-10 sm:w-0" aria-hidden="true"></div>'}
+</div>`
+            : `${n === 1 ? delBtn : ''}
+<div class="${n === 1 ? 'pr-14' : ''}">
+  <div class="flex flex-wrap items-start gap-2">
+  <h3 class="item-title font-semibold text-base text-gray-900 dark:text-gray-100">${title}</h3>
+  ${appealsBadge}
+  ${frogBadge}
+  </div>
+  <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Тел.: ${phones}</p>
+  <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">E-mail: ${emails}</p>
+  <p class="text-sm mt-2 line-clamp-4">${q || '—'}</p>
+  <p class="text-xs text-gray-500 mt-3">${fn}</p>
+  ${historyHint}
+</div>`;
+    return el;
+}
+
+/**
  * Рендер списка записей и метаданных файлов.
  */
 export async function renderClientAnalyticsPage() {
@@ -700,13 +868,16 @@ export async function renderClientAnalyticsPage() {
         });
     const totalRecords = sorted.length;
     const filtered = filterClientAnalyticsRecordsByQuery(sorted, clientAnalyticsSearchQuery);
+    const groupedAll = groupClientAnalyticsRecordsForDisplay(sorted);
+    const groupedFiltered = groupClientAnalyticsRecordsForDisplay(filtered);
+    const cardCountAll = groupedAll.innStacks.length + groupedAll.noInnRecords.length;
+    const cardCountFiltered = groupedFiltered.innStacks.length + groupedFiltered.noInnRecords.length;
     const countEl = document.getElementById('clientAnalyticsRecordCount');
     if (countEl) {
-        const found = filtered.length;
         countEl.textContent =
             clientAnalyticsSearchQuery.trim().length > 0
-                ? `Карточек: ${totalRecords} · найдено: ${found}`
-                : `Карточек в базе: ${totalRecords}`;
+                ? `Карточек: ${cardCountAll} · по запросу: ${cardCountFiltered} (${filtered.length} обращ.)`
+                : `Карточек: ${cardCountAll} · обращений: ${totalRecords}`;
     }
 
     const viewMode =
@@ -723,7 +894,7 @@ export async function renderClientAnalyticsPage() {
         container.classList.add('gap-4', 'auto-rows-fr');
     }
 
-    if (filtered.length === 0) {
+    if (cardCountFiltered === 0) {
         container.innerHTML =
             clientAnalyticsSearchQuery.trim().length > 0
                 ? `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">По запросу «${escapeHtml(
@@ -732,7 +903,11 @@ export async function renderClientAnalyticsPage() {
                 : '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">Записей пока нет. Загрузите один или несколько .txt файлов выше.</p>';
     } else {
         const frag = document.createDocumentFragment();
-        for (const rec of filtered) {
+        for (const stack of groupedFiltered.innStacks) {
+            const blLevel = getBlacklistLevelForClientInn(stack.innKey, blacklistLevelByInn);
+            frag.appendChild(createInnStackCardElement(stack, viewMode, blLevel));
+        }
+        for (const rec of groupedFiltered.noInnRecords) {
             const blLevel = getBlacklistLevelForClientInn(rec.inn, blacklistLevelByInn);
             frag.appendChild(createRecordCardElement(rec, viewMode, blLevel));
         }
@@ -778,12 +953,141 @@ export async function renderClientAnalyticsPage() {
     }
 }
 
+/**
+ * Модалка: хронология всех обращений по одному ИНН (данные перечитываются из IndexedDB).
+ * @param {string} innKey нормализованный ИНН (10/12 цифр)
+ */
+export async function showClientAnalyticsInnHistoryModal(innKey) {
+    const key = normalizeInnForBlacklistLookup(innKey);
+    if (!key) return;
+
+    const modal = document.getElementById('clientAnalyticsDetailModal');
+    const body = document.getElementById('clientAnalyticsDetailBody');
+    const titleEl = document.getElementById('clientAnalyticsDetailTitle');
+    if (!modal || !body || !titleEl) return;
+
+    const all = await getAllFromIndexedDB('clientAnalyticsRecords');
+    const stack = all
+        .filter((r) => r && r.id != null && normalizeInnForBlacklistLookup(r.inn) === key)
+        .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
+    if (!stack.length) return;
+
+    deactivateModalFocus(modal);
+
+    let frogBannerHtml = '';
+    let maxBl = 0;
+    if (State.db) {
+        try {
+            const blEntries = await getAllFromIndexedDB('blacklistedClients');
+            const blMap = buildMaxBlacklistLevelByInnMap(blEntries);
+            for (const r of stack) {
+                const lv = getBlacklistLevelForClientInn(r.inn, blMap);
+                if (lv > maxBl) maxBl = lv;
+            }
+            if (maxBl > 0) {
+                const { short, aria } = frogBadgeLabelsForLevel(maxBl);
+                const live = maxBl === 3 ? 'assertive' : 'polite';
+                frogBannerHtml = `
+  <div class="client-analytics-frog-banner client-analytics-frog-banner--l${maxBl} mx-4 mt-4 mb-0 rounded-lg border px-3 py-2.5 text-sm" role="status" aria-live="${live}">
+    <p class="font-semibold m-0">${escapeHtml(short)}</p>
+    <p class="m-0 mt-1 opacity-90">${escapeHtml(aria)}</p>
+  </div>`;
+            }
+        } catch (e) {
+            console.warn('[client-analytics] сверка с чёрным списком в истории ИНН', e);
+        }
+    }
+
+    const displayInn = stack[0].inn || key;
+    titleEl.textContent = `ИНН ${displayInn} · ${pluralRuAppeals(stack.length)}`;
+
+    const rows = stack
+        .map((rec) => {
+            const when = formatClientAnalyticsRuDateTime(rec.uploadedAt);
+            const q = escapeHtml((rec.question || '—').slice(0, 2000));
+            const fn = escapeHtml(rec.sourceFileName || '—');
+            const item = rec.listItemIndex != null ? escapeHtml(String(rec.listItemIndex)) : '—';
+            const phones = escapeHtml((rec.phones || []).join(', ') || '—');
+            const emails = escapeHtml((rec.emails || []).join(', ') || '—');
+            const kpp = escapeHtml(rec.kpp || '—');
+            return `
+<li class="client-analytics-history-item rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/40 p-3">
+  <div class="flex flex-wrap items-start justify-between gap-2">
+    <div class="min-w-0 flex-1">
+      <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 m-0">${escapeHtml(when)}</p>
+      <p class="text-sm mt-1 whitespace-pre-wrap break-words m-0">${q}</p>
+    </div>
+    <button type="button" class="delete-ca-history-record shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500" data-ca-history-delete="${rec.id}" title="Удалить это обращение" aria-label="Удалить обращение от ${escapeHtml(when)}"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>
+  </div>
+  <dl class="mt-2 grid gap-1 text-xs text-gray-600 dark:text-gray-400">
+    <div class="flex flex-wrap gap-x-2"><dt class="font-medium text-gray-700 dark:text-gray-300">Файл</dt><dd class="m-0">${fn}</dd></div>
+    <div class="flex flex-wrap gap-x-2"><dt class="font-medium text-gray-700 dark:text-gray-300">Пункт</dt><dd class="m-0">${item}</dd></div>
+    <div class="flex flex-wrap gap-x-2"><dt class="font-medium text-gray-700 dark:text-gray-300">КПП</dt><dd class="m-0">${kpp}</dd></div>
+    <div class="flex flex-wrap gap-x-2"><dt class="font-medium text-gray-700 dark:text-gray-300">Тел.</dt><dd class="m-0">${phones}</dd></div>
+    <div class="flex flex-wrap gap-x-2"><dt class="font-medium text-gray-700 dark:text-gray-300">E-mail</dt><dd class="m-0">${emails}</dd></div>
+  </dl>
+</li>`;
+        })
+        .join('');
+
+    const detailInnBadgeHtml =
+        maxBl > 0
+            ? `<button type="button" class="inline-flex items-center p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded ml-2" data-action="open-blacklist-by-inn" data-inn="${escapeHtml(
+                  displayInn,
+              )}" title="Открыть запись в черном списке по ИНН">${frogBlacklistBadgeHtml(maxBl)}</button>`
+            : '';
+
+    body.innerHTML = `
+${frogBannerHtml}
+<div class="flex flex-col flex-1 min-h-0 px-4 pt-3 pb-2">
+  <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
+    <span>Обращения отсортированы от новых к старым.</span>${detailInnBadgeHtml}
+  </div>
+  <div class="client-analytics-detail-scroll flex-1 min-h-0 overflow-y-auto pb-2 custom-scrollbar">
+    <ol class="client-analytics-history-list space-y-3 list-none m-0 p-0">${rows}</ol>
+  </div>
+</div>`;
+
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden', 'modal-open');
+    activateModalFocus(modal);
+
+    const bindHistoryDeletes = () => {
+        body.querySelectorAll('[data-ca-history-delete]').forEach((btn) => {
+            btn.addEventListener('click', async (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const rid = parseInt(btn.getAttribute('data-ca-history-delete') || '', 10);
+                if (!Number.isFinite(rid)) return;
+                await deleteAnalyticsRecord(rid);
+                if (deps.showNotification) deps.showNotification('Обращение удалено', 'success');
+                await renderClientAnalyticsPage();
+                const again = await getAllFromIndexedDB('clientAnalyticsRecords');
+                const rest = again.filter(
+                    (r) => r && r.id != null && normalizeInnForBlacklistLookup(r.inn) === key,
+                );
+                if (!rest.length) {
+                    closeClientAnalyticsDetailModal();
+                } else {
+                    await showClientAnalyticsInnHistoryModal(key);
+                }
+            });
+        });
+    };
+    bindHistoryDeletes();
+}
+
 export async function navigateToBlacklistByInn(inn, options = {}) {
     const key = normalizeInnForBlacklistLookup(inn);
     if (!key) return false;
     const setTab = options.setActiveTabFn || (typeof window !== 'undefined' ? window.setActiveTab : null);
     if (typeof setTab === 'function') {
-        await Promise.resolve(setTab('blacklistedClients', true));
+        await Promise.resolve(
+            setTab('blacklistedClients', true, {
+                navigationSource: NavigationSource.PROGRAMMATIC,
+            }),
+        );
     }
     const applySearch = () => {
         const input = document.getElementById('blacklistSearchInput');
@@ -811,7 +1115,9 @@ export async function showClientAnalyticsDetailModal(recordId) {
     if (!rec) return;
     const modal = document.getElementById('clientAnalyticsDetailModal');
     const body = document.getElementById('clientAnalyticsDetailBody');
+    const titleEl = document.getElementById('clientAnalyticsDetailTitle');
     if (!modal || !body) return;
+    if (titleEl) titleEl.textContent = 'Карточка клиента';
 
     deactivateModalFocus(modal);
 
@@ -1022,9 +1328,15 @@ export function initClientAnalyticsUi() {
             return;
         }
         const card = e.target.closest('.client-analytics-card');
-        if (card && card.dataset.id && !e.target.closest('a[href]')) {
-            showClientAnalyticsDetailModal(parseInt(card.dataset.id, 10));
-            return;
+        if (card && !e.target.closest('a[href]')) {
+            if (card.dataset.innKey) {
+                void showClientAnalyticsInnHistoryModal(card.dataset.innKey);
+                return;
+            }
+            if (card.dataset.id) {
+                void showClientAnalyticsDetailModal(parseInt(card.dataset.id, 10));
+                return;
+            }
         }
         const delFile = e.target.closest('.delete-ca-file');
         if (delFile && delFile.dataset.fileId) {

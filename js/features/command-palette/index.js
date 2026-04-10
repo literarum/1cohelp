@@ -10,6 +10,9 @@ import { handleSearchResultClick } from '../search.js';
 import { executeModalPaletteCommand } from './modal-commands.js';
 import * as ui from './ui.js';
 import { getRecentIds, addRecentId, clearRecentIds, reorderByRecent } from './recent.js';
+import { NavigationSource } from '../contextual-back-navigation.js';
+
+const NAV_FROM_PALETTE = { navigationSource: NavigationSource.PROGRAMMATIC };
 
 let setActiveTab = null;
 let showAlgorithmDetail = null;
@@ -36,7 +39,8 @@ function selectResult(result) {
     }
 
     if (result.type === 'algorithm' && result.payload.algorithm && result.payload.section) {
-        if (typeof setActiveTab === 'function') setActiveTab(result.payload.section);
+        if (typeof setActiveTab === 'function')
+            setActiveTab(result.payload.section, false, NAV_FROM_PALETTE);
         setTimeout(() => {
             if (typeof showAlgorithmDetail === 'function') {
                 showAlgorithmDetail(result.payload.algorithm, result.payload.section);
@@ -142,7 +146,7 @@ function selectResult(result) {
     }
 
     if (result.payload.tabId && typeof setActiveTab === 'function') {
-        setActiveTab(result.payload.tabId);
+        setActiveTab(result.payload.tabId, false, NAV_FROM_PALETTE);
     }
 }
 

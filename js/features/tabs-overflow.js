@@ -6,6 +6,7 @@
  */
 
 import { State } from '../app/state.js';
+import { NavigationSource } from './contextual-back-navigation.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setTabsOverflowDependencies)
@@ -166,7 +167,9 @@ export function updateVisibleTabs() {
             dropdownItem.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (deps.setActiveTab) {
-                    deps.setActiveTab(dropdownItem.dataset.tabId);
+                    deps.setActiveTab(dropdownItem.dataset.tabId, false, {
+                        navigationSource: NavigationSource.TAB_BAR,
+                    });
                 }
                 if (moreTabsDropdown) moreTabsDropdown.classList.add('hidden');
             });

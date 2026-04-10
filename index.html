@@ -94,8 +94,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260409-232557-616fed0"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260409-232557-616fed0"></script>
+        <script src="js/vendor-config.js?v=legacy-20260410-141302-5f58f6f"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260410-141302-5f58f6f"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,12 +161,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260409-232557-616fed0"
+            href="css/tailwind.generated.css?v=legacy-20260410-141302-5f58f6f"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260409-232557-616fed0" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260409-232557-616fed0" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260410-141302-5f58f6f" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260410-141302-5f58f6f" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -929,6 +929,28 @@
         <div class="container mx-auto px-4 py-6 max-w-7xl hidden" id="appContent">
             <div id="staticHeaderWrapper">
                 <header class="mb-4">
+                    <div
+                        id="contextualBackNav"
+                        class="hidden mb-2 min-h-0 transition-opacity duration-200 ease-out"
+                        aria-hidden="true"
+                    >
+                        <button
+                            type="button"
+                            id="contextualBackNavBtn"
+                            class="group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 pl-0 pr-2 text-left text-sm text-primary hover:bg-gray-100/80 dark:hover:bg-gray-800/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:opacity-40"
+                            disabled
+                            aria-label=""
+                        >
+                            <i
+                                class="fas fa-chevron-left text-xs opacity-80 transition-transform group-hover:-translate-x-px"
+                                aria-hidden="true"
+                            ></i>
+                            <span
+                                id="contextualBackNavLabel"
+                                class="truncate font-medium tracking-tight"
+                            ></span>
+                        </button>
+                    </div>
                     <div
                         class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-3"
                     >
@@ -2037,7 +2059,7 @@
                                 id="clientAnalyticsRecordCount"
                                 class="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-primary/10 text-primary dark:bg-primary/20"
                             >
-                                Карточек в базе: 0
+                                Карточек: 0 · обращений: 0
                             </span>
                         </div>
                         <div class="client-analytics-toolbar">
@@ -5462,7 +5484,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260409-232557-616fed0"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260409-232557-616fed0"></script>
+        <script type="module" src="./script.js?v=legacy-20260410-141302-5f58f6f"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260410-141302-5f58f6f"></script>
     </body>
 </html>

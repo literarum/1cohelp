@@ -11,6 +11,7 @@ import {
     resolveMonitoredDomIds,
     bucketMissingIdsByZone,
     probeVisibleInteractiveLayout,
+    filterDomAuditMissingIdsForConditionalMainAlgo,
 } from './ui-health-surface-registry.js';
 import { runFullButtonHealthSweep } from './ui-health-button-sweep.js';
 
@@ -83,6 +84,20 @@ export function detectSearchDropdownVerticalClip(panel) {
 
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * @param {{ getMainAlgorithmSteps?: () => unknown }} [opts]
+ * @returns {object[] | null}
+ */
+function resolveMainAlgorithmStepsForDomAudit(opts) {
+    if (!opts || typeof opts.getMainAlgorithmSteps !== 'function') return null;
+    try {
+        const raw = opts.getMainAlgorithmSteps();
+        return Array.isArray(raw) ? raw : null;
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -302,8 +317,9 @@ export async function runSearchUiDualContourCheck(deps, report, runWithTimeout, 
  * Синхронный контур (юнит-тесты, ручной вызов). Для живого приложения предпочтительнее
  * {@link runFullSurfaceDomAuditAsync} из runUiSurfaceHealthSuite.
  * @param {function(...args): void} report
+ * @param {{ getMainAlgorithmSteps?: () => unknown }} [opts] — для условных id главного алгоритма (#noInnLink)
  */
-export function runFullSurfaceDomAudit(report) {
+export function runFullSurfaceDomAudit(report, opts = {}) {
     const r = (level, title, message, extra = {}) =>
         report(level, title, message, { system: 'ui_surface', ...extra });
 
@@ -313,15 +329,18 @@ export function runFullSurfaceDomAudit(report) {
     }
 
     const meta = resolveMonitoredDomIds(document);
-    const missing = meta.allIds.filter((id) => !document.getElementById(id));
+    const mainSteps = resolveMainAlgorithmStepsForDomAudit(opts);
+    let missing = meta.allIds.filter((id) => !document.getElementById(id));
+    missing = filterDomAuditMissingIdsForConditionalMainAlgo(missing, mainSteps);
     emitSurfaceDomAuditResults(report, meta, missing);
 }
 
 /**
  * Асинхронный DOM-аудит с резервным контуром: ожидание load + 2× rAF и повторная выборка missing.
  * @param {function(...args): void} report
+ * @param {{ getMainAlgorithmSteps?: () => unknown }} [opts]
  */
-export async function runFullSurfaceDomAuditAsync(report) {
+export async function runFullSurfaceDomAuditAsync(report, opts = {}) {
     const r = (level, title, message, extra = {}) =>
         report(level, title, message, { system: 'ui_surface', ...extra });
 
@@ -332,7 +351,10 @@ export async function runFullSurfaceDomAuditAsync(report) {
 
     await waitForUiSurfaceDomProbeReady();
     const meta = resolveMonitoredDomIds(document);
-    let missing = meta.allIds.filter((id) => !document.getElementById(id));
+    const mainSteps = resolveMainAlgorithmStepsForDomAudit(opts);
+    const applyConditional = (raw) => filterDomAuditMissingIdsForConditionalMainAlgo(raw, mainSteps);
+
+    let missing = applyConditional(meta.allIds.filter((id) => !document.getElementById(id)));
 
     if (missing.length > 0) {
         r(
@@ -347,7 +369,7 @@ export async function runFullSurfaceDomAuditAsync(report) {
             }
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         });
-        missing = meta.allIds.filter((id) => !document.getElementById(id));
+        missing = applyConditional(meta.allIds.filter((id) => !document.getElementById(id)));
         if (missing.length === 0) {
             r(
                 'info',
@@ -432,7 +454,11 @@ export async function runUiSurfaceHealthSuite(deps, report, runWithTimeout, opti
         );
     }
 
-    await runFullSurfaceDomAuditAsync(report);
+    const domAuditOpts =
+        typeof deps?.getMainAlgorithmSteps === 'function'
+            ? { getMainAlgorithmSteps: deps.getMainAlgorithmSteps }
+            : {};
+    await runFullSurfaceDomAuditAsync(report, domAuditOpts);
     if (intrusiveUi) {
         runFullInteractiveLayoutProbe(report);
     } else {

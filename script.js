@@ -568,8 +568,8 @@ import {
 } from './js/components/tabs.js';
 
 // Раннее определение setActiveTab для передачи в setUIInitDependencies и initUI
-const setActiveTab = async (tabId, warningJustAccepted = false) =>
-    setActiveTabModule(tabId, warningJustAccepted);
+const setActiveTab = async (tabId, warningJustAccepted = false, navOptions = {}) =>
+    setActiveTabModule(tabId, warningJustAccepted, navOptions);
 
 // Client Data System
 import {
@@ -4244,6 +4244,8 @@ setBackgroundHealthTestsDependencies({
     performSearch,
     setActiveTab,
     loadingOverlayManager,
+    getMainAlgorithmSteps: () =>
+        algorithms?.main && Array.isArray(algorithms.main.steps) ? algorithms.main.steps : null,
 });
 console.log('[script.js] Зависимости фоновых health-тестов установлены');
 

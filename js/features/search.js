@@ -66,7 +66,15 @@ import {
     buildAppealNotesDigitQuerySuggestions,
     getNotesSourceForInnSearch,
 } from './client-notes-search-nav.js';
-import { showClientAnalyticsDetailModal } from './client-analytics.js';
+import {
+    showClientAnalyticsDetailModal,
+    showClientAnalyticsInnHistoryModal,
+} from './client-analytics.js';
+import { normalizeInnForBlacklistLookup } from './client-analytics-blacklist-crosscheck.js';
+import { NavigationSource } from './contextual-back-navigation.js';
+
+/** Навигация из поиска — сохраняем предыдущий экран для iOS-подобного «назад» */
+const NAV_FROM_SEARCH = { navigationSource: NavigationSource.PROGRAMMATIC };
 
 /** Доменные синонимы для расширения запроса (ФНС/СФР/Росстат и т.д.) — единый источник с палитрой команд */
 const QUERY_SYNONYMS = {
@@ -3583,7 +3591,7 @@ export async function handleSearchResultClick(result) {
     async function tryScrollAndHighlight(tabId, itemSelector, highlightTerm) {
         const tabSwitched = typeof setActiveTab === 'function' && State.currentSection !== tabId;
         if (tabSwitched && setActiveTab) {
-            await setActiveTab(tabId);
+            await setActiveTab(tabId, false, NAV_FROM_SEARCH);
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
         const findAndHighlight = () => {
@@ -3669,7 +3677,7 @@ export async function handleSearchResultClick(result) {
             case 'reglament': {
                 const reglamentData = await getFromIndexedDB('reglaments', parseInt(result.id, 10));
                 if (reglamentData && reglamentData.category) {
-                    if (setActiveTab) await setActiveTab('reglaments');
+                    if (setActiveTab) await setActiveTab('reglaments', false, NAV_FROM_SEARCH);
                     if (showReglamentsForCategory)
                         await showReglamentsForCategory(reglamentData.category);
                     await new Promise((r) => setTimeout(r, 350));
@@ -3684,7 +3692,7 @@ export async function handleSearchResultClick(result) {
                 break;
             }
             case 'extLink':
-                if (setActiveTab) await setActiveTab('extLinks');
+                if (setActiveTab) await setActiveTab('extLinks', false, NAV_FROM_SEARCH);
                 await tryScrollAndHighlight(
                     'extLinks',
                     `.ext-link-item[data-id="${result.id}"]`,
@@ -3692,7 +3700,7 @@ export async function handleSearchResultClick(result) {
                 );
                 break;
             case 'extLinkCategory':
-                if (setActiveTab) await setActiveTab('extLinks');
+                if (setActiveTab) await setActiveTab('extLinks', false, NAV_FROM_SEARCH);
                 {
                     const categoryFilter = document.getElementById('extLinkCategoryFilter');
                     const searchInput = document.getElementById('extLinkSearchInput');
@@ -3707,7 +3715,7 @@ export async function handleSearchResultClick(result) {
                 }
                 break;
             case 'link':
-                if (setActiveTab) await setActiveTab('links');
+                if (setActiveTab) await setActiveTab('links', false, NAV_FROM_SEARCH);
                 await tryScrollAndHighlight(
                     'links',
                     `.cib-link-item[data-id="${result.id}"]`,
@@ -3715,7 +3723,7 @@ export async function handleSearchResultClick(result) {
                 );
                 break;
             case 'sedoInfoItem':
-                if (setActiveTab) await setActiveTab('sedoTypes');
+                if (setActiveTab) await setActiveTab('sedoTypes', false, NAV_FROM_SEARCH);
                 if (window._highlightAndScrollSedoItem) {
                     await window._highlightAndScrollSedoItem(
                         result.sedoTableIndex,
@@ -3755,11 +3763,11 @@ export async function handleSearchResultClick(result) {
             }
             case 'section_link':
                 if (result.section && setActiveTab) {
-                    setActiveTab(result.section);
+                    setActiveTab(result.section, false, NAV_FROM_SEARCH);
                 }
                 break;
             case 'bookmarkFolder':
-                if (setActiveTab) await setActiveTab('bookmarks');
+                if (setActiveTab) await setActiveTab('bookmarks', false, NAV_FROM_SEARCH);
                 await tryScrollAndHighlight(
                     'bookmarks',
                     `.folder-item[data-folder-id="${result.id}"]`,
@@ -3767,32 +3775,49 @@ export async function handleSearchResultClick(result) {
                 );
                 break;
             case 'blacklistedClient':
-                if (setActiveTab) await setActiveTab('blacklistedClients');
+                if (setActiveTab) await setActiveTab('blacklistedClients', false, NAV_FROM_SEARCH);
                 await tryScrollAndHighlight(
                     'blacklistedClients',
                     `tr[data-entry-id="${result.id}"]`,
                     result.highlightTerm || result.title,
                 );
                 break;
-            case 'clientAnalyticsRecord':
-                if (setActiveTab) await setActiveTab('clientAnalytics');
-                await tryScrollAndHighlight(
-                    'clientAnalytics',
-                    `.client-analytics-card[data-id="${result.id}"]`,
-                    result.highlightTerm || result.title,
-                );
-                if (typeof showClientAnalyticsDetailModal === 'function') {
-                    showClientAnalyticsDetailModal(parseInt(result.id, 10));
+            case 'clientAnalyticsRecord': {
+                if (setActiveTab) await setActiveTab('clientAnalytics', false, NAV_FROM_SEARCH);
+                const rid = parseInt(result.id, 10);
+                const rec = await getFromIndexedDB('clientAnalyticsRecords', rid);
+                const innKey = rec ? normalizeInnForBlacklistLookup(rec.inn) : '';
+                if (innKey) {
+                    await tryScrollAndHighlight(
+                        'clientAnalytics',
+                        `.client-analytics-card[data-inn-key="${innKey}"]`,
+                        result.highlightTerm || result.title,
+                    );
+                    if (typeof showClientAnalyticsInnHistoryModal === 'function') {
+                        await showClientAnalyticsInnHistoryModal(innKey);
+                    }
+                } else {
+                    await tryScrollAndHighlight(
+                        'clientAnalytics',
+                        `.client-analytics-card[data-id="${result.id}"]`,
+                        result.highlightTerm || result.title,
+                    );
+                    if (typeof showClientAnalyticsDetailModal === 'function') {
+                        await showClientAnalyticsDetailModal(rid);
+                    }
                 }
                 break;
+            }
             case 'preference':
-                if (result.section && setActiveTab) await setActiveTab(result.section);
+                if (result.section && setActiveTab)
+                    await setActiveTab(result.section, false, NAV_FROM_SEARCH);
                 break;
             case 'uiSetting':
-                if (setActiveTab) await setActiveTab('uiSettingsControl');
+                if (setActiveTab) await setActiveTab('uiSettingsControl', false, NAV_FROM_SEARCH);
                 break;
             case 'section_fallback':
-                if (result.section && setActiveTab) await setActiveTab(result.section);
+                if (result.section && setActiveTab)
+                    await setActiveTab(result.section, false, NAV_FROM_SEARCH);
                 if (result.section && result.id) {
                     await tryScrollAndHighlight(
                         result.section,

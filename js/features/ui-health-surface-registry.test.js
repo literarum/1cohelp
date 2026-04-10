@@ -12,6 +12,9 @@ import {
     shouldSkipHealthInteractiveGeometry,
     probeVisibleInteractiveLayout,
     resolveInteractiveLayoutProbeElement,
+    NO_INN_LINK_DOM_ID,
+    mainStepsRequireNoInnHelpLinkInDom,
+    filterDomAuditMissingIdsForConditionalMainAlgo,
 } from './ui-health-surface-registry.js';
 import { INDEX_HTML_UNIQUE_ELEMENT_ID_COUNT } from './ui-health-index-ids.js';
 
@@ -40,6 +43,27 @@ describe('ui-health-surface-registry', () => {
     it('inferDomZoneLabel даёт стабильные группы', () => {
         expect(inferDomZoneLabel('mainTab')).toContain('клад');
         expect(inferDomZoneLabel('dbMergeModal')).toContain('Слияние');
+    });
+
+    it('inferDomZoneLabel: noInnLink — зона главного алгоритма', () => {
+        expect(inferDomZoneLabel(NO_INN_LINK_DOM_ID)).toContain('главн');
+    });
+
+    it('filterDomAuditMissingIdsForConditionalMainAlgo убирает noInnLink если ни один шаг не требует ссылки', () => {
+        const raw = ['searchInput', NO_INN_LINK_DOM_ID];
+        expect(
+            filterDomAuditMissingIdsForConditionalMainAlgo(raw, [{ title: 'Просто шаг', showNoInnHelp: false }]),
+        ).toEqual(['searchInput']);
+    });
+
+    it('filterDomAuditMissingIdsForConditionalMainAlgo оставляет noInnLink при inn_step', () => {
+        const raw = [NO_INN_LINK_DOM_ID];
+        expect(filterDomAuditMissingIdsForConditionalMainAlgo(raw, [{ type: 'inn_step' }])).toEqual(raw);
+    });
+
+    it('mainStepsRequireNoInnHelpLinkInDom ложь для не-массива', () => {
+        expect(mainStepsRequireNoInnHelpLinkInDom(null)).toBe(false);
+        expect(mainStepsRequireNoInnHelpLinkInDom(undefined)).toBe(false);
     });
 
     it('inferDomZoneLabel: clearClientAnalyticsSearchBtn — зона аналитики клиентов', () => {

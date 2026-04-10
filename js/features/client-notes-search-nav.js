@@ -6,6 +6,7 @@
  */
 
 import { escapeHtml } from '../utils/html.js';
+import { NavigationSource } from './contextual-back-navigation.js';
 
 const FLASH_OVERLAY_ATTR = 'data-client-notes-search-flash';
 const DEFAULT_FLASH_MS = 5500;
@@ -396,7 +397,9 @@ export async function navigateMainTabToAppealNotesMatch(rawTerm, deps = {}) {
 
     const { setActiveTab, panelTextarea, isClientNotesPanelOpen } = deps;
     if (typeof setActiveTab === 'function') {
-        await setActiveTab('main');
+        await setActiveTab('main', false, {
+            navigationSource: NavigationSource.PROGRAMMATIC,
+        });
     }
     await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => setTimeout(r, 50));

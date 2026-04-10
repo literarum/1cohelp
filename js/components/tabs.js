@@ -3,6 +3,13 @@
 import { MAX_UPDATE_VISIBLE_TABS_RETRIES, SHABLONY_DOC_ID } from '../constants.js';
 import { State } from '../app/state.js';
 import { tabsConfig } from '../config.js';
+import {
+    onBeforeProgrammaticSectionChange,
+    applyReglamentsSnapshotIfNeeded,
+    scheduleScrollRestore,
+    NavigationSource,
+    updateBackButtonUi,
+} from '../features/contextual-back-navigation.js';
 
 /** Допуск (px) при сравнении границ вкладок (субпиксельный рендер) */
 const LAYOUT_TOLERANCE_PX = 2;
@@ -78,10 +85,11 @@ export function createTabButtonElement(tabConfig) {
     button.innerHTML = buttonContent;
 
     button.addEventListener('click', () => {
+        const nav = { navigationSource: NavigationSource.TAB_BAR };
         if (deps.setActiveTab) {
-            deps.setActiveTab(tabConfig.id);
+            deps.setActiveTab(tabConfig.id, false, nav);
         } else if (typeof window.setActiveTab === 'function') {
-            window.setActiveTab(tabConfig.id);
+            window.setActiveTab(tabConfig.id, false, nav);
         } else {
             console.error(
                 `[createTabButtonElement] Функция setActiveTab не найдена при клике на кнопку ${tabConfig.id}`,
@@ -247,10 +255,11 @@ export function updateVisibleTabs() {
             dropdownItem.dataset.tabId = tab.id.replace('Tab', '');
             dropdownItem.addEventListener('click', (e) => {
                 e.preventDefault();
+                const nav = { navigationSource: NavigationSource.TAB_BAR };
                 if (typeof deps.setActiveTab === 'function') {
-                    deps.setActiveTab(dropdownItem.dataset.tabId);
+                    deps.setActiveTab(dropdownItem.dataset.tabId, false, nav);
                 } else if (typeof window.setActiveTab === 'function') {
-                    window.setActiveTab(dropdownItem.dataset.tabId);
+                    window.setActiveTab(dropdownItem.dataset.tabId, false, nav);
                 } else {
                     console.error(
                         `[updateVisibleTabs] setActiveTab недоступна для overflow-вкладки "${dropdownItem.dataset.tabId}".`,
@@ -276,7 +285,7 @@ export function initTabClickDelegation() {
         if (!btn || btn.id === 'moreTabsBtn') return;
         const tabId = (btn.id || '').replace(/Tab$/, '');
         if (tabId && typeof deps.setActiveTab === 'function') {
-            deps.setActiveTab(tabId);
+            deps.setActiveTab(tabId, false, { navigationSource: NavigationSource.TAB_BAR });
         }
     });
 }
@@ -512,8 +521,9 @@ export function applyPanelOrderAndVisibility(order, visibility) {
  * Активирует указанную вкладку с анимацией
  * @param {string} tabId - ID вкладки для активации
  * @param {boolean} warningJustAccepted - флаг, что предупреждение было принято
+ * @param {object} [navOptions] - contextual-back: navigationSource, scrollRestore, reglamentsSnapshot
  */
-export async function setActiveTab(tabId, warningJustAccepted = false) {
+export async function setActiveTab(tabId, warningJustAccepted = false, navOptions = {}) {
     if (tabId === 'favorites' && State.currentSection === 'favorites') {
         tabId = State.sectionBeforeFavorites || 'main';
     }
@@ -593,6 +603,10 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
         }
         console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} уже активна. Выход.`);
         return;
+    }
+
+    if (navOptions?.navigationSource === NavigationSource.PROGRAMMATIC) {
+        onBeforeProgrammaticSectionChange(State.currentSection, tabId);
     }
 
     State.currentSection = tabId;
@@ -745,11 +759,17 @@ export async function setActiveTab(tabId, warningJustAccepted = false) {
         requestAnimationFrame(updateVisibleTabs);
     }
 
-    if (State.userPreferences.staticHeader) {
+    if (navOptions?.navigationSource === NavigationSource.CONTEXTUAL_BACK) {
+        await applyReglamentsSnapshotIfNeeded(navOptions.reglamentsSnapshot);
+        if (navOptions.scrollRestore) {
+            scheduleScrollRestore(navOptions.scrollRestore, FADE_DURATION + 50);
+        }
+    } else if (State.userPreferences.staticHeader) {
         scrollPageToTop();
     }
 
     console.log(`[setActiveTab v.Corrected] Вкладка ${tabId} успешно активирована с анимацией.`);
+    updateBackButtonUi();
     requestAnimationFrame(() => {
         const visibleModals =
             deps.getVisibleModals && typeof deps.getVisibleModals === 'function'

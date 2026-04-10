@@ -34,5 +34,7 @@ export function isLikelyInnClarificationStep(step) {
 export function stepNeedsNoInnHelpLink(step) {
     if (!step || typeof step !== 'object') return false;
     if (step.showNoInnHelp === true || step.type === 'inn_step') return true;
+    /* Явное «выкл» в данных шага — не поднимать ссылку эвристикой по заголовку (старые БД). */
+    if (step.showNoInnHelp === false) return false;
     return isLikelyInnClarificationStep(step);
 }

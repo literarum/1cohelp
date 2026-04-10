@@ -20,6 +20,10 @@ import {
     BOOKMARK_LIST_FAVORITE_TOGGLE_CLASS,
 } from '../config.js';
 
+import { NavigationSource } from './contextual-back-navigation.js';
+
+const NAV_FROM_FAVORITES = { navigationSource: NavigationSource.PROGRAMMATIC };
+
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setFavoritesDependencies)
 // ============================================================================
@@ -502,18 +506,18 @@ export async function handleFavoriteContainerClick(event) {
         );
 
         if (itemType === 'mainAlgorithm') {
-            deps.setActiveTab?.('main');
+            deps.setActiveTab?.('main', false, NAV_FROM_FAVORITES);
         } else if (itemType === 'sedoTypeSection') {
-            deps.setActiveTab?.('sedoTypes');
+            deps.setActiveTab?.('sedoTypes', false, NAV_FROM_FAVORITES);
         } else if (originalItemSection && deps.setActiveTab) {
-            deps.setActiveTab(originalItemSection);
+            deps.setActiveTab(originalItemSection, false, NAV_FROM_FAVORITES);
             await new Promise((resolve) => setTimeout(resolve, 200));
 
             if (itemType === 'algorithm') {
                 const resolved = resolveAlgorithmById(originalItemId, originalItemSection);
                 if (resolved) {
                     if (resolved.section && deps.setActiveTab) {
-                        deps.setActiveTab(resolved.section);
+                        deps.setActiveTab(resolved.section, false, NAV_FROM_FAVORITES);
                         await new Promise((resolve) => setTimeout(resolve, 200));
                     }
                     deps.showAlgorithmDetail?.(resolved.algo, resolved.section);
@@ -620,11 +624,11 @@ export async function handleFavoriteContainerClick(event) {
 
         switch (itemType) {
             case 'mainAlgorithm':
-                deps.setActiveTab?.('main');
+                deps.setActiveTab?.('main', false, NAV_FROM_FAVORITES);
                 break;
 
             case 'sedoTypeSection':
-                deps.setActiveTab?.('sedoTypes');
+                deps.setActiveTab?.('sedoTypes', false, NAV_FROM_FAVORITES);
                 break;
 
             case 'algorithm':
@@ -632,7 +636,7 @@ export async function handleFavoriteContainerClick(event) {
                     const resolvedAlgo = resolveAlgorithmById(originalItemId, originalItemSection);
                     if (resolvedAlgo) {
                         if (resolvedAlgo.section && deps.setActiveTab) {
-                            deps.setActiveTab(resolvedAlgo.section);
+                            deps.setActiveTab(resolvedAlgo.section, false, NAV_FROM_FAVORITES);
                             await new Promise((resolve) => setTimeout(resolve, 200));
                         }
                         deps.showAlgorithmDetail?.(resolvedAlgo.algo, resolvedAlgo.section);
