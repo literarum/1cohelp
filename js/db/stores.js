@@ -162,4 +162,19 @@ export const storeConfigs = [
             { name: 'uploadedAt', keyPath: 'uploadedAt', options: { unique: false } },
         ],
     },
+    {
+        name: 'clientAnalyticsFolders',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [{ name: 'sortOrder', keyPath: 'sortOrder', options: { unique: false } }],
+    },
+    {
+        name: 'clientAnalyticsTags',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [{ name: 'sortOrder', keyPath: 'sortOrder', options: { unique: false } }],
+    },
+    {
+        name: 'clientAnalyticsCardMeta',
+        options: { keyPath: 'id' },
+        indexes: [{ name: 'folderId', keyPath: 'folderId', options: { unique: false } }],
+    },
 ];

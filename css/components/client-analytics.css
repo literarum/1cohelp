@@ -1,5 +1,50 @@
 /* База клиентов и аналитика */
 
+#clientAnalyticsContent .ca-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    border: 1px solid transparent;
+}
+
+#clientAnalyticsContent .ca-meta-chip--folder {
+    background: rgba(59, 130, 246, 0.1);
+    color: rgb(29 78 216);
+    border-color: rgba(59, 130, 246, 0.25);
+}
+
+html.dark #clientAnalyticsContent .ca-meta-chip--folder {
+    background: rgba(59, 130, 246, 0.15);
+    color: rgb(191 219 254);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+#clientAnalyticsContent .ca-meta-chip--tag {
+    background: rgba(100, 116, 139, 0.12);
+    color: rgb(51 65 85);
+    border-color: rgba(100, 116, 139, 0.35);
+}
+
+html.dark #clientAnalyticsContent .ca-meta-chip--tag {
+    background: rgba(148, 163, 184, 0.12);
+    color: rgb(226 232 240);
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+#clientAnalyticsContent .ca-section-heading:first-of-type {
+    margin-top: 0;
+}
+
+#clientAnalyticsAssignModal:not(.hidden),
+#clientAnalyticsOrgManageModal:not(.hidden) {
+    z-index: 66;
+}
+
 #clientAnalyticsContent .client-analytics-card {
     min-height: 7rem;
 }

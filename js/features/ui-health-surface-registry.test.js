@@ -15,6 +15,9 @@ import {
     NO_INN_LINK_DOM_ID,
     mainStepsRequireNoInnHelpLinkInDom,
     filterDomAuditMissingIdsForConditionalMainAlgo,
+    filterDomAuditMissingIdsForBirthdayMode,
+    BIRTHDAY_FX_LAYER_DOM_ID,
+    BIRTHDAY_GARLAND_DOM_ID,
 } from './ui-health-surface-registry.js';
 import { INDEX_HTML_UNIQUE_ELEMENT_ID_COUNT } from './ui-health-index-ids.js';
 
@@ -59,6 +62,20 @@ describe('ui-health-surface-registry', () => {
     it('filterDomAuditMissingIdsForConditionalMainAlgo оставляет noInnLink при inn_step', () => {
         const raw = [NO_INN_LINK_DOM_ID];
         expect(filterDomAuditMissingIdsForConditionalMainAlgo(raw, [{ type: 'inn_step' }])).toEqual(raw);
+    });
+
+    it('filterDomAuditMissingIdsForBirthdayMode убирает birthday-узлы, когда режим выключен', () => {
+        document.documentElement.dataset.birthdayMode = 'off';
+        document.documentElement.classList.remove('birthday-mode');
+        const raw = [BIRTHDAY_FX_LAYER_DOM_ID, BIRTHDAY_GARLAND_DOM_ID, 'appContent'];
+        expect(filterDomAuditMissingIdsForBirthdayMode(raw, document)).toEqual(['appContent']);
+    });
+
+    it('filterDomAuditMissingIdsForBirthdayMode оставляет birthday-узлы, когда режим включен', () => {
+        document.documentElement.dataset.birthdayMode = 'on';
+        document.documentElement.classList.add('birthday-mode');
+        const raw = [BIRTHDAY_FX_LAYER_DOM_ID, BIRTHDAY_GARLAND_DOM_ID];
+        expect(filterDomAuditMissingIdsForBirthdayMode(raw, document)).toEqual(raw);
     });
 
     it('mainStepsRequireNoInnHelpLinkInDom ложь для не-массива', () => {

@@ -231,12 +231,17 @@ export function updateBackButtonUi() {
         wrap.classList.add('hidden');
         wrap.setAttribute('aria-hidden', 'true');
         btn.disabled = true;
+        labelEl.textContent = '';
+        btn.removeAttribute('aria-label');
+        btn.removeAttribute('title');
+        btn.setAttribute('aria-hidden', 'true');
         return;
     }
 
     const title = getSectionTitleFn(top.labelSectionId) || top.labelSectionId;
     labelEl.textContent = title;
     const backLabel = `Вернуться к разделу «${title}»`;
+    btn.removeAttribute('aria-hidden');
     btn.setAttribute('aria-label', backLabel);
     btn.setAttribute('title', backLabel);
     wrap.classList.remove('hidden');

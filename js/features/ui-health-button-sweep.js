@@ -221,12 +221,12 @@ export async function runFullButtonHealthSweep(deps, report, runWithTimeout, opt
      */
     const passiveScan = (el, context) => {
         const id = el.id;
+        if (shouldSkipHealthInteractiveGeometry(el, document)) {
+            return;
+        }
         passiveTargets += 1;
         if (!computeAccessibleName(el)) {
             nameWarnings.push(`${id} (${context})`);
-        }
-        if (shouldSkipHealthInteractiveGeometry(el, document)) {
-            return;
         }
         const rect = el.getBoundingClientRect();
         const w = rect.width;

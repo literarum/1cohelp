@@ -16,6 +16,8 @@ import { stepNeedsNoInnHelpLink } from '../components/main-algo-inn-link.js';
 
 /** id ссылки «нет ИНН» в главном алгоритме: в index.html есть заглушка, после render — только при необходимости шагов. */
 export const NO_INN_LINK_DOM_ID = 'noInnLink';
+export const BIRTHDAY_FX_LAYER_DOM_ID = 'birthdayFxLayer';
+export const BIRTHDAY_GARLAND_DOM_ID = 'birthdayGarland';
 
 /** Атрибут для автоматического включения элемента (с id) в мониторинг DOM. */
 export const HEALTH_SURFACE_DATA_ATTR = 'data-health-surface';
@@ -157,6 +159,27 @@ export function filterDomAuditMissingIdsForConditionalMainAlgo(missingIds, mainS
     if (!missingIds.includes(NO_INN_LINK_DOM_ID)) return missingIds;
     if (mainStepsRequireNoInnHelpLinkInDom(mainSteps)) return missingIds;
     return missingIds.filter((id) => id !== NO_INN_LINK_DOM_ID);
+}
+
+/**
+ * Убирает из списка «отсутствующих» birthday-элементы, если режим дня рождения выключен.
+ * Когда режим включен, элементы остаются обязательными.
+ * @param {string[]} missingIds
+ * @param {Document} [doc]
+ * @returns {string[]}
+ */
+export function filterDomAuditMissingIdsForBirthdayMode(missingIds, doc) {
+    if (!Array.isArray(missingIds) || missingIds.length === 0) return missingIds;
+    const hasBirthdayNodesMissing =
+        missingIds.includes(BIRTHDAY_FX_LAYER_DOM_ID) || missingIds.includes(BIRTHDAY_GARLAND_DOM_ID);
+    if (!hasBirthdayNodesMissing) return missingIds;
+    const root = doc?.documentElement;
+    const birthdayModeEnabled =
+        root?.dataset?.birthdayMode === 'on' || root?.classList?.contains('birthday-mode');
+    if (birthdayModeEnabled) return missingIds;
+    return missingIds.filter(
+        (id) => id !== BIRTHDAY_FX_LAYER_DOM_ID && id !== BIRTHDAY_GARLAND_DOM_ID,
+    );
 }
 
 /**

@@ -41,6 +41,16 @@ export const tabsConfig = [
 
 export const allPanelIdsForDefault = tabsConfig.map((t) => t.id);
 export const defaultPanelOrder = tabsConfig.map((t) => t.id);
+const HIDDEN_BY_DEFAULT_PANEL_IDS = new Set([
+    'clientAnalytics',
+    'training',
+    'sedoTypes',
+    'blacklistedClients',
+]);
+
+export function isPanelVisibleByDefault(panelId) {
+    return !HIDDEN_BY_DEFAULT_PANEL_IDS.has(String(panelId || ''));
+}
 
 // ============================================================================
 // КОНФИГУРАЦИЯ КАТЕГОРИЙ РЕГЛАМЕНТОВ
@@ -535,12 +545,11 @@ export function getDefaultUISettings(allPanelIdsForDefault) {
                 : [],
         panelVisibility:
             typeof allPanelIdsForDefault !== 'undefined' && Array.isArray(allPanelIdsForDefault)
-                ? allPanelIdsForDefault.map(
-                      (id) => !(id === 'sedoTypes' || id === 'blacklistedClients'),
-                  )
+                ? allPanelIdsForDefault.map((id) => isPanelVisibleByDefault(id))
                 : [],
         disableForcedBackupOnImport: false,
         staticHeader: false,
+        birthdayModeEnabled: true,
     };
 }
 

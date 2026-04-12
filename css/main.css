@@ -43,6 +43,7 @@
 @import url('./components/engineering-cockpit.css');
 @import url('./components/training.css');
 @import url('./components/client-analytics.css');
+@import url('./components/birthday-mode.css');
 
 /* 6. Скроллбар и кнопки (используют переменные из theme/variables.css) */
 @import url('./inline-styles.css');

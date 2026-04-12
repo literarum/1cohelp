@@ -12,6 +12,8 @@ import {
     stackDepth,
     NavigationSource,
     scheduleScrollRestore,
+    clearNavigationStack,
+    initContextualBackNavigation,
 } from './contextual-back-navigation.js';
 
 describe('contextual-back-navigation', () => {
@@ -120,5 +122,53 @@ describe('contextual-back-navigation', () => {
 
     it('NavigationSource.PROGRAMMATIC is stable string', () => {
         expect(NavigationSource.PROGRAMMATIC).toBe('programmatic');
+    });
+
+    it('contextualBackNavBtn never exposes an empty aria-label; hidden when stack empty', async () => {
+        const dom = new JSDOM(
+            `<!doctype html><html><body>
+        <div id="contextualBackNav" class="hidden" aria-hidden="true">
+          <button type="button" id="contextualBackNavBtn" disabled aria-hidden="true">
+            <i aria-hidden="true"></i>
+            <span id="contextualBackNavLabel"></span>
+          </button>
+        </div>
+      </body></html>`,
+            { url: 'https://example.test/' },
+        );
+        globalThis.document = dom.window.document;
+        globalThis.window = dom.window;
+
+        initContextualBackNavigation({
+            getSectionTitle: (id) => (id === 'links' ? 'Ссылки' : id),
+            setActiveTab: async () => {},
+        });
+
+        const btn = document.getElementById('contextualBackNavBtn');
+        expect(btn?.getAttribute('aria-label')).not.toBe('');
+        expect(btn?.hasAttribute('aria-label')).toBe(false);
+        expect(btn?.getAttribute('aria-hidden')).toBe('true');
+
+        pushNavigationEntry(
+            {
+                v: 1,
+                section: 'program',
+                windowScrollY: 0,
+                mainScrollY: 0,
+                reglaments: null,
+            },
+            'links',
+        );
+
+        expect(btn?.hasAttribute('aria-hidden')).toBe(false);
+        expect(btn?.getAttribute('aria-label')).toBe('Вернуться к разделу «Ссылки»');
+
+        clearNavigationStack();
+
+        expect(btn?.hasAttribute('aria-label')).toBe(false);
+        expect(btn?.getAttribute('aria-hidden')).toBe('true');
+
+        delete globalThis.document;
+        delete globalThis.window;
     });
 });

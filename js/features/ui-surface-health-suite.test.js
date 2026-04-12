@@ -89,6 +89,27 @@ describe('ui-surface-health-suite', () => {
                 spy.mockRestore();
             }
         });
+
+        it('не считает ошибкой отсутствие birthday-узлов, когда режим дня рождения выключен', () => {
+            document.body.innerHTML = '';
+            document.documentElement.dataset.birthdayMode = 'off';
+            document.documentElement.classList.remove('birthday-mode');
+            const report = vi.fn();
+            const spy = vi.spyOn(uiHealthSurfaceRegistry, 'resolveMonitoredDomIds').mockReturnValue({
+                allIds: ['birthdayFxLayer', 'birthdayGarland'],
+                indexCount: 2,
+                runtimeExtraCount: 0,
+                dynamicIds: [],
+                dataHealthAttributeOrphans: 0,
+            });
+            try {
+                runFullSurfaceDomAudit(report);
+                const err = report.mock.calls.find((c) => c[0] === 'error');
+                expect(err).toBeUndefined();
+            } finally {
+                spy.mockRestore();
+            }
+        });
     });
 
     describe('runFullSurfaceDomAuditAsync', () => {

@@ -67,4 +67,19 @@ describe('applyPreviewSettings custom background', () => {
             .toLowerCase();
         expect(appliedDarkBg).toBe('#111827');
     });
+
+    it('при birthdayModeEnabled включает праздничные атрибуты на documentElement', async () => {
+        window.matchMedia = vi.fn().mockReturnValue({
+            matches: false,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+        });
+        await applyPreviewSettings({
+            primaryColor: '#7e22ce',
+            themeMode: 'dark',
+            birthdayModeEnabled: true,
+        });
+        expect(document.documentElement.dataset.birthdayMode).toBe('on');
+        expect(document.documentElement.classList.contains('birthday-mode')).toBe(true);
+    });
 });

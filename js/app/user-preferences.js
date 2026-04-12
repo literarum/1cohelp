@@ -5,7 +5,7 @@
  * Вынесено из script.js
  */
 
-import { THEME_DEFAULTS } from '../config.js';
+import { THEME_DEFAULTS, isPanelVisibleByDefault } from '../config.js';
 import { ONBOARDING_AUTO_OFFER_STORAGE_KEY, USER_PREFERENCES_KEY } from '../constants.js';
 import { getFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 
@@ -120,9 +120,7 @@ export async function loadUserPreferences() {
         contentDensity: DEFAULT_UI_SETTINGS.contentDensity || 3,
         mainLayout: DEFAULT_UI_SETTINGS.mainLayout || 'horizontal',
         panelOrder: [...defaultPanelOrder],
-        panelVisibility: defaultPanelOrder.map(
-            (id) => !(id === 'sedoTypes' || id === 'blacklistedClients'),
-        ),
+        panelVisibility: defaultPanelOrder.map((id) => isPanelVisibleByDefault(id)),
         showBlacklistUsageWarning: true,
         disableForcedBackupOnImport: false,
         staticHeader: false,
@@ -132,6 +130,8 @@ export async function loadUserPreferences() {
         onboardingTourAutoPromptConsumed: false,
         /** Напоминания о резервном копировании (тост каждые 3 ч). false — отключено. */
         backupReminderEnabled: true,
+        /** Праздничное оформление «день рождения» (конфетти, рамка, мягкое свечение кнопок) */
+        birthdayModeEnabled: true,
         clientNotesFontSize: 100,
         employeeExtension: '',
         textareaHeights: {},
@@ -205,8 +205,8 @@ export async function loadUserPreferences() {
                   ? defaultPanelOrder
                   : [];
         const knownPanelIds = new Set(currentPanelIds);
-        const actualDefaultPanelVisibility = currentPanelIds.map(
-            (id) => !(id === 'sedoTypes' || id === 'blacklistedClients'),
+        const actualDefaultPanelVisibility = currentPanelIds.map((id) =>
+            isPanelVisibleByDefault(id),
         );
 
         let savedOrder = finalSettings.panelOrder || [];
@@ -232,7 +232,7 @@ export async function loadUserPreferences() {
                 const defaultVisibility =
                     index < actualDefaultPanelVisibility.length
                         ? actualDefaultPanelVisibility[index]
-                        : !(panelId === 'sedoTypes' || panelId === 'blacklistedClients');
+                        : isPanelVisibleByDefault(panelId);
                 effectiveVisibility.push(defaultVisibility);
                 console.log(
                     `${LOG_PREFIX} Добавлена новая панель "${panelId}" с видимостью по умолчанию.`,
@@ -304,6 +304,7 @@ export async function saveUserPreferences() {
             'onboardingTourCompleted',
             'onboardingTourAutoPromptConsumed',
             'backupReminderEnabled',
+            'birthdayModeEnabled',
             'clientNotesFontSize',
             'employeeExtension',
             'textareaHeights',
@@ -315,6 +316,7 @@ export async function saveUserPreferences() {
             'welcomeTextShownInitially',
             'onboardingTourCompleted',
             'onboardingTourAutoPromptConsumed',
+            'birthdayModeEnabled',
         ]);
         fields.forEach((field) => {
             if (typeof State.userPreferences[field] === 'undefined') {

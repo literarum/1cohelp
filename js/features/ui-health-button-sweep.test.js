@@ -90,4 +90,29 @@ describe('ui-health-button-sweep', () => {
         expect(clickSpy).not.toHaveBeenCalled();
         clickSpy.mockRestore();
     });
+
+    it('не предупреждает об a11y имени для скрытой contextualBackNavBtn', async () => {
+        document.body.innerHTML = `<div id="appContent" class="">
+            <div id="staticHeaderWrapper">
+                <div id="contextualBackNav" class="hidden" aria-hidden="true">
+                    <button type="button" id="contextualBackNavBtn" aria-hidden="true" disabled></button>
+                </div>
+            </div>
+            <div id="mainContent" class="tab-content"></div>
+        </div>`;
+        const report = vi.fn();
+        const setActiveTab = vi.fn(async () => {});
+        await runFullButtonHealthSweep(
+            { setActiveTab, State: { currentSection: 'main' } },
+            report,
+            (p) => p,
+            { tabSweepMode: 'background' },
+        );
+        const a11yWarn = report.mock.calls.find(
+            (c) =>
+                c[1] === 'Поверхность UI / кнопки (a11y имя)' &&
+                String(c[2] || '').includes('contextualBackNavBtn'),
+        );
+        expect(a11yWarn).toBeUndefined();
+    });
 });

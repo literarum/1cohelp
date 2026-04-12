@@ -13,6 +13,7 @@ export const State = {
         theme: 'dark',
         showBlacklistUsageWarning: true,
         staticHeader: false,
+        birthdayModeEnabled: true,
     },
 
     // UI состояние

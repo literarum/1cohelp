@@ -29,6 +29,22 @@ import {
     normalizeInnForBlacklistLookup,
 } from './client-analytics-blacklist-crosscheck.js';
 import { NavigationSource } from './contextual-back-navigation.js';
+import {
+    buildDisplayUnitsFromGrouped,
+    sortClientAnalyticsDisplayUnits,
+    filterUnitsByFolder,
+    filterUnitsByTagsAny,
+    groupClientAnalyticsUnitsForRender,
+    getClientAnalyticsUnitMetaId,
+    normalizeClientAnalyticsCardMeta,
+    CA_FOLDER_FILTER_ALL,
+    CA_FOLDER_FILTER_UNFILED,
+} from './client-analytics-organization.js';
+
+/** @typedef {import('./client-analytics-organization.js').CaSortMode} CaSortMode */
+/** @typedef {import('./client-analytics-organization.js').CaGroupMode} CaGroupMode */
+
+const CA_ORG_VIEW_PREF_ID = 'clientAnalyticsOrgView';
 
 let deps = {
     showNotification: null,
@@ -168,6 +184,280 @@ export function filterClientAnalyticsRecordsByQuery(records, query) {
         const line = buildClientAnalyticsSearchIndexLine(record);
         return tokens.every((token) => line.includes(token));
     });
+}
+
+/**
+ * @param {unknown} hex
+ * @returns {string}
+ */
+function sanitizeClientAnalyticsTagColor(hex) {
+    const s = String(hex || '').trim();
+    return /^#[0-9A-Fa-f]{6}$/.test(s) ? s : '';
+}
+
+/**
+ * @param {import('./client-analytics-organization.js').CaCardMeta} meta
+ * @param {Map<number, object>} foldersById
+ * @param {Map<number, object>} tagsById
+ * @returns {string}
+ */
+function buildClientAnalyticsMetaChipsHtml(meta, foldersById, tagsById) {
+    const parts = [];
+    const m = normalizeClientAnalyticsCardMeta(meta);
+    if (m.folderId != null && foldersById.has(m.folderId)) {
+        const name = String(foldersById.get(m.folderId).name || 'Папка');
+        parts.push(
+            `<span class="ca-meta-chip ca-meta-chip--folder">${escapeHtml(name)}</span>`,
+        );
+    }
+    for (const tid of m.tagIds || []) {
+        if (!tagsById.has(tid)) continue;
+        const t = tagsById.get(tid);
+        const col = sanitizeClientAnalyticsTagColor(t.color);
+        const style = col ? ` style="border-color:${escapeHtml(col)}"` : '';
+        parts.push(
+            `<span class="ca-meta-chip ca-meta-chip--tag"${style}>${escapeHtml(String(t.name || ''))}</span>`,
+        );
+    }
+    return parts.join('');
+}
+
+/**
+ * @param {unknown} pref
+ * @returns {{ sortMode: CaSortMode, groupMode: CaGroupMode, folderFilter: string, tagFilterIds: number[] }}
+ */
+function normalizeClientAnalyticsOrgViewPref(pref) {
+    const base = {
+        sortMode: /** @type {CaSortMode} */ ('date_desc'),
+        groupMode: /** @type {CaGroupMode} */ ('none'),
+        folderFilter: CA_FOLDER_FILTER_ALL,
+        tagFilterIds: /** @type {number[]} */ ([]),
+    };
+    if (!pref || typeof pref !== 'object') return base;
+    const sortRaw = pref.sortMode;
+    const groupRaw = pref.groupMode;
+    const allowedSort = new Set([
+        'date_desc',
+        'date_asc',
+        'inn_asc',
+        'appeals_desc',
+        'file_asc',
+        'question_asc',
+    ]);
+    const allowedGroup = new Set(['none', 'folder', 'tag', 'source_file']);
+    if (typeof sortRaw === 'string' && allowedSort.has(sortRaw)) {
+        base.sortMode = /** @type {CaSortMode} */ (sortRaw);
+    }
+    if (typeof groupRaw === 'string' && allowedGroup.has(groupRaw)) {
+        base.groupMode = /** @type {CaGroupMode} */ (groupRaw);
+    }
+    if (pref.folderFilter === CA_FOLDER_FILTER_ALL || pref.folderFilter === CA_FOLDER_FILTER_UNFILED) {
+        base.folderFilter = pref.folderFilter;
+    } else if (pref.folderFilter != null && Number.isFinite(Number(pref.folderFilter))) {
+        base.folderFilter = String(Number(pref.folderFilter));
+    }
+    const tf = pref.tagFilterIds;
+    if (Array.isArray(tf)) {
+        base.tagFilterIds = [...new Set(tf.map((n) => Number(n)).filter((n) => Number.isFinite(n)))].sort(
+            (a, b) => a - b,
+        );
+    }
+    return base;
+}
+
+/**
+ * @param {{ folderFilter: string }} view
+ * @param {Map<number, object>} foldersById
+ */
+function coerceClientAnalyticsOrgFolderFilter(view, foldersById) {
+    const f = view.folderFilter;
+    if (f === CA_FOLDER_FILTER_ALL || f === CA_FOLDER_FILTER_UNFILED) return;
+    const n = Number(f);
+    if (!Number.isFinite(n) || !foldersById.has(n)) {
+        view.folderFilter = CA_FOLDER_FILTER_ALL;
+    }
+}
+
+/**
+ * @returns {Promise<{ folders: object[], tags: object[], metaById: Map<string, import('./client-analytics-organization.js').CaCardMeta>, foldersById: Map<number, object>, tagsById: Map<number, object>, view: ReturnType<typeof normalizeClientAnalyticsOrgViewPref> }>}
+ */
+async function loadClientAnalyticsOrgState() {
+    const [foldersRaw, tagsRaw, metaRows, prefRow] = await Promise.all([
+        getAllFromIndexedDB('clientAnalyticsFolders'),
+        getAllFromIndexedDB('clientAnalyticsTags'),
+        getAllFromIndexedDB('clientAnalyticsCardMeta'),
+        getFromIndexedDB('preferences', CA_ORG_VIEW_PREF_ID),
+    ]);
+    const folders = Array.isArray(foldersRaw) ? foldersRaw.filter(Boolean) : [];
+    const tags = Array.isArray(tagsRaw) ? tagsRaw.filter(Boolean) : [];
+    /** @type {Map<string, import('./client-analytics-organization.js').CaCardMeta>} */
+    const metaById = new Map();
+    for (const row of Array.isArray(metaRows) ? metaRows : []) {
+        if (row && row.id) {
+            metaById.set(String(row.id), normalizeClientAnalyticsCardMeta(row));
+        }
+    }
+    const foldersById = new Map(folders.map((f) => [Number(f.id), f]));
+    const tagsById = new Map(tags.map((t) => [Number(t.id), t]));
+    const prefPayload =
+        prefRow && typeof prefRow === 'object' && prefRow.data && typeof prefRow.data === 'object'
+            ? prefRow.data
+            : prefRow;
+    const view = normalizeClientAnalyticsOrgViewPref(prefPayload);
+    coerceClientAnalyticsOrgFolderFilter(view, foldersById);
+    view.tagFilterIds = (view.tagFilterIds || []).filter((id) => tagsById.has(id));
+    return { folders, tags, metaById, foldersById, tagsById, view };
+}
+
+/**
+ * @param {ReturnType<typeof normalizeClientAnalyticsOrgViewPref>} view
+ */
+async function saveClientAnalyticsOrgViewPref(view) {
+    await saveToIndexedDB('preferences', {
+        id: CA_ORG_VIEW_PREF_ID,
+        data: { ...view },
+    });
+    const again = await getFromIndexedDB('preferences', CA_ORG_VIEW_PREF_ID);
+    const payload = again?.data && typeof again.data === 'object' ? again.data : again;
+    if (!payload || typeof payload !== 'object') {
+        console.warn('[client-analytics] не удалось перепроверить сохранение настроек вида');
+    }
+}
+
+/**
+ * @param {string} metaId
+ * @param {import('./client-analytics-organization.js').CaCardMeta} meta
+ */
+async function persistClientAnalyticsCardMeta(metaId, meta) {
+    const normalized = normalizeClientAnalyticsCardMeta(meta);
+    const row = { id: metaId, folderId: normalized.folderId, tagIds: normalized.tagIds };
+    await saveToIndexedDB('clientAnalyticsCardMeta', row);
+    const read = await getFromIndexedDB('clientAnalyticsCardMeta', metaId);
+    if (!read || read.folderId !== row.folderId || JSON.stringify(read.tagIds) !== JSON.stringify(row.tagIds)) {
+        console.warn('[client-analytics] перепроверка clientAnalyticsCardMeta не совпала', metaId);
+    }
+}
+
+/**
+ * @param {number} folderId
+ */
+async function deleteClientAnalyticsFolderCascade(folderId) {
+    const id = Number(folderId);
+    if (!Number.isFinite(id)) return;
+    const allMeta = await getAllFromIndexedDB('clientAnalyticsCardMeta');
+    for (const row of Array.isArray(allMeta) ? allMeta : []) {
+        if (!row || row.id == null) continue;
+        const m = normalizeClientAnalyticsCardMeta(row);
+        if (m.folderId === id) {
+            await persistClientAnalyticsCardMeta(String(row.id), { folderId: null, tagIds: m.tagIds });
+        }
+    }
+    await deleteFromIndexedDB('clientAnalyticsFolders', id);
+}
+
+/**
+ * @param {number} tagId
+ */
+async function deleteClientAnalyticsTagCascade(tagId) {
+    const id = Number(tagId);
+    if (!Number.isFinite(id)) return;
+    const allMeta = await getAllFromIndexedDB('clientAnalyticsCardMeta');
+    for (const row of Array.isArray(allMeta) ? allMeta : []) {
+        if (!row || row.id == null) continue;
+        const m = normalizeClientAnalyticsCardMeta(row);
+        if (!m.tagIds.includes(id)) continue;
+        const next = m.tagIds.filter((t) => t !== id);
+        await persistClientAnalyticsCardMeta(String(row.id), { folderId: m.folderId, tagIds: next });
+    }
+    await deleteFromIndexedDB('clientAnalyticsTags', id);
+}
+
+/**
+ * @param {object[]} folders
+ * @param {object[]} tags
+ * @param {ReturnType<typeof normalizeClientAnalyticsOrgViewPref>} view
+ */
+function syncClientAnalyticsOrgToolbarDom(folders, tags, view) {
+    const sortEl = document.getElementById('clientAnalyticsSortSelect');
+    const groupEl = document.getElementById('clientAnalyticsGroupSelect');
+    const folderEl = document.getElementById('clientAnalyticsFolderFilterSelect');
+    const tagBar = document.getElementById('clientAnalyticsTagFilterBar');
+    if (sortEl) sortEl.value = view.sortMode;
+    if (groupEl) groupEl.value = view.groupMode;
+    if (folderEl) {
+        folderEl.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = CA_FOLDER_FILTER_ALL;
+        optAll.textContent = 'Все карточки';
+        folderEl.appendChild(optAll);
+        const optUn = document.createElement('option');
+        optUn.value = CA_FOLDER_FILTER_UNFILED;
+        optUn.textContent = 'Без папки';
+        folderEl.appendChild(optUn);
+        const sorted = [...folders].sort((a, b) => {
+            const ao = Number(a.sortOrder) || 0;
+            const bo = Number(b.sortOrder) || 0;
+            if (ao !== bo) return ao - bo;
+            return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+        });
+        for (const f of sorted) {
+            const o = document.createElement('option');
+            o.value = String(f.id);
+            o.textContent = String(f.name || 'Папка');
+            folderEl.appendChild(o);
+        }
+        const want = [CA_FOLDER_FILTER_ALL, CA_FOLDER_FILTER_UNFILED].includes(view.folderFilter)
+            ? view.folderFilter
+            : String(view.folderFilter);
+        const valid = Array.from(folderEl.options).some((o) => o.value === want);
+        folderEl.value = valid ? want : CA_FOLDER_FILTER_ALL;
+        if (!valid && view.folderFilter !== CA_FOLDER_FILTER_ALL) {
+            view.folderFilter = CA_FOLDER_FILTER_ALL;
+        }
+    }
+    if (tagBar) {
+        tagBar.innerHTML =
+            '<span class="text-xs text-gray-500 dark:text-gray-400 mr-1 shrink-0">Теги:</span>';
+        const sortedTags = [...tags].sort((a, b) => {
+            const ao = Number(a.sortOrder) || 0;
+            const bo = Number(b.sortOrder) || 0;
+            if (ao !== bo) return ao - bo;
+            return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+        });
+        const selected = new Set(view.tagFilterIds || []);
+        for (const t of sortedTags) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = [
+                'ca-tag-filter-btn',
+                'text-xs',
+                'font-medium',
+                'rounded-full',
+                'px-2.5',
+                'py-1',
+                'border',
+                'transition-colors',
+                'focus:outline-none',
+                'focus-visible:ring-2',
+                'focus-visible:ring-primary',
+                selected.has(Number(t.id))
+                    ? 'ca-tag-filter-btn--active border-primary bg-primary/10 text-primary dark:bg-primary/20'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700',
+            ].join(' ');
+            btn.dataset.tagFilterId = String(t.id);
+            btn.textContent = String(t.name || 'Тег');
+            const col = sanitizeClientAnalyticsTagColor(t.color);
+            if (col) btn.style.borderColor = col;
+            tagBar.appendChild(btn);
+        }
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className =
+            'text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 ml-1 underline-offset-2 hover:underline';
+        clearBtn.textContent = 'Сбросить фильтр тегов';
+        clearBtn.setAttribute('data-ca-clear-tag-filter', '1');
+        tagBar.appendChild(clearBtn);
+    }
 }
 
 export function buildClientAnalyticsStructureSignature(parsedRecords) {
@@ -517,11 +807,18 @@ export async function deleteAnalyticsRecord(recordId) {
 export async function exportClientAnalyticsSection() {
     const files = await getAllFromIndexedDB('clientAnalyticsFiles');
     const records = await getAllFromIndexedDB('clientAnalyticsRecords');
+    const folders = await getAllFromIndexedDB('clientAnalyticsFolders');
+    const tags = await getAllFromIndexedDB('clientAnalyticsTags');
+    const cardMeta = await getAllFromIndexedDB('clientAnalyticsCardMeta');
     return {
         exportKind: 'clientAnalyticsSection',
         exportDate: new Date().toISOString(),
+        schemaOrg: 1,
         files,
         records,
+        folders: Array.isArray(folders) ? folders : [],
+        tags: Array.isArray(tags) ? tags : [],
+        cardMeta: Array.isArray(cardMeta) ? cardMeta : [],
     };
 }
 
@@ -549,6 +846,16 @@ export async function importClientAnalyticsSection(data) {
         await deleteFromIndexedDB('clientAnalyticsFiles', f.id);
     }
 
+    const wipeStore = async (name) => {
+        const rows = await getAllFromIndexedDB(name);
+        for (const row of Array.isArray(rows) ? rows : []) {
+            if (row && row.id != null) await deleteFromIndexedDB(name, row.id);
+        }
+    };
+    await wipeStore('clientAnalyticsFolders');
+    await wipeStore('clientAnalyticsTags');
+    await wipeStore('clientAnalyticsCardMeta');
+
     const idMap = new Map();
     for (const f of files) {
         const oldId = f.id;
@@ -570,6 +877,42 @@ export async function importClientAnalyticsSection(data) {
         if (saved && deps.updateSearchIndex) {
             await deps.updateSearchIndex('clientAnalyticsRecords', nid, saved, 'add', null);
         }
+    }
+
+    const folderRows = Array.isArray(data.folders) ? data.folders : [];
+    const tagRows = Array.isArray(data.tags) ? data.tags : [];
+    const metaRows = Array.isArray(data.cardMeta) ? data.cardMeta : [];
+    const folderIdMap = new Map();
+    for (const f of folderRows) {
+        const oldFid = f.id;
+        const copy = { ...f };
+        delete copy.id;
+        const nf = await saveToIndexedDB('clientAnalyticsFolders', copy);
+        if (oldFid != null) folderIdMap.set(oldFid, nf);
+    }
+    const tagIdMap = new Map();
+    for (const t of tagRows) {
+        const oldTid = t.id;
+        const copy = { ...t };
+        delete copy.id;
+        const nt = await saveToIndexedDB('clientAnalyticsTags', copy);
+        if (oldTid != null) tagIdMap.set(oldTid, nt);
+    }
+    for (const m of metaRows) {
+        if (!m || m.id == null) continue;
+        const strId = String(m.id);
+        const oldFolder = m.folderId;
+        let folderId = null;
+        if (oldFolder != null && folderIdMap.has(oldFolder)) {
+            folderId = folderIdMap.get(oldFolder);
+        }
+        const nextTags = [];
+        for (const tid of Array.isArray(m.tagIds) ? m.tagIds : []) {
+            const nt = tagIdMap.get(tid);
+            if (nt != null) nextTags.push(nt);
+        }
+        const row = { id: strId, folderId, tagIds: nextTags };
+        await saveToIndexedDB('clientAnalyticsCardMeta', row);
     }
 }
 
@@ -625,9 +968,10 @@ function frogBlacklistBadgeHtml(level) {
  * @param {object} rec
  * @param {'cards'|'list'} viewMode
  * @param {number} [blacklistLevel] 0 — нет в ЧС, иначе 1|2|3
+ * @param {{ metaId?: string, chipsHtml?: string } | null} [org]
  * @returns {HTMLElement}
  */
-function createRecordCardElement(rec, viewMode, blacklistLevel = 0) {
+function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null) {
     const el = document.createElement('article');
     const bl =
         typeof blacklistLevel === 'number' && blacklistLevel >= 1 && blacklistLevel <= 3
@@ -682,11 +1026,19 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0) {
         : '—';
     const q = escapeHtml((rec.question || '').slice(0, 280));
     const fn = escapeHtml(rec.sourceFileName || '');
+    const orgBtn =
+        org && org.metaId
+            ? `<button type="button" class="ca-card-organize pointer-events-auto ${viewMode === 'list' ? BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS : BOOKMARK_CARD_ICON_BUTTON_CLASS} text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-200" data-ca-organize="${escapeHtml(org.metaId)}" title="Папка и теги" aria-label="Папка и теги"><i class="fas fa-tags text-sm" aria-hidden="true"></i></button>`
+            : '';
+    const chipsRow =
+        org && org.chipsHtml
+            ? `<div class="ca-meta-chips-row flex flex-wrap gap-1 mt-2">${org.chipsHtml}</div>`
+            : '';
     const delBtn =
         viewMode === 'list'
             ? `<button type="button" class="${CA_LIST_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить запись" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>`
             : `<div class="client-analytics-card-actions absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto" data-role="actions">
-  <button type="button" class="${CA_CARD_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить запись" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>
+  ${orgBtn}<button type="button" class="${CA_CARD_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить запись" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>
 </div>`;
     el.innerHTML =
         viewMode === 'list'
@@ -696,13 +1048,14 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0) {
     <h3 class="item-title font-semibold text-gray-900 dark:text-gray-100">${title}</h3>
     ${frogBadge}
     </div>
+    ${chipsRow}
     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Тел.: ${phones}</p>
     <p class="text-sm text-gray-600 dark:text-gray-400">E-mail: ${emails}</p>
     <p class="text-sm mt-1 line-clamp-2">${q || '—'}</p>
     <p class="text-xs text-gray-500 mt-1">${fn}</p>
   </div>
   <div class="flex gap-2 shrink-0 self-start" data-role="actions">
-    ${delBtn}
+    ${orgBtn}${delBtn}
   </div>
 </div>`
             : `${delBtn}
@@ -711,6 +1064,7 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0) {
   <h3 class="item-title font-semibold text-base text-gray-900 dark:text-gray-100">${title}</h3>
   ${frogBadge}
   </div>
+  ${chipsRow}
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Тел.: ${phones}</p>
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">E-mail: ${emails}</p>
   <p class="text-sm mt-2 line-clamp-4">${q || '—'}</p>
@@ -735,9 +1089,10 @@ function formatClientAnalyticsRuDateTime(iso) {
  * @param {{ innKey: string, records: object[] }} stack
  * @param {'cards'|'list'} viewMode
  * @param {number} [blacklistLevel]
+ * @param {{ metaId?: string, chipsHtml?: string } | null} [org]
  * @returns {HTMLElement}
  */
-function createInnStackCardElement(stack, viewMode, blacklistLevel = 0) {
+function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = null) {
     const rec = stack.records[0];
     const n = stack.records.length;
     const el = document.createElement('article');
@@ -796,16 +1151,30 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0) {
         n > 1
             ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Последнее: ${escapeHtml(updated)} · нажмите карточку для полной истории</p>`
             : `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Обновлено: ${escapeHtml(updated)}</p>`;
+    const orgBtn =
+        org && org.metaId
+            ? `<button type="button" class="ca-card-organize pointer-events-auto ${viewMode === 'list' ? BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS : BOOKMARK_CARD_ICON_BUTTON_CLASS} text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-200" data-ca-organize="${escapeHtml(org.metaId)}" title="Папка и теги" aria-label="Папка и теги"><i class="fas fa-tags text-sm" aria-hidden="true"></i></button>`
+            : '';
+    const chipsRow =
+        org && org.chipsHtml
+            ? `<div class="ca-meta-chips-row flex flex-wrap gap-1 mt-2">${org.chipsHtml}</div>`
+            : '';
     const delBtn =
         n === 1
             ? viewMode === 'list'
                 ? `<button type="button" class="${CA_LIST_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить запись" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>`
                 : `<div class="client-analytics-card-actions absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto" data-role="actions">
-  <button type="button" class="${CA_CARD_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить единственное обращение" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>
+  ${orgBtn}<button type="button" class="${CA_CARD_DELETE_BTN_CLASS}" data-id="${rec.id}" title="Удалить единственное обращение" aria-label="Удалить запись"><i class="fas fa-trash text-sm" aria-hidden="true"></i></button>
 </div>`
             : viewMode === 'list'
               ? ''
               : '';
+    const cardActionsMulti =
+        n > 1 && orgBtn
+            ? `<div class="client-analytics-card-actions absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto" data-role="actions">
+  ${orgBtn}
+</div>`
+            : '';
     el.innerHTML =
         viewMode === 'list'
             ? `<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
@@ -815,21 +1184,27 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0) {
     ${appealsBadge}
     ${frogBadge}
     </div>
+    ${chipsRow}
     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Тел.: ${phones}</p>
     <p class="text-sm text-gray-600 dark:text-gray-400">E-mail: ${emails}</p>
     <p class="text-sm mt-1 line-clamp-2">${q || '—'}</p>
     <p class="text-xs text-gray-500 mt-1">${fn}</p>
     ${historyHint}
   </div>
-  ${n === 1 ? `<div class="flex gap-2 shrink-0 self-start" data-role="actions">${delBtn}</div>` : '<div class="shrink-0 self-start w-10 sm:w-0" aria-hidden="true"></div>'}
+  ${
+      n === 1
+          ? `<div class="flex gap-2 shrink-0 self-start" data-role="actions">${orgBtn}${delBtn}</div>`
+          : `<div class="flex gap-2 shrink-0 self-start" data-role="actions">${orgBtn}</div>`
+  }
 </div>`
-            : `${n === 1 ? delBtn : ''}
-<div class="${n === 1 ? 'pr-14' : ''}">
+            : `${n === 1 ? delBtn : cardActionsMulti}
+<div class="${n === 1 || orgBtn ? 'pr-14' : ''}">
   <div class="flex flex-wrap items-start gap-2">
   <h3 class="item-title font-semibold text-base text-gray-900 dark:text-gray-100">${title}</h3>
   ${appealsBadge}
   ${frogBadge}
   </div>
+  ${chipsRow}
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Тел.: ${phones}</p>
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">E-mail: ${emails}</p>
   <p class="text-sm mt-2 line-clamp-4">${q || '—'}</p>
@@ -872,12 +1247,31 @@ export async function renderClientAnalyticsPage() {
     const groupedFiltered = groupClientAnalyticsRecordsForDisplay(filtered);
     const cardCountAll = groupedAll.innStacks.length + groupedAll.noInnRecords.length;
     const cardCountFiltered = groupedFiltered.innStacks.length + groupedFiltered.noInnRecords.length;
+    let orgState = {
+        folders: [],
+        tags: [],
+        metaById: /** @type {Map<string, import('./client-analytics-organization.js').CaCardMeta>} */ (new Map()),
+        foldersById: new Map(),
+        tagsById: new Map(),
+        view: normalizeClientAnalyticsOrgViewPref(null),
+    };
+    try {
+        orgState = await loadClientAnalyticsOrgState();
+        syncClientAnalyticsOrgToolbarDom(orgState.folders, orgState.tags, orgState.view);
+    } catch (e) {
+        console.warn('[client-analytics] не удалось загрузить папки/теги', e);
+    }
+
     const countEl = document.getElementById('clientAnalyticsRecordCount');
     if (countEl) {
+        const filterSuffix =
+            orgState.view.folderFilter !== CA_FOLDER_FILTER_ALL || (orgState.view.tagFilterIds || []).length
+                ? ' · фильтр'
+                : '';
         countEl.textContent =
             clientAnalyticsSearchQuery.trim().length > 0
-                ? `Карточек: ${cardCountAll} · по запросу: ${cardCountFiltered} (${filtered.length} обращ.)`
-                : `Карточек: ${cardCountAll} · обращений: ${totalRecords}`;
+                ? `Карточек: ${cardCountAll} · по запросу: ${cardCountFiltered} (${filtered.length} обращ.)${filterSuffix}`
+                : `Карточек: ${cardCountAll} · обращений: ${totalRecords}${filterSuffix}`;
     }
 
     const viewMode =
@@ -902,16 +1296,66 @@ export async function renderClientAnalyticsPage() {
                   )}» ничего не найдено.</p>`
                 : '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">Записей пока нет. Загрузите один или несколько .txt файлов выше.</p>';
     } else {
-        const frag = document.createDocumentFragment();
-        for (const stack of groupedFiltered.innStacks) {
-            const blLevel = getBlacklistLevelForClientInn(stack.innKey, blacklistLevelByInn);
-            frag.appendChild(createInnStackCardElement(stack, viewMode, blLevel));
+        let units = buildDisplayUnitsFromGrouped(groupedFiltered);
+        units = sortClientAnalyticsDisplayUnits(units, orgState.view.sortMode);
+        const metaRecord = Object.fromEntries(orgState.metaById);
+        units = filterUnitsByFolder(units, orgState.view.folderFilter, metaRecord);
+        units = filterUnitsByTagsAny(units, orgState.view.tagFilterIds, metaRecord);
+        const sections = groupClientAnalyticsUnitsForRender(
+            units,
+            orgState.view.groupMode,
+            orgState.folders,
+            orgState.tags,
+            metaRecord,
+        );
+
+        /**
+         * @param {import('./client-analytics-organization.js').CaDisplayUnit} u
+         */
+        const orgPayloadForUnit = (u) => {
+            const id = getClientAnalyticsUnitMetaId(u);
+            const meta = orgState.metaById.get(id) || { folderId: null, tagIds: [] };
+            const chips = buildClientAnalyticsMetaChipsHtml(
+                meta,
+                orgState.foldersById,
+                orgState.tagsById,
+            );
+            return { metaId: id, chipsHtml: chips };
+        };
+
+        if (!units.length) {
+            container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">По выбранным фильтрам папки и тегов карточек нет. Сбросьте фильтры или назначьте папки и теги через иконку на карточке.</p>`;
+        } else {
+            const frag = document.createDocumentFragment();
+            for (const sec of sections) {
+                if (sec.label) {
+                    const h = document.createElement('h3');
+                    h.className =
+                        'ca-section-heading col-span-full text-sm font-semibold text-gray-700 dark:text-gray-200 mt-3 mb-2 px-0.5 border-b border-gray-200 dark:border-gray-600 pb-1';
+                    h.textContent = sec.label;
+                    frag.appendChild(h);
+                }
+                for (const u of sec.units) {
+                    if (u.type === 'inn') {
+                        const blLevel = getBlacklistLevelForClientInn(u.innKey, blacklistLevelByInn);
+                        frag.appendChild(
+                            createInnStackCardElement(
+                                { innKey: u.innKey, records: u.records },
+                                viewMode,
+                                blLevel,
+                                orgPayloadForUnit(u),
+                            ),
+                        );
+                    } else {
+                        const blLevel = getBlacklistLevelForClientInn(u.record.inn, blacklistLevelByInn);
+                        frag.appendChild(
+                            createRecordCardElement(u.record, viewMode, blLevel, orgPayloadForUnit(u)),
+                        );
+                    }
+                }
+            }
+            container.appendChild(frag);
         }
-        for (const rec of groupedFiltered.noInnRecords) {
-            const blLevel = getBlacklistLevelForClientInn(rec.inn, blacklistLevelByInn);
-            frag.appendChild(createRecordCardElement(rec, viewMode, blLevel));
-        }
-        container.appendChild(frag);
     }
 
     if (typeof deps.applyCurrentView === 'function') {
@@ -1205,6 +1649,129 @@ export function closeClientAnalyticsDetailModal() {
     });
 }
 
+async function refreshClientAnalyticsOrgManageModalLists() {
+    const ulF = document.getElementById('clientAnalyticsFoldersManageList');
+    const ulT = document.getElementById('clientAnalyticsTagsManageList');
+    if (!ulF || !ulT) return;
+    const folders = await getAllFromIndexedDB('clientAnalyticsFolders');
+    const tags = await getAllFromIndexedDB('clientAnalyticsTags');
+    const fs = [...(Array.isArray(folders) ? folders : [])].sort((a, b) => {
+        const ao = Number(a.sortOrder) || 0;
+        const bo = Number(b.sortOrder) || 0;
+        if (ao !== bo) return ao - bo;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+    });
+    ulF.innerHTML = fs
+        .map(
+            (f) =>
+                `<li class="flex items-center gap-2 justify-between border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1.5">
+<span class="min-w-0 break-words">${escapeHtml(String(f.name || ''))}</span>
+<button type="button" class="shrink-0 text-red-600 hover:text-red-800 text-sm" data-ca-delete-folder="${f.id}" title="Удалить папку" aria-label="Удалить папку"><i class="fas fa-trash" aria-hidden="true"></i></button>
+</li>`,
+        )
+        .join('');
+    const ts = [...(Array.isArray(tags) ? tags : [])].sort((a, b) => {
+        const ao = Number(a.sortOrder) || 0;
+        const bo = Number(b.sortOrder) || 0;
+        if (ao !== bo) return ao - bo;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+    });
+    ulT.innerHTML = ts
+        .map((t) => {
+            const col = sanitizeClientAnalyticsTagColor(t.color) || '#94a3b8';
+            return `<li class="flex items-center gap-2 justify-between border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1.5">
+<span class="min-w-0 flex items-center gap-2 break-words"><span class="inline-block h-2.5 w-2.5 rounded-full shrink-0" style="background:${escapeHtml(col)}"></span>${escapeHtml(String(t.name || ''))}</span>
+<button type="button" class="shrink-0 text-red-600 hover:text-red-800 text-sm" data-ca-delete-tag="${t.id}" title="Удалить тег" aria-label="Удалить тег"><i class="fas fa-trash" aria-hidden="true"></i></button>
+</li>`;
+        })
+        .join('');
+}
+
+function closeClientAnalyticsAssignModal() {
+    const modal = document.getElementById('clientAnalyticsAssignModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    deactivateModalFocus(modal);
+    requestAnimationFrame(() => {
+        if (getVisibleModals().length === 0) {
+            document.body.classList.remove('overflow-hidden', 'modal-open');
+        }
+    });
+}
+
+function closeClientAnalyticsOrgManageModal() {
+    const modal = document.getElementById('clientAnalyticsOrgManageModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    deactivateModalFocus(modal);
+    requestAnimationFrame(() => {
+        if (getVisibleModals().length === 0) {
+            document.body.classList.remove('overflow-hidden', 'modal-open');
+        }
+    });
+}
+
+async function openClientAnalyticsOrgManageModal() {
+    const modal = document.getElementById('clientAnalyticsOrgManageModal');
+    if (!modal) return;
+    await refreshClientAnalyticsOrgManageModalLists();
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden', 'modal-open');
+    activateModalFocus(modal);
+}
+
+/**
+ * @param {string} metaId
+ */
+async function openClientAnalyticsAssignModal(metaId) {
+    const modal = document.getElementById('clientAnalyticsAssignModal');
+    const hid = document.getElementById('clientAnalyticsAssignMetaId');
+    const folderSelect = document.getElementById('clientAnalyticsAssignFolderSelect');
+    const tagBox = document.getElementById('clientAnalyticsAssignTagsFieldset');
+    if (!modal || !hid || !folderSelect || !tagBox || !metaId) return;
+    const state = await loadClientAnalyticsOrgState();
+    hid.value = metaId;
+    folderSelect.innerHTML = '<option value="">Без папки</option>';
+    const fs = [...state.folders].sort((a, b) => {
+        const ao = Number(a.sortOrder) || 0;
+        const bo = Number(b.sortOrder) || 0;
+        if (ao !== bo) return ao - bo;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+    });
+    for (const f of fs) {
+        const o = document.createElement('option');
+        o.value = String(f.id);
+        o.textContent = String(f.name || 'Папка');
+        folderSelect.appendChild(o);
+    }
+    const meta = state.metaById.get(metaId) || { folderId: null, tagIds: [] };
+    folderSelect.value = meta.folderId != null ? String(meta.folderId) : '';
+    const ts = [...state.tags].sort((a, b) => {
+        const ao = Number(a.sortOrder) || 0;
+        const bo = Number(b.sortOrder) || 0;
+        if (ao !== bo) return ao - bo;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+    });
+    const sel = new Set(meta.tagIds || []);
+    tagBox.innerHTML = ts
+        .map((t) => {
+            const id = `ca-assign-tag-${t.id}`;
+            const checked = sel.has(Number(t.id)) ? ' checked' : '';
+            return `<label class="flex items-center gap-2 cursor-pointer select-none" for="${id}">
+<input type="checkbox" id="${id}" value="${String(t.id)}" class="rounded border-gray-300 text-primary focus:ring-primary"${checked}/>
+<span>${escapeHtml(String(t.name || ''))}</span>
+</label>`;
+        })
+        .join('');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden', 'modal-open');
+    activateModalFocus(modal);
+}
+
 let _handlersBound = false;
 
 /**
@@ -1308,6 +1875,14 @@ export function initClientAnalyticsUi() {
     }
 
     document.addEventListener('click', (e) => {
+        const orgHit = e.target.closest('[data-ca-organize]');
+        if (orgHit) {
+            e.preventDefault();
+            e.stopPropagation();
+            const mid = orgHit.getAttribute('data-ca-organize') || '';
+            void openClientAnalyticsAssignModal(mid);
+            return;
+        }
         const openBlacklist = e.target.closest('[data-action="open-blacklist-by-inn"]');
         if (openBlacklist) {
             e.preventDefault();
@@ -1389,6 +1964,213 @@ export function initClientAnalyticsUi() {
             const sec = document.getElementById('clientAnalyticsFilesSection');
             const n = parseInt(sec?.dataset?.fileCount || '0', 10);
             updateClientAnalyticsFilesListChrome(Number.isFinite(n) ? n : 0);
+        });
+    }
+
+    const sortSel = document.getElementById('clientAnalyticsSortSelect');
+    if (sortSel && !sortSel._caSortBound) {
+        sortSel._caSortBound = true;
+        sortSel.addEventListener('change', async () => {
+            const st = await loadClientAnalyticsOrgState();
+            st.view.sortMode = /** @type {CaSortMode} */ (sortSel.value);
+            await saveClientAnalyticsOrgViewPref(st.view);
+            await renderClientAnalyticsPage();
+        });
+    }
+    const groupSel = document.getElementById('clientAnalyticsGroupSelect');
+    if (groupSel && !groupSel._caGroupBound) {
+        groupSel._caGroupBound = true;
+        groupSel.addEventListener('change', async () => {
+            const st = await loadClientAnalyticsOrgState();
+            st.view.groupMode = /** @type {CaGroupMode} */ (groupSel.value);
+            await saveClientAnalyticsOrgViewPref(st.view);
+            await renderClientAnalyticsPage();
+        });
+    }
+    const folderSel = document.getElementById('clientAnalyticsFolderFilterSelect');
+    if (folderSel && !folderSel._caFolderFilterBound) {
+        folderSel._caFolderFilterBound = true;
+        folderSel.addEventListener('change', async () => {
+            const st = await loadClientAnalyticsOrgState();
+            st.view.folderFilter = folderSel.value;
+            await saveClientAnalyticsOrgViewPref(st.view);
+            await renderClientAnalyticsPage();
+        });
+    }
+
+    const orgToolbar = document.getElementById('clientAnalyticsOrgToolbar');
+    if (orgToolbar && !orgToolbar._caTagBarBound) {
+        orgToolbar._caTagBarBound = true;
+        orgToolbar.addEventListener('click', async (ev) => {
+            const clearB = ev.target.closest('[data-ca-clear-tag-filter]');
+            if (clearB) {
+                ev.preventDefault();
+                const st = await loadClientAnalyticsOrgState();
+                st.view.tagFilterIds = [];
+                await saveClientAnalyticsOrgViewPref(st.view);
+                await renderClientAnalyticsPage();
+                return;
+            }
+            const tagB = ev.target.closest('.ca-tag-filter-btn');
+            if (tagB && tagB.dataset.tagFilterId != null) {
+                ev.preventDefault();
+                const tid = Number(tagB.dataset.tagFilterId);
+                if (!Number.isFinite(tid)) return;
+                const st = await loadClientAnalyticsOrgState();
+                const set = new Set(st.view.tagFilterIds || []);
+                if (set.has(tid)) set.delete(tid);
+                else set.add(tid);
+                st.view.tagFilterIds = [...set].sort((a, b) => a - b);
+                await saveClientAnalyticsOrgViewPref(st.view);
+                await renderClientAnalyticsPage();
+            }
+        });
+    }
+
+    const manageOrgBtn = document.getElementById('clientAnalyticsManageOrgBtn');
+    if (manageOrgBtn && !manageOrgBtn._caBound) {
+        manageOrgBtn._caBound = true;
+        manageOrgBtn.addEventListener('click', () => void openClientAnalyticsOrgManageModal());
+    }
+
+    const assignClose = document.getElementById('clientAnalyticsAssignCloseBtn');
+    if (assignClose && !assignClose._caBound) {
+        assignClose._caBound = true;
+        assignClose.addEventListener('click', closeClientAnalyticsAssignModal);
+    }
+    const assignCancel = document.getElementById('clientAnalyticsAssignCancelBtn');
+    if (assignCancel && !assignCancel._caBound) {
+        assignCancel._caBound = true;
+        assignCancel.addEventListener('click', closeClientAnalyticsAssignModal);
+    }
+    const assignSave = document.getElementById('clientAnalyticsAssignSaveBtn');
+    if (assignSave && !assignSave._caBound) {
+        assignSave._caBound = true;
+        assignSave.addEventListener('click', async () => {
+            const hid = document.getElementById('clientAnalyticsAssignMetaId');
+            const folderSelect = document.getElementById('clientAnalyticsAssignFolderSelect');
+            const tagBox = document.getElementById('clientAnalyticsAssignTagsFieldset');
+            if (!hid || !folderSelect || !tagBox) return;
+            const metaId = hid.value;
+            if (!metaId) return;
+            const fv = folderSelect.value;
+            let folderId = null;
+            if (fv !== '') {
+                const n = Number(fv);
+                if (Number.isFinite(n)) folderId = n;
+            }
+            const tagIds = [];
+            tagBox.querySelectorAll('input[type="checkbox"]').forEach((inp) => {
+                if (inp.checked) {
+                    const n = Number(inp.value);
+                    if (Number.isFinite(n)) tagIds.push(n);
+                }
+            });
+            tagIds.sort((a, b) => a - b);
+            try {
+                await persistClientAnalyticsCardMeta(metaId, {
+                    folderId,
+                    tagIds,
+                });
+                if (deps.showNotification) deps.showNotification('Папка и теги сохранены', 'success');
+                closeClientAnalyticsAssignModal();
+                await renderClientAnalyticsPage();
+            } catch (err) {
+                console.error(err);
+                if (deps.showNotification) deps.showNotification(String(err?.message || err), 'error');
+            }
+        });
+    }
+
+    const orgManageClose = document.getElementById('clientAnalyticsOrgManageCloseBtn');
+    if (orgManageClose && !orgManageClose._caBound) {
+        orgManageClose._caBound = true;
+        orgManageClose.addEventListener('click', closeClientAnalyticsOrgManageModal);
+    }
+
+    const addFolderBtn = document.getElementById('clientAnalyticsAddFolderBtn');
+    if (addFolderBtn && !addFolderBtn._caBound) {
+        addFolderBtn._caBound = true;
+        addFolderBtn.addEventListener('click', async () => {
+            const inp = document.getElementById('clientAnalyticsNewFolderName');
+            const name = String(inp?.value || '').trim();
+            if (!name) {
+                if (deps.showNotification) deps.showNotification('Введите название папки', 'warning');
+                return;
+            }
+            const all = await getAllFromIndexedDB('clientAnalyticsFolders');
+            const maxOrder = Math.max(
+                0,
+                ...(Array.isArray(all) ? all : []).map((f) => Number(f.sortOrder) || 0),
+            );
+            await saveToIndexedDB('clientAnalyticsFolders', {
+                name,
+                sortOrder: maxOrder + 1,
+                createdAt: new Date().toISOString(),
+            });
+            if (inp) inp.value = '';
+            await refreshClientAnalyticsOrgManageModalLists();
+            await renderClientAnalyticsPage();
+            if (deps.showNotification) deps.showNotification('Папка добавлена', 'success');
+        });
+    }
+
+    const addTagBtn = document.getElementById('clientAnalyticsAddTagBtn');
+    if (addTagBtn && !addTagBtn._caBound) {
+        addTagBtn._caBound = true;
+        addTagBtn.addEventListener('click', async () => {
+            const inp = document.getElementById('clientAnalyticsNewTagName');
+            const colorInp = document.getElementById('clientAnalyticsNewTagColor');
+            const name = String(inp?.value || '').trim();
+            if (!name) {
+                if (deps.showNotification) deps.showNotification('Введите название тега', 'warning');
+                return;
+            }
+            const colorRaw = colorInp && 'value' in colorInp ? colorInp.value : '';
+            const color = sanitizeClientAnalyticsTagColor(colorRaw) || '#3b82f6';
+            const all = await getAllFromIndexedDB('clientAnalyticsTags');
+            const maxOrder = Math.max(
+                0,
+                ...(Array.isArray(all) ? all : []).map((t) => Number(t.sortOrder) || 0),
+            );
+            await saveToIndexedDB('clientAnalyticsTags', {
+                name,
+                color,
+                sortOrder: maxOrder + 1,
+                createdAt: new Date().toISOString(),
+            });
+            if (inp) inp.value = '';
+            await refreshClientAnalyticsOrgManageModalLists();
+            await renderClientAnalyticsPage();
+            if (deps.showNotification) deps.showNotification('Тег добавлен', 'success');
+        });
+    }
+
+    const manageModal = document.getElementById('clientAnalyticsOrgManageModal');
+    if (manageModal && !manageModal._caDeleteBound) {
+        manageModal._caDeleteBound = true;
+        manageModal.addEventListener('click', async (ev) => {
+            const df = ev.target.closest('[data-ca-delete-folder]');
+            if (df) {
+                ev.preventDefault();
+                const id = parseInt(df.getAttribute('data-ca-delete-folder') || '', 10);
+                if (!Number.isFinite(id)) return;
+                await deleteClientAnalyticsFolderCascade(id);
+                await refreshClientAnalyticsOrgManageModalLists();
+                await renderClientAnalyticsPage();
+                if (deps.showNotification) deps.showNotification('Папка удалена', 'info');
+                return;
+            }
+            const dt = ev.target.closest('[data-ca-delete-tag]');
+            if (dt) {
+                ev.preventDefault();
+                const id = parseInt(dt.getAttribute('data-ca-delete-tag') || '', 10);
+                if (!Number.isFinite(id)) return;
+                await deleteClientAnalyticsTagCascade(id);
+                await refreshClientAnalyticsOrgManageModalLists();
+                await renderClientAnalyticsPage();
+                if (deps.showNotification) deps.showNotification('Тег удалён', 'info');
+            }
         });
     }
 }

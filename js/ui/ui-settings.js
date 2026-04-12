@@ -6,6 +6,7 @@
  */
 
 import { getFromIndexedDB } from '../db/indexeddb.js';
+import { isPanelVisibleByDefault } from '../config.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ
@@ -127,7 +128,7 @@ export async function saveUISettings() {
             Array.isArray(State.userPreferences?.panelVisibility) &&
             State.userPreferences.panelVisibility.length === order.length
                 ? [...State.userPreferences.panelVisibility]
-                : order.map((id) => !(id === 'sedoTypes' || id === 'blacklistedClients'));
+                : order.map((id) => isPanelVisibleByDefault(id));
         if (typeof applyPanelOrderAndVisibility === 'function') {
             applyPanelOrderAndVisibility(order, visibility);
         } else {
@@ -174,7 +175,7 @@ export async function applyUISettings() {
         Array.isArray(defaultPanelVisibility) &&
         defaultPanelVisibility.length === actualDefaultPanelOrder.length
             ? defaultPanelVisibility
-            : currentPanelIds.map((id) => !(id === 'sedoTypes' || id === 'blacklistedClients'));
+            : currentPanelIds.map((id) => isPanelVisibleByDefault(id));
 
     if (
         !DEFAULT_UI_SETTINGS.panelOrder ||
@@ -215,7 +216,7 @@ export async function applyUISettings() {
                         const defaultIndex = actualDefaultPanelOrder.indexOf(id);
                         return defaultIndex !== -1
                             ? actualDefaultPanelVisibility[defaultIndex]
-                            : id !== 'sedoTypes';
+                            : isPanelVisibleByDefault(id);
                     });
                 }
                 let effectiveOrder = [];
@@ -227,7 +228,7 @@ export async function applyUISettings() {
                         effectiveVisibility.push(
                             typeof savedVisibility[index] === 'boolean'
                                 ? savedVisibility[index]
-                                : panelId !== 'sedoTypes',
+                                : isPanelVisibleByDefault(panelId),
                         );
                         processedIds.add(panelId);
                     } else {
@@ -242,7 +243,7 @@ export async function applyUISettings() {
                             `applyUISettings (DB Load): Добавление новой панели "${panelId}" в порядок/видимость.`,
                         );
                         effectiveOrder.push(panelId);
-                        effectiveVisibility.push(panelId !== 'sedoTypes');
+                        effectiveVisibility.push(isPanelVisibleByDefault(panelId));
                     }
                 });
                 settingsToApply.panelOrder = effectiveOrder;
@@ -355,7 +356,7 @@ export async function applyInitialUISettings() {
                 Array.isArray(State.userPreferences?.panelVisibility) &&
                 State.userPreferences.panelVisibility.length === order.length
                     ? [...State.userPreferences.panelVisibility]
-                    : order.map((id) => id !== 'sedoTypes');
+                    : order.map((id) => isPanelVisibleByDefault(id));
             if (typeof applyPanelOrderAndVisibility === 'function') {
                 applyPanelOrderAndVisibility(order, visArr);
             } else {

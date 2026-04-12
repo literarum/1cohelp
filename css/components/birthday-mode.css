@@ -1,0 +1,425 @@
+/* ===================================================================
+   Режим «День рождения»: гирлянда, конфетти, логотип-свеча, доступность
+   =================================================================== */
+
+html.birthday-mode {
+    --birthday-glow: color-mix(in srgb, var(--color-primary, #9933ff) 55%, #ff6b9d 45%);
+}
+
+/* Место под фиксированную гирлянду (волна + блик чуть выше прежних 32px) */
+html.birthday-mode div#appContent.container {
+    padding-top: calc(1.5rem + 44px);
+}
+
+/* Мягкий виньет вместо грубой border-image-«гирлянды» */
+html.birthday-mode body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 25;
+    box-shadow:
+        inset 0 0 100px color-mix(in srgb, var(--color-primary, #9933ff) 14%, transparent),
+        inset 0 0 40px color-mix(in srgb, #ff6b9d 8%, transparent);
+    border: none;
+}
+
+html.birthday-mode--reduced body::before {
+    opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.birthday-mode body::before {
+        opacity: 0.65;
+    }
+}
+
+/* ---------- Гирлянда (провод + равномерные лампочки + свечение) ---------- */
+/* z-index ниже модалок (z-60+), выше виньета body::before (25) и типичной шапки */
+.birthday-garland {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 45;
+    height: 45px;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 5px;
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+}
+
+.birthday-garland--hidden {
+    visibility: hidden;
+    height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.birthday-garland__cord {
+    position: absolute;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    top: 5px;
+    height: 15px;
+    pointer-events: none;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.birthday-garland__cord-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))
+        drop-shadow(0 -1px 6px rgba(255, 210, 140, 0.28));
+}
+
+.birthday-garland__bulbs {
+    position: relative;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: min(94vw, 1180px);
+    margin: 0 auto;
+    /* 5 (padding гирлянды) + 11 + margin-top лампочки = верх лампы у линии провода (~16px от верха гирлянды) */
+    padding: 11px 10px 0;
+    box-sizing: border-box;
+}
+
+.birthday-garland__bulb {
+    --bulb-color: #ffd93d;
+    --garland-wave-y: 0px;
+    position: relative;
+    flex: 0 0 13px;
+    width: 13px;
+    height: 13px;
+    /* Волна: смещаем весь шар вниз от базовой линии провода; верх шара = точка подвеса */
+    margin-top: var(--garland-wave-y, 0px);
+    transform-origin: top center;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle at 34% 26%,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(255, 255, 255, 0.55) 16%,
+        var(--bulb-color) 40%,
+        color-mix(in srgb, var(--bulb-color) 78%, #1a0a05) 100%
+    );
+    /* Один компактный drop-shadow (без overflow на родителе — иначе артефакты «радуги»).
+       Основной ореол — box-shadow, смещён вверх, без огромного кольца 26px/10px вниз. */
+    filter: drop-shadow(0 -1px 4px color-mix(in srgb, var(--bulb-color) 92%, transparent))
+        drop-shadow(0 -3px 11px color-mix(in srgb, var(--bulb-color) 42%, transparent));
+    box-shadow:
+        0 0 2px 1px rgba(255, 255, 255, 0.65),
+        0 0 0 1px color-mix(in srgb, var(--bulb-color) 35%, transparent),
+        0 -2px 7px 2px var(--bulb-color),
+        0 -4px 12px 3px color-mix(in srgb, var(--bulb-color) 48%, transparent),
+        inset 0 1px 2px rgba(255, 255, 255, 0.35),
+        inset 0 -2px 5px rgba(0, 0, 0, 0.28);
+    animation: birthday-bulb-twinkle 2.1s ease-in-out infinite;
+    animation-delay: var(--tw-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .birthday-garland__bulb {
+        animation: none;
+    }
+}
+
+html.birthday-mode--reduced .birthday-garland__bulb {
+    animation: none;
+}
+
+@keyframes birthday-bulb-twinkle {
+    0%,
+    100% {
+        opacity: 0.92;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.16);
+    }
+}
+
+/* Логотип: свеча только вместо цифры «1», «СО» остаётся; вне ДР — «1СО» слитно, без лишнего зазора */
+.app-brand-title__suffix {
+    white-space: nowrap;
+    margin-inline-start: 0;
+}
+
+.app-brand-title__digit-one {
+    margin-right: -4px;
+}
+
+.app-brand-title__candle-wrap {
+    display: none;
+    vertical-align: -0.1em;
+}
+
+html.birthday-mode .app-brand-title__digit-one {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Чуть больший зазор после «Copilot» (к тексту суффикса), только в ДР */
+html.birthday-mode .app-brand-title__suffix {
+    margin-inline-start: 0.07em;
+}
+
+html.birthday-mode .app-brand-title__candle-wrap {
+    display: inline-flex;
+    /* чуть выше базовой линии (менее отрицательный vertical-align) */
+    vertical-align: -0.03em;
+    /* ещё ближе к «СО» */
+    margin-left: -0.09em;
+    margin-inline-end: -0.2em;
+}
+
+html.birthday-mode .app-brand-title__candle-svg {
+    width: 0.46em;
+    height: 0.82em;
+    vertical-align: -0.02em;
+}
+
+html.birthday-mode .app-brand-title__letters-so {
+    margin-left: -0.06em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html.birthday-mode:not(.birthday-mode--reduced) .app-brand-title__candle-glow {
+        animation: birthday-candle-glow 1.35s ease-in-out infinite;
+        transform-origin: 12px 10px;
+    }
+
+    html.birthday-mode:not(.birthday-mode--reduced) .app-brand-title__candle-flame {
+        animation: birthday-candle-flame 0.85s ease-in-out infinite alternate;
+        transform-origin: 12px 16px;
+    }
+}
+
+@keyframes birthday-candle-glow {
+    0%,
+    100% {
+        opacity: 0.38;
+    }
+    50% {
+        opacity: 0.62;
+    }
+}
+
+@keyframes birthday-candle-flame {
+    0% {
+        transform: scale(1, 1) translateY(0);
+    }
+    100% {
+        transform: scale(1.04, 1.1) translateY(-0.4px);
+    }
+}
+
+html.birthday-mode--reduced .app-brand-title__candle-glow,
+html.birthday-mode--reduced .app-brand-title__candle-flame {
+    animation: none;
+}
+
+/* Конфетти-слой: выше липкой шапки (base.css z-index 30), ниже гирлянды (45) */
+.birthday-fx-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 42;
+    overflow: hidden;
+}
+
+.birthday-fx-layer--hidden {
+    visibility: hidden;
+}
+
+/* Хост: только вертикаль. Нельзя width/height: 0 — при overflow:hidden у слоя движок обрезает transform до «линии» у шапки. */
+.birthday-confetti-host {
+    position: absolute;
+    top: -12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    /* Запас под горизонтальный sway чипа (~±38px) + центрирование по inline left */
+    width: 48px;
+    height: 16px;
+    margin-left: -24px;
+    overflow: visible;
+    pointer-events: none;
+    animation-name: birthday-confetti-drop;
+    animation-duration: var(--bc-dur, 7s);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-fill-mode: backwards;
+    will-change: transform;
+}
+
+@keyframes birthday-confetti-drop {
+    0% {
+        transform: translate3d(0, -12vh, 0);
+    }
+    100% {
+        transform: translate3d(0, 120vh, 0);
+    }
+}
+
+/* Частица: горизонтальный занос + лёгкий крен (var(--bc-sway-neg) задаётся из JS — без calc в keyframes). */
+.birthday-confetti {
+    position: relative;
+    flex: 0 0 auto;
+    width: 9px;
+    height: 14px;
+    border-radius: 2px;
+    opacity: 0.92;
+    transform-origin: center center;
+    animation-name: birthday-confetti-sway;
+    animation-duration: var(--bc-sway-dur, 2.4s);
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+    animation-fill-mode: backwards;
+    box-shadow:
+        0 0 4px 1px color-mix(in srgb, currentColor 48%, transparent),
+        0 0 2px color-mix(in srgb, currentColor 32%, transparent);
+}
+
+@keyframes birthday-confetti-sway {
+    0% {
+        transform: translate3d(var(--bc-sway-neg, -16px), 0, 0) rotate(-12deg);
+    }
+    100% {
+        transform: translate3d(var(--bc-sway, 16px), 0, 0) rotate(12deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .birthday-confetti-host {
+        animation-duration: calc(var(--bc-dur, 7s) * 2.2);
+        animation-timing-function: linear;
+        animation-fill-mode: backwards;
+        will-change: auto;
+    }
+
+    .birthday-confetti-host .birthday-confetti {
+        opacity: 0.42;
+        animation-duration: calc(var(--bc-sway-dur, 2.4s) * 2.8);
+        animation-timing-function: ease-out;
+        animation-fill-mode: backwards;
+        --bc-sway: 6px;
+        --bc-sway-neg: -6px;
+    }
+}
+
+html.birthday-mode--reduced .birthday-confetti-host {
+    animation-duration: calc(var(--bc-dur, 7s) * 2.2);
+    animation-timing-function: linear;
+    animation-fill-mode: backwards;
+    will-change: auto;
+}
+
+html.birthday-mode--reduced .birthday-confetti-host .birthday-confetti {
+    opacity: 0.38;
+    animation-duration: calc(var(--bc-sway-dur, 2.4s) * 2.8);
+    animation-timing-function: ease-out;
+    animation-fill-mode: backwards;
+    --bc-sway: 6px;
+    --bc-sway-neg: -6px;
+}
+
+.birthday-confetti-host:nth-child(6n + 1) .birthday-confetti {
+    background: #ff6b9d;
+    color: #ff6b9d;
+}
+.birthday-confetti-host:nth-child(6n + 2) .birthday-confetti {
+    background: #ffd93d;
+    color: #ffd93d;
+}
+.birthday-confetti-host:nth-child(6n + 3) .birthday-confetti {
+    background: #6bcb77;
+    color: #6bcb77;
+}
+.birthday-confetti-host:nth-child(6n + 4) .birthday-confetti {
+    background: #4d96ff;
+    color: #4d96ff;
+}
+.birthday-confetti-host:nth-child(6n + 5) .birthday-confetti {
+    background: #c56cf0;
+    color: #c56cf0;
+}
+.birthday-confetti-host:nth-child(6n) .birthday-confetti {
+    background: #ff922b;
+    color: #ff922b;
+}
+
+/* Мелкие яркие конфетти в ДР; без filter (совместимость анимации transform) */
+html.birthday-mode .birthday-fx-layer .birthday-confetti-host {
+    top: -10px;
+    width: 44px;
+    height: 12px;
+    margin-left: -22px;
+}
+
+html.birthday-mode .birthday-fx-layer .birthday-confetti {
+    width: 5px;
+    height: 8px;
+    border-radius: 1px;
+    opacity: 0.98;
+    will-change: transform;
+    box-shadow:
+        0 0 4px 1px color-mix(in srgb, currentColor 62%, transparent),
+        0 0 2px 0.5px color-mix(in srgb, currentColor 46%, transparent);
+}
+
+/* Выше специфичность, чем у блока конфетти выше — иначе анимация снова включается при reduced */
+html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-host {
+    animation-duration: calc(var(--bc-dur, 7s) * 2.2);
+    animation-timing-function: linear;
+    animation-fill-mode: backwards;
+    will-change: auto;
+}
+
+html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-host .birthday-confetti {
+    opacity: 0.38;
+    animation-duration: calc(var(--bc-sway-dur, 2.4s) * 2.8);
+    animation-timing-function: ease-out;
+    animation-fill-mode: backwards;
+    --bc-sway: 6px;
+    --bc-sway-neg: -6px;
+    will-change: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html.birthday-mode .bg-primary {
+        animation: birthday-btn-glow 3.2s ease-in-out infinite;
+    }
+}
+
+@keyframes birthday-btn-glow {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--birthday-glow) 0%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 18px 2px color-mix(in srgb, var(--birthday-glow) 35%, transparent);
+    }
+}
+
+html.birthday-mode--reduced .bg-primary {
+    animation: none;
+}

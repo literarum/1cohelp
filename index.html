@@ -94,8 +94,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260410-141302-5f58f6f"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260410-141302-5f58f6f"></script>
+        <script src="js/vendor-config.js?v=legacy-20260413-005858-fd473fa"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260413-005858-fd473fa"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,12 +161,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260410-141302-5f58f6f"
+            href="css/tailwind.generated.css?v=legacy-20260413-005858-fd473fa"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260410-141302-5f58f6f" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260410-141302-5f58f6f" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260413-005858-fd473fa" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260413-005858-fd473fa" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -939,7 +939,7 @@
                             id="contextualBackNavBtn"
                             class="group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 pl-0 pr-2 text-left text-sm text-primary hover:bg-gray-100/80 dark:hover:bg-gray-800/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:opacity-40"
                             disabled
-                            aria-label=""
+                            aria-hidden="true"
                         >
                             <i
                                 class="fas fa-chevron-left text-xs opacity-80 transition-transform group-hover:-translate-x-px"
@@ -955,7 +955,93 @@
                         class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-3"
                     >
                         <div>
-                            <h1 class="text-2xl md:text-3xl font-bold text-primary">Copilot 1СО</h1>
+                            <h1
+                                class="relative text-2xl md:text-3xl font-bold text-primary app-brand-title"
+                                id="appBrandTitle"
+                            >
+                                Copilot&#32;<span
+                                    class="app-brand-title__suffix inline font-bold text-primary"
+                                    lang="ru"
+                                    ><span class="app-brand-title__digit-one">1</span
+                                    ><span
+                                        class="app-brand-title__candle-wrap inline-flex items-end align-baseline"
+                                        aria-hidden="true"
+                                    >
+                                    <svg
+                                        class="app-brand-title__candle-svg"
+                                        width="0.46em"
+                                        height="0.82em"
+                                        viewBox="0 0 24 44"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        focusable="false"
+                                    >
+                                        <defs>
+                                            <linearGradient
+                                                id="appBrandCandleFlameGrad"
+                                                x1="12"
+                                                y1="1"
+                                                x2="12"
+                                                y2="17"
+                                                gradientUnits="userSpaceOnUse"
+                                            >
+                                                <stop offset="0%" stop-color="#fffde7" />
+                                                <stop offset="40%" stop-color="#ffcc4d" />
+                                                <stop offset="100%" stop-color="#ff6b35" />
+                                            </linearGradient>
+                                            <filter
+                                                id="appBrandCandleFlameGlow"
+                                                x="-80%"
+                                                y="-80%"
+                                                width="260%"
+                                                height="260%"
+                                            >
+                                                <feGaussianBlur stdDeviation="1.4" result="blur" />
+                                                <feMerge>
+                                                    <feMergeNode in="blur" />
+                                                    <feMergeNode in="SourceGraphic" />
+                                                </feMerge>
+                                            </filter>
+                                        </defs>
+                                        <ellipse
+                                            class="app-brand-title__candle-glow"
+                                            cx="12"
+                                            cy="10"
+                                            rx="7"
+                                            ry="9"
+                                            fill="#ffb74d"
+                                            opacity="0.5"
+                                        />
+                                        <path
+                                            class="app-brand-title__candle-flame"
+                                            d="M12 2.5c-2.8 3.2-5.2 5.6-5.2 9.2 0 3.1 2.3 5.4 5.2 5.4s5.2-2.3 5.2-5.4c0-3.6-2.4-6-5.2-9.2z"
+                                            fill="url(#appBrandCandleFlameGrad)"
+                                            filter="url(#appBrandCandleFlameGlow)"
+                                        />
+                                        <rect
+                                            x="7.5"
+                                            y="17.5"
+                                            width="9"
+                                            height="24"
+                                            rx="2.2"
+                                            fill="#faf3e8"
+                                            stroke="#e5d9c8"
+                                            stroke-width="0.6"
+                                        />
+                                        <line
+                                            x1="12"
+                                            y1="17.5"
+                                            x2="12"
+                                            y2="12.5"
+                                            stroke="#5d4037"
+                                            stroke-width="1.1"
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
+                                    </span>
+                                    <span class="app-brand-title__letters-so">СО</span>
+                                </span>
+                            </h1>
                             <p id="appSlogan" class="text-sm md:text-base text-primary">
                                 Ваш надежный второй пилот
                             </p>
@@ -2145,6 +2231,84 @@
                     </div>
 
                     <div
+                        id="clientAnalyticsOrgToolbar"
+                        class="mb-4 flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white/60 dark:bg-gray-900/40 px-3 py-3"
+                    >
+                        <div class="flex flex-wrap items-end gap-3">
+                            <div class="flex flex-col gap-1 min-w-[11rem]">
+                                <label
+                                    for="clientAnalyticsSortSelect"
+                                    class="text-xs font-medium text-gray-600 dark:text-gray-400"
+                                    >Сортировка</label
+                                >
+                                <select
+                                    id="clientAnalyticsSortSelect"
+                                    class="text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="date_desc">Сначала новые</option>
+                                    <option value="date_asc">Сначала старые</option>
+                                    <option value="inn_asc">По ИНН (А–Я)</option>
+                                    <option value="appeals_desc">По числу обращений</option>
+                                    <option value="file_asc">По имени файла</option>
+                                    <option value="question_asc">По тексту вопроса</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1 min-w-[11rem]">
+                                <label
+                                    for="clientAnalyticsGroupSelect"
+                                    class="text-xs font-medium text-gray-600 dark:text-gray-400"
+                                    >Группировка</label
+                                >
+                                <select
+                                    id="clientAnalyticsGroupSelect"
+                                    class="text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="none">Без группировки</option>
+                                    <option value="folder">По папкам</option>
+                                    <option value="tag">По тегам</option>
+                                    <option value="source_file">По файлу источника</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1 min-w-[11rem] flex-1">
+                                <label
+                                    for="clientAnalyticsFolderFilterSelect"
+                                    class="text-xs font-medium text-gray-600 dark:text-gray-400"
+                                    >Папка</label
+                                >
+                                <select
+                                    id="clientAnalyticsFolderFilterSelect"
+                                    class="text-sm w-full max-w-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="all">Все карточки</option>
+                                    <option value="unfiled">Без папки</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1 justify-end">
+                                <span class="text-xs font-medium text-transparent select-none" aria-hidden="true"
+                                    >.</span
+                                >
+                                <button
+                                    type="button"
+                                    id="clientAnalyticsManageOrgBtn"
+                                    class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                    title="Создать и удалить папки и теги"
+                                >
+                                    <i class="fas fa-sliders-h" aria-hidden="true"></i>
+                                    Папки и теги
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            id="clientAnalyticsTagFilterBar"
+                            class="flex flex-wrap gap-2 items-center min-h-[1.75rem]"
+                            role="toolbar"
+                            aria-label="Фильтр по тегам"
+                        >
+                            <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">Теги:</span>
+                        </div>
+                    </div>
+
+                    <div
                         id="clientAnalyticsIngestPanel"
                         class="mb-4 hidden rounded-xl border border-gray-200 dark:border-gray-600 bg-white/90 dark:bg-gray-900/50 shadow-sm px-4 py-3"
                         role="status"
@@ -3298,6 +3462,40 @@
                                                 Каждые три часа показывается напоминание создать
                                                 резервную копию. Отключить можно и из самого
                                                 напоминания; снова включить — здесь.
+                                            </p>
+                                        </div>
+
+                                        <div
+                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                        >
+                                            <label
+                                                for="toggleBirthdayMode"
+                                                class="app-toggle flex items-center cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    id="toggleBirthdayMode"
+                                                    name="birthdayModeEnabled"
+                                                    class="app-toggle-input"
+                                                />
+                                                <span class="app-toggle__track"></span>
+                                                <span
+                                                    class="ml-3 text-sm text-gray-700 dark:text-gray-300"
+                                                >
+                                                    <i
+                                                        class="fas fa-cake-candles text-amber-500 dark:text-amber-400 mr-1.5"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    Режим «День рождения»
+                                                </span>
+                                            </label>
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
+                                            >
+                                                Яркое праздничное оформление: радужная рамка,
+                                                конфетти и мягкое свечение кнопок. При системной
+                                                настройке «уменьшить движение» анимации
+                                                отключаются — остаётся спокойный акцент.
                                             </p>
                                         </div>
 
@@ -5411,6 +5609,181 @@
             </div>
         </div>
 
+        <!-- Модалка: назначение папки и тегов карточке -->
+        <div
+            id="clientAnalyticsAssignModal"
+            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[66] flex items-center justify-center p-4"
+            aria-hidden="true"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clientAnalyticsAssignTitle"
+        >
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-600"
+            >
+                <header
+                    class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600"
+                >
+                    <h3
+                        id="clientAnalyticsAssignTitle"
+                        class="text-lg font-bold text-gray-900 dark:text-gray-100"
+                    >
+                        Папка и теги
+                    </h3>
+                    <button
+                        type="button"
+                        id="clientAnalyticsAssignCloseBtn"
+                        class="h-9 w-9 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 text-2xl leading-none"
+                        aria-label="Закрыть"
+                    >
+                        ×
+                    </button>
+                </header>
+                <div class="p-4 flex flex-col gap-4 text-gray-800 dark:text-gray-200">
+                    <input type="hidden" id="clientAnalyticsAssignMetaId" value="" />
+                    <div class="flex flex-col gap-1">
+                        <label
+                            for="clientAnalyticsAssignFolderSelect"
+                            class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                            >Папка</label
+                        >
+                        <select
+                            id="clientAnalyticsAssignFolderSelect"
+                            class="text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                            <option value="">Без папки</option>
+                        </select>
+                    </div>
+                    <fieldset class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                        <legend class="text-sm font-medium px-1 text-gray-700 dark:text-gray-300">
+                            Теги
+                        </legend>
+                        <div
+                            id="clientAnalyticsAssignTagsFieldset"
+                            class="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar text-sm"
+                        ></div>
+                    </fieldset>
+                    <div class="flex justify-end gap-2 pt-1">
+                        <button
+                            type="button"
+                            id="clientAnalyticsAssignCancelBtn"
+                            class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                            Отмена
+                        </button>
+                        <button
+                            type="button"
+                            id="clientAnalyticsAssignSaveBtn"
+                            class="px-3 py-1.5 rounded-md bg-primary hover:bg-secondary text-white text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                            Сохранить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модалка: управление папками и тегами -->
+        <div
+            id="clientAnalyticsOrgManageModal"
+            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[66] flex items-center justify-center p-4"
+            aria-hidden="true"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clientAnalyticsOrgManageTitle"
+        >
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-600"
+            >
+                <header
+                    class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600"
+                >
+                    <h3
+                        id="clientAnalyticsOrgManageTitle"
+                        class="text-lg font-bold text-gray-900 dark:text-gray-100"
+                    >
+                        Папки и теги
+                    </h3>
+                    <button
+                        type="button"
+                        id="clientAnalyticsOrgManageCloseBtn"
+                        class="h-9 w-9 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 text-2xl leading-none"
+                        aria-label="Закрыть"
+                    >
+                        ×
+                    </button>
+                </header>
+                <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 flex flex-col gap-6 text-gray-800 dark:text-gray-200">
+                    <section aria-labelledby="clientAnalyticsFoldersHeading">
+                        <h4
+                            id="clientAnalyticsFoldersHeading"
+                            class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2"
+                        >
+                            Папки
+                        </h4>
+                        <ul
+                            id="clientAnalyticsFoldersManageList"
+                            class="space-y-2 mb-3 text-sm"
+                            role="list"
+                        ></ul>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <input
+                                type="text"
+                                id="clientAnalyticsNewFolderName"
+                                placeholder="Название папки"
+                                class="flex-1 min-w-[8rem] text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5"
+                                maxlength="120"
+                            />
+                            <button
+                                type="button"
+                                id="clientAnalyticsAddFolderBtn"
+                                class="px-3 py-1.5 text-sm rounded-md bg-primary hover:bg-secondary text-white"
+                            >
+                                Добавить
+                            </button>
+                        </div>
+                    </section>
+                    <section aria-labelledby="clientAnalyticsTagsHeading">
+                        <h4
+                            id="clientAnalyticsTagsHeading"
+                            class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2"
+                        >
+                            Теги
+                        </h4>
+                        <ul
+                            id="clientAnalyticsTagsManageList"
+                            class="space-y-2 mb-3 text-sm"
+                            role="list"
+                        ></ul>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <input
+                                type="text"
+                                id="clientAnalyticsNewTagName"
+                                placeholder="Название тега"
+                                class="flex-1 min-w-[8rem] text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5"
+                                maxlength="80"
+                            />
+                            <input
+                                type="color"
+                                id="clientAnalyticsNewTagColor"
+                                value="#3b82f6"
+                                class="h-9 w-12 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer bg-transparent"
+                                title="Цвет метки"
+                                aria-label="Цвет метки для нового тега"
+                            />
+                            <button
+                                type="button"
+                                id="clientAnalyticsAddTagBtn"
+                                class="px-3 py-1.5 text-sm rounded-md bg-primary hover:bg-secondary text-white"
+                            >
+                                Добавить
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
         <!-- Кнопки прокрутки вверх/вниз для длинных страниц -->
         <div
             id="scrollNavButtons"
@@ -5433,6 +5806,13 @@
             >
                 <i class="fas fa-chevron-down"></i>
             </button>
+        </div>
+
+        <!-- Праздничный оверлей (ДР): узлы в разметке для UI-health / паритета id; наполнение — birthday-mode.js -->
+        <div id="birthdayFxLayer" class="birthday-fx-layer birthday-fx-layer--hidden" aria-hidden="true"></div>
+        <div id="birthdayGarland" class="birthday-garland birthday-garland--hidden" aria-hidden="true">
+            <div class="birthday-garland__cord"></div>
+            <div class="birthday-garland__bulbs"></div>
         </div>
 
         <div id="app-copyright" class="p-3 text-center text-2xs">
@@ -5484,7 +5864,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260410-141302-5f58f6f"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260410-141302-5f58f6f"></script>
+        <script type="module" src="./script.js?v=legacy-20260413-005858-fd473fa"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260413-005858-fd473fa"></script>
     </body>
 </html>

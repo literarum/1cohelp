@@ -12,6 +12,7 @@ import {
     bucketMissingIdsByZone,
     probeVisibleInteractiveLayout,
     filterDomAuditMissingIdsForConditionalMainAlgo,
+    filterDomAuditMissingIdsForBirthdayMode,
 } from './ui-health-surface-registry.js';
 import { runFullButtonHealthSweep } from './ui-health-button-sweep.js';
 
@@ -332,6 +333,7 @@ export function runFullSurfaceDomAudit(report, opts = {}) {
     const mainSteps = resolveMainAlgorithmStepsForDomAudit(opts);
     let missing = meta.allIds.filter((id) => !document.getElementById(id));
     missing = filterDomAuditMissingIdsForConditionalMainAlgo(missing, mainSteps);
+    missing = filterDomAuditMissingIdsForBirthdayMode(missing, document);
     emitSurfaceDomAuditResults(report, meta, missing);
 }
 
@@ -352,7 +354,11 @@ export async function runFullSurfaceDomAuditAsync(report, opts = {}) {
     await waitForUiSurfaceDomProbeReady();
     const meta = resolveMonitoredDomIds(document);
     const mainSteps = resolveMainAlgorithmStepsForDomAudit(opts);
-    const applyConditional = (raw) => filterDomAuditMissingIdsForConditionalMainAlgo(raw, mainSteps);
+    const applyConditional = (raw) =>
+        filterDomAuditMissingIdsForBirthdayMode(
+            filterDomAuditMissingIdsForConditionalMainAlgo(raw, mainSteps),
+            document,
+        );
 
     let missing = applyConditional(meta.allIds.filter((id) => !document.getElementById(id)));
 

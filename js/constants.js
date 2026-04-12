@@ -4,7 +4,7 @@
 // БАЗА ДАННЫХ
 // ============================================================================
 export const DB_NAME = 'CopilotDB';
-export const DB_VERSION = 21;
+export const DB_VERSION = 22;
 export const CURRENT_SCHEMA_VERSION = '1.7';
 export const REMINDERS_STORE_NAME = 'reminders';
 export const FAVORITES_STORE_NAME = 'favorites';
@@ -29,6 +29,8 @@ export const IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY = 'compatUnknownStoresSnapshot_v
 export const SEDO_CONFIG_KEY = 'sedoTypesConfigGlobal';
 export const BLACKLIST_WARNING_ACCEPTED_KEY = 'blacklistWarningAccepted';
 export const USER_PREFERENCES_KEY = 'userGlobalPreferences';
+/** Резервное зеркало флага «режим дня рождения» (IndexedDB — источник истины; localStorage — дубль для диагностики и раннего чтения) */
+export const BIRTHDAY_MODE_LOCAL_MIRROR_KEY = 'copilot1co:birthdayModeMirror_v1';
 /** Одноразовый автопоказ онбординга: синхронизация с preferences.onboardingTourAutoPromptConsumed */
 export const ONBOARDING_AUTO_OFFER_STORAGE_KEY = 'copilot1co:onboardingAutoOffered_v1';
 export const EXT_LINKS_MIGRATION_KEY = 'extLinksCategoryMigrationDone_v1';

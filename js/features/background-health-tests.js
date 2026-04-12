@@ -885,6 +885,51 @@ export function initBackgroundHealthTestsSystem() {
                     }
                 }
 
+                // Тест 2.2: резервный контур — метаданные карточек (папки/теги на уровне ключа inn:/rec:)
+                const caMetaKey = `health-inn:${testId.slice(-12)}`;
+                try {
+                    if (deps.saveToIndexedDB && deps.getFromIndexedDB && deps.deleteFromIndexedDB) {
+                        await runWithTimeout(
+                            deps.saveToIndexedDB('clientAnalyticsCardMeta', {
+                                id: caMetaKey,
+                                folderId: null,
+                                tagIds: [1, 2],
+                            }),
+                            5000,
+                        );
+                        const metaRow = await runWithTimeout(
+                            deps.getFromIndexedDB('clientAnalyticsCardMeta', caMetaKey),
+                            5000,
+                        );
+                        if (
+                            metaRow &&
+                            metaRow.id === caMetaKey &&
+                            Array.isArray(metaRow.tagIds) &&
+                            metaRow.tagIds.length === 2
+                        ) {
+                            report(
+                                'info',
+                                'ClientAnalytics DB',
+                                'Запись и чтение clientAnalyticsCardMeta работают.',
+                            );
+                        } else {
+                            report(
+                                'warn',
+                                'ClientAnalytics DB',
+                                'Запись clientAnalyticsCardMeta не подтверждена после чтения.',
+                            );
+                        }
+                    }
+                } catch (err) {
+                    report('warn', 'ClientAnalytics DB', err.message || String(err));
+                } finally {
+                    try {
+                        await deps.deleteFromIndexedDB?.('clientAnalyticsCardMeta', caMetaKey);
+                    } catch {
+                        /* ignore */
+                    }
+                }
+
                 updateHud(40);
 
                 // Тест 3: индексация и поиск (расширенный набор проверок)

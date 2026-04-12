@@ -6,6 +6,7 @@ import {
     normalizeColorToHex,
     applyPrimaryPairWithVerification,
 } from './color-settings-engine.js';
+import { applyBirthdayModeFromSettings } from '../features/birthday-mode.js';
 
 /** Множители для пары фонов светлая/тёмная тема (должны совпадать с логикой buildPalette). */
 export const UI_BG_THEME_FACTORS = Object.freeze({ darkRel: 0.75, lightRel: 0.2 });
@@ -257,4 +258,6 @@ export async function applyPreviewSettings(settings) {
             }
         }
     }
+
+    applyBirthdayModeFromSettings(settings);
 }
