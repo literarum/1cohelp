@@ -5,7 +5,12 @@
  * Вынесено из script.js
  */
 
-import { THEME_DEFAULTS, isPanelVisibleByDefault } from '../config.js';
+import {
+    THEME_DEFAULTS,
+    isPanelVisibleByDefault,
+    clampBorderRadiusPx,
+    DEFAULT_BORDER_RADIUS_PX,
+} from '../config.js';
 import { ONBOARDING_AUTO_OFFER_STORAGE_KEY, USER_PREFERENCES_KEY } from '../constants.js';
 import { getFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 
@@ -81,7 +86,7 @@ export async function loadUserPreferences() {
             themeMode: 'dark',
             primaryColor: THEME_DEFAULTS.primary,
             fontSize: 80,
-            borderRadius: 2,
+            borderRadius: DEFAULT_BORDER_RADIUS_PX,
             contentDensity: 3,
             mainLayout: 'horizontal',
         };
@@ -116,7 +121,7 @@ export async function loadUserPreferences() {
         theme: DEFAULT_UI_SETTINGS.themeMode || 'dark',
         primaryColor: DEFAULT_UI_SETTINGS.primaryColor || THEME_DEFAULTS.primary,
         fontSize: DEFAULT_UI_SETTINGS.fontSize || 80,
-        borderRadius: DEFAULT_UI_SETTINGS.borderRadius || 2,
+        borderRadius: clampBorderRadiusPx(DEFAULT_UI_SETTINGS.borderRadius),
         contentDensity: DEFAULT_UI_SETTINGS.contentDensity || 3,
         mainLayout: DEFAULT_UI_SETTINGS.mainLayout || 'horizontal',
         panelOrder: [...defaultPanelOrder],
@@ -130,7 +135,7 @@ export async function loadUserPreferences() {
         onboardingTourAutoPromptConsumed: false,
         /** Напоминания о резервном копировании (тост каждые 3 ч). false — отключено. */
         backupReminderEnabled: true,
-        /** Праздничное оформление «день рождения» (конфетти, рамка, мягкое свечение кнопок) */
+        /** Праздничное оформление «день рождения» (эмодзи 🎉 вместо «1» в логотипе, конфетти, рамка, мягкое свечение кнопок) */
         birthdayModeEnabled: true,
         clientNotesFontSize: 100,
         employeeExtension: '',
@@ -143,6 +148,7 @@ export async function loadUserPreferences() {
         );
         if (State) {
             State.userPreferences = { ...defaultPreferences };
+            State.userPreferences.borderRadius = clampBorderRadiusPx(State.userPreferences.borderRadius);
         }
         return;
     }
@@ -243,6 +249,8 @@ export async function loadUserPreferences() {
         finalSettings.panelOrder = effectiveOrder;
         finalSettings.panelVisibility = effectiveVisibility;
 
+        finalSettings.borderRadius = clampBorderRadiusPx(finalSettings.borderRadius);
+
         finalSettings.onboardingTourAutoPromptConsumed = inferOnboardingAutoPromptConsumed(
             finalSettings,
             defaultPreferences,
@@ -269,6 +277,7 @@ export async function loadUserPreferences() {
         console.error(`${LOG_PREFIX} Ошибка при загрузке/миграции настроек:`, error);
         if (State) {
             State.userPreferences = { ...defaultPreferences };
+            State.userPreferences.borderRadius = clampBorderRadiusPx(State.userPreferences.borderRadius);
         }
     }
 }
@@ -318,6 +327,12 @@ export async function saveUserPreferences() {
             'onboardingTourAutoPromptConsumed',
             'birthdayModeEnabled',
         ]);
+        const numericPreferenceDefaults = {
+            fontSize: 80,
+            borderRadius: DEFAULT_BORDER_RADIUS_PX,
+            contentDensity: 3,
+            clientNotesFontSize: 100,
+        };
         fields.forEach((field) => {
             if (typeof State.userPreferences[field] === 'undefined') {
                 console.warn(
@@ -329,11 +344,15 @@ export async function saveUserPreferences() {
                     State.userPreferences[field] = true;
                 } else if (booleanPreferenceFields.has(field)) {
                     State.userPreferences[field] = false;
+                } else if (Object.prototype.hasOwnProperty.call(numericPreferenceDefaults, field)) {
+                    State.userPreferences[field] = numericPreferenceDefaults[field];
                 } else {
                     State.userPreferences[field] = '';
                 }
             }
         });
+
+        State.userPreferences.borderRadius = clampBorderRadiusPx(State.userPreferences.borderRadius);
 
         const dataToSave = {
             id: USER_PREFERENCES_KEY,

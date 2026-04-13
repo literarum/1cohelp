@@ -94,8 +94,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260413-005858-fd473fa"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260413-005858-fd473fa"></script>
+        <script src="js/vendor-config.js?v=legacy-20260414-002017-0595f1e"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260414-002017-0595f1e"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,12 +161,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260413-005858-fd473fa"
+            href="css/tailwind.generated.css?v=legacy-20260414-002017-0595f1e"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260413-005858-fd473fa" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260413-005858-fd473fa" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260414-002017-0595f1e" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260414-002017-0595f1e" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -964,80 +964,12 @@
                                     lang="ru"
                                     ><span class="app-brand-title__digit-one">1</span
                                     ><span
-                                        class="app-brand-title__candle-wrap inline-flex items-end align-baseline"
+                                        class="app-brand-title__party-emoji-wrap inline-flex items-end align-baseline"
                                         aria-hidden="true"
                                     >
-                                    <svg
-                                        class="app-brand-title__candle-svg"
-                                        width="0.46em"
-                                        height="0.82em"
-                                        viewBox="0 0 24 44"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        focusable="false"
-                                    >
-                                        <defs>
-                                            <linearGradient
-                                                id="appBrandCandleFlameGrad"
-                                                x1="12"
-                                                y1="1"
-                                                x2="12"
-                                                y2="17"
-                                                gradientUnits="userSpaceOnUse"
-                                            >
-                                                <stop offset="0%" stop-color="#fffde7" />
-                                                <stop offset="40%" stop-color="#ffcc4d" />
-                                                <stop offset="100%" stop-color="#ff6b35" />
-                                            </linearGradient>
-                                            <filter
-                                                id="appBrandCandleFlameGlow"
-                                                x="-80%"
-                                                y="-80%"
-                                                width="260%"
-                                                height="260%"
-                                            >
-                                                <feGaussianBlur stdDeviation="1.4" result="blur" />
-                                                <feMerge>
-                                                    <feMergeNode in="blur" />
-                                                    <feMergeNode in="SourceGraphic" />
-                                                </feMerge>
-                                            </filter>
-                                        </defs>
-                                        <ellipse
-                                            class="app-brand-title__candle-glow"
-                                            cx="12"
-                                            cy="10"
-                                            rx="7"
-                                            ry="9"
-                                            fill="#ffb74d"
-                                            opacity="0.5"
-                                        />
-                                        <path
-                                            class="app-brand-title__candle-flame"
-                                            d="M12 2.5c-2.8 3.2-5.2 5.6-5.2 9.2 0 3.1 2.3 5.4 5.2 5.4s5.2-2.3 5.2-5.4c0-3.6-2.4-6-5.2-9.2z"
-                                            fill="url(#appBrandCandleFlameGrad)"
-                                            filter="url(#appBrandCandleFlameGlow)"
-                                        />
-                                        <rect
-                                            x="7.5"
-                                            y="17.5"
-                                            width="9"
-                                            height="24"
-                                            rx="2.2"
-                                            fill="#faf3e8"
-                                            stroke="#e5d9c8"
-                                            stroke-width="0.6"
-                                        />
-                                        <line
-                                            x1="12"
-                                            y1="17.5"
-                                            x2="12"
-                                            y2="12.5"
-                                            stroke="#5d4037"
-                                            stroke-width="1.1"
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
+                                        <span class="app-brand-title__party-emoji" role="presentation"
+                                            >&#x1F389;</span
+                                        >
                                     </span>
                                     <span class="app-brand-title__letters-so">СО</span>
                                 </span>
@@ -3226,9 +3158,12 @@
             <!-- Окно Настройки UI -->
             <div
                 id="customizeUIModal"
-                class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center hidden"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center"
             >
-                <div class="flex items-center justify-center min-h-full">
+                <div
+                    id="customizeUIModalShell"
+                    class="flex items-center justify-center min-h-full w-full"
+                >
                     <div
                         class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-screen flex flex-col modal-inner-container overflow-hidden"
                     >
@@ -3253,6 +3188,16 @@
                                             title="Введите свой добавочный"
                                         />
                                     </div>
+                                    <button
+                                        type="button"
+                                        id="toggleFullscreenCustomizeUIBtn"
+                                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+                                        title="Развернуть на весь экран"
+                                        aria-label="Развернуть на весь экран"
+                                        aria-expanded="false"
+                                    >
+                                        <i class="fas fa-expand text-lg leading-none" aria-hidden="true"></i>
+                                    </button>
                                     <button
                                         id="closeCustomizeUIModalBtn"
                                         class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -3492,10 +3437,11 @@
                                             <p
                                                 class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
                                             >
-                                                Яркое праздничное оформление: радужная рамка,
-                                                конфетти и мягкое свечение кнопок. При системной
-                                                настройке «уменьшить движение» анимации
-                                                отключаются — остаётся спокойный акцент.
+                                                Яркое праздничное оформление: в шапке вместо «1» —
+                                                эмодзи &#x1F389;, радужная рамка, конфетти и мягкое
+                                                свечение кнопок. При системной настройке
+                                                «уменьшить движение» анимации отключаются — остаётся
+                                                спокойный акцент.
                                             </p>
                                         </div>
 
@@ -3918,10 +3864,19 @@
                                             type="range"
                                             min="0"
                                             max="20"
-                                            value="8"
+                                            value="5"
                                             class="app-customization-range w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
                                             id="borderRadiusSlider"
+                                            aria-valuemin="0"
+                                            aria-valuemax="20"
+                                            aria-valuetext="25%"
+                                            aria-labelledby="acm-radius-heading borderRadiusPercentLabel"
                                         />
+                                        <div
+                                            class="flex justify-end text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium tabular-nums"
+                                        >
+                                            <span id="borderRadiusPercentLabel" aria-live="polite">25%</span>
+                                        </div>
                                         <div
                                             class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2 font-medium tabular-nums"
                                         >
@@ -4782,7 +4737,8 @@
             <!-- Окно подтверждения выхода без сохранения -->
             <div
                 id="unsavedConfirmModal"
-                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[70] p-4 overflow-y-auto"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[110] p-4 overflow-y-auto"
+                style="z-index: 110"
                 aria-modal="true"
                 role="dialog"
                 aria-labelledby="unsavedConfirmModalTitle"
@@ -5864,7 +5820,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260413-005858-fd473fa"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260413-005858-fd473fa"></script>
+        <script type="module" src="./script.js?v=legacy-20260414-002017-0595f1e"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260414-002017-0595f1e"></script>
     </body>
 </html>

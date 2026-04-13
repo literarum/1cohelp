@@ -1,5 +1,10 @@
 'use strict';
 
+import {
+    clampBorderRadiusPx,
+    BORDER_RADIUS_SLIDER_MAX,
+    DEFAULT_BORDER_RADIUS_SLIDER_PERCENT,
+} from '../config.js';
 import { resolveHexForCustomizationTarget } from './color-picker.js';
 
 /**
@@ -59,6 +64,33 @@ export function createPanelItemElement(id, name, isVisible = true) {
 }
 
 /**
+ * Подпись процента заполнения трека скругления (доступность + согласованность с DEFAULT 25%).
+ */
+export function syncBorderRadiusSliderPercentLabel() {
+    const slider =
+        document.querySelector('#appCustomizationModal #borderRadiusSlider') ||
+        document.getElementById('borderRadiusSlider');
+    const label = document.getElementById('borderRadiusPercentLabel');
+    if (!slider || !label) return;
+    const max = Number(slider.max);
+    const maxSafe = Number.isFinite(max) && max > 0 ? max : BORDER_RADIUS_SLIDER_MAX;
+    const v = Number(slider.value);
+    const pct =
+        Number.isFinite(v) && maxSafe > 0
+            ? Math.round((v / maxSafe) * 100)
+            : DEFAULT_BORDER_RADIUS_SLIDER_PERCENT;
+    label.textContent = `${pct}%`;
+    slider.setAttribute('aria-valuetext', `${pct}%`);
+}
+
+function readBorderRadiusFromSliderElement(slider) {
+    if (!slider || slider.value === '' || slider.value == null) return null;
+    const n = Number(slider.value);
+    if (!Number.isFinite(n)) return null;
+    return clampBorderRadiusPx(n);
+}
+
+/**
  * Заполняет элементы модального окна кастомизации (тема, цвета, скругление, отступы, фон).
  * Элементы находятся в #appCustomizationModal.
  */
@@ -83,7 +115,10 @@ export function populateCustomizationModalControls(settings) {
     if (themeRadio) themeRadio.checked = true;
 
     const borderRadiusSlider = modal.querySelector('#borderRadiusSlider');
-    if (borderRadiusSlider) borderRadiusSlider.value = String(settings.borderRadius ?? 8);
+    if (borderRadiusSlider) {
+        borderRadiusSlider.value = String(clampBorderRadiusPx(settings.borderRadius));
+        syncBorderRadiusSliderPercentLabel();
+    }
 
     const densitySlider = modal.querySelector('#densitySlider');
     if (densitySlider) densitySlider.value = String(settings.contentDensity ?? 3);
@@ -214,6 +249,7 @@ export function getSettingsFromModal() {
         'auto';
     const borderRadiusSlider = customizationModal?.querySelector('#borderRadiusSlider');
     const densitySlider = customizationModal?.querySelector('#densitySlider');
+    const fromRadiusSlider = readBorderRadiusFromSliderElement(borderRadiusSlider);
 
     const panelItems = Array.from(modal.querySelectorAll('#panelSortContainer .panel-item'));
     const panelOrder = panelItems.map((item) => item.getAttribute('data-section'));
@@ -230,7 +266,10 @@ export function getSettingsFromModal() {
         customTextColor: customTextColor,
         isTextCustom: isTextCustom,
         fontSize: parseInt(modal.querySelector('#fontSizeLabel')?.textContent) || 100,
-        borderRadius: parseInt(borderRadiusSlider?.value) || State.currentPreviewSettings?.borderRadius || 8,
+        borderRadius:
+            fromRadiusSlider !== null
+                ? fromRadiusSlider
+                : clampBorderRadiusPx(State.currentPreviewSettings?.borderRadius),
         contentDensity: parseInt(densitySlider?.value) || State.currentPreviewSettings?.contentDensity || 3,
         panelOrder: panelOrder,
         panelVisibility: panelVisibility,

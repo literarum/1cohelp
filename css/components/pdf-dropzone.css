@@ -2,6 +2,49 @@
 /*    PDF DROPZONE                                                     */
 /* =================================================================== */
 
+/* Активная зона при перетаскивании файла (контур + подсветка рамки у контейнера) */
+.pdf-list-shell.pdf-drop-target-active,
+.pdf-draft-shell.pdf-drop-target-active,
+.pdf-drop-target.pdf-drop-target-active {
+    border-color: rgba(37, 99, 235, 0.75) !important;
+    box-shadow:
+        0 0 0 3px rgba(59, 130, 246, 0.22),
+        0 8px 24px rgba(15, 23, 42, 0.08);
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+html.dark .pdf-list-shell.pdf-drop-target-active,
+.dark .pdf-list-shell.pdf-drop-target-active,
+html.dark .pdf-draft-shell.pdf-drop-target-active,
+.dark .pdf-draft-shell.pdf-drop-target-active,
+html.dark .pdf-drop-target.pdf-drop-target-active,
+.dark .pdf-drop-target.pdf-drop-target-active {
+    border-color: rgba(96, 165, 250, 0.85) !important;
+    box-shadow:
+        0 0 0 3px rgba(59, 130, 246, 0.28),
+        0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+/*
+ * Пока файл над зоной: список/пустое состояние скрыты — виден только оверлей «Отпустите PDF…».
+ * Контур 1: класс на родителе; контур 2: layout сохраняется (opacity, не display:none).
+ */
+.pdf-dnd-inner {
+    opacity: 1;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        visibility 0.2s ease;
+}
+
+.pdf-drop-target-active > .pdf-dnd-inner {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .pdf-drop-overlay {
     padding: 8px;
     box-sizing: border-box;

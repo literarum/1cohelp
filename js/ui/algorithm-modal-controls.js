@@ -147,7 +147,7 @@ export function initAlgorithmModalControls() {
     deleteAlgorithmBtn.addEventListener('click', clickHandler);
     deleteAlgorithmBtn._clickHandler = clickHandler;
 
-    // Кнопки «Добавить» в разделах алгоритмов (Программа 1С, СКЗИ, 1СО ЛК, Веб-Регистратор)
+    // Кнопки «Добавить» в разделах алгоритмов (Программа 1С/УП, СКЗИ, 1СО ЛК, Веб-Регистратор)
     const addButtonSections = [
         { id: 'addProgramAlgorithmBtn', section: 'program' },
         { id: 'addSkziAlgorithmBtn', section: 'skzi' },

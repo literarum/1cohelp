@@ -27,6 +27,35 @@ let deps = {
     renderClientAnalyticsPage: null,
 };
 
+/** Очередь переключений вкладок: исключает гонки таймеров/RAF при быстрых кликах и параллельных вызовах. */
+let tabSwitchChain = Promise.resolve();
+
+function hardHideTabPanel(panel) {
+    if (!panel) return;
+    panel.classList.add('hidden');
+    panel.classList.remove('is-hiding');
+    panel.style.removeProperty('opacity');
+    panel.style.removeProperty('visibility');
+    panel.style.removeProperty('pointer-events');
+}
+
+/**
+ * Инвариант: не более одной видимой панели `.tab-content` (резервный контур после анимации и при сбоях).
+ */
+function enforceExclusiveTabContent(targetContent) {
+    if (!targetContent) return;
+    document.querySelectorAll('.tab-content').forEach((panel) => {
+        if (panel !== targetContent) {
+            hardHideTabPanel(panel);
+        }
+    });
+    targetContent.classList.remove('hidden');
+    targetContent.classList.remove('is-hiding');
+    targetContent.style.opacity = '1';
+    targetContent.style.visibility = 'visible';
+    targetContent.style.pointerEvents = 'auto';
+}
+
 /**
  * Установка зависимостей модуля
  * @param {Object} dependencies - объект с зависимостями
@@ -524,6 +553,12 @@ export function applyPanelOrderAndVisibility(order, visibility) {
  * @param {object} [navOptions] - contextual-back: navigationSource, scrollRestore, reglamentsSnapshot
  */
 export async function setActiveTab(tabId, warningJustAccepted = false, navOptions = {}) {
+    const next = tabSwitchChain.then(() => setActiveTabCore(tabId, warningJustAccepted, navOptions));
+    tabSwitchChain = next.catch(() => {});
+    return next;
+}
+
+async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions = {}) {
     if (tabId === 'favorites' && State.currentSection === 'favorites') {
         tabId = State.sectionBeforeFavorites || 'main';
     }
@@ -611,21 +646,22 @@ export async function setActiveTab(tabId, warningJustAccepted = false, navOption
 
     State.currentSection = tabId;
     localStorage.setItem('lastActiveTabCopilot1CO', tabId);
-    let currentActiveContent = null;
 
-    allTabContents.forEach((content) => {
-        if (!content.classList.contains('hidden')) {
-            currentActiveContent = content;
+    const visiblePanels = Array.from(allTabContents).filter((c) => !c.classList.contains('hidden'));
+    const nonTargetVisible = visiblePanels.filter((c) => c !== targetContent);
+    if (nonTargetVisible.length > 1) {
+        for (let i = 1; i < nonTargetVisible.length; i++) {
+            hardHideTabPanel(nonTargetVisible[i]);
         }
-    });
+    }
+    const previousPanel = nonTargetVisible.length > 0 ? nonTargetVisible[0] : null;
 
-    if (currentActiveContent && currentActiveContent !== targetContent) {
-        currentActiveContent.classList.add('is-hiding');
+    if (previousPanel && previousPanel !== targetContent) {
+        previousPanel.classList.add('is-hiding');
 
         await new Promise((resolve) => {
             setTimeout(() => {
-                currentActiveContent.classList.add('hidden');
-                currentActiveContent.classList.remove('is-hiding');
+                hardHideTabPanel(previousPanel);
 
                 if (targetContent) {
                     targetContent.classList.add('is-hiding');
@@ -646,15 +682,7 @@ export async function setActiveTab(tabId, warningJustAccepted = false, navOption
         });
     }
 
-    // Fail-safe: иногда вкладка остается с opacity:0 после анимации (race при множественных init/RAF).
-    // Принудительно нормализуем состояние отображения целевой вкладки.
-    if (targetContent) {
-        targetContent.classList.remove('hidden');
-        targetContent.classList.remove('is-hiding');
-        targetContent.style.opacity = '1';
-        targetContent.style.visibility = 'visible';
-        targetContent.style.pointerEvents = 'auto';
-    }
+    enforceExclusiveTabContent(targetContent);
 
     if (targetContent && tabId === 'shablony') {
         setTimeout(() => {

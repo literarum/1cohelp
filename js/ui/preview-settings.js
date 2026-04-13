@@ -1,6 +1,6 @@
 'use strict';
 
-import { THEME_DEFAULTS } from '../config.js';
+import { THEME_DEFAULTS, DEFAULT_BORDER_RADIUS_PX } from '../config.js';
 import {
     normalizeHex6,
     normalizeColorToHex,
@@ -228,7 +228,7 @@ export async function applyPreviewSettings(settings) {
     const hasUnit = typeof radiusRaw === 'string' && /[a-z%]+$/i.test(radiusRaw.trim());
     const radiusValue = hasUnit
         ? radiusRaw.trim()
-        : `${Number.isFinite(radiusRaw) ? radiusRaw : 8}px`;
+        : `${Number.isFinite(radiusRaw) ? radiusRaw : DEFAULT_BORDER_RADIUS_PX}px`;
     root.style.setProperty('--border-radius', radiusValue);
 
     const density = Number.isFinite(settings?.contentDensity) ? settings.contentDensity : 3;

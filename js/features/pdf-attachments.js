@@ -28,6 +28,26 @@ export function isPdfFile(file) {
     return /\.pdf$/i.test(file.name || '');
 }
 
+/** Класс внутреннего контейнера: сюда пишется контент; overlay остаётся соседом и не затирается innerHTML. */
+export const PDF_DND_INNER_CLASS = 'pdf-dnd-inner';
+
+/**
+ * Корень для списка/пустого состояния внутри зоны drag&drop (не очищать сам target целиком).
+ * @param {HTMLElement | null | undefined} targetEl
+ * @returns {HTMLElement | null}
+ */
+export function getPdfDropContentRoot(targetEl) {
+    if (!targetEl) return null;
+    const inner = targetEl.querySelector(`:scope > .${PDF_DND_INNER_CLASS}`);
+    return /** @type {HTMLElement} */ (inner || targetEl);
+}
+
+function isFileDragEvent(e) {
+    const dt = e.dataTransfer;
+    if (!dt || !dt.types) return false;
+    return Array.from(dt.types).some((t) => t === 'Files' || t === 'application/x-moz-file');
+}
+
 /**
  * Setup PDF drag and drop on an element
  */
@@ -39,10 +59,20 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
     const cs = window.getComputedStyle(targetEl);
     if (cs.position === 'static') targetEl.style.position = 'relative';
 
+    let inner = targetEl.querySelector(`:scope > .${PDF_DND_INNER_CLASS}`);
+    if (!inner) {
+        inner = document.createElement('div');
+        inner.className = `${PDF_DND_INNER_CLASS} relative z-0 min-h-0 w-full`;
+        while (targetEl.firstChild) {
+            inner.appendChild(targetEl.firstChild);
+        }
+        targetEl.appendChild(inner);
+    }
+
     const overlay = document.createElement('div');
     overlay.className = `pdf-drop-overlay pointer-events-none absolute inset-0 rounded-xl z-20
     border-2 border-dashed grid place-items-center text-sm font-medium
-    opacity-0 transition-opacity`;
+    opacity-0 transition-opacity duration-200 ease-out`;
     overlay.style.zIndex = '1000';
     overlay.style.willChange = 'opacity';
     overlay.style.display = 'none';
@@ -52,14 +82,17 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
     overlay.style.borderWidth = '2px';
     overlay.style.opacity = '0';
     overlay.style.visibility = 'hidden';
+    overlay.setAttribute('role', 'presentation');
+    overlay.setAttribute('aria-hidden', 'true');
 
-    overlay.innerHTML = `<div class="pdf-drop-msg px-3 py-2 rounded-md">
-    <i class="far fa-file-pdf mr-1"></i>Отпустите PDF, чтобы загрузить
+    overlay.innerHTML = `<div class="pdf-drop-msg px-3 py-2 rounded-md shadow-sm ring-1 ring-black/5 dark:ring-white/10">
+    <i class="far fa-file-pdf mr-1" aria-hidden="true"></i>Отпустите PDF, чтобы загрузить
     </div>`;
 
     targetEl.appendChild(overlay);
 
-    let dragDepth = 0;
+    /** Глубина «реальных» входов в зону (без ложных срабатываний от вложенных узлов). */
+    let zoneEnterDepth = 0;
 
     const isTransparent = (c) => {
         if (!c) return true;
@@ -120,6 +153,8 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
     };
 
     const showOverlay = () => {
+        targetEl.classList.add('pdf-drop-target-active');
+        targetEl.setAttribute('data-pdf-dropping', 'true');
         overlay.style.display = 'grid';
         overlay.style.visibility = 'visible';
         requestAnimationFrame(() => {
@@ -165,6 +200,8 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
     };
 
     const hideOverlay = () => {
+        targetEl.classList.remove('pdf-drop-target-active');
+        targetEl.removeAttribute('data-pdf-dropping');
         overlay.style.opacity = '0';
         setTimeout(() => {
             overlay.style.display = 'none';
@@ -172,24 +209,48 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
         }, 200);
     };
 
+    const resetDropUi = () => {
+        zoneEnterDepth = 0;
+        hideOverlay();
+    };
+
+    const onGlobalDragEnd = () => resetDropUi();
+    window.addEventListener('dragend', onGlobalDragEnd);
+
     targetEl.addEventListener('dragenter', (e) => {
+        if (!isFileDragEvent(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        dragDepth++;
-        if (dragDepth === 1) showOverlay();
+        const related = /** @type {Node | null} */ (e.relatedTarget);
+        if (related && targetEl.contains(related)) return;
+        zoneEnterDepth++;
+        if (zoneEnterDepth === 1) showOverlay();
     });
 
     targetEl.addEventListener('dragover', (e) => {
+        if (!isFileDragEvent(e)) return;
         e.preventDefault();
         e.stopPropagation();
+        try {
+            e.dataTransfer.dropEffect = 'copy';
+        } catch {
+            /* ignore */
+        }
+        if (zoneEnterDepth === 0) {
+            zoneEnterDepth = 1;
+            showOverlay();
+        }
     });
 
     targetEl.addEventListener('dragleave', (e) => {
+        if (!isFileDragEvent(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        dragDepth--;
-        if (dragDepth <= 0) {
-            dragDepth = 0;
+        const related = /** @type {Node | null} */ (e.relatedTarget);
+        if (related && targetEl.contains(related)) return;
+        zoneEnterDepth--;
+        if (zoneEnterDepth <= 0) {
+            zoneEnterDepth = 0;
             hideOverlay();
         }
     });
@@ -197,7 +258,7 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
     targetEl.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        dragDepth = 0;
+        zoneEnterDepth = 0;
         hideOverlay();
 
         const files = Array.from(e.dataTransfer?.files || []).filter(isPdfFile);
@@ -323,7 +384,7 @@ const PDF_UI_CLASSES = Object.freeze({
     editNameButton:
         'rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200',
     editNameInput:
-        'w-full h-5 border-0 bg-transparent px-0 text-sm font-medium leading-5 text-gray-900 outline-none ring-0 focus:outline-none focus:ring-0 dark:text-gray-100',
+        'h-5 min-w-0 border-0 bg-transparent px-0 text-sm font-medium leading-5 text-gray-900 outline-none ring-0 focus:outline-none focus:ring-0 dark:text-gray-100',
 });
 
 const PDF_DIVIDER_CLASSES = 'border-gray-200 dark:border-gray-600';
@@ -385,6 +446,77 @@ function normalizePdfFilename(nextName, fallbackName) {
     const raw = String(nextName || '').trim().replace(/\s+/g, ' ');
     if (!raw) return String(fallbackName || 'file.pdf');
     return raw.slice(0, 180);
+}
+
+/**
+ * Разделяет имя PDF на редактируемую часть и неизменяемое расширение (.pdf с исходным регистром).
+ * @param {string | null | undefined} filename
+ * @returns {{ base: string, suffix: string }}
+ */
+export function splitPdfFilenameParts(filename) {
+    const s = String(filename ?? '').trim();
+    if (!s) {
+        return { base: '', suffix: '.pdf' };
+    }
+    if (/\.pdf$/i.test(s)) {
+        return { base: s.slice(0, -4), suffix: s.slice(-4) };
+    }
+    return { base: s, suffix: '.pdf' };
+}
+
+/**
+ * Собирает полное имя: база + суффикс из исходного имени (или .pdf). Ограничение 180 символов — за счёт базы.
+ * @param {string | null | undefined} basename
+ * @param {string | null | undefined} originalFilename
+ */
+export function buildPdfFilenameFromBasename(basename, originalFilename) {
+    const { suffix } = splitPdfFilenameParts(originalFilename);
+    let base = String(basename ?? '')
+        .trim()
+        .replace(/\s+/g, ' ');
+    if (/\.pdf$/i.test(base)) {
+        base = base.slice(0, -4).trimEnd();
+    }
+    if (!base) base = 'file';
+    const maxBase = Math.max(1, 180 - suffix.length);
+    if (base.length > maxBase) {
+        base = base.slice(0, maxBase);
+    }
+    return base + suffix;
+}
+
+/**
+ * true, если фокус переходит на кнопку сохранения модалки закладки/алгоритма —
+ * тогда при blur поля переименования PDF нужно коммитить имя, а не отменять правку.
+ */
+export function isPdfModalSaveFocusTarget(el) {
+    if (!el || typeof el.closest !== 'function') return false;
+    const sel =
+        '#saveBookmarkBtn, #saveAlgorithmBtn, #saveNewAlgorithmBtn, button[type="submit"][form="bookmarkForm"]';
+    if (typeof el.matches === 'function' && el.matches(sel)) return true;
+    return Boolean(el.closest(sel));
+}
+
+/**
+ * Сохраняет все незавершённые переименования PDF в контейнере (режим правки с открытым полем ввода).
+ * Резервный контур на случай программной отправки формы без корректного relatedTarget у blur.
+ * @param {ParentNode | null | undefined} root
+ */
+export async function flushPendingPdfRenamesInContainer(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    const callbacks = [];
+    root.querySelectorAll('.pdf-attachments-section li').forEach((li) => {
+        const editWrap = li.querySelector('.pdf-name-edit-wrap');
+        if (
+            editWrap?.classList.contains('flex') &&
+            typeof li._pdfCommitPendingRename === 'function'
+        ) {
+            callbacks.push(li._pdfCommitPendingRename);
+        }
+    });
+    for (const fn of callbacks) {
+        await fn();
+    }
 }
 
 /**
@@ -523,7 +655,8 @@ async function refreshPdfList(section, parentType, parentId) {
         addToolbar.classList.toggle('hidden', pdfs.length === 0);
     }
 
-    shell.innerHTML = '';
+    const contentRoot = getPdfDropContentRoot(shell) || shell;
+    contentRoot.innerHTML = '';
     shell.className = readOnly
         ? 'pdf-list-shell mt-2 min-h-0 rounded-xl transition-colors'
         : PDF_UI_CLASSES.shellEmpty;
@@ -575,7 +708,7 @@ async function refreshPdfList(section, parentType, parentId) {
                 pickFiles();
             }
         });
-        shell.appendChild(empty);
+        contentRoot.appendChild(empty);
         applyPdfThemeStyling({ section, addToolbar, shell });
         return;
     }
@@ -607,7 +740,7 @@ async function refreshPdfList(section, parentType, parentId) {
         const meta = document.createElement('div');
         meta.className = 'min-w-0 flex-1';
         const nameSlot = document.createElement('div');
-        nameSlot.className = readOnly ? 'min-w-0' : 'relative h-5';
+        nameSlot.className = readOnly ? 'min-w-0' : 'min-w-0 min-h-[1.25rem]';
         const nameEl = document.createElement('p');
         nameEl.className =
             'truncate text-sm font-medium leading-5 text-gray-900 dark:text-gray-100';
@@ -615,20 +748,29 @@ async function refreshPdfList(section, parentType, parentId) {
         nameEl.title = displayName;
 
         let nameInput = null;
+        let editWrap = null;
+        let extSpan = null;
         if (!readOnly) {
+            editWrap = document.createElement('div');
+            editWrap.className = 'pdf-name-edit-wrap hidden min-w-0 w-full items-center gap-0';
             nameInput = document.createElement('input');
             nameInput.type = 'text';
-            nameInput.className = `${PDF_UI_CLASSES.editNameInput} absolute inset-0 hidden`;
-            nameInput.value = displayName;
+            nameInput.className = `${PDF_UI_CLASSES.editNameInput} pdf-name-base-input flex-1`;
             nameInput.setAttribute('aria-label', `Переименовать PDF ${displayName}`);
-            nameInput.setAttribute('maxlength', '180');
+            nameInput.setAttribute('maxlength', '176');
+            extSpan = document.createElement('span');
+            extSpan.className =
+                'pdf-name-ext shrink-0 text-sm font-medium leading-5 text-gray-400 dark:text-gray-500 select-none pointer-events-none';
+            extSpan.setAttribute('aria-hidden', 'true');
+            editWrap.appendChild(nameInput);
+            editWrap.appendChild(extSpan);
         }
 
         const sizeEl = document.createElement('p');
         sizeEl.className = 'mt-0.5 text-xs text-gray-500 dark:text-gray-400 tabular-nums';
         sizeEl.textContent = sizeLabel;
         nameSlot.appendChild(nameEl);
-        if (nameInput) nameSlot.appendChild(nameInput);
+        if (editWrap) nameSlot.appendChild(editWrap);
         meta.appendChild(nameSlot);
         meta.appendChild(sizeEl);
 
@@ -697,24 +839,38 @@ async function refreshPdfList(section, parentType, parentId) {
             const startRename = () => {
                 if (isSavingName) return;
                 isEditingName = true;
-                nameInput.value = nameEl.textContent || displayName;
+                const parts = splitPdfFilenameParts(nameEl.textContent || displayName);
+                nameInput.value = parts.base;
+                extSpan.textContent = parts.suffix;
+                const maxBase = Math.max(1, 180 - parts.suffix.length);
+                nameInput.setAttribute('maxlength', String(maxBase));
+                nameInput.setAttribute(
+                    'aria-label',
+                    `Имя PDF без расширения; суффикс ${parts.suffix} не редактируется`,
+                );
                 nameEl.classList.add('hidden');
-                nameInput.classList.remove('hidden');
+                editWrap.classList.remove('hidden');
+                editWrap.classList.add('flex');
                 setEditButtonState(true);
                 nameInput.focus();
-                nameInput.select();
+                requestAnimationFrame(() => {
+                    const len = nameInput.value.length;
+                    nameInput.setSelectionRange(0, len);
+                });
             };
 
             const stopRename = () => {
                 isEditingName = false;
-                nameInput.classList.add('hidden');
+                editWrap.classList.add('hidden');
+                editWrap.classList.remove('flex');
                 nameEl.classList.remove('hidden');
                 setEditButtonState(false);
             };
 
             const commitRename = async () => {
                 if (!isEditingName || isSavingName) return;
-                const normalized = normalizePdfFilename(nameInput.value, displayName);
+                const merged = buildPdfFilenameFromBasename(nameInput.value, displayName);
+                const normalized = normalizePdfFilename(merged, displayName);
                 const prev = nameEl.textContent || displayName;
                 if (normalized === prev) {
                     stopRename();
@@ -733,6 +889,8 @@ async function refreshPdfList(section, parentType, parentId) {
                     isSavingName = false;
                 }
             };
+
+            li._pdfCommitPendingRename = commitRename;
 
             editBtn.addEventListener('click', () => {
                 if (isEditingName) {
@@ -760,10 +918,12 @@ async function refreshPdfList(section, parentType, parentId) {
                 }
             });
 
-            nameInput.addEventListener('blur', () => {
-                if (isEditingName && !isSavingName) {
-                    stopRename();
+            nameInput.addEventListener('blur', (e) => {
+                if (!isEditingName || isSavingName) return;
+                if (isPdfModalSaveFocusTarget(e.relatedTarget)) {
+                    return;
                 }
+                stopRename();
             });
 
             actions.appendChild(editBtn);
@@ -778,7 +938,7 @@ async function refreshPdfList(section, parentType, parentId) {
         ul.appendChild(li);
     });
 
-    shell.appendChild(ul);
+    contentRoot.appendChild(ul);
 }
 
 /**
@@ -858,10 +1018,35 @@ function tryAttachToAlgorithmModal() {
  * в editAlgorithm (как для закладок в showEditBookmarkModal), без MutationObserver.
  */
 
+function attachPendingPdfRenameCommitOnModalSavePointerDown() {
+    if (typeof document === 'undefined' || document.documentElement.dataset.pdfSavePointerFlush === '1')
+        return;
+    document.documentElement.dataset.pdfSavePointerFlush = '1';
+    const flushFromModal = (modal) => {
+        if (!modal?.querySelectorAll) return;
+        modal.querySelectorAll('.pdf-attachments-section li').forEach((li) => {
+            const wrap = li.querySelector('.pdf-name-edit-wrap');
+            if (wrap?.classList.contains('flex') && typeof li._pdfCommitPendingRename === 'function') {
+                void li._pdfCommitPendingRename();
+            }
+        });
+    };
+    const onPointerDownCapture = (ev) => {
+        const t = ev.target;
+        if (!t || typeof t.closest !== 'function') return;
+        const btn = t.closest('#saveBookmarkBtn, #saveAlgorithmBtn');
+        if (!btn) return;
+        const modal = btn.closest('#bookmarkModal, #editModal');
+        if (modal) flushFromModal(modal);
+    };
+    document.addEventListener('pointerdown', onPointerDownCapture, true);
+}
+
 /**
  * Initialize PDF attachment system
  */
 export function initPdfAttachmentSystem() {
+    attachPendingPdfRenameCommitOnModalSavePointerDown();
     tryAttachToAlgorithmModal();
     console.log('PDF Attachment System initialized.');
 }
@@ -959,7 +1144,8 @@ export function attachBookmarkPdfHandlers(form) {
         form._tempPdfFiles = files;
 
         if (!draftShell) return;
-        draftShell.innerHTML = '';
+        const draftContentRoot = getPdfDropContentRoot(draftShell) || draftShell;
+        draftContentRoot.innerHTML = '';
 
         if (!files.length) {
             const empty = document.createElement('div');
@@ -967,7 +1153,7 @@ export function attachBookmarkPdfHandlers(form) {
                 'flex flex-col items-center justify-center gap-1.5 py-8 px-4 text-center text-xs text-gray-400 dark:text-gray-500';
             empty.innerHTML =
                 '<span class="text-sm font-medium text-gray-500 dark:text-gray-400">Пока нет файлов</span><span>Добавьте PDF — они прикрепятся при сохранении закладки.</span>';
-            draftShell.appendChild(empty);
+            draftContentRoot.appendChild(empty);
             draftShell.className =
                 'pdf-draft-shell mt-4 min-h-[4rem] rounded-xl border-2 border-dashed border-gray-200/90 bg-white/60 px-1 py-1 dark:border-gray-600/60 dark:bg-gray-800/30';
             return;
@@ -1026,7 +1212,7 @@ export function attachBookmarkPdfHandlers(form) {
             ul.appendChild(li);
         });
 
-        draftShell.appendChild(ul);
+        draftContentRoot.appendChild(ul);
     };
 
     if (input && input.dataset.wired !== '1') {
@@ -1067,6 +1253,8 @@ if (typeof window !== 'undefined') {
     window.mountPdfSection = mountPdfSection;
     window.renderPdfAttachmentsSection = renderPdfAttachmentsSection;
     window.removePdfSectionsFromContainer = removePdfSectionsFromContainer;
+    window.flushPendingPdfRenamesInContainer = flushPendingPdfRenamesInContainer;
+    window.isPdfModalSaveFocusTarget = isPdfModalSaveFocusTarget;
     window.initPdfAttachmentSystem = initPdfAttachmentSystem;
     window.attachAlgorithmAddPdfHandlers = attachAlgorithmAddPdfHandlers;
     window.attachBookmarkPdfHandlers = attachBookmarkPdfHandlers;

@@ -596,11 +596,14 @@ export async function showEditBookmarkModal(id) {
         }
 
         if (typeof getCurrentBookmarkFormState === 'function') {
-            form._initialState = getCurrentBookmarkFormState(form);
+            State.initialBookmarkFormState = getCurrentBookmarkFormState(form);
+            form._initialState = JSON.parse(JSON.stringify(State.initialBookmarkFormState));
             console.log(
                 'Захвачено начальное состояние для EDIT bookmarkModal:',
-                JSON.parse(JSON.stringify(form._initialState)),
+                form._initialState,
             );
+        } else {
+            State.initialBookmarkFormState = null;
         }
 
         modal.classList.remove('hidden');

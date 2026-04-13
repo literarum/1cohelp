@@ -222,6 +222,30 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
     overflow: auto;
 }
 
+/* Полноэкранные настройки: между оверлеем и панелью — оболочка #customizeUIModalShell (как #appCustomizationModalShell) */
+#customizeUIModal.is-fullscreen {
+    align-items: stretch !important;
+    justify-content: stretch !important;
+}
+
+#customizeUIModal.is-fullscreen #customizeUIModalShell {
+    width: 100% !important;
+    min-height: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+}
+
+#customizeUIModal.is-fullscreen .modal-inner-container {
+    max-width: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
 #customizeUIModal .settings-modal-footer {
     overflow-x: auto;
     overflow-y: hidden;
@@ -874,6 +898,7 @@ body.app-backup-warning-perimeter-pulse::before {
         #addModal .p-content.overflow-y-auto.flex-1,
         #editModal .p-content.overflow-y-auto.flex-1,
         #reminderModal #reminderModalBody,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1,
         #appCustomizationModal .app-customization-scroll
     ) {
     flex-grow: 1;

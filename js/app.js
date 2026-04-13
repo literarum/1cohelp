@@ -139,6 +139,7 @@ export function setDependencies(deps) {
         handleViewBookmarkScreenshots: deps.handleViewBookmarkScreenshots,
         NotificationService: deps.NotificationService,
         showScreenshotViewerModal: deps.showScreenshotViewerModal,
+        showAppConfirm: deps.showAppConfirm,
     });
 
     // Установка loadingOverlayManager для ExportService

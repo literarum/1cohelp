@@ -13,7 +13,7 @@ export const REVOCATION_API_BASE_URL =
 // ============================================================================
 export const tabsConfig = [
     { id: 'main', name: 'Главная', icon: 'fa-home' },
-    { id: 'program', name: 'Программа 1С', icon: 'fa-desktop' },
+    { id: 'program', name: 'Программа 1С/УП', icon: 'fa-desktop' },
     { id: 'links', name: 'Ссылки 1С', icon: 'fa-link' },
     { id: 'extLinks', name: 'Внешние ресурсы', icon: 'fa-globe' },
     { id: 'skzi', name: 'СКЗИ', icon: 'fa-key' },
@@ -333,6 +333,49 @@ export const dbMergeModalConfig = {
     contentAreaSelector: '#dbMergeStepContainer',
 };
 
+/** Главное окно «Настройки» (вкладки, масштаб, расширения) — тот же централизованный fullscreen, что у прочих модалок */
+export const customizeUIModalConfig = {
+    modalId: 'customizeUIModal',
+    buttonId: 'toggleFullscreenCustomizeUIBtn',
+    classToggleConfig: {
+        normal: {
+            modal: ['p-4', 'overflow-y-auto', 'flex', 'items-center', 'justify-center'],
+            innerContainer: [
+                'rounded-lg',
+                'shadow-xl',
+                'max-w-7xl',
+                'w-full',
+                'max-h-screen',
+                'flex',
+                'flex-col',
+                'overflow-hidden',
+            ],
+            contentArea: ['p-content', 'overflow-y-auto', 'flex-1'],
+        },
+        fullscreen: {
+            modal: UNIFIED_FULLSCREEN_MODAL_CLASSES.modal,
+            innerContainer: [
+                ...UNIFIED_FULLSCREEN_MODAL_CLASSES.innerContainer,
+                'flex',
+                'flex-col',
+                'min-h-0',
+            ],
+            contentArea: [
+                'p-content',
+                'h-full',
+                'max-h-full',
+                'flex-1',
+                'min-h-0',
+                'overflow-y-auto',
+                'flex',
+                'flex-col',
+            ],
+        },
+    },
+    innerContainerSelector: '.modal-inner-container',
+    contentAreaSelector: '.p-content.overflow-y-auto.flex-1',
+};
+
 /** Окно «Кастомизация» (тема, цвета, скругление) — тот же паттерн, что hotkeys */
 export const appCustomizationModalConfig = {
     modalId: 'appCustomizationModal',
@@ -429,6 +472,7 @@ export const FULLSCREEN_MODAL_CONFIGS = [
     healthReportModalConfig,
     dbMergeModalConfig,
     engineeringCockpitModalConfig,
+    customizeUIModalConfig,
     appCustomizationModalConfig,
 ];
 
@@ -531,11 +575,34 @@ export const THEME_DEFAULTS = Object.freeze({
 // ============================================================================
 // НАСТРОЙКИ UI ПО УМОЛЧАНИЮ
 // ============================================================================
+/** Диапазон ползунка «Скругление углов» (#borderRadiusSlider), значение = px для --border-radius. */
+export const BORDER_RADIUS_SLIDER_MIN = 0;
+export const BORDER_RADIUS_SLIDER_MAX = 20;
+/** По умолчанию 25% трека ползунка (согласовано с подписью процента в UI). */
+export const DEFAULT_BORDER_RADIUS_SLIDER_PERCENT = 25;
+export const DEFAULT_BORDER_RADIUS_PX = Math.round(
+    (BORDER_RADIUS_SLIDER_MAX * DEFAULT_BORDER_RADIUS_SLIDER_PERCENT) / 100,
+);
+
+/**
+ * Приводит сохранённое значение скругления к допустимому целому на шкале ползунка.
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function clampBorderRadiusPx(value) {
+    const n = typeof value === 'string' ? Number.parseFloat(String(value).trim()) : Number(value);
+    if (!Number.isFinite(n)) return DEFAULT_BORDER_RADIUS_PX;
+    return Math.max(
+        BORDER_RADIUS_SLIDER_MIN,
+        Math.min(BORDER_RADIUS_SLIDER_MAX, Math.round(n)),
+    );
+}
+
 export function getDefaultUISettings(allPanelIdsForDefault) {
     return {
         primaryColor: THEME_DEFAULTS.primary,
         fontSize: 80,
-        borderRadius: 2,
+        borderRadius: DEFAULT_BORDER_RADIUS_PX,
         contentDensity: 3,
         themeMode: 'dark',
         mainLayout: 'horizontal',

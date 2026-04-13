@@ -4,7 +4,8 @@
 // BOOKMARKS DELETE (вынос из script.js)
 // ============================================================================
 
-import { addRecentlyDeletedRecord } from './recently-deleted.js';
+import { buildRecentlyDeletedRecord } from './recently-deleted.js';
+import { RECENTLY_DELETED_STORE_NAME } from '../constants.js';
 
 let State = null;
 let getFromIndexedDB = null;
@@ -15,6 +16,9 @@ let loadBookmarks = null;
 let removeFromFavoritesDB = null;
 let updateFavoriteStatusUI = null;
 let renderFavoritesPage = null;
+
+/** Параллельные вызовы deleteBookmark без await давали несколько записей в корзине на один id. */
+const bookmarkDeletesInFlight = new Set();
 
 export function setBookmarksDeleteDependencies(deps) {
     State = deps.State;
@@ -35,6 +39,12 @@ export async function deleteBookmark(id) {
         showNotification?.('Ошибка: Неверный ID закладки для удаления.', 'error');
         return;
     }
+
+    if (bookmarkDeletesInFlight.has(numericId)) {
+        console.warn(`deleteBookmark: удаление закладки ${numericId} уже выполняется, пропуск дубликата.`);
+        return;
+    }
+    bookmarkDeletesInFlight.add(numericId);
 
     let bookmarkToDelete = null;
     let screenshotIdsToDelete = [];
@@ -70,53 +80,60 @@ export async function deleteBookmark(id) {
                 fetchError,
             );
             showNotification?.(
-                'Не удалось получить данные скриншотов, но будет предпринята попытка удалить закладку.',
-                'warning',
+                'Не удалось получить данные закладки. Удаление отменено.',
+                'error',
             );
-        }
-
-        if (bookmarkToDelete && typeof updateSearchIndex === 'function') {
-            try {
-                await updateSearchIndex('bookmarks', numericId, null, 'delete', bookmarkToDelete);
-                console.log(
-                    `Обновление индекса (delete) для закладки ID: ${numericId} инициировано.`,
-                );
-            } catch (indexError) {
-                console.error(
-                    `Ошибка обновления поискового индекса при удалении закладки ${numericId}:`,
-                    indexError,
-                );
-                showNotification?.('Ошибка обновления поискового индекса.', 'warning');
-            }
-        } else {
-            console.warn(
-                `Обновление индекса для закладки ${numericId} пропущено (данные не получены или функция недоступна).`,
-            );
-        }
-
-        if (bookmarkToDelete) {
-            await addRecentlyDeletedRecord({
-                storeName: 'bookmarks',
-                entityId: numericId,
-                payload: bookmarkToDelete,
-                reason: 'delete_bookmark',
-            });
+            return;
         }
 
         if (!State?.db) {
             throw new Error('State.db не инициализирован (IndexedDB недоступен).');
         }
 
-        const stores = ['bookmarks'];
-        if (screenshotIdsToDelete.length > 0) stores.push('screenshots');
+        const storeNames = [RECENTLY_DELETED_STORE_NAME, 'bookmarks'];
+        if (screenshotIdsToDelete.length > 0) {
+            storeNames.push('screenshots');
+        }
 
-        transaction = State.db.transaction(stores, 'readwrite');
+        transaction = State.db.transaction(storeNames, 'readwrite');
+        const recentlyDeletedStore = transaction.objectStore(RECENTLY_DELETED_STORE_NAME);
         const bookmarkStore = transaction.objectStore('bookmarks');
-        const screenshotStore = stores.includes('screenshots')
-            ? transaction.objectStore('screenshots')
-            : null;
+        const screenshotStore =
+            screenshotIdsToDelete.length > 0 ? transaction.objectStore('screenshots') : null;
+
+        const recentlyDeletedRecord = buildRecentlyDeletedRecord({
+            storeName: 'bookmarks',
+            entityId: numericId,
+            payload: bookmarkToDelete,
+            reason: 'delete_bookmark',
+        });
 
         const deletePromises = [];
+
+        if (recentlyDeletedRecord) {
+            deletePromises.push(
+                new Promise((resolve, reject) => {
+                    const req = recentlyDeletedStore.add(recentlyDeletedRecord);
+                    req.onsuccess = () => {
+                        console.log(
+                            `[deleteBookmark] Снимок закладки ${numericId} записан в recentlyDeleted (одна транзакция).`,
+                        );
+                        resolve();
+                    };
+                    req.onerror = (e) => {
+                        console.error(
+                            `[deleteBookmark] Ошибка записи в recentlyDeleted для ${numericId}:`,
+                            e.target.error,
+                        );
+                        reject(e.target.error);
+                    };
+                }),
+            );
+        } else {
+            console.warn(
+                '[deleteBookmark] buildRecentlyDeletedRecord вернул null — корзина не пополнится.',
+            );
+        }
 
         deletePromises.push(
             new Promise((resolve, reject) => {
@@ -157,7 +174,7 @@ export async function deleteBookmark(id) {
         }
 
         await Promise.all(deletePromises);
-        console.log('Все запросы на удаление (закладка + скриншоты) успешно инициированы.');
+        console.log('Все запросы на удаление (корзина + закладка + скриншоты) успешно инициированы.');
 
         await new Promise((resolve, reject) => {
             transaction.oncomplete = () => {
@@ -179,7 +196,22 @@ export async function deleteBookmark(id) {
             };
         });
 
-        // Синхронизация с избранным (если доступно)
+        if (typeof updateSearchIndex === 'function') {
+            updateSearchIndex('bookmarks', numericId, null, 'delete', bookmarkToDelete).then(
+                () => {
+                    console.log(
+                        `Обновление индекса (delete) для закладки ID: ${numericId} завершено.`,
+                    );
+                },
+                (indexError) => {
+                    console.error(
+                        `Ошибка обновления поискового индекса при удалении закладки ${numericId}:`,
+                        indexError,
+                    );
+                },
+            );
+        }
+
         try {
             const removedBookmark = await removeFromFavoritesDB?.('bookmark', numericId);
             const removedNote = await removeFromFavoritesDB?.('bookmark_note', numericId);
@@ -223,5 +255,7 @@ export async function deleteBookmark(id) {
             }
         }
         await loadBookmarks?.();
+    } finally {
+        bookmarkDeletesInFlight.delete(numericId);
     }
 }

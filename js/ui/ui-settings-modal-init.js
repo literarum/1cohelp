@@ -5,8 +5,9 @@ import {
     buildHealthSubsystemSummaryHtml,
 } from '../features/health-report-format.js';
 import { onBackupReminderReEnabled } from '../features/backup-reminder.js';
-import { appCustomizationModalConfig } from '../config.js';
+import { appCustomizationModalConfig, customizeUIModalConfig } from '../config.js';
 import { collapseModalFullscreenIfActive, ensureFullscreenToggleForConfig } from './modals-manager.js';
+import { syncBorderRadiusSliderPercentLabel } from './ui-settings-modal.js';
 
 let deps = {
     State: null,
@@ -53,6 +54,8 @@ export function initUISettingsModalHandlers() {
                     );
                 }
                 if (deps.State) deps.State.isUISettingsDirty = false;
+                ensureFullscreenToggleForConfig(customizeUIModalConfig);
+                collapseModalFullscreenIfActive('customizeUIModal', customizeUIModalConfig);
                 customizeUIModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
                 if (typeof deps.addEscapeHandler === 'function') {
@@ -112,6 +115,7 @@ export function initUISettingsModalHandlers() {
 
     if (customizeUIModal && !customizeUIModal.dataset.settingsInnerListenersAttached) {
         const closeModal = () => {
+            collapseModalFullscreenIfActive('customizeUIModal', customizeUIModalConfig);
             const panelSortContainer = document.getElementById('panelSortContainer');
             if (panelSortContainer?.sortableInstance) {
                 try {
@@ -310,6 +314,7 @@ export function initUISettingsModalHandlers() {
             borderRadiusSlider.addEventListener('input', () => {
                 if (typeof deps.updatePreviewSettingsFromModal === 'function') {
                     deps.updatePreviewSettingsFromModal();
+                    syncBorderRadiusSliderPercentLabel();
                     if (deps.State && typeof deps.applyPreviewSettings === 'function') {
                         deps.applyPreviewSettings(deps.State.currentPreviewSettings);
                     }

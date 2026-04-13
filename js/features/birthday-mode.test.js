@@ -165,10 +165,14 @@ describe('birthday-mode', () => {
         expect(bulbBlock).toMatch(/transform-origin:\s*top\s+center/);
     });
 
-    it('CSS: свеча в birthday-mode меньше и ближе к «СО»', () => {
+    it('CSS: эмодзи в логотипе в birthday-mode компактнее и ближе к «СО»', () => {
         const raw = readFileSync(BIRTHDAY_CSS_PATH, 'utf8');
-        expect(raw).toMatch(/html\.birthday-mode\s+\.app-brand-title__candle-wrap\s*\{[\s\S]*?margin-inline-end/s);
-        expect(raw).toMatch(/html\.birthday-mode\s+\.app-brand-title__candle-svg\s*\{[\s\S]*?width:\s*0\.46em/s);
+        expect(raw).toMatch(
+            /html\.birthday-mode\s+\.app-brand-title__party-emoji-wrap\s*\{[\s\S]*?margin-inline-end/s,
+        );
+        expect(raw).toMatch(
+            /html\.birthday-mode\s+\.app-brand-title__party-emoji\s*\{[\s\S]*?font-size:\s*0\.92em/s,
+        );
         expect(raw).toMatch(/html\.birthday-mode\s+\.app-brand-title__letters-so\s*\{[\s\S]*?margin-left/s);
     });
 

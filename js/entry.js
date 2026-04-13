@@ -42,6 +42,8 @@ initPwaShell();
         handleViewBookmarkScreenshots: window.handleViewBookmarkScreenshots,
         NotificationService: window.NotificationService,
         showScreenshotViewerModal: window.showScreenshotViewerModal,
+        showAppConfirm:
+            typeof window.showAppConfirm === 'function' ? window.showAppConfirm : undefined,
     };
 
     setDependencies(deps);

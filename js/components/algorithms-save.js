@@ -5,9 +5,13 @@
  * Вынесено из script.js
  */
 
-import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
+import { buildRecentlyDeletedRecord } from '../features/recently-deleted.js';
+import { RECENTLY_DELETED_STORE_NAME } from '../constants.js';
 import { recordAlgorithmHistoryAfterSuccessfulSave } from '../history/algorithm-history-bridge.js';
-import { removePdfSectionsFromContainer } from '../features/pdf-attachments.js';
+import {
+    flushPendingPdfRenamesInContainer,
+    removePdfSectionsFromContainer,
+} from '../features/pdf-attachments.js';
 import { parseTagsFromUserString } from '../features/global-tags.js';
 
 // ============================================================================
@@ -292,7 +296,7 @@ export async function saveNewAlgorithm() {
             `[Save New Algorithm] КРИТИЧЕСКАЯ ОШИБКА сохранения для нового алгоритма в секции ${section}:`,
             error,
         );
-        if (transaction && transaction.readyState !== 'done' && transaction.abort) {
+        if (transaction && transaction.readyState === 'pending' && transaction.abort) {
             try {
                 transaction.abort();
                 console.log('[Save New Algorithm] Транзакция отменена в catch.');
@@ -452,6 +456,12 @@ export async function saveAlgorithm() {
         showNotification('Заголовок не может быть пустым.', 'warning');
         algorithmTitleInput.focus();
         return;
+    }
+
+    try {
+        await flushPendingPdfRenamesInContainer(editModal);
+    } catch (flushPdfErr) {
+        console.warn('[saveAlgorithm] flush PDF renames:', flushPdfErr);
     }
 
     saveButton.disabled = true;
@@ -789,7 +799,7 @@ export async function saveAlgorithm() {
         );
         if (
             transaction &&
-            transaction.readyState !== 'done' &&
+            transaction.readyState === 'pending' &&
             transaction.abort &&
             !transaction.error
         ) {
@@ -947,9 +957,13 @@ export async function deleteAlgorithm(algorithmId, section) {
     let deleteSuccessful = false;
     try {
         if (!State.db) throw new Error('База данных недоступна');
-        transaction = State.db.transaction(['algorithms', 'screenshots'], 'readwrite');
+        transaction = State.db.transaction(
+            ['algorithms', 'screenshots', RECENTLY_DELETED_STORE_NAME],
+            'readwrite',
+        );
         const screenshotsStore = transaction.objectStore('screenshots');
         const algorithmsStore = transaction.objectStore('algorithms');
+        const recentlyDeletedStore = transaction.objectStore(RECENTLY_DELETED_STORE_NAME);
 
         console.log(
             `[TX Delete] Поиск скриншотов по parentId: ${algorithmId}, parentType: 'algorithm'`,
@@ -1020,7 +1034,7 @@ export async function deleteAlgorithm(algorithmId, section) {
             console.log('[TX Delete] Связанных скриншотов для удаления не найдено.');
         }
 
-        await addRecentlyDeletedRecord({
+        const recentlyDeletedRecord = buildRecentlyDeletedRecord({
             storeName: 'algorithms',
             entityId: algorithmToDelete.id,
             payload: algorithmToDelete,
@@ -1032,19 +1046,47 @@ export async function deleteAlgorithm(algorithmId, section) {
         console.log(`Алгоритм ${algorithmId} удален из массива в памяти [${section}].`);
 
         const algorithmContainerToSave = { section: 'all', data: algorithms };
+        const persistPromises = [];
+
+        if (recentlyDeletedRecord) {
+            persistPromises.push(
+                new Promise((resolve, reject) => {
+                    console.log('[TX Delete] Запрос на запись снимка в recentlyDeleted.');
+                    const putTrash = recentlyDeletedStore.put(recentlyDeletedRecord);
+                    putTrash.onsuccess = () => resolve();
+                    putTrash.onerror = (e) => {
+                        console.error('[TX Delete] Ошибка записи в recentlyDeleted:', e.target.error);
+                        reject(
+                            new Error(
+                                `Ошибка записи в корзину: ${e.target.error?.message}`,
+                            ),
+                        );
+                    };
+                }),
+            );
+        } else {
+            console.warn(
+                '[TX Delete] Запись в recentlyDeleted пропущена (buildRecentlyDeletedRecord вернул null).',
+            );
+        }
+
         console.log("[TX Delete] Запрос на сохранение обновленного контейнера 'algorithms'.");
-        await new Promise((resolve, reject) => {
-            const putReq = algorithmsStore.put(algorithmContainerToSave);
-            putReq.onsuccess = resolve;
-            putReq.onerror = (e) => {
-                console.error("[TX Delete] Ошибка сохранения 'algorithms':", e.target.error);
-                reject(
-                    new Error(
-                        `Ошибка сохранения algorithms после удаления ${algorithmId}: ${e.target.error?.message}`,
-                    ),
-                );
-            };
-        });
+        persistPromises.push(
+            new Promise((resolve, reject) => {
+                const putReq = algorithmsStore.put(algorithmContainerToSave);
+                putReq.onsuccess = resolve;
+                putReq.onerror = (e) => {
+                    console.error("[TX Delete] Ошибка сохранения 'algorithms':", e.target.error);
+                    reject(
+                        new Error(
+                            `Ошибка сохранения algorithms после удаления ${algorithmId}: ${e.target.error?.message}`,
+                        ),
+                    );
+                };
+            }),
+        );
+
+        await Promise.all(persistPromises);
         console.log(
             `Обновленные данные algorithms сохранены в IndexedDB после удаления ${algorithmId}.`,
         );
@@ -1074,7 +1116,7 @@ export async function deleteAlgorithm(algorithmId, section) {
             `КРИТИЧЕСКАЯ ОШИБКА при удалении алгоритма ${algorithmId} из секции ${section}:`,
             error,
         );
-        if (transaction && transaction.readyState !== 'done' && transaction.abort) {
+        if (transaction && transaction.readyState === 'pending' && transaction.abort) {
             try {
                 console.log('Попытка явно отменить транзакцию...');
                 transaction.abort();

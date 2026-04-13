@@ -1,5 +1,5 @@
 /* ===================================================================
-   Режим «День рождения»: гирлянда, конфетти, логотип-свеча, доступность
+   Режим «День рождения»: гирлянда, конфетти, эмодзи в логотипе, доступность
    =================================================================== */
 
 html.birthday-mode {
@@ -148,7 +148,7 @@ html.birthday-mode--reduced .birthday-garland__bulb {
     }
 }
 
-/* Логотип: свеча только вместо цифры «1», «СО» остаётся; вне ДР — «1СО» слитно, без лишнего зазора */
+/* Логотип: эмодзи 🎉 вместо цифры «1», «СО» остаётся; вне ДР — «1СО» слитно, без лишнего зазора */
 .app-brand-title__suffix {
     white-space: nowrap;
     margin-inline-start: 0;
@@ -158,7 +158,7 @@ html.birthday-mode--reduced .birthday-garland__bulb {
     margin-right: -4px;
 }
 
-.app-brand-title__candle-wrap {
+.app-brand-title__party-emoji-wrap {
     display: none;
     vertical-align: -0.1em;
 }
@@ -180,7 +180,7 @@ html.birthday-mode .app-brand-title__suffix {
     margin-inline-start: 0.07em;
 }
 
-html.birthday-mode .app-brand-title__candle-wrap {
+html.birthday-mode .app-brand-title__party-emoji-wrap {
     display: inline-flex;
     /* чуть выше базовой линии (менее отрицательный vertical-align) */
     vertical-align: -0.03em;
@@ -189,50 +189,22 @@ html.birthday-mode .app-brand-title__candle-wrap {
     margin-inline-end: -0.2em;
 }
 
-html.birthday-mode .app-brand-title__candle-svg {
-    width: 0.46em;
-    height: 0.82em;
+html.birthday-mode .app-brand-title__party-emoji {
+    font-size: 0.92em;
+    line-height: 1;
+    display: inline-block;
     vertical-align: -0.02em;
+    font-style: normal;
+    font-family:
+        'Apple Color Emoji',
+        'Segoe UI Emoji',
+        'Segoe UI Symbol',
+        'Noto Color Emoji',
+        sans-serif;
 }
 
 html.birthday-mode .app-brand-title__letters-so {
     margin-left: -0.06em;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    html.birthday-mode:not(.birthday-mode--reduced) .app-brand-title__candle-glow {
-        animation: birthday-candle-glow 1.35s ease-in-out infinite;
-        transform-origin: 12px 10px;
-    }
-
-    html.birthday-mode:not(.birthday-mode--reduced) .app-brand-title__candle-flame {
-        animation: birthday-candle-flame 0.85s ease-in-out infinite alternate;
-        transform-origin: 12px 16px;
-    }
-}
-
-@keyframes birthday-candle-glow {
-    0%,
-    100% {
-        opacity: 0.38;
-    }
-    50% {
-        opacity: 0.62;
-    }
-}
-
-@keyframes birthday-candle-flame {
-    0% {
-        transform: scale(1, 1) translateY(0);
-    }
-    100% {
-        transform: scale(1.04, 1.1) translateY(-0.4px);
-    }
-}
-
-html.birthday-mode--reduced .app-brand-title__candle-glow,
-html.birthday-mode--reduced .app-brand-title__candle-flame {
-    animation: none;
 }
 
 /* Конфетти-слой: выше липкой шапки (base.css z-index 30), ниже гирлянды (45) */

@@ -27,6 +27,7 @@ import {
     DEFAULT_CIB_LINKS,
     FULLSCREEN_MODAL_CONFIGS,
     appCustomizationModalConfig,
+    customizeUIModalConfig,
     THEME_DEFAULTS,
 } from './js/config.js';
 
@@ -956,6 +957,12 @@ function addEscapeHandler(modalElement) {
                     collapseModalFullscreenIfActiveModule(
                         'appCustomizationModal',
                         appCustomizationModalConfig,
+                    );
+                }
+                if (modalElement.id === 'customizeUIModal') {
+                    collapseModalFullscreenIfActiveModule(
+                        'customizeUIModal',
+                        customizeUIModalConfig,
                     );
                 }
                 modalElement.classList.add('hidden');
@@ -4094,6 +4101,7 @@ console.log('[script.js] Зависимости модуля Import/Export ус�
 
 setRecentlyDeletedDependencies({
     showNotification,
+    showAppConfirm: showAppConfirmModule,
     loadBookmarks,
     loadExtLinks,
     loadCibLinks: loadCibLinksModule,

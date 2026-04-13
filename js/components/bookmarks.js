@@ -152,7 +152,10 @@ export function setBookmarksDependencies(deps) {
     _handleViewBookmarkScreenshotsDep = deps.handleViewBookmarkScreenshots;
     NotificationService = deps.NotificationService;
     showScreenshotViewerModal = deps.showScreenshotViewerModal;
-    showAppConfirm = deps.showAppConfirm;
+    // Не затирать showAppConfirm, если ключ не передан (entry.js / частичные deps).
+    if (deps.showAppConfirm !== undefined) {
+        showAppConfirm = deps.showAppConfirm;
+    }
 }
 
 /**
@@ -1939,19 +1942,31 @@ export async function handleBookmarkAction(event) {
             }
         }
     } else if (action === 'delete') {
-        const title = bookmarkItem.querySelector('h3')?.title || `закладку с ID ${bookmarkId}`;
-        const confirmed = showAppConfirm
-            ? await showAppConfirm({
+        const titleEl = bookmarkItem.querySelector('h3');
+        const title =
+            (titleEl?.textContent || titleEl?.title || '').trim() ||
+            `закладку с ID ${bookmarkId}`;
+        const confirmModal =
+            typeof showAppConfirm === 'function'
+                ? showAppConfirm
+                : typeof window !== 'undefined' && typeof window.showAppConfirm === 'function'
+                  ? window.showAppConfirm
+                  : null;
+        const confirmed = confirmModal
+            ? await confirmModal({
                   title: 'Удаление закладки',
-                  message: `Вы уверены, что хотите удалить закладку «${title}»?`,
+                  message:
+                      `Вы уверены, что хотите удалить закладку «${title}»? Связанные скриншоты будут удалены вместе с ней. Восстановить запись можно через раздел «Недавно удалённые».`,
                   confirmText: 'Удалить',
                   cancelText: 'Отмена',
                   confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
               })
-            : confirm(`Вы уверены, что хотите удалить закладку "${title}"?`);
+            : confirm(
+                  `Вы уверены, что хотите удалить закладку "${title}"? Связанные скриншоты также будут удалены.`,
+              );
         if (confirmed) {
             if (typeof deleteBookmarkDep === 'function') {
-                deleteBookmarkDep(bookmarkId);
+                await deleteBookmarkDep(bookmarkId);
             } else {
                 console.error('Функция deleteBookmark не определена.');
                 if (NotificationService?.add) {

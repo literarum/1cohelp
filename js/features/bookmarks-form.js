@@ -2,6 +2,7 @@
 
 import { getFromIndexedDB } from '../db/indexeddb.js';
 import { parseTagsFromUserString } from '../features/global-tags.js';
+import { flushPendingPdfRenamesInContainer } from '../features/pdf-attachments.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
 
 // ============================================================================
@@ -64,6 +65,12 @@ export async function handleBookmarkFormSubmit(event) {
     }
 
     console.log('[handleBookmarkFormSubmit v6] Modal, form, and save button found. Proceeding...');
+
+    try {
+        await flushPendingPdfRenamesInContainer(modal);
+    } catch (flushPdfErr) {
+        console.warn('[handleBookmarkFormSubmit] flush PDF renames:', flushPdfErr);
+    }
 
     saveButton.disabled = true;
     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
@@ -353,17 +360,8 @@ export async function handleBookmarkFormSubmit(event) {
             transaction.onabort = (e) => reject(e.target.error || new Error('Транзакция прервана'));
         });
 
-        try {
-            const pdfTemp = Array.isArray(form._tempPdfFiles) ? form._tempPdfFiles : [];
-            if (pdfTemp.length > 0) {
-                console.log(
-                    `[Save Bookmark] Сохранение ${pdfTemp.length} PDF для закладки ${finalId}`,
-                );
-                await addPdfRecords(pdfTemp, 'bookmark', finalId);
-            }
-        } catch (pdfErr) {
-            console.error('[handleBookmarkFormSubmit] Ошибка сохранения PDF-файлов:', pdfErr);
-        }
+        // Черновые PDF (_tempPdfFiles) сохраняются один раз в блоке if (saveSuccessful) ниже.
+        // Дублирующий вызов addPdfRecords здесь давал по 2 одинаковых записи в IndexedDB на каждый файл.
     } catch (saveError) {
         console.error(
             `[Save Bookmark v6 (Robust TX)] КРИТИЧЕСКАЯ ОШИБКА при сохранении закладки ${
