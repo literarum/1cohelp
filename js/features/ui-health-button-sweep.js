@@ -39,6 +39,8 @@ const AUTOSLICK_DENY_IDS = new Set([
     'backgroundImageInput',
     'clientAnalyticsFileInput',
     'clientAnalyticsImportInput',
+    'clientAnalyticsClearAllBtn',
+    'clientAnalyticsClearAllConfirmBtn',
     'dbMergeFileInput',
     'fnsCertFileInput',
     'xmlAnalyzerDataInput',

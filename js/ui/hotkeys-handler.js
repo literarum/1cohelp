@@ -5,7 +5,10 @@
  * Вынесено из script.js (Этап 5)
  */
 
-import { closeClientAnalyticsDetailModal } from '../features/client-analytics.js';
+import {
+    closeClientAnalyticsClearAllModal,
+    closeClientAnalyticsDetailModal,
+} from '../features/client-analytics.js';
 import { performAlgorithmRedo, performAlgorithmUndo } from '../history/algorithm-history-bridge.js';
 import {
     MODAL_IDS_WITH_HISTORY,
@@ -603,6 +606,7 @@ export async function handleGlobalHotkey(event) {
     const algorithmModal = document.getElementById('algorithmModal');
     const bookmarkDetailModal = document.getElementById('bookmarkDetailModal');
     const clientAnalyticsDetailModal = document.getElementById('clientAnalyticsDetailModal');
+    const clientAnalyticsClearAllModal = document.getElementById('clientAnalyticsClearAllModal');
     const reglamentDetailModal = document.getElementById('reglamentDetailModal');
     const reglamentsListDiv = document.getElementById('reglamentsList');
     const backToCategoriesBtn = document.getElementById('backToCategories');
@@ -633,7 +637,12 @@ export async function handleGlobalHotkey(event) {
                 if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
                     reglamentDetailModal.classList.add('hidden');
                 }
-                if (clientAnalyticsDetailModal && !clientAnalyticsDetailModal.classList.contains('hidden')) {
+                if (clientAnalyticsClearAllModal && !clientAnalyticsClearAllModal.classList.contains('hidden')) {
+                    closeClientAnalyticsClearAllModal();
+                } else if (
+                    clientAnalyticsDetailModal &&
+                    !clientAnalyticsDetailModal.classList.contains('hidden')
+                ) {
                     closeClientAnalyticsDetailModal();
                 }
 
@@ -744,6 +753,13 @@ export async function handleGlobalHotkey(event) {
         } else if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
             console.log('[GlobalHotkey Esc] Закрытие окна деталей регламента');
             reglamentDetailModal.classList.add('hidden');
+            closedSomethingInChain = true;
+        } else if (
+            clientAnalyticsClearAllModal &&
+            !clientAnalyticsClearAllModal.classList.contains('hidden')
+        ) {
+            console.log('[GlobalHotkey Esc] Закрытие подтверждения очистки базы клиентов');
+            closeClientAnalyticsClearAllModal();
             closedSomethingInChain = true;
         } else if (clientAnalyticsDetailModal && !clientAnalyticsDetailModal.classList.contains('hidden')) {
             console.log('[GlobalHotkey Esc] Закрытие карточки аналитики клиентов');

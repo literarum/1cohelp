@@ -83,7 +83,7 @@ function ensureModal() {
     modal = document.createElement('div');
     modal.id = 'recentlyDeletedModal';
     modal.className =
-        'fixed inset-0 bg-black bg-opacity-50 hidden z-[80] p-4 overflow-y-auto flex items-center justify-center';
+        'fixed inset-0 bg-black bg-opacity-50 hidden z-[100] p-4 overflow-y-auto flex items-center justify-center';
     modal.innerHTML = `
         <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">

@@ -130,6 +130,21 @@ function evaluateCrossCheckNotes() {
         }
     }
 
+    if (lastStartupReadiness && watchdogRing.length > 0) {
+        const wd = watchdogRing[watchdogRing.length - 1];
+        if (
+            wd &&
+            wd.source === 'interval' &&
+            lastStartupReadiness.runtimeFaultCount === 0 &&
+            wd.runtimeFaultCount >= 3 &&
+            wd.errorCount === 0
+        ) {
+            notes.push(
+                'Тройной контур: после «чистого» старта в последнем плановом watchdog накопились только рантайм-сбои при нуле ошибок чеклиста — сверьте буфер runtime и HUD.',
+            );
+        }
+    }
+
     return notes;
 }
 

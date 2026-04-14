@@ -25,6 +25,7 @@ import {
     formatCockpitLogText,
     isValidCockpitLogFilterLevel,
 } from './engineering-cockpit-logging.js';
+import { bindEngineeringCockpitScrollNav } from './engineering-cockpit-scroll-nav.js';
 
 const ENGINEERING_PASSWORD = '05213587';
 const LOG_BUFFER_LIMIT = 1500;
@@ -71,6 +72,9 @@ let deps = {
 };
 
 let refs = null;
+
+/** @type {{ requestUpdate: () => void, detach: () => void } | null} */
+let cockpitScrollNavUi = null;
 
 function nowIso() {
     return new Date().toISOString();
@@ -346,6 +350,7 @@ async function renderActiveTab() {
         : 'Сводка БД пока не собрана.';
 
     refs.state.textContent = safeSerialize(getStateSnapshot(), 200000);
+    cockpitScrollNavUi?.requestUpdate?.();
 }
 
 function activateTab(tabId) {
@@ -421,6 +426,10 @@ function bindUi() {
         errors: document.getElementById('engineeringCockpitErrors'),
         db: document.getElementById('engineeringCockpitDb'),
         state: document.getElementById('engineeringCockpitState'),
+        cockpitContent: modal?.querySelector('.engineering-cockpit-content'),
+        scrollNav: document.getElementById('engineeringCockpitScrollNav'),
+        scrollNavUp: document.getElementById('engineeringCockpitScrollUpBtn'),
+        scrollNavDown: document.getElementById('engineeringCockpitScrollDownBtn'),
     };
 
     if (!refs.modal || !refs.closeBtn || !refs.unlockBtn || !refs.passwordInput) return false;
@@ -648,6 +657,20 @@ function bindUi() {
         btn.addEventListener('click', () => activateTab(btn.dataset.cockpitTab || 'overview'));
     });
 
+    cockpitScrollNavUi?.detach();
+    if (refs.cockpitContent && refs.scrollNav && refs.scrollNavUp && refs.scrollNavDown) {
+        cockpitScrollNavUi = bindEngineeringCockpitScrollNav({
+            modal: refs.modal,
+            workspace: refs.workspace,
+            contentWrap: refs.cockpitContent,
+            container: refs.scrollNav,
+            upBtn: refs.scrollNavUp,
+            downBtn: refs.scrollNavDown,
+        });
+    } else {
+        cockpitScrollNavUi = null;
+    }
+
     return true;
 }
 
@@ -672,6 +695,7 @@ export function openEngineeringCockpit() {
     refs.workspace.classList.remove('hidden');
     activateTab(state.currentTab);
     void refreshCockpitData();
+    requestAnimationFrame(() => cockpitScrollNavUi?.requestUpdate?.());
 }
 
 export function initEngineeringCockpit() {

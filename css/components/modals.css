@@ -362,6 +362,14 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 /* ——— «Кастомизация»: премиальный слой (сегменты, карточки, фокус) ——— */
 #appCustomizationModal.app-customization-overlay {
     -webkit-tap-highlight-color: transparent;
+    /* Выше #customizeUIModal.is-fullscreen (z-index 90 из .is-fullscreen), иначе оверлей «Кастомизации»
+       остаётся под полноэкранными настройками и окно не видно (sibling fixed в корне документа). */
+    z-index: 100 !important;
+}
+
+/* Динамически создаваемое #recentlyDeletedModal — тот же контракт слоя над полноэкранными настройками. */
+#recentlyDeletedModal {
+    z-index: 100 !important;
 }
 
 #appCustomizationModal .app-customization-panel {

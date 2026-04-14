@@ -15,6 +15,7 @@ let showNotification = null;
 let addPdfRecords = null;
 let updateSearchIndex = null;
 let loadBookmarks = null;
+let filterBookmarks = null;
 let getVisibleModals = null;
 
 export function setBookmarksFormDependencies(deps) {
@@ -24,6 +25,7 @@ export function setBookmarksFormDependencies(deps) {
     addPdfRecords = deps.addPdfRecords;
     updateSearchIndex = deps.updateSearchIndex;
     loadBookmarks = deps.loadBookmarks;
+    filterBookmarks = deps.filterBookmarks;
     getVisibleModals = deps.getVisibleModals;
 }
 
@@ -462,7 +464,9 @@ export async function handleBookmarkFormSubmit(event) {
         if (pdfListEl) pdfListEl.innerHTML = '<li class="text-gray-500">Нет файлов</li>';
         State.initialBookmarkFormState = null;
 
-        if (typeof loadBookmarks === 'function') loadBookmarks();
+        if (typeof loadBookmarks === 'function') await loadBookmarks();
+        // loadBookmarks рендерит только по папке; активный поиск/теги в строке — через filterBookmarks
+        if (typeof filterBookmarks === 'function') await filterBookmarks();
 
         if (typeof getVisibleModals === 'function') {
             const visibleModals = getVisibleModals().filter(

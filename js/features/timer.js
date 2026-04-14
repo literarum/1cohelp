@@ -216,6 +216,69 @@ function showReturnToClientModal() {
  * При отсутствии поддержки или отказе пользователя показ уведомления о завершении таймера делается через alert().
  * На мобильных и в PWA поведение зависит от поддержки браузера.
  */
+/**
+ * Уведомления при старте таймера: не блокируют отсчёт.
+ * Вызов Notification.requestPermission() должен остаться синхронным относительно user gesture
+ * (иначе браузер может отклонить запрос); результат обрабатываем в .then().
+ */
+function kickOffTimerNotificationPermissionFromUserGesture() {
+    if (!('Notification' in window)) return;
+    const currentGlobalPermission = Notification.permission;
+    if (currentGlobalPermission === 'granted') {
+        if (notificationPermissionState !== 'granted') {
+            notificationPermissionState = 'granted';
+        }
+        showNotification('Системные уведомления уже разрешены.', 'info');
+        return;
+    }
+    if (currentGlobalPermission === 'denied') {
+        notificationPermissionState = 'denied';
+        showNotification(
+            'Уведомления заблокированы. Проверьте настройки браузера и ОС (Windows: «Фокусировка внимания», macOS: «Не беспокоить»).',
+            'info',
+            10000,
+        );
+        return;
+    }
+    try {
+        const permP = Notification.requestPermission();
+        if (permP && typeof permP.then === 'function') {
+            void permP
+                .then((permissionResult) => {
+                    notificationPermissionState = permissionResult;
+                    if (permissionResult === 'granted') {
+                        showNotification('Системные уведомления успешно разрешены!', 'success');
+                    } else if (permissionResult === 'denied') {
+                        showNotification(
+                            'Вы отклонили показ уведомлений. Если передумаете, измените настройки браузера и ОС (Windows/macOS).',
+                            'info',
+                            10000,
+                        );
+                    } else {
+                        showNotification(
+                            'Запрос на уведомления закрыт без выбора или не был успешно обработан. Уведомления таймера могут не работать.',
+                            'warning',
+                            10000,
+                        );
+                    }
+                })
+                .catch((error) => {
+                    console.error(
+                        'kickOffTimerNotificationPermissionFromUserGesture: requestPermission',
+                        error,
+                    );
+                    notificationPermissionState = 'denied';
+                });
+        }
+    } catch (error) {
+        console.error(
+            'kickOffTimerNotificationPermissionFromUserGesture: синхронная ошибка requestPermission',
+            error,
+        );
+        notificationPermissionState = 'denied';
+    }
+}
+
 export async function requestAppNotificationPermission() {
     if (!('Notification' in window)) {
         console.warn('Этот браузер не поддерживает десктопные уведомления.');
@@ -701,49 +764,15 @@ export async function toggleTimer() {
             );
         }
 
-        let permissionObtainedForNotifications = notificationPermissionState === 'granted';
-        if (!permissionObtainedForNotifications && 'Notification' in window) {
-            const currentGlobalPermission = Notification.permission;
-            if (currentGlobalPermission === 'granted') {
-                notificationPermissionState = 'granted';
-                permissionObtainedForNotifications = true;
-                showNotification('Системные уведомления уже разрешены.', 'info');
-            } else if (currentGlobalPermission === 'denied') {
-                notificationPermissionState = 'denied';
-                permissionObtainedForNotifications = false;
-                showNotification(
-                    'Уведомления заблокированы. Проверьте настройки браузера и ОС (Windows: «Фокусировка внимания», macOS: «Не беспокоить»).',
-                    'info',
-                    10000,
-                );
-            } else {
-                permissionObtainedForNotifications = await requestAppNotificationPermission();
-                if (permissionObtainedForNotifications) {
-                    showNotification('Системные уведомления успешно разрешены!', 'success');
-                } else {
-                    if (notificationPermissionState === 'denied') {
-                        showNotification(
-                            'Вы отклонили показ уведомлений. Если передумаете, измените настройки браузера и ОС (Windows/macOS).',
-                            'info',
-                            10000,
-                        );
-                    } else {
-                        showNotification(
-                            'Запрос на уведомления закрыт без выбора или не был успешно обработан. Уведомления таймера могут не работать.',
-                            'warning',
-                            10000,
-                        );
-                    }
-                }
-            }
-        }
-
         if (originalDocumentTitle && document.title.startsWith('⏰')) {
             document.title = originalDocumentTitle;
         }
         stopTimerEndEffects();
+        // Основной контур: отсчёт запускается сразу, без ожидания Notification.requestPermission()
+        // (иначе при «зависшем» диалоге или медленном WebView таймер не стартует вообще).
         startTimerInternal();
         console.log('toggleTimer: Таймер запущен.');
+        kickOffTimerNotificationPermissionFromUserGesture();
     }
 }
 

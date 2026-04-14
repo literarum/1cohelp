@@ -11,6 +11,30 @@ import {
     enhanceModalAccessibility,
 } from '../ui/modals-manager.js';
 
+/**
+ * Снимает «висящее» закрытие: transitionend + fallback setTimeout из closeAnimatedModal.
+ * Нужно при повторном open до завершения анимации закрытия — иначе старый transitionend
+ * снова выставит .hidden и модалка «мигнёт» (типичный случай: Кастомизация поверх полноэкранных настроек).
+ *
+ * @param {HTMLElement} modalElement
+ */
+function clearAnimatedClosePending(modalElement) {
+    if (!modalElement) return;
+    const handler = modalElement._animatedModalCloseOnTransitionEnd;
+    if (handler) {
+        modalElement.removeEventListener('transitionend', handler);
+        delete modalElement._animatedModalCloseOnTransitionEnd;
+    }
+    const tid = modalElement._animatedModalCloseFallbackTimer;
+    if (tid != null) {
+        clearTimeout(tid);
+        delete modalElement._animatedModalCloseFallbackTimer;
+    }
+    if (modalElement.style.pointerEvents === 'none') {
+        modalElement.style.pointerEvents = '';
+    }
+}
+
 let deps = {
     addEscapeHandler: null,
     removeEscapeHandler: null,
@@ -34,6 +58,8 @@ export function setModalDependencies(dependencies) {
  */
 export function openAnimatedModal(modalElement) {
     if (!modalElement) return;
+
+    clearAnimatedClosePending(modalElement);
 
     const titleId = modalElement.querySelector('h1[id],h2[id],h3[id]')?.id || null;
     enhanceModalAccessibility(modalElement, { labelledBy: titleId });
@@ -67,6 +93,8 @@ export function openAnimatedModal(modalElement) {
 export function closeAnimatedModal(modalElement) {
     if (!modalElement || modalElement.classList.contains('hidden')) return;
 
+    clearAnimatedClosePending(modalElement);
+
     modalElement.classList.add('modal-transition');
     modalElement.classList.remove('modal-visible');
     modalElement.style.pointerEvents = 'none';
@@ -77,11 +105,18 @@ export function closeAnimatedModal(modalElement) {
 
     const handleTransitionEnd = (event) => {
         if (event.target === modalElement && event.propertyName === 'opacity') {
+            const tid = modalElement._animatedModalCloseFallbackTimer;
+            if (tid != null) {
+                clearTimeout(tid);
+                delete modalElement._animatedModalCloseFallbackTimer;
+            }
+            modalElement.removeEventListener('transitionend', handleTransitionEnd);
+            delete modalElement._animatedModalCloseOnTransitionEnd;
+
             modalElement.classList.add('hidden');
             modalElement.style.pointerEvents = '';
             document.body.classList.remove('modal-open');
             deactivateModalFocus(modalElement);
-            modalElement.removeEventListener('transitionend', handleTransitionEnd);
             console.log(`[closeAnimatedModal] Closed modal #${modalElement.id}`);
 
             // Вызываем callback для дополнительной логики очистки
@@ -113,9 +148,11 @@ export function closeAnimatedModal(modalElement) {
         }
     };
 
+    modalElement._animatedModalCloseOnTransitionEnd = handleTransitionEnd;
     modalElement.addEventListener('transitionend', handleTransitionEnd);
 
-    setTimeout(() => {
+    modalElement._animatedModalCloseFallbackTimer = setTimeout(() => {
+        modalElement._animatedModalCloseFallbackTimer = null;
         if (!modalElement.classList.contains('hidden')) {
             console.warn(
                 `[closeAnimatedModal] Transitionend fallback triggered for #${modalElement.id}`,
@@ -124,7 +161,13 @@ export function closeAnimatedModal(modalElement) {
             modalElement.style.pointerEvents = '';
             document.body.classList.remove('modal-open');
             deactivateModalFocus(modalElement);
-            modalElement.removeEventListener('transitionend', handleTransitionEnd);
+            if (modalElement._animatedModalCloseOnTransitionEnd) {
+                modalElement.removeEventListener(
+                    'transitionend',
+                    modalElement._animatedModalCloseOnTransitionEnd,
+                );
+                delete modalElement._animatedModalCloseOnTransitionEnd;
+            }
         }
     }, 300);
 }

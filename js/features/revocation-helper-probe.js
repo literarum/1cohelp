@@ -3,7 +3,8 @@
  * Probes localhost:7777/health at app load; triggers OS-aware download when helper is missing.
  */
 
-const PROBE_TIMEOUT_MS = 2000;
+/** Достаточный бюджет для холодного старта API Gateway / мобильных сетей (внешний runWithTimeout может быть шире). */
+const DEFAULT_PROBE_TIMEOUT_MS = 8000;
 
 let ingestUnavailable = false;
 function sendAgentDebugLog(payload) {
@@ -36,7 +37,7 @@ if (typeof window !== 'undefined') {
 /**
  * Probes helper or revocation API availability.
  * @param {string} baseUrl - e.g. 'http://localhost:7777' or 'https://functions.yandexcloud.net/...'
- * @param {{ path?: string }} [options] - path: '/health' for local helper, '/api/health' for Yandex/API
+ * @param {{ path?: string, timeoutMs?: number }} [options] - path: '/health' for local helper, '/api/health' for Yandex/API
  * @returns {Promise<boolean>}
  */
 export async function probeHelperAvailability(baseUrl, options = {}) {
@@ -46,12 +47,18 @@ export async function probeHelperAvailability(baseUrl, options = {}) {
         .replace(/\/$/, '');
     if (!base) return false;
 
+    const timeoutMs =
+        typeof options.timeoutMs === 'number' && options.timeoutMs > 0
+            ? options.timeoutMs
+            : DEFAULT_PROBE_TIMEOUT_MS;
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
         const res = await fetch(`${base}${path.startsWith('/') ? path : `/${path}`}`, {
             method: 'GET',
             signal: controller.signal,
+            headers: { Accept: 'application/json, text/plain, */*' },
         });
         // #region agent log
         sendAgentDebugLog({
@@ -62,10 +69,16 @@ export async function probeHelperAvailability(baseUrl, options = {}) {
             data: { base, status: res.status, ok: res.ok },
         });
         // #endregion
-        clearTimeout(timeoutId);
         if (!res.ok) return false;
-        const data = await res.json();
-        return data?.ok === true;
+        const text = await res.text();
+        if (!text || !String(text).trim()) return false;
+        try {
+            const data = JSON.parse(text);
+            if (data && data.ok === true) return true;
+        } catch {
+            /* второй контур: шлюзы иногда оборачивают тело; допускаем явный маркер ok:true в тексте */
+        }
+        return /["']ok["']\s*:\s*true\b/.test(String(text).trim());
     } catch (error) {
         // #region agent log
         sendAgentDebugLog({
@@ -80,8 +93,9 @@ export async function probeHelperAvailability(baseUrl, options = {}) {
             },
         });
         // #endregion
-        clearTimeout(timeoutId);
         return false;
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 

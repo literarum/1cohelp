@@ -19,6 +19,7 @@ import {
     probeHelperAvailability,
     triggerDownload,
 } from './revocation-helper-probe.js';
+import { ingestRuntimeHubIssue } from './runtime-issue-hub.js';
 
 const FNS_DEBUG_TAG = '[FNS Revocation]';
 
@@ -222,6 +223,84 @@ function resolveFinalRevocationState(hasCrlRevocation, certExpired) {
     if (hasCrlRevocation) return { revoked: true, reason: 'crl' };
     if (certExpired) return { revoked: true, reason: 'expired' };
     return { revoked: false, reason: null };
+}
+
+/**
+ * Отделяет подтверждённый «не отозван» от случая, когда CRL/API не дали достоверного ответа.
+ * @param {{ revoked: boolean, reason?: string|null }} finalRevocationState
+ * @param {number} successfulChecks
+ * @param {number} failedChecks
+ * @param {string|null|undefined} batchLevelError
+ */
+export function deriveFnsCertRevocationUiModel(
+    finalRevocationState,
+    successfulChecks,
+    failedChecks,
+    batchLevelError,
+) {
+    const hasPartialResult = failedChecks > 0 || Boolean(batchLevelError);
+    const statusUnknown =
+        !finalRevocationState.revoked && (successfulChecks === 0 || hasPartialResult);
+    return { hasPartialResult, statusUnknown };
+}
+
+/**
+ * Дублирующий контур: буфер runtime + зеркало в «Ошибки» машинного отделения (ingest → cockpit).
+ */
+function recordFnsRevocationHybridFaultToRuntimeHub(
+    batchResult,
+    results,
+    successfulChecks,
+    failedChecks,
+    finalRevoked,
+) {
+    if (finalRevoked) return;
+    const total = successfulChecks + failedChecks;
+    if (total === 0 && !batchResult?.error) return;
+    const noSuccess = successfulChecks === 0;
+    const hasFault = noSuccess || failedChecks > 0 || Boolean(batchResult?.error);
+    if (!hasFault) return;
+
+    const samples = (Array.isArray(results) ? results : [])
+        .filter((r) => r.error)
+        .slice(0, 5)
+        .map((r) => ({
+            url: (r.url || '').slice(0, 140),
+            code: r.errorCode || null,
+            err: (r.error || '').slice(0, 420),
+        }));
+    const msg =
+        noSuccess && failedChecks > 0
+            ? `Проверка отзыва ФНС: все ${failedChecks} попыток CRL завершились ошибкой; статус по отзыву неизвестен.`
+            : failedChecks > 0
+              ? `Проверка отзыва ФНС: ${failedChecks} из ${total} CRL с ошибками; полный вывод о неотзыве недостоверен.`
+              : batchResult?.error
+                ? `Проверка отзыва ФНС: ошибка пакета — ${batchResult.error}`
+                : 'Проверка отзыва ФНС: нет успешных ответов по CRL.';
+    ingestRuntimeHubIssue(
+        'FNS Revocation',
+        msg,
+        {
+            samples,
+            batchError: batchResult?.error || null,
+            batchErrorCode: batchResult?.errorCode || null,
+            successfulChecks,
+            failedChecks,
+        },
+        { mirror: true },
+    );
+    try {
+        if (typeof console !== 'undefined' && typeof console.error === 'function') {
+            console.error(FNS_DEBUG_TAG, msg, {
+                samples,
+                successfulChecks,
+                failedChecks,
+                batchError: batchResult?.error || null,
+            });
+        }
+    } catch {
+        /* дублирующий контур не должен ломать проверку отзыва */
+    }
 }
 
 function shouldRecommendProxy(totalChecks, failedChecks) {
@@ -1099,6 +1178,9 @@ export function initFNSCertificateRevocationSystem() {
             detailsEl.innerHTML = '';
             detailsEl.classList.add('hidden');
         }
+        if (contentShell) {
+            contentShell.classList.remove('fns-cert-shell-danger', 'fns-cert-shell-warning');
+        }
     };
 
     const resetAll = () => {
@@ -1116,7 +1198,7 @@ export function initFNSCertificateRevocationSystem() {
             );
         }
         if (contentShell) {
-            contentShell.classList.remove('fns-cert-shell-danger');
+            contentShell.classList.remove('fns-cert-shell-danger', 'fns-cert-shell-warning');
         }
         setUploadDisabled(false);
         resetOutput();
@@ -1236,6 +1318,26 @@ export function initFNSCertificateRevocationSystem() {
                 detailList.appendChild(item);
             });
 
+            let redirectToInstallGate = false;
+            const certExpired = isCertificateExpired(certInfoData);
+            const finalRevocationState = resolveFinalRevocationState(
+                Boolean(revokedSource),
+                certExpired,
+            );
+            const uiModel = deriveFnsCertRevocationUiModel(
+                finalRevocationState,
+                successfulChecks,
+                failedChecks,
+                batchResult?.error,
+            );
+            recordFnsRevocationHybridFaultToRuntimeHub(
+                batchResult,
+                results,
+                successfulChecks,
+                failedChecks,
+                finalRevocationState.revoked,
+            );
+
             logDebug({
                 stage: 'checkRevocationHybrid',
                 source: 'client',
@@ -1247,15 +1349,12 @@ export function initFNSCertificateRevocationSystem() {
                 localHelperEnabled: REVOCATION_LOCAL_HELPER_ENABLED,
                 errorCode: batchResult?.errorCode || null,
                 errorMessage: batchResult?.error || null,
+                verdictUnknown: uiModel.statusUnknown,
+                errorCodesSample: results
+                    .filter((r) => r.errorCode)
+                    .slice(0, 6)
+                    .map((r) => r.errorCode),
             });
-
-            let redirectToInstallGate = false;
-            const certExpired = isCertificateExpired(certInfoData);
-            const finalRevocationState = resolveFinalRevocationState(
-                Boolean(revokedSource),
-                certExpired,
-            );
-            const hasPartialResult = failedChecks > 0 || Boolean(batchResult.error);
             const serverNetworkCodes = new Set(['crl_fetch_network', 'crl_fetch_timeout']);
             const failedResults = results.filter((r) => r.error);
             const _hasNetworkFailures = failedResults.some(
@@ -1271,29 +1370,32 @@ export function initFNSCertificateRevocationSystem() {
                     'mb-3 rounded-lg border p-3 text-sm flex items-start gap-2 ' +
                     (finalRevocationState.revoked
                         ? 'border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                        : hasPartialResult
-                          ? 'border-yellow-300 dark:border-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
+                        : uiModel.statusUnknown
+                          ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/25 text-amber-900 dark:text-amber-200'
                           : 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300');
                 const isRevoked = finalRevocationState.revoked;
                 const isExpiredOnly = finalRevocationState.reason === 'expired';
-                const summaryTitle = isRevoked
-                    ? isExpiredOnly
+                let summaryTitle;
+                if (isRevoked) {
+                    summaryTitle = isExpiredOnly
                         ? 'По результатам проверки сертификат истёк'
-                        : 'По результатам проверки сертификат отозван'
-                    : hasPartialResult
-                      ? 'По результатам проверки сертификат проверен частично'
-                      : 'По результатам проверки сертификат не отозван';
-                const _summaryHint = isRevoked
-                    ? isExpiredOnly
-                        ? 'Срок действия сертификата завершился.'
-                        : 'Сертификат найден в списке отозванных.'
-                    : hasPartialResult
-                      ? `Проверено источников: ${successfulChecks} из ${results.length}.`
-                      : 'Признаков отзыва или истечения срока действия не обнаружено.';
+                        : 'По результатам проверки сертификат отозван';
+                } else if (uiModel.statusUnknown) {
+                    summaryTitle =
+                        successfulChecks === 0
+                            ? 'Ошибка проверки отзыва: статус сертификата по CRL неизвестен'
+                            : 'Проверка отзыва неполная: нельзя утверждать, что сертификат не отозван';
+                } else {
+                    summaryTitle = 'По результатам проверки сертификат не отозван';
+                }
                 summary.innerHTML = `<i class="fas fa-shield-alt mt-0.5"></i><div class="font-semibold">${escapeHtmlForCert(summaryTitle)}</div>`;
                 detailsEl.appendChild(summary);
                 if (contentShell) {
                     contentShell.classList.toggle('fns-cert-shell-danger', Boolean(isRevoked));
+                    contentShell.classList.toggle(
+                        'fns-cert-shell-warning',
+                        Boolean(uiModel.statusUnknown && !isRevoked),
+                    );
                 }
 
                 const statusPanelEl = certInfo.querySelector('[data-fns-cert-status-panel]');
@@ -1302,10 +1404,14 @@ export function initFNSCertificateRevocationSystem() {
                         'fns-cert-status-panel--pending',
                         'fns-cert-status-panel--danger',
                         'fns-cert-status-panel--success',
+                        'fns-cert-status-panel--unknown',
                     );
                     if (isRevoked) {
                         statusPanelEl.classList.add('fns-cert-status-panel--danger');
                         statusPanelEl.textContent = isExpiredOnly ? 'ИСТЕК' : 'ОТОЗВАН';
+                    } else if (uiModel.statusUnknown) {
+                        statusPanelEl.classList.add('fns-cert-status-panel--unknown');
+                        statusPanelEl.textContent = 'НЕИЗВЕСТЕН';
                     } else {
                         statusPanelEl.classList.add('fns-cert-status-panel--success');
                         statusPanelEl.textContent = 'ДЕЙСТВИТЕЛЕН';
@@ -1418,12 +1524,18 @@ export function initFNSCertificateRevocationSystem() {
                         : '\u2716 Результат: сертификат отозван',
                     'danger',
                 );
+            } else if (!uiModel.statusUnknown) {
+                setStatus('\u2713 Результат: сертификат действителен (по успешно проверенным CRL)', 'success');
             } else if (successfulChecks === 0) {
-                setStatus('\u2716 Результат: проверка не завершена', 'warn');
-            } else if (hasPartialResult) {
-                setStatus('\u25B3 Результат: частичная проверка', 'warn');
+                setStatus(
+                    '\u2716 Результат: проверка отзыва не завершена — статус сертификата неизвестен',
+                    'warn',
+                );
             } else {
-                setStatus('\u2713 Результат: сертификат действителен', 'success');
+                setStatus(
+                    '\u25B3 Результат: проверка отзыва неполная — статус по отзыву не подтверждён',
+                    'warn',
+                );
             }
         } catch (error) {
             if (runId !== activeRunId) return;
@@ -1434,6 +1546,16 @@ export function initFNSCertificateRevocationSystem() {
                 errorCode: error?.code || 'unknown',
                 errorMessage: error?.message || String(error),
             });
+            try {
+                ingestRuntimeHubIssue(
+                    'FNS Revocation',
+                    error?.message || String(error),
+                    { stage: 'runCheck', runId },
+                    { mirror: true },
+                );
+            } catch {
+                /* ignore */
+            }
             setStatus('\u2716 Ошибка', 'danger');
             if (detailsEl) {
                 detailsEl.innerHTML = `<p class="text-xs text-gray-600 dark:text-gray-400">${String(error?.message || error).slice(0, 120)}</p>`;
@@ -1508,6 +1630,7 @@ if (typeof window !== 'undefined') {
 export const __testables = {
     detectCertificateFormat,
     decodeRawBase64ToBytes,
+    deriveFnsCertRevocationUiModel,
     isCertificateExpired,
     parseCertificate,
     resolveCrlUrls,

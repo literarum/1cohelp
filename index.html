@@ -94,8 +94,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260414-002017-0595f1e"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260414-002017-0595f1e"></script>
+        <script src="js/vendor-config.js?v=legacy-20260414-232033-1829422"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260414-232033-1829422"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,12 +161,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260414-002017-0595f1e"
+            href="css/tailwind.generated.css?v=legacy-20260414-232033-1829422"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260414-002017-0595f1e" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260414-002017-0595f1e" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260414-232033-1829422" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260414-232033-1829422" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -2140,6 +2140,15 @@
                                     class="hidden"
                                 />
                             </label>
+                            <button
+                                type="button"
+                                id="clientAnalyticsClearAllBtn"
+                                class="p-2 rounded-full text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                                title="Очистить всю базу клиентов (только раздел «База клиентов и аналитика»)"
+                                aria-label="Очистить всю базу клиентов: открыть окно подтверждения"
+                            >
+                                <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                            </button>
                         </div>
                     </div>
                     <div class="mb-4 flex items-center gap-2">
@@ -3434,15 +3443,6 @@
                                                     Режим «День рождения»
                                                 </span>
                                             </label>
-                                            <p
-                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
-                                            >
-                                                Яркое праздничное оформление: в шапке вместо «1» —
-                                                эмодзи &#x1F389;, радужная рамка, конфетти и мягкое
-                                                свечение кнопок. При системной настройке
-                                                «уменьшить движение» анимации отключаются — остаётся
-                                                спокойный акцент.
-                                            </p>
                                         </div>
 
                                         <div
@@ -3507,7 +3507,7 @@
             <!-- Окно Кастомизация (тема, цвета, скругление, отступы, фон) -->
             <div
                 id="appCustomizationModal"
-                class="app-customization-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-2 sm:p-4 overflow-y-auto flex items-center justify-center"
+                class="app-customization-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[100] p-2 sm:p-4 overflow-y-auto flex items-center justify-center"
                 role="dialog"
                 aria-labelledby="appCustomizationModalTitle"
                 aria-describedby="appCustomizationModalDesc"
@@ -4656,6 +4656,30 @@
                                 </div>
                             </section>
                         </div>
+                        <div
+                            id="engineeringCockpitScrollNav"
+                            class="engineering-cockpit-scroll-nav flex flex-col gap-2 opacity-0 pointer-events-none transition-opacity duration-200"
+                            aria-hidden="true"
+                        >
+                            <button
+                                type="button"
+                                id="engineeringCockpitScrollUpBtn"
+                                class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Прокрутить вверх"
+                                aria-label="Прокрутить содержимое машинного отделения вверх"
+                            >
+                                <i class="fas fa-chevron-up" aria-hidden="true"></i>
+                            </button>
+                            <button
+                                type="button"
+                                id="engineeringCockpitScrollDownBtn"
+                                class="p-2.5 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Прокрутить вниз"
+                                aria-label="Прокрутить содержимое машинного отделения вниз"
+                            >
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5740,6 +5764,83 @@
             </div>
         </div>
 
+        <!-- Модалка: полная очистка раздела «База клиентов и аналитика» -->
+        <div
+            id="clientAnalyticsClearAllModal"
+            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[67] flex items-center justify-center p-4"
+            aria-hidden="true"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clientAnalyticsClearAllTitle"
+            aria-describedby="clientAnalyticsClearAllDesc"
+        >
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-red-200 dark:border-red-900/60"
+            >
+                <header
+                    class="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600"
+                >
+                    <h3
+                        id="clientAnalyticsClearAllTitle"
+                        class="text-lg font-bold text-red-700 dark:text-red-400 flex items-center gap-2"
+                    >
+                        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                        Очистить всю базу клиентов?
+                    </h3>
+                    <button
+                        type="button"
+                        id="clientAnalyticsClearAllModalCloseBtn"
+                        class="h-9 w-9 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 text-2xl leading-none"
+                        aria-label="Закрыть без очистки"
+                    >
+                        ×
+                    </button>
+                </header>
+                <div class="p-4 flex flex-col gap-4 text-gray-800 dark:text-gray-200 overflow-y-auto custom-scrollbar">
+                    <p id="clientAnalyticsClearAllDesc" class="text-sm leading-relaxed">
+                        Будут безвозвратно удалены
+                        <strong class="text-gray-900 dark:text-gray-100"
+                            >только данные раздела «База клиентов и аналитика»</strong
+                        >: загруженные файлы заметок, все извлечённые записи, папки, теги и назначения на карточках.
+                        Остальные разделы приложения (закладки, алгоритмы, клиентские данные и т.д.)
+                        <strong>не затрагиваются</strong>.
+                    </p>
+                    <p class="text-sm font-semibold text-red-700 dark:text-red-400">
+                        Это действие нельзя отменить. При необходимости сначала экспортируйте раздел (кнопка
+                        экспорта JSON).
+                    </p>
+                    <label class="flex items-start gap-3 cursor-pointer select-none text-sm">
+                        <input
+                            type="checkbox"
+                            id="clientAnalyticsClearAllAcknowledge"
+                            class="mt-1 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <span>Я понимаю, что все данные этого раздела будут удалены без возможности восстановления.</span>
+                    </label>
+                </div>
+                <footer
+                    class="flex-shrink-0 flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 rounded-b-xl"
+                >
+                    <button
+                        type="button"
+                        id="clientAnalyticsClearAllCancelBtn"
+                        class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                        Отмена
+                    </button>
+                    <button
+                        type="button"
+                        id="clientAnalyticsClearAllConfirmBtn"
+                        disabled
+                        aria-disabled="true"
+                        class="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+                    >
+                        Да, очистить раздел
+                    </button>
+                </footer>
+            </div>
+        </div>
+
         <!-- Кнопки прокрутки вверх/вниз для длинных страниц -->
         <div
             id="scrollNavButtons"
@@ -5820,7 +5921,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260414-002017-0595f1e"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260414-002017-0595f1e"></script>
+        <script type="module" src="./script.js?v=legacy-20260414-232033-1829422"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260414-232033-1829422"></script>
     </body>
 </html>

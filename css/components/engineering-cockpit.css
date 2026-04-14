@@ -302,6 +302,16 @@
     min-height: 0;
     flex: 1 1 0;
     overflow: hidden;
+    position: relative;
+}
+
+/* Стрелки прокрутки: глобальный #scrollNavButtons (z-40) под модалкой кокпита (z-80) — локальный дублирующий контур */
+.engineering-cockpit-scroll-nav {
+    position: absolute;
+    right: 1rem;
+    bottom: 4.5rem;
+    z-index: 25;
+    max-width: calc(100% - 2rem);
 }
 
 #engineeringCockpitModal .engineering-cockpit-content {

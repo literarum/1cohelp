@@ -593,6 +593,60 @@ function updateClientAnalyticsFilesListChrome(fileCount) {
 }
 
 /**
+ * Полностью удаляет данные раздела «База клиентов и аналитика» из IndexedDB и снимает записи с поискового индекса.
+ * Не трогает другие разделы приложения и не изменяет настройки вида раздела (preferences).
+ * @returns {Promise<void>}
+ */
+async function purgeClientAnalyticsSectionStoresFromIndexedDb() {
+    const existing = await getAllFromIndexedDB('clientAnalyticsRecords');
+    for (const r of existing) {
+        if (deps.updateSearchIndex) {
+            await deps.updateSearchIndex('clientAnalyticsRecords', r.id, null, 'delete', r);
+        }
+        await deleteFromIndexedDB('clientAnalyticsRecords', r.id);
+    }
+    const existingFiles = await getAllFromIndexedDB('clientAnalyticsFiles');
+    for (const f of existingFiles) {
+        await deleteFromIndexedDB('clientAnalyticsFiles', f.id);
+    }
+    const wipeStore = async (name) => {
+        const rows = await getAllFromIndexedDB(name);
+        for (const row of Array.isArray(rows) ? rows : []) {
+            if (row && row.id != null) await deleteFromIndexedDB(name, row.id);
+        }
+    };
+    await wipeStore('clientAnalyticsFolders');
+    await wipeStore('clientAnalyticsTags');
+    await wipeStore('clientAnalyticsCardMeta');
+}
+
+/**
+ * Очищает раздел «База клиентов и аналитика»: записи, файлы, папки, теги, метаданные карточек и сохранённые фильтры/сортировку раздела.
+ * Другие данные приложения не затрагиваются.
+ * @returns {Promise<void>}
+ */
+export async function clearEntireClientAnalyticsSection() {
+    if (!State.db) throw new Error('База данных недоступна');
+    await purgeClientAnalyticsSectionStoresFromIndexedDb();
+    try {
+        await deleteFromIndexedDB('preferences', CA_ORG_VIEW_PREF_ID);
+    } catch {
+        /* настройка вида могла отсутствовать */
+    }
+    const [recC, fileC, foldC, tagC, metaC] = await Promise.all([
+        getAllFromIndexedDB('clientAnalyticsRecords'),
+        getAllFromIndexedDB('clientAnalyticsFiles'),
+        getAllFromIndexedDB('clientAnalyticsFolders'),
+        getAllFromIndexedDB('clientAnalyticsTags'),
+        getAllFromIndexedDB('clientAnalyticsCardMeta'),
+    ]);
+    const counts = [recC, fileC, foldC, tagC, metaC].map((x) => (Array.isArray(x) ? x.length : -1));
+    if (counts.some((n) => n !== 0)) {
+        throw new Error('Перепроверка: после очистки раздела в IndexedDB остались данные');
+    }
+}
+
+/**
  * Удаляет записи раздела, относящиеся к файлу, и снимает их с поискового индекса.
  * @param {number} sourceFileId
  */
@@ -834,27 +888,7 @@ export async function importClientAnalyticsSection(data) {
     const files = Array.isArray(data.files) ? data.files : [];
     const records = Array.isArray(data.records) ? data.records : [];
 
-    const existing = await getAllFromIndexedDB('clientAnalyticsRecords');
-    for (const r of existing) {
-        if (deps.updateSearchIndex) {
-            await deps.updateSearchIndex('clientAnalyticsRecords', r.id, null, 'delete', r);
-        }
-        await deleteFromIndexedDB('clientAnalyticsRecords', r.id);
-    }
-    const existingFiles = await getAllFromIndexedDB('clientAnalyticsFiles');
-    for (const f of existingFiles) {
-        await deleteFromIndexedDB('clientAnalyticsFiles', f.id);
-    }
-
-    const wipeStore = async (name) => {
-        const rows = await getAllFromIndexedDB(name);
-        for (const row of Array.isArray(rows) ? rows : []) {
-            if (row && row.id != null) await deleteFromIndexedDB(name, row.id);
-        }
-    };
-    await wipeStore('clientAnalyticsFolders');
-    await wipeStore('clientAnalyticsTags');
-    await wipeStore('clientAnalyticsCardMeta');
+    await purgeClientAnalyticsSectionStoresFromIndexedDb();
 
     const idMap = new Map();
     for (const f of files) {
@@ -1713,6 +1747,46 @@ function closeClientAnalyticsOrgManageModal() {
     });
 }
 
+function resetClientAnalyticsClearAllModalForm() {
+    const ack = document.getElementById('clientAnalyticsClearAllAcknowledge');
+    const confirmBtn = document.getElementById('clientAnalyticsClearAllConfirmBtn');
+    if (ack) ack.checked = false;
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.setAttribute('aria-disabled', 'true');
+    }
+}
+
+function openClientAnalyticsClearAllModal() {
+    closeClientAnalyticsDetailModal();
+    closeClientAnalyticsAssignModal();
+    closeClientAnalyticsOrgManageModal();
+    const modal = document.getElementById('clientAnalyticsClearAllModal');
+    if (!modal) return;
+    resetClientAnalyticsClearAllModalForm();
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden', 'modal-open');
+    activateModalFocus(modal);
+}
+
+/**
+ * Закрытие модалки полной очистки раздела «База клиентов» (Escape / Отмена).
+ */
+export function closeClientAnalyticsClearAllModal() {
+    const modal = document.getElementById('clientAnalyticsClearAllModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    deactivateModalFocus(modal);
+    resetClientAnalyticsClearAllModalForm();
+    requestAnimationFrame(() => {
+        if (getVisibleModals().length === 0) {
+            document.body.classList.remove('overflow-hidden', 'modal-open');
+        }
+    });
+}
+
 async function openClientAnalyticsOrgManageModal() {
     const modal = document.getElementById('clientAnalyticsOrgManageModal');
     if (!modal) return;
@@ -1870,6 +1944,58 @@ export function initClientAnalyticsUi() {
                 }
             }
             importInput.value = '';
+            await renderClientAnalyticsPage();
+        });
+    }
+
+    const clearAllBtn = document.getElementById('clientAnalyticsClearAllBtn');
+    if (clearAllBtn && !clearAllBtn._caClearAllBound) {
+        clearAllBtn._caClearAllBound = true;
+        clearAllBtn.addEventListener('click', () => {
+            openClientAnalyticsClearAllModal();
+        });
+    }
+    const clearAck = document.getElementById('clientAnalyticsClearAllAcknowledge');
+    const clearConfirm = document.getElementById('clientAnalyticsClearAllConfirmBtn');
+    if (clearAck && clearConfirm && !clearAck._caClearAckBound) {
+        clearAck._caClearAckBound = true;
+        clearAck.addEventListener('change', () => {
+            clearConfirm.disabled = !clearAck.checked;
+            clearConfirm.setAttribute('aria-disabled', clearConfirm.disabled ? 'true' : 'false');
+        });
+    }
+    const clearCancel = document.getElementById('clientAnalyticsClearAllCancelBtn');
+    const clearClose = document.getElementById('clientAnalyticsClearAllModalCloseBtn');
+    for (const el of [clearCancel, clearClose]) {
+        if (el && !el._caClearModalDismissBound) {
+            el._caClearModalDismissBound = true;
+            el.addEventListener('click', () => closeClientAnalyticsClearAllModal());
+        }
+    }
+    if (clearConfirm && !clearConfirm._caClearConfirmBound) {
+        clearConfirm._caClearConfirmBound = true;
+        clearConfirm.addEventListener('click', async () => {
+            if (clearConfirm.disabled) return;
+            try {
+                await clearEntireClientAnalyticsSection();
+                clientAnalyticsSearchQuery = '';
+                const si = document.getElementById('clientAnalyticsSearchInput');
+                if (si) si.value = '';
+                const csb = document.getElementById('clearClientAnalyticsSearchBtn');
+                if (csb) csb.classList.add('hidden');
+                closeClientAnalyticsClearAllModal();
+                if (deps.showNotification) {
+                    deps.showNotification(
+                        'Раздел «База клиентов и аналитика» полностью очищен (остальные данные приложения не изменены)',
+                        'success',
+                    );
+                }
+            } catch (err) {
+                console.error(err);
+                if (deps.showNotification) {
+                    deps.showNotification(err?.message || String(err), 'error');
+                }
+            }
             await renderClientAnalyticsPage();
         });
     }

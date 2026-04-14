@@ -135,6 +135,19 @@ export function getRuntimeHubFaultEntries(limit = 300) {
     }));
 }
 
+/**
+ * Количество сбоев в буфере за окно времени (мс), удовлетворяющих предикату.
+ * Для перекрёстной самодиагностики подсистемы отзыва (второй контур к UI проверки серта).
+ * @param {number} windowMs
+ * @param {(e: { title: string, message: string, source: string, ts: number, isFault: boolean }) => boolean} predicate
+ */
+export function countRuntimeHubFaultsSince(windowMs, predicate) {
+    const w = Math.max(0, Number(windowMs) || 0);
+    if (!w) return 0;
+    const cutoff = Date.now() - w;
+    return buffer.filter((e) => e.isFault && e.ts >= cutoff && predicate(e)).length;
+}
+
 /** Мета для диагностического пакета и самопроверки (двухконтурное сравнение с буфером кокпита). */
 export function getRuntimeHubBufferMeta() {
     const faults = buffer.filter((e) => e.isFault);

@@ -3913,6 +3913,7 @@ setBookmarksFormDependencies({
     addPdfRecords,
     updateSearchIndex,
     loadBookmarks,
+    filterBookmarks,
     getVisibleModals,
 });
 console.log('[script.js] Зависимости модуля Bookmarks Form установлены');
@@ -4663,6 +4664,7 @@ if (typeof showBookmarkDetail === 'function') window.showBookmarkDetail = showBo
 if (typeof showOrganizeFoldersModal === 'function')
     window.showOrganizeFoldersModal = showOrganizeFoldersModal;
 if (typeof filterBookmarks === 'function') window.filterBookmarks = filterBookmarks;
+if (typeof loadBookmarks === 'function') window.loadBookmarks = loadBookmarks;
 if (typeof populateBookmarkFolders === 'function')
     window.populateBookmarkFolders = populateBookmarkFolders;
 if (typeof loadFoldersList === 'function') window.loadFoldersList = loadFoldersList;

@@ -131,4 +131,28 @@ describe('application-health-state', () => {
         const exp = getApplicationHealthStateForExport();
         expect(exp.crossCheckNotes.some((n) => /плановый watchdog/.test(n))).toBe(true);
     });
+
+    it('emits cross-check when runtime faults accumulate after clean startup but checklist stays clean', () => {
+        recordApplicationHealthSnapshot({
+            phase: HEALTH_PHASE.STARTUP_READINESS,
+            source: 'startup',
+            errorCount: 0,
+            warnCount: 0,
+            checkCount: 8,
+            runtimeFaultCount: 0,
+            errors: [],
+        });
+        recordApplicationHealthSnapshot({
+            phase: HEALTH_PHASE.PERIODIC_LIVENESS,
+            source: 'interval',
+            errorCount: 0,
+            warnCount: 0,
+            checkCount: 6,
+            runtimeFaultCount: 4,
+            errors: [],
+            watchdogSeverity: 'ok',
+        });
+        const exp = getApplicationHealthStateForExport();
+        expect(exp.crossCheckNotes.some((n) => /Тройной контур/.test(n))).toBe(true);
+    });
 });
