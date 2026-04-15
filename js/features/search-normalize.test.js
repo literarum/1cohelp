@@ -87,10 +87,17 @@ describe('indexQueryTokensFromUserQuery', () => {
         expect(indexQueryTokensFromUserQuery('77070')).toEqual(['77070']);
     });
 
-    it('смешанный запрос — обычная токенизация', () => {
+    it('смешанный запрос — только стеммы/ключевые слова, без префиксной лавины', () => {
         const got = indexQueryTokensFromUserQuery('инн 77070');
-        expect(got.length).toBeGreaterThan(0);
-        expect(got).not.toEqual(['инн 77070']);
+        expect(new Set(got)).toEqual(new Set(['инн', '77070']));
+    });
+
+    it('многословный запрос не порождает двухбуквенные префиксы', () => {
+        const got = indexQueryTokensFromUserQuery('налоговая декларация');
+        expect(got.every((t) => t.length >= 3)).toBe(true);
+        expect(got).toContain('налог');
+        expect(got).toContain('декларац');
+        expect(got.some((t) => t === 'на' || t === 'дек')).toBe(false);
     });
 });
 

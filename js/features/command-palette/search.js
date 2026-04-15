@@ -17,6 +17,18 @@ import { getModalPaletteResults } from './modal-commands.js';
 import { getErrorDictionaryResults } from './errors.js';
 import { getGlobalSearchResults } from '../search.js';
 
+/**
+ * Минимальный score строк из глобального индекса в палитре.
+ * Многословный запрос даёт более низкие BM25‑оценки при AND — порог ниже, иначе релевантные строки отсекаются.
+ */
+export function effectiveMinGlobalScoreForPaletteQuery(trimmed) {
+    const words = (trimmed || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+        return Math.max(8, Math.floor(MIN_GLOBAL_SCORE * 0.55));
+    }
+    return MIN_GLOBAL_SCORE;
+}
+
 function normalizeText(s) {
     if (typeof s !== 'string') return '';
     return s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -320,10 +332,11 @@ export async function runSearchWithGlobal(query, algorithms) {
         console.warn('[command-palette] getGlobalSearchResults failed:', err);
     }
 
+    const minGlobal = effectiveMinGlobalScoreForPaletteQuery(trimmed);
     const mapped = globalResults
         .map(mapGlobalResultToPalette)
         .filter(Boolean)
-        .filter((item) => (item.score ?? 0) >= MIN_GLOBAL_SCORE);
+        .filter((item) => (item.score ?? 0) >= minGlobal);
     const merged = [...paletteResults];
     for (const item of mapped) {
         const key = normalizedDedupKey(item);

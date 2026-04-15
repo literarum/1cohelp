@@ -3,9 +3,20 @@
 /**
  * Периодическое напоминание о резервном копировании (интервал 3 ч, HUD-поведение тоста).
  * Два контура: localStorage (интервал) + userPreferences.backupReminderEnabled (вкл/выкл).
+ * Отложить: третий контур — copilot_backup_reminder_defer_until_v1 + одноразовый таймер в памяти;
+ * при срабатывании — системное уведомление (если разрешено) + повтор тоста.
  */
 
 import { NotificationService } from '../services/notification.js';
+import {
+    STORAGE_KEY_DEFER_UNTIL,
+    isBackupReminderSuppressedByDefer,
+    parseDeferLocalDatetimeToUtcMs,
+    readDeferUntilMs,
+    writeDeferUntilMs,
+} from './backup-reminder-defer.js';
+
+export { STORAGE_KEY_DEFER_UNTIL } from './backup-reminder-defer.js';
 
 export const BACKUP_REMINDER_TOAST_ID = 'copilot-backup-reminder-toast';
 export const BACKUP_REMINDER_INTERVAL_MS = 3 * 60 * 60 * 1000;
@@ -24,6 +35,8 @@ let _deps = {
 
 let _intervalId = null;
 let _onVisibility = null;
+let _deferAlarmId = null;
+let _onStorage = null;
 
 export function setBackupReminderDependencies(deps = {}) {
     _deps = { ..._deps, ...deps };
@@ -82,7 +95,159 @@ function _markLastShown(now) {
     _writeNum(STORAGE_KEY_LAST_SHOWN, now);
 }
 
-function _maybeShow() {
+function _purgeExpiredDeferIfAny() {
+    const du = readDeferUntilMs();
+    if (du != null && du <= Date.now()) {
+        writeDeferUntilMs(null);
+        _clearDeferAlarm();
+    }
+}
+
+function _clearDeferAlarm() {
+    if (_deferAlarmId != null) {
+        clearTimeout(_deferAlarmId);
+        _deferAlarmId = null;
+    }
+}
+
+function _armDeferAlarm(untilMs) {
+    _clearDeferAlarm();
+    const delay = Math.max(0, untilMs - Date.now());
+    _deferAlarmId = setTimeout(() => {
+        _deferAlarmId = null;
+        const stored = readDeferUntilMs();
+        if (stored == null || stored <= Date.now()) {
+            writeDeferUntilMs(null);
+            _onDeferAlarmFired().catch(() => {});
+        }
+    }, delay);
+}
+
+function _trySystemNotifyBackupDeferred() {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+    try {
+        new Notification('Copilot 1СО — резервная копия', {
+            body: 'Настало время напоминания о резервном копировании.',
+            tag: `${BACKUP_REMINDER_TOAST_ID}-defer`,
+            requireInteraction: false,
+        });
+    } catch {
+        /* резерв: тост покажется при возврате во вкладку */
+    }
+}
+
+async function _onDeferAlarmFired() {
+    _trySystemNotifyBackupDeferred();
+    _presentBackupReminderToast({ forceInterval: true });
+}
+
+function _syncDeferAlarmFromStorage() {
+    const until = readDeferUntilMs();
+    if (until != null && until > Date.now()) {
+        _armDeferAlarm(until);
+    } else {
+        _clearDeferAlarm();
+        if (until != null && until <= Date.now()) {
+            writeDeferUntilMs(null);
+        }
+    }
+}
+
+function _pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+function _toDatetimeLocalValue(d) {
+    return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}T${_pad2(d.getHours())}:${_pad2(
+        d.getMinutes(),
+    )}`;
+}
+
+/**
+ * @returns {Promise<number|null>} defer until UTC ms, or null if cancelled
+ */
+export function openBackupReminderDeferDialog() {
+    const modal = document.getElementById('backupReminderDeferModal');
+    const input = document.getElementById('backupReminderDeferDatetime');
+    const confirmBtn = document.getElementById('backupReminderDeferConfirmBtn');
+    const cancelBtn = document.getElementById('backupReminderDeferCancelBtn');
+    const closeBtn = document.getElementById('backupReminderDeferModalCloseBtn');
+    if (!modal || !input || !confirmBtn || !cancelBtn) {
+        return Promise.resolve(null);
+    }
+
+    const now = new Date();
+    const min = new Date(now.getTime() + 60 * 1000);
+    input.min = _toDatetimeLocalValue(min);
+    let def = new Date(now.getTime() + 60 * 60 * 1000);
+    if (def < min) def = new Date(min.getTime());
+    input.value = _toDatetimeLocalValue(def);
+
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden', 'modal-open');
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (/** @type {number|null} */ v) => {
+            if (settled) return;
+            settled = true;
+            modal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden', 'modal-open');
+            input.removeEventListener('keydown', onInputKeydown);
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            closeBtn?.removeEventListener('click', onCancel);
+            document.removeEventListener('keydown', onEscape);
+            resolve(v);
+        };
+
+        const onEscape = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                finish(null);
+            }
+        };
+
+        const onInputKeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onConfirm();
+            }
+        };
+
+        const onConfirm = () => {
+            const raw = input.value;
+            const until = parseDeferLocalDatetimeToUtcMs(raw, Date.now());
+            if (until == null) {
+                const NS = _deps.NotificationService || NotificationService;
+                NS?.add?.('Укажите время в будущем (не раньше чем через минуту).', 'warning', {
+                    duration: 4500,
+                });
+                return;
+            }
+            finish(until);
+        };
+
+        const onCancel = () => finish(null);
+
+        input.addEventListener('keydown', onInputKeydown);
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        closeBtn?.addEventListener('click', onCancel);
+        document.addEventListener('keydown', onEscape, true);
+        setTimeout(() => input.focus(), 0);
+    });
+}
+
+/**
+ * @param {object} opts
+ * @param {boolean} [opts.forceInterval] — показать без проверки интервала (срабатывание отложенного будильника)
+ */
+function _presentBackupReminderToast(opts = {}) {
+    const { forceInterval = false } = opts;
+    _purgeExpiredDeferIfAny();
     const NS = _deps.NotificationService || NotificationService;
     if (!NS || typeof NS.showImportantRich !== 'function') return;
 
@@ -91,10 +256,15 @@ function _maybeShow() {
     if (NS.activeImportantNotifications?.has(BACKUP_REMINDER_TOAST_ID)) return;
 
     const now = Date.now();
+    if (isBackupReminderSuppressedByDefer(now, readDeferUntilMs())) return;
+
     const first = _getOrInitFirstLaunch(now);
     const lastShown = _readNum(STORAGE_KEY_LAST_SHOWN);
 
-    if (!shouldShowBackupReminder(now, first, lastShown, true, BACKUP_REMINDER_INTERVAL_MS)) {
+    if (
+        !forceInterval &&
+        !shouldShowBackupReminder(now, first, lastShown, true, BACKUP_REMINDER_INTERVAL_MS)
+    ) {
         return;
     }
 
@@ -106,6 +276,16 @@ function _maybeShow() {
         NS.dismissImportant(BACKUP_REMINDER_TOAST_ID);
     };
 
+    const requestNotificationPermissionFromGesture = () => {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+        try {
+            const p = Notification.requestPermission();
+            if (p && typeof p.then === 'function') void p.catch(() => {});
+        } catch {
+            /* ignore */
+        }
+    };
+
     NS.showImportantRich({
         id: BACKUP_REMINDER_TOAST_ID,
         message:
@@ -113,7 +293,11 @@ function _maybeShow() {
         type: 'warning',
         minVisibleBeforeInteractionDismissMs: BACKUP_REMINDER_MIN_VISIBLE_MS,
         dismissAfterActivityDelayMs: 2000,
-        shouldIgnoreInteractionEvent: (e) => Boolean(e?.target?.closest?.('#appConfirmModal')),
+        shouldIgnoreInteractionEvent: (e) =>
+            Boolean(
+                e?.target?.closest?.('#appConfirmModal') ||
+                    e?.target?.closest?.('#backupReminderDeferModal'),
+            ),
         onDismiss: () => {
             _markLastShown(Date.now());
         },
@@ -123,10 +307,35 @@ function _maybeShow() {
                 label: 'Сделать сейчас',
                 primary: true,
                 onClick: () => {
+                    writeDeferUntilMs(null);
+                    _clearDeferAlarm();
                     _markLastShown(Date.now());
                     NS.dismissImportant(BACKUP_REMINDER_TOAST_ID);
                     const btn = document.getElementById('exportDataBtn');
                     if (btn && typeof btn.click === 'function') btn.click();
+                },
+            },
+            {
+                id: 'defer-reminder',
+                label: 'Отложить',
+                onClick: () => {
+                    requestNotificationPermissionFromGesture();
+                    NS.dismissImportant(BACKUP_REMINDER_TOAST_ID);
+                    void openBackupReminderDeferDialog().then((untilMs) => {
+                        if (untilMs == null) {
+                            _presentBackupReminderToast({ forceInterval: true });
+                            return;
+                        }
+                        writeDeferUntilMs(untilMs);
+                        _armDeferAlarm(untilMs);
+                        const when = new Date(untilMs).toLocaleString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        });
+                        NS.add(`Напоминание отложено до ${when}.`, 'info', { duration: 5000 });
+                    });
                 },
             },
             {
@@ -146,6 +355,8 @@ function _maybeShow() {
                         confirmClass: 'bg-primary hover:bg-secondary text-white',
                     });
                     if (!ok) return;
+                    writeDeferUntilMs(null);
+                    _clearDeferAlarm();
                     if (_deps.State?.userPreferences) {
                         _deps.State.userPreferences.backupReminderEnabled = false;
                     }
@@ -157,6 +368,13 @@ function _maybeShow() {
             },
         ],
     });
+}
+
+function _maybeShow() {
+    _purgeExpiredDeferIfAny();
+    const now = Date.now();
+    if (isBackupReminderSuppressedByDefer(now, readDeferUntilMs())) return;
+    _presentBackupReminderToast({ forceInterval: false });
 }
 
 /**
@@ -178,6 +396,17 @@ export function initBackupReminderScheduler() {
         if (document.visibilityState === 'visible') tick();
     };
     document.addEventListener('visibilitychange', _onVisibility);
+
+    if (!_onStorage) {
+        _onStorage = (e) => {
+            if (e.key === STORAGE_KEY_DEFER_UNTIL) {
+                _syncDeferAlarmFromStorage();
+            }
+        };
+        window.addEventListener('storage', _onStorage);
+    }
+
+    _syncDeferAlarmFromStorage();
     tick();
 }
 
@@ -186,6 +415,8 @@ export function initBackupReminderScheduler() {
  */
 export function onBackupReminderReEnabled() {
     const now = Date.now();
+    writeDeferUntilMs(null);
+    _clearDeferAlarm();
     _writeNum(STORAGE_KEY_FIRST_LAUNCH, now);
     _writeNum(STORAGE_KEY_LAST_SHOWN, now);
 }
@@ -199,4 +430,9 @@ export function __resetBackupReminderSchedulerForTests() {
         document.removeEventListener('visibilitychange', _onVisibility);
         _onVisibility = null;
     }
+    if (_onStorage) {
+        window.removeEventListener('storage', _onStorage);
+        _onStorage = null;
+    }
+    _clearDeferAlarm();
 }

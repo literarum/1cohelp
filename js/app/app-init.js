@@ -58,6 +58,7 @@ export async function appInit(context = 'normal') {
         categoryDisplayInfo,
         initSearchSystem,
         initCommandPalette,
+        initGlobalContextMenu,
         initRecentlyDeletedSystem,
         setCommandPaletteDependencies,
         getVisibleModals,
@@ -507,6 +508,14 @@ export async function appInit(context = 'normal') {
                         typeof initCommandPalette === 'function'
                             ? initCommandPalette
                             : () => console.warn('initCommandPalette not defined'),
+                    critical: false,
+                },
+                {
+                    name: 'initGlobalContextMenu',
+                    func:
+                        typeof initGlobalContextMenu === 'function'
+                            ? initGlobalContextMenu
+                            : () => console.warn('initGlobalContextMenu not defined'),
                     critical: false,
                 },
                 {

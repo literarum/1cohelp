@@ -1,33 +1,51 @@
 /**
  * Service Worker: офлайн-оболочка + stale-while-revalidate (единый кэш приложения).
  * Версию ASSET_QUERY_VERSION синхронизировать с site/js/constants-pwa.js и ?v= в index.html.
+ * Precache URL строятся от каталога SW (см. site/js/utils/pwa-scope-dir.js — та же формула pathname).
  * skipWaiting только по сообщению SKIP_WAITING.
  */
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20260403pwa';
-const VERSION = `20260403pwa1`;
+const ASSET_QUERY_VERSION = '20260415pwa-scope';
+/** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
+const MAIN_CSS_QUERY_VERSION = '20260415static-header-inset';
+const VERSION = `20260415pwa-scope2`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
- * @param {string} pathWithQuery
+ * Каталог приложения: /sw.js → / ; /1cohelp/sw.js → /1cohelp/
+ * (см. site/js/utils/pwa-scope-dir.js — держать логику идентичной)
  * @returns {string}
  */
-function asset(pathWithQuery) {
-    return new URL(pathWithQuery, self.location.origin).href;
+function serviceWorkerScopeDirPathname() {
+    const p = self.location.pathname || '/';
+    if (p === '/' || p === '') return '/';
+    return p.replace(/\/[^/]+$/, '/');
+}
+
+/**
+ * Ресурс относительно каталога приложения (корректно при деплое под /1cohelp/ и т.п.).
+ * @param {string} rel например "index.html", "css/main.css?v=1"
+ * @returns {string}
+ */
+function scopedAsset(rel) {
+    const dir = serviceWorkerScopeDirPathname();
+    const base = new URL(dir, self.location.origin);
+    const trimmed = rel.replace(/^\//, '');
+    return new URL(trimmed, base).href;
 }
 
 const SHELL_PRECACHE = [
-    asset('/'),
-    asset('/index.html'),
-    asset(`/css/tailwind.generated.css?v=${ASSET_QUERY_VERSION}`),
-    asset(`/css/main.css?v=${ASSET_QUERY_VERSION}`),
-    asset(`/script.js?v=${ASSET_QUERY_VERSION}`),
-    asset(`/js/entry.js?v=${ASSET_QUERY_VERSION}`),
-    asset('/js/vendor-config.js'),
-    asset('/js/vendor-loader.js'),
-    asset('/manifest.webmanifest'),
+    scopedAsset(''),
+    scopedAsset('index.html'),
+    scopedAsset(`css/tailwind.generated.css?v=${ASSET_QUERY_VERSION}`),
+    scopedAsset(`css/main.css?v=${MAIN_CSS_QUERY_VERSION}`),
+    scopedAsset(`script.js?v=${ASSET_QUERY_VERSION}`),
+    scopedAsset(`js/entry.js?v=${ASSET_QUERY_VERSION}`),
+    scopedAsset('js/vendor-config.js'),
+    scopedAsset('js/vendor-loader.js'),
+    scopedAsset('manifest.webmanifest'),
 ];
 
 /**
@@ -127,7 +145,8 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
     if (request.headers.has('range')) return;
-    if (url.pathname === '/sw.js') return;
+    const swPathname = new URL(self.location.href).pathname;
+    if (url.pathname === swPathname) return;
 
     event.respondWith(staleWhileRevalidate(event, request, CACHE_APP));
 });

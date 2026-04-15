@@ -431,32 +431,115 @@ export function applyDefaultViews() {
 }
 
 /**
- * Переключает вид активной секции
+ * Контейнер списка/плиток для текущей секции ({@link State.currentSection}).
+ * @returns {{ container: HTMLElement, sectionIdentifierForPrefs: string } | null}
+ */
+export function resolveToggleContainerForCurrentSection() {
+    if (typeof State === 'undefined' || !State.currentSection) return null;
+
+    switch (State.currentSection) {
+        case 'main':
+            return null;
+        case 'program':
+            return containerPair('programAlgorithms');
+        case 'skzi':
+            return containerPair('skziAlgorithms');
+        case 'webReg':
+            return containerPair('webRegAlgorithms');
+        case 'lk1c':
+            return containerPair('lk1cAlgorithms');
+        case 'links':
+            return containerPair('linksContainer');
+        case 'extLinks':
+            return containerPair('extLinksContainer');
+        case 'reglaments': {
+            const reglamentsListDiv = document.getElementById('reglamentsList');
+            if (!reglamentsListDiv || reglamentsListDiv.classList.contains('hidden')) {
+                return null;
+            }
+            return containerPair('reglamentsContainer');
+        }
+        case 'bookmarks':
+            return containerPair('bookmarksContainer');
+        case 'favorites':
+            return containerPair('favoritesContainer');
+        case 'clientAnalytics':
+            return containerPair('clientAnalyticsContainer');
+        default:
+            return null;
+    }
+
+    function containerPair(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return null;
+        return { container, sectionIdentifierForPrefs: containerId };
+    }
+}
+
+/**
+ * Подпись пункта «список / плитки» для контекстного меню.
+ * @returns {{ disabled: boolean; label: string; hiddenInMenu?: boolean }}
+ */
+export function getViewToggleLabelForContextMenu() {
+    const r = resolveToggleContainerForCurrentSection();
+    if (!r) {
+        if (State.currentSection === 'main') {
+            return { disabled: true, label: 'Вид: недоступно на главной', hiddenInMenu: true };
+        }
+        if (State.currentSection === 'reglaments') {
+            return { disabled: true, label: 'Вид: сначала выберите категорию' };
+        }
+        return { disabled: true, label: 'Вид недоступен' };
+    }
+    const currentView =
+        State.viewPreferences[r.sectionIdentifierForPrefs] ||
+        r.container.dataset.defaultView ||
+        'cards';
+    const nextView = currentView === 'cards' ? 'list' : 'cards';
+    return {
+        disabled: false,
+        label: nextView === 'list' ? 'Отобразить списком' : 'Отобразить плитками',
+    };
+}
+
+/**
+ * Переключает вид активной секции (список ⟷ плитки), синхронно с {@link State.currentSection}.
  */
 export function toggleActiveSectionView() {
-    const activeTab = document.querySelector('.tab-button.active');
-    if (!activeTab) return;
+    if (typeof State === 'undefined' || !State.currentSection) {
+        console.warn('toggleActiveSectionView: State.currentSection не задан.');
+        return;
+    }
+    if (State.currentSection === 'main') {
+        window.showNotification?.('Главный алгоритм не имеет переключения вида.', 'info');
+        return;
+    }
 
-    const sectionMap = {
-        mainTab: 'mainAlgorithm',
-        algorithmsTab: 'algorithmsContainer',
-        bookmarksTab: 'bookmarksContainer',
-        extLinksTab: 'extLinksContainer',
-        reglamentsTab: 'reglamentsContainer',
-    };
+    const r = resolveToggleContainerForCurrentSection();
+    if (!r) {
+        if (State.currentSection === 'reglaments') {
+            window.showNotification?.('Сначала выберите категорию регламентов.', 'info');
+        } else {
+            window.showNotification?.(
+                'Переключение вида для текущей секции не поддерживается.',
+                'warning',
+            );
+        }
+        return;
+    }
 
-    const tabId = activeTab.id;
-    const sectionId = sectionMap[tabId];
+    const { container, sectionIdentifierForPrefs } = r;
+    const currentView =
+        State.viewPreferences[sectionIdentifierForPrefs] ||
+        container.dataset.defaultView ||
+        'cards';
+    const nextView = currentView === 'cards' ? 'list' : 'cards';
 
-    if (!sectionId) return;
-
-    const container = document.getElementById(sectionId);
-    if (!container) return;
-
-    const currentView = container.dataset.view || 'cards';
-    const newView = currentView === 'cards' ? 'list' : 'cards';
-
-    const sectionIdForPrefs = container.dataset.sectionId || container.id || sectionId;
-    applyView(container, newView);
-    saveViewPreference(sectionIdForPrefs, newView);
+    applyView(container, nextView);
+    saveViewPreference(sectionIdentifierForPrefs, nextView);
+    window.showNotification?.(
+        `Вид переключен на: ${nextView === 'list' ? 'Список' : 'Плитки'}`,
+        'info',
+        1500,
+    );
 }

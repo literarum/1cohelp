@@ -175,7 +175,38 @@ export function tokenizeNormalized(text, opts = {}) {
 }
 
 /**
+ * Короткие токены, допустимые в запросе к индексу (точный ключ, без префиксного скана).
+ * Совпадает с исключениями в search.js / палитре команд.
+ */
+const RETRIEVAL_SHORT_TOKEN_EXCEPTIONS = new Set([
+    '1с',
+    '1c',
+    'сф',
+    'фн',
+    'фс',
+    'ск',
+    'эц',
+    'пф',
+    'иф',
+    'инн',
+]);
+
+const MIN_RETRIEVAL_TOKEN_LEN = 4;
+
+/**
+ * Допускается ли токен для обращения к searchIndex (префиксный диапазон или точный get).
+ */
+export function isRetrievalQueryTokenAllowed(token) {
+    if (!token || typeof token !== 'string') return false;
+    if (token.length >= MIN_RETRIEVAL_TOKEN_LEN) return true;
+    return RETRIEVAL_SHORT_TOKEN_EXCEPTIONS.has(token);
+}
+
+/**
  * Токены для обхода searchIndex по строке запроса (после sanitize).
+ * Важно: только стеммы слов запроса (без префиксов 2–8 символов из tokenizeNormalized).
+ * Иначе короткие префиксы + IDBKeyRange дают лавину нерелевантных кандидатов (OR по всем токенам).
+ *
  * Чисто цифровой запрос не раскладываем на префиксы 77, 770, 7707, … — иначе
  * IDBKeyRange.bound('77','77\uffff') перебирает лавину ключей и поиск не доходит до подсказок по ИНН.
  * @param {string} query
@@ -189,7 +220,53 @@ export function indexQueryTokensFromUserQuery(query) {
         if (q.length <= 4) return [];
         return [q];
     }
-    return tokenizeNormalized(q).filter((word) => word.length >= 2);
+
+    const normalized = normalizeTextForIndex(q);
+    const words = normalized.split(/\s+/).filter((w) => w.length > 0);
+    const stems = new Set();
+
+    for (const word of words) {
+        if (/^\d+$/.test(word)) {
+            if (word.length >= 5) stems.add(word);
+            continue;
+        }
+        if (word.length < 3 && !RETRIEVAL_SHORT_TOKEN_EXCEPTIONS.has(word)) {
+            continue;
+        }
+
+        const stem = stemWord(word);
+        /** Для коротких слов (ИНН, аббревиатуры) берём форму слова, если стем слишком общий */
+        const token =
+            stem.length >= MIN_RETRIEVAL_TOKEN_LEN
+                ? stem
+                : word.length <= 4 && word.length >= 2
+                  ? word
+                  : stem;
+
+        if (!isRetrievalQueryTokenAllowed(token)) continue;
+        stems.add(token);
+
+        const parts = word.split(/[-_]/);
+        if (parts.length > 1) {
+            for (const part of parts) {
+                if (part.length < 2) continue;
+                if (/^\d+$/.test(part)) {
+                    if (part.length >= 5) stems.add(part);
+                    continue;
+                }
+                const st = stemWord(part);
+                const partTok =
+                    st.length >= MIN_RETRIEVAL_TOKEN_LEN
+                        ? st
+                        : part.length <= 4 && part.length >= 2
+                          ? part
+                          : st;
+                if (isRetrievalQueryTokenAllowed(partTok)) stems.add(partTok);
+            }
+        }
+    }
+
+    return Array.from(stems);
 }
 
 /** Символы для подстановки при генерации вариантов с опечаткой (Левенштейн 1) */

@@ -92,6 +92,9 @@ const AUTOSLICK_DENY_IDS = new Set([
     'closeEditModalBtn',
     'closeAddModalBtn',
     'reminderModalCloseBtn',
+    'backupReminderDeferConfirmBtn',
+    'backupReminderDeferCancelBtn',
+    'backupReminderDeferModalCloseBtn',
     'engineeringCockpitCloseBtn',
 ]);
 

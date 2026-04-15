@@ -94,8 +94,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260414-232033-1829422"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260414-232033-1829422"></script>
+        <script src="js/vendor-config.js?v=legacy-20260415-235329-a3adb05"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260415-235329-a3adb05"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,12 +161,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260414-232033-1829422"
+            href="css/tailwind.generated.css?v=legacy-20260415-235329-a3adb05"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260414-232033-1829422" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260414-232033-1829422" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260415-235329-a3adb05" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260415-235329-a3adb05" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -4856,6 +4856,79 @@
                 </div>
             </div>
 
+            <!-- Отложить напоминание о резервной копии: дата и время → системное уведомление + повтор тоста -->
+            <div
+                id="backupReminderDeferModal"
+                class="fixed inset-0 bg-black bg-opacity-50 hidden z-[110] p-4 overflow-y-auto"
+                aria-modal="true"
+                role="dialog"
+                aria-labelledby="backupReminderDeferModalTitle"
+            >
+                <div class="flex items-center justify-center min-h-full">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700"
+                    >
+                        <div class="p-content border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between items-center gap-3">
+                                <h2
+                                    id="backupReminderDeferModalTitle"
+                                    class="text-lg font-bold text-gray-900 dark:text-gray-100"
+                                >
+                                    <i class="far fa-clock mr-2 text-primary" aria-hidden="true"></i>Отложить
+                                    напоминание
+                                </h2>
+                                <button
+                                    type="button"
+                                    id="backupReminderDeferModalCloseBtn"
+                                    class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    aria-label="Закрыть"
+                                >
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-content space-y-3">
+                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                Выберите дату и время — мы напомним о резервной копии снова. Если разрешены
+                                системные уведомления, придёт сигнал и при свёрнутой вкладке (ограничения
+                                браузера и ОС).
+                            </p>
+                            <div>
+                                <label
+                                    for="backupReminderDeferDatetime"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
+                                    >Когда напомнить</label
+                                >
+                                <input
+                                    type="datetime-local"
+                                    id="backupReminderDeferDatetime"
+                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm px-3 py-2 text-gray-900 dark:text-gray-100"
+                                    step="60"
+                                />
+                            </div>
+                        </div>
+                        <div
+                            class="p-content border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg"
+                        >
+                            <button
+                                type="button"
+                                id="backupReminderDeferCancelBtn"
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-md transition font-medium"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                type="button"
+                                id="backupReminderDeferConfirmBtn"
+                                class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition font-medium"
+                            >
+                                Готово
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Окно "Вернись к клиенту" (таймер): большое, пульсирующий неоново-красный стиль -->
             <div
                 id="timerReturnToClientModal"
@@ -5921,7 +5994,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260414-232033-1829422"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260414-232033-1829422"></script>
+        <script type="module" src="./script.js?v=legacy-20260415-235329-a3adb05"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260415-235329-a3adb05"></script>
     </body>
 </html>

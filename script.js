@@ -1,5 +1,8 @@
 'use strict';
 
+// Ранняя регистрация SW (до тяжёлой инициализации) — критерии installable / контроль страницы.
+import './js/app/pwa-early-init.js';
+
 // ============================================================================
 // ИМПОРТЫ ИЗ МОДУЛЕЙ
 // ============================================================================
@@ -268,6 +271,8 @@ import {
     setCommandPaletteDependencies,
     openCommandPalette,
 } from './js/features/command-palette/index.js';
+import { initGlobalContextMenu } from './js/features/global-context-menu.js';
+import { initContentKeyboardArrowScroll } from './js/features/content-keyboard-arrow-scroll.js';
 import {
     setRecentlyDeletedDependencies,
     initRecentlyDeletedSystem,
@@ -1410,6 +1415,8 @@ function initScrollNavButtons() {
             visibleTab: visibleTab?.id,
         };
     };
+
+    initContentKeyboardArrowScroll();
 }
 
 // showNotification и showBookmarkDetailModal определены ниже как function declarations
@@ -1461,6 +1468,7 @@ setAppInitDependencies({
     initHotkeysModal,
     setupHotkeys,
     initCommandPalette,
+    initGlobalContextMenu,
     initRecentlyDeletedSystem,
     setCommandPaletteDependencies,
     initFullscreenToggles,

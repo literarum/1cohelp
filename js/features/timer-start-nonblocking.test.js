@@ -70,3 +70,52 @@ describe('timer: старт не блокируется уведомлениям
         addSpy.mockRestore();
     });
 });
+
+describe('timer: при уже выданном разрешении на уведомления', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        document.body.innerHTML = `
+            <div id="appTimer">
+                <button type="button" id="timerToggleButton"><i class="fa-solid fa-play"></i></button>
+                <button type="button" id="timerResetButton"><i class="fa-undo"></i></button>
+                <button type="button" id="timerIncreaseButton">+</button>
+                <button type="button" id="timerDecreaseButton">-</button>
+                <div id="timerDisplay"></div>
+            </div>
+            <div id="timerReturnToClientModal" class="hidden"></div>
+        `;
+        vi.stubGlobal('requestAnimationFrame', () => 0);
+        vi.stubGlobal('cancelAnimationFrame', vi.fn());
+        globalThis.Notification = class {
+            static get permission() {
+                return 'granted';
+            }
+            static requestPermission() {
+                return Promise.resolve('granted');
+            }
+        };
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        localStorage.clear();
+        document.body.innerHTML = '';
+    });
+
+    it('не показывает инфо-тост «уже разрешены» при каждом старте таймера', async () => {
+        const addSpy = vi.spyOn(NotificationService, 'add').mockImplementation(() => {});
+
+        initTimerSystem();
+        await toggleTimer();
+        await Promise.resolve();
+
+        await toggleTimer();
+        await toggleTimer();
+        await Promise.resolve();
+
+        const messages = addSpy.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('уже разрешены'))).toBe(false);
+
+        addSpy.mockRestore();
+    });
+});

@@ -228,7 +228,7 @@ function kickOffTimerNotificationPermissionFromUserGesture() {
         if (notificationPermissionState !== 'granted') {
             notificationPermissionState = 'granted';
         }
-        showNotification('Системные уведомления уже разрешены.', 'info');
+        /* granted: только синхронизация внутреннего состояния, без тоста при каждом старте. */
         return;
     }
     if (currentGlobalPermission === 'denied') {
@@ -741,6 +741,11 @@ export function pauseTimer() {
 /**
  * Toggle timer (start/pause)
  */
+/** Состояние «таймер запущен» для UI (глобальное меню, палитра). */
+export function getTimerRunning() {
+    return isTimerRunning;
+}
+
 export async function toggleTimer() {
     if (isTimerRunning) {
         console.log('toggleTimer: Пауза таймера.');

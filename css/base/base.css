@@ -75,8 +75,13 @@ header,
     min-height: 0;
 }
 
+/*
+ * Резерв под фиксированную шапку: полный отступ задаётся в JS как --static-header-scroll-inset
+ * (измеренная высота + px-буфер), без calc() — надёжнее при каскаде с утилитами.
+ * --static-header-height — сырое измерение (диагностика); для layout используется scroll-inset.
+ */
 #appContent.has-static-header {
-    padding-top: var(--static-header-height, 140px);
+    padding-top: var(--static-header-scroll-inset, 168px);
 }
 
 #staticHeaderWrapper.header-sticky {
@@ -91,6 +96,13 @@ header,
     z-index: 30;
     background-color: var(--color-background);
     box-shadow: none;
+    /* BFC: нижний margin последнего блока (например mb-3 у панели вкладок) не «выпадает» из offsetHeight — иначе занижается резерв и контент перекрывается. */
+    display: flow-root;
+}
+
+/* Второй контур: якоря/focus внутри прокручиваемого main не оказываются под шапкой (scroll-padding на контейнере скролла). */
+#appContent.has-static-header > main {
+    scroll-padding-top: var(--static-header-scroll-inset, 168px);
 }
 
 /* Сетки и карточки: не растягивают страницу по горизонтали */

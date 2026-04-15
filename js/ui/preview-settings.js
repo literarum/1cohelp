@@ -57,6 +57,36 @@ export function setPreviewSettingsDependencies(deps) {
     if (deps.setTheme !== undefined) setTheme = deps.setTheme;
 }
 
+/** Отключает ResizeObserver фиксированной шапки (перед повторным включением или выключением). */
+function disconnectStaticHeaderResizeObserver(staticWrapper) {
+    if (staticWrapper && staticWrapper._staticHeaderResizeObserver) {
+        staticWrapper._staticHeaderResizeObserver.disconnect();
+        delete staticWrapper._staticHeaderResizeObserver;
+    }
+}
+
+/**
+ * Измеряет занимаемую шапкой высоту: max(offsetHeight, ceil(getBoundingClientRect)) — подстраховка от субпикселей.
+ * @param {HTMLElement} staticWrapper
+ * @returns {number}
+ */
+export function measureStaticHeaderReservePx(staticWrapper) {
+    if (!staticWrapper || typeof staticWrapper.getBoundingClientRect !== 'function') return 180;
+    let fromRect = 0;
+    try {
+        const rect = staticWrapper.getBoundingClientRect();
+        if (rect && Number.isFinite(rect.height)) fromRect = Math.ceil(rect.height);
+    } catch {
+        fromRect = 0;
+    }
+    const fromOffset = staticWrapper.offsetHeight || 0;
+    const merged = Math.max(fromRect, fromOffset);
+    return merged > 0 ? merged : 180;
+}
+
+/** Дополнительный px-зазор под шапку (резерв поверх измерения). */
+const STATIC_HEADER_SCROLL_BUFFER_PX = 8;
+
 // ============================================================================
 // ОСНОВНЫЕ ФУНКЦИИ
 // ============================================================================
@@ -238,24 +268,35 @@ export async function applyPreviewSettings(settings) {
     const staticWrapper = document.getElementById('staticHeaderWrapper');
     if (appContent && staticWrapper) {
         if (settings?.staticHeader === true) {
+            disconnectStaticHeaderResizeObserver(staticWrapper);
             staticWrapper.classList.add('header-sticky');
             appContent.classList.add('has-static-header');
             const updateHeight = () => {
-                const h = staticWrapper.offsetHeight || 180;
-                appContent.style.setProperty('--static-header-height', `${h}px`);
+                if (!appContent.classList.contains('has-static-header')) return;
+                const raw = measureStaticHeaderReservePx(staticWrapper);
+                const inset = raw + STATIC_HEADER_SCROLL_BUFFER_PX;
+                appContent.style.setProperty('--static-header-height', `${raw}px`);
+                appContent.style.setProperty('--static-header-scroll-inset', `${inset}px`);
+                /* Inline — надёжнее утилит Tailwind (py-*), которые иначе могут «перебить» padding-top из листа. */
+                appContent.style.setProperty('padding-top', `${inset}px`);
             };
             updateHeight();
-            const ro = new ResizeObserver(updateHeight);
+            requestAnimationFrame(() => {
+                updateHeight();
+                requestAnimationFrame(updateHeight);
+            });
+            const ro = new ResizeObserver(() => {
+                requestAnimationFrame(updateHeight);
+            });
             ro.observe(staticWrapper);
             staticWrapper._staticHeaderResizeObserver = ro;
         } else {
             staticWrapper.classList.remove('header-sticky');
             appContent.classList.remove('has-static-header');
             appContent.style.removeProperty('--static-header-height');
-            if (staticWrapper._staticHeaderResizeObserver) {
-                staticWrapper._staticHeaderResizeObserver.disconnect();
-                delete staticWrapper._staticHeaderResizeObserver;
-            }
+            appContent.style.removeProperty('--static-header-scroll-inset');
+            appContent.style.removeProperty('padding-top');
+            disconnectStaticHeaderResizeObserver(staticWrapper);
         }
     }
 

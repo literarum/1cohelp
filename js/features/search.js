@@ -53,6 +53,8 @@ import {
     tokenizeNormalized,
     suggestTokenVariants,
     indexQueryTokensFromUserQuery,
+    stemWord,
+    normalizeTextForIndex,
 } from './search-normalize.js';
 import {
     parseSearchQueryTagsAndText,
@@ -86,7 +88,23 @@ const QUERY_SYNONYMS = {
 };
 
 /**
- * Расширяет набор токенов запроса синонимами: если в запросе есть токен из группы, добавляются все токены группы.
+ * Стеммы слов фразы (без префиксов из tokenizeNormalized) — для синонимов ФНС/СФР и т.д.
+ * @param {string} phrase
+ * @returns {string[]}
+ */
+function stemsFromSynonymPhrase(phrase) {
+    if (!phrase || typeof phrase !== 'string') return [];
+    const norm = normalizeTextForIndex(phrase);
+    return norm
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => stemWord(w))
+        .filter((s) => s.length >= 2);
+}
+
+/**
+ * Расширяет набор токенов запроса синонимами: если стем запроса совпадает со стемом фразы из группы,
+ * добавляются только осмысленные стеммы (без коротких префиксов), иначе префиксный OR даёт «всё подряд».
  * @param {string[]} queryTokens — токены запроса (нормализованные/стеммы)
  * @returns {string[]} уникальные токены для поиска по индексу
  */
@@ -97,17 +115,17 @@ function expandQueryTokensWithSynonyms(queryTokens) {
     for (const variants of Object.values(QUERY_SYNONYMS)) {
         let hasMatch = false;
         for (const phrase of variants) {
-            const phraseTokens = tokenizeNormalized(phrase).filter((w) => w.length >= 2);
-            if (phraseTokens.some((t) => tokenSet.has(t))) {
+            const phraseStems = stemsFromSynonymPhrase(phrase);
+            if (phraseStems.some((t) => tokenSet.has(t))) {
                 hasMatch = true;
                 break;
             }
         }
         if (hasMatch) {
             variants.forEach((phrase) => {
-                tokenizeNormalized(phrase)
-                    .filter((w) => w.length >= 2)
-                    .forEach((t) => expanded.add(t));
+                stemsFromSynonymPhrase(phrase).forEach((t) => {
+                    if (t.length >= 4 || isExceptionShortToken(t)) expanded.add(t);
+                });
             });
         }
     }
@@ -230,7 +248,7 @@ export function tokenize(text) {
  * Проверяет, является ли токен исключением для коротких токенов
  */
 export function isExceptionShortToken(token) {
-    const exceptions = new Set(['1с', '1c', 'сф', 'фн', 'фс']);
+    const exceptions = new Set(['1с', '1c', 'сф', 'фн', 'фс', 'инн', 'иф', 'пф', 'ск', 'эц']);
     return exceptions.has(token);
 }
 
@@ -2226,7 +2244,10 @@ export async function performSearch(query) {
         const searchContext = determineSearchContext(textForContext);
         let queryTokens = indexQueryTokensFromUserQuery(textQuery);
         const originalQueryTokens = queryTokens.slice();
-        queryTokens = expandQueryTokensWithSynonyms(queryTokens);
+        /** Синонимы — только при одном поисковом слове: иначе AND по словам + OR по синонимам даёт шум */
+        if (queryTokens.length <= 1) {
+            queryTokens = expandQueryTokensWithSynonyms(queryTokens);
+        }
         const sectionMatches = findSectionMatches(textForContext);
 
         if (queryTokens.length === 0) {
@@ -2244,7 +2265,16 @@ export async function performSearch(query) {
             return;
         }
 
-        let candidateDocs = await searchCandidates(queryTokens, searchContext);
+        const conjunctiveSearch = originalQueryTokens.length > 1;
+        let candidateDocs = await searchCandidates(queryTokens, searchContext, {
+            conjunctive: conjunctiveSearch,
+        });
+        /** Резервный контур: при пустом AND (строгая пересечка) — OR по тем же токенам, чтобы не «молчать» */
+        if (conjunctiveSearch && candidateDocs.size === 0) {
+            candidateDocs = await searchCandidates(queryTokens, searchContext, {
+                conjunctive: false,
+            });
+        }
         if (
             candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD &&
             queryTokens.length >= 1 &&
@@ -2254,7 +2284,9 @@ export async function performSearch(query) {
             const variants = suggestTokenVariants(queryTokens[0], 2);
             const existingInIndex = await findTokensThatExistInIndex(variants);
             if (existingInIndex.length > 0) {
-                const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext);
+                const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext, {
+                    conjunctive: false,
+                });
                 mergeFuzzyCandidatesInto(candidateDocs, fuzzyCandidates);
             }
         }
@@ -2388,7 +2420,9 @@ export async function getGlobalSearchResults(query) {
     const searchContext = determineSearchContext(textForContext);
     let queryTokens = indexQueryTokensFromUserQuery(textQuery);
     const originalQueryTokens = queryTokens.slice();
-    queryTokens = expandQueryTokensWithSynonyms(queryTokens);
+    if (queryTokens.length <= 1) {
+        queryTokens = expandQueryTokensWithSynonyms(queryTokens);
+    }
     const sectionMatches = findSectionMatches(textForContext);
 
     if (queryTokens.length === 0) {
@@ -2400,7 +2434,15 @@ export async function getGlobalSearchResults(query) {
 
     let candidateDocs;
     try {
-        candidateDocs = await searchCandidates(queryTokens, searchContext);
+        const conjunctiveSearch = originalQueryTokens.length > 1;
+        candidateDocs = await searchCandidates(queryTokens, searchContext, {
+            conjunctive: conjunctiveSearch,
+        });
+        if (conjunctiveSearch && candidateDocs.size === 0) {
+            candidateDocs = await searchCandidates(queryTokens, searchContext, {
+                conjunctive: false,
+            });
+        }
         if (
             candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD &&
             queryTokens.length >= 1 &&
@@ -2410,7 +2452,9 @@ export async function getGlobalSearchResults(query) {
             const variants = suggestTokenVariants(queryTokens[0], 2);
             const existingInIndex = await findTokensThatExistInIndex(variants);
             if (existingInIndex.length > 0) {
-                const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext);
+                const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext, {
+                    conjunctive: false,
+                });
                 mergeFuzzyCandidatesInto(candidateDocs, fuzzyCandidates);
             }
         }
@@ -2436,6 +2480,9 @@ export async function getGlobalSearchResults(query) {
 
 const FUZZY_CANDIDATES_THRESHOLD = 2;
 const FUZZY_SCORE_FACTOR = 0.4;
+
+/** Токены короче этого порога ищем только точным ключом `get`, без префиксного курсора */
+const MIN_QUERY_TOKEN_PREFIX_RANGE = 4;
 
 /**
  * Возвращает те токены из списка, которые есть в индексе (точное совпадение ключа).
@@ -2477,109 +2524,243 @@ function mergeFuzzyCandidatesInto(candidateDocs, fuzzyCandidates) {
 }
 
 /**
- * Ищет кандидатов в индексе
+ * Пересчёт BM25-подобного score по накопленным term* картам.
+ * @param {Map<string, object>} candidateDocs
  */
-async function searchCandidates(queryTokens, searchContext) {
-    const candidateDocs = new Map();
-    try {
-        const transaction = State.db.transaction(['searchIndex'], 'readonly');
-        const indexStore = transaction.objectStore('searchIndex');
+function recomputeCandidateBm25Scores(candidateDocs) {
+    for (const candidate of candidateDocs.values()) {
+        let s = 0;
+        for (const term of candidate.matchedTokens) {
+            const tf = candidate.termHitCounts.get(term) || 0;
+            const idf = candidate.termIdf.get(term) || 1;
+            const rawSum = candidate.termRawScores.get(term) || 0;
+            if (tf <= 0) continue;
+            s += idf * (tf / (tf + SEARCH_BM25_K1)) * (rawSum / tf);
+        }
+        candidate.score = s;
+    }
+}
 
-        for (const queryToken of queryTokens) {
+/**
+ * Загружает записи searchIndex для одного токена запроса (префиксный курсор или точный get).
+ * @param {IDBObjectStore} indexStore
+ * @param {string} queryToken
+ * @returns {Promise<object[]>}
+ */
+async function fetchIndexEntriesForQueryToken(indexStore, queryToken) {
+    const entries = [];
+    if (queryToken.length >= MIN_QUERY_TOKEN_PREFIX_RANGE) {
+        await new Promise((resolve, reject) => {
             const range = IDBKeyRange.bound(queryToken, queryToken + '\uffff');
+            const request = indexStore.openCursor(range);
+            request.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    entries.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    resolve();
+                }
+            };
+            request.onerror = (e) => reject(e.target.error);
+        });
+    } else {
+        await new Promise((resolve, reject) => {
+            const r = indexStore.get(queryToken);
+            r.onsuccess = () => {
+                if (r.result) entries.push(r.result);
+                resolve();
+            };
+            r.onerror = () => reject(r.error);
+        });
+    }
+    return entries;
+}
 
-            await new Promise((resolve, reject) => {
-                const request = indexStore.openCursor(range);
-                request.onsuccess = (e) => {
-                    const cursor = e.target.result;
-                    if (cursor) {
-                        const indexEntry = cursor.value;
-                        const actualToken = indexEntry.word;
+/**
+ * Добавляет ссылки из одной записи индекса в карту кандидатов.
+ */
+function accumulateIndexEntryIntoCandidateMap(
+    candidateDocs,
+    indexEntry,
+    queryToken,
+    searchContext,
+) {
+    const actualToken = indexEntry.word;
+    if (!indexEntry.refs || !Array.isArray(indexEntry.refs)) return;
 
-                        if (indexEntry.refs && Array.isArray(indexEntry.refs)) {
-                            const docFreq = new Set(
-                                indexEntry.refs
-                                    .filter((r) => r && r.store != null && r.id != null)
-                                    .map((r) => `${r.store}:${r.id}`),
-                            ).size;
-                            const idf = Math.min(SEARCH_MAX_IDF, Math.log(1 + 1 / (docFreq + 0.5)));
-                            indexEntry.refs.forEach((ref) => {
-                                if (
-                                    !ref ||
-                                    typeof ref !== 'object' ||
-                                    !ref.store ||
-                                    ref.id == null
-                                ) {
-                                    return;
-                                }
-                                if (String(ref.id) === 'undefined' || String(ref.id) === '') {
-                                    return;
-                                }
-                                if (
-                                    ref.store === 'shablony' &&
-                                    (ref.blockIndex === undefined || ref.blockIndex === null)
-                                ) {
-                                    return;
-                                }
+    const docFreq = new Set(
+        indexEntry.refs
+            .filter((r) => r && r.store != null && r.id != null)
+            .map((r) => `${r.store}:${r.id}`),
+    ).size;
+    const idf = Math.min(SEARCH_MAX_IDF, Math.log(1 + 1 / (docFreq + 0.5)));
 
-                                if (!isRelevantForContext(ref, searchContext)) {
-                                    return;
-                                }
+    indexEntry.refs.forEach((ref) => {
+        if (!ref || typeof ref !== 'object' || !ref.store || ref.id == null) {
+            return;
+        }
+        if (String(ref.id) === 'undefined' || String(ref.id) === '') {
+            return;
+        }
+        if (ref.store === 'shablony' && (ref.blockIndex === undefined || ref.blockIndex === null)) {
+            return;
+        }
+        if (!isRelevantForContext(ref, searchContext)) {
+            return;
+        }
 
-                                const docKey = generateDocKey(ref);
-                                if (!candidateDocs.has(docKey)) {
-                                    candidateDocs.set(docKey, {
-                                        ref: ref,
-                                        score: 0,
-                                        matchedTokens: new Set(),
-                                        termHitCounts: new Map(),
-                                        termRawScores: new Map(),
-                                        termIdf: new Map(),
-                                        context: searchContext,
-                                    });
-                                }
-
-                                const candidate = candidateDocs.get(docKey);
-                                const rawScore = calculateTokenScore(actualToken, queryToken, ref);
-                                candidate.termIdf.set(queryToken, idf);
-                                candidate.score += rawScore * idf;
-                                candidate.matchedTokens.add(queryToken);
-                                candidate.termHitCounts.set(
-                                    queryToken,
-                                    (candidate.termHitCounts.get(queryToken) || 0) + 1,
-                                );
-                                candidate.termRawScores.set(
-                                    queryToken,
-                                    (candidate.termRawScores.get(queryToken) || 0) + rawScore,
-                                );
-                            });
-                        }
-                        cursor.continue();
-                    } else {
-                        resolve();
-                    }
-                };
-                request.onerror = (e) => reject(e.target.error);
+        const docKey = generateDocKey(ref);
+        if (!candidateDocs.has(docKey)) {
+            candidateDocs.set(docKey, {
+                ref: ref,
+                score: 0,
+                matchedTokens: new Set(),
+                termHitCounts: new Map(),
+                termRawScores: new Map(),
+                termIdf: new Map(),
+                context: searchContext,
             });
         }
 
-        for (const candidate of candidateDocs.values()) {
-            let s = 0;
-            for (const term of candidate.matchedTokens) {
-                const tf = candidate.termHitCounts.get(term) || 0;
-                const idf = candidate.termIdf.get(term) || 1;
-                const rawSum = candidate.termRawScores.get(term) || 0;
-                if (tf <= 0) continue;
-                s += idf * (tf / (tf + SEARCH_BM25_K1)) * (rawSum / tf);
-            }
-            candidate.score = s;
+        const candidate = candidateDocs.get(docKey);
+        const rawScore = calculateTokenScore(actualToken, queryToken, ref);
+        candidate.termIdf.set(queryToken, idf);
+        candidate.score += rawScore * idf;
+        candidate.matchedTokens.add(queryToken);
+        candidate.termHitCounts.set(queryToken, (candidate.termHitCounts.get(queryToken) || 0) + 1);
+        candidate.termRawScores.set(
+            queryToken,
+            (candidate.termRawScores.get(queryToken) || 0) + rawScore,
+        );
+    });
+}
+
+/**
+ * OR по всем токенам (одно слово пользователя, синонимы, fuzzy-варианты).
+ */
+async function searchCandidatesUnionAll(queryTokens, searchContext) {
+    const candidateDocs = new Map();
+    const uniqueTokens = [...new Set(queryTokens)].filter(Boolean);
+    if (uniqueTokens.length === 0) return candidateDocs;
+
+    const transaction = State.db.transaction(['searchIndex'], 'readonly');
+    const indexStore = transaction.objectStore('searchIndex');
+    for (const queryToken of uniqueTokens) {
+        const indexEntries = await fetchIndexEntriesForQueryToken(indexStore, queryToken);
+        for (const indexEntry of indexEntries) {
+            accumulateIndexEntryIntoCandidateMap(
+                candidateDocs,
+                indexEntry,
+                queryToken,
+                searchContext,
+            );
         }
+    }
+    recomputeCandidateBm25Scores(candidateDocs);
+    return candidateDocs;
+}
+
+/**
+ * Кандидаты по одному токену запроса (для последующего AND между токенами).
+ */
+async function collectCandidatesForSingleQueryToken(queryToken, searchContext) {
+    const candidateDocs = new Map();
+    const transaction = State.db.transaction(['searchIndex'], 'readonly');
+    const indexStore = transaction.objectStore('searchIndex');
+    const indexEntries = await fetchIndexEntriesForQueryToken(indexStore, queryToken);
+    for (const indexEntry of indexEntries) {
+        accumulateIndexEntryIntoCandidateMap(
+            candidateDocs,
+            indexEntry,
+            queryToken,
+            searchContext,
+        );
+    }
+    recomputeCandidateBm25Scores(candidateDocs);
+    return candidateDocs;
+}
+
+/**
+ * Пересечение кандидатов по словам запроса (AND): документ должен содержать все токены.
+ */
+function intersectSearchCandidateMaps(mapA, mapB) {
+    const out = new Map();
+    for (const [docKey, ca] of mapA) {
+        const cb = mapB.get(docKey);
+        if (!cb) continue;
+        out.set(docKey, mergeSearchCandidatePair(ca, cb));
+    }
+    return out;
+}
+
+/**
+ * Объединяет два кандидата одного документа с разных токенов запроса.
+ */
+function mergeSearchCandidatePair(ca, cb) {
+    const matchedTokens = new Set([...ca.matchedTokens, ...cb.matchedTokens]);
+    const termHitCounts = new Map(ca.termHitCounts);
+    for (const [k, v] of cb.termHitCounts) {
+        termHitCounts.set(k, (termHitCounts.get(k) || 0) + v);
+    }
+    const termRawScores = new Map(ca.termRawScores);
+    for (const [k, v] of cb.termRawScores) {
+        termRawScores.set(k, (termRawScores.get(k) || 0) + v);
+    }
+    const termIdf = new Map(ca.termIdf);
+    for (const [k, v] of cb.termIdf) {
+        if (!termIdf.has(k)) termIdf.set(k, v);
+    }
+    const merged = {
+        ref: ca.ref,
+        score: 0,
+        matchedTokens,
+        termHitCounts,
+        termRawScores,
+        termIdf,
+        context: ca.context,
+    };
+    let s = 0;
+    for (const term of matchedTokens) {
+        const tf = termHitCounts.get(term) || 0;
+        const idf = termIdf.get(term) || 1;
+        const rawSum = termRawScores.get(term) || 0;
+        if (tf <= 0) continue;
+        s += idf * (tf / (tf + SEARCH_BM25_K1)) * (rawSum / tf);
+    }
+    merged.score = s;
+    return merged;
+}
+
+/**
+ * Ищет кандидатов в индексе.
+ * @param {{ conjunctive?: boolean }} [opts] — conjunctive: AND по токенам (несколько слов в запросе); иначе OR (синонимы, fuzzy).
+ */
+async function searchCandidates(queryTokens, searchContext, opts = {}) {
+    const uniqueTokens = [...new Set(queryTokens)].filter(Boolean);
+    if (uniqueTokens.length === 0) {
+        return new Map();
+    }
+
+    const conjunctive = opts.conjunctive === true;
+
+    try {
+        if (conjunctive && uniqueTokens.length > 1) {
+            let merged = await collectCandidatesForSingleQueryToken(uniqueTokens[0], searchContext);
+            for (let i = 1; i < uniqueTokens.length; i++) {
+                const next = await collectCandidatesForSingleQueryToken(
+                    uniqueTokens[i],
+                    searchContext,
+                );
+                merged = intersectSearchCandidateMaps(merged, next);
+            }
+            return merged;
+        }
+        return searchCandidatesUnionAll(uniqueTokens, searchContext);
     } catch (error) {
         console.error('[searchCandidates] Ошибка поиска кандидатов:', error);
         throw error;
     }
-
-    return candidateDocs;
 }
 
 /**
@@ -2991,6 +3172,19 @@ async function processSearchResults(
         entry.matchedTokens.forEach((token) => group.matchedTokensUnion.add(token));
     });
 
+    const phraseParsedForBonus = parseSearchQueryTagsAndText(originalQuery);
+    const phraseNeedleForBonus = (
+        phraseParsedForBonus.textQuery ||
+        originalQuery ||
+        ''
+    )
+        .toLowerCase()
+        .replace(/ё/g, 'е')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const phraseNeedleIsMultiWord =
+        phraseNeedleForBonus.split(/\s+/).filter(Boolean).length >= 2;
+
     const searchResults = [];
     for (const [, group] of groupedByActualItem.entries()) {
         if (!group.refsForConversion || group.refsForConversion.length === 0) {
@@ -3081,6 +3275,20 @@ async function processSearchResults(
                 originalQueryTokens.every((t) => group.matchedTokensUnion.has(t))
             ) {
                 result.score = (result.score || 0) + 5000;
+            }
+            if (
+                phraseNeedleForBonus.length >= 4 &&
+                phraseNeedleIsMultiWord &&
+                !result.isExactTitleMatch
+            ) {
+                const hay = `${result.title || ''} ${result.description || ''}`
+                    .toLowerCase()
+                    .replace(/ё/g, 'е')
+                    .replace(/\s+/g, ' ');
+                if (hay.includes(phraseNeedleForBonus)) {
+                    result.score = (result.score || 0) + 7500;
+                    result.isPhraseInContentMatch = true;
+                }
             }
             searchResults.push(result);
         }

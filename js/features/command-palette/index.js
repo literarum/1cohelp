@@ -154,6 +154,8 @@ let keydownHandler = null;
 let inputHandler = null;
 const GLOBAL_SEARCH_DEBOUNCE_MS = 200;
 let globalSearchDebounceTimer = null;
+/** Монотонный номер запроса глобального поиска — отсекаем устаревшие async-ответы (out-of-order) */
+let paletteSearchGeneration = 0;
 
 export function openCommandPalette() {
     ui.setUiCallbacks({ selectResult, onClose: closeCommandPalette });
@@ -167,15 +169,35 @@ export function openCommandPalette() {
             const q = inputEl.value;
             const syncResults = runSearch(q, algorithms);
             ui.renderResults(reorderByRecent(syncResults, getRecentIds()));
-            if (!q.trim()) return;
+            if (!q.trim()) {
+                if (globalSearchDebounceTimer) {
+                    clearTimeout(globalSearchDebounceTimer);
+                    globalSearchDebounceTimer = null;
+                }
+                paletteSearchGeneration += 1;
+                inputEl.removeAttribute('aria-busy');
+                return;
+            }
             if (globalSearchDebounceTimer) clearTimeout(globalSearchDebounceTimer);
             globalSearchDebounceTimer = setTimeout(() => {
                 globalSearchDebounceTimer = null;
-                runSearchWithGlobal(q, algorithms).then((merged) => {
-                    if (inputEl.value.trim() === q.trim()) {
+                const gen = (paletteSearchGeneration += 1);
+                const qTrim = q.trim();
+                inputEl.setAttribute('aria-busy', 'true');
+                runSearchWithGlobal(q, algorithms)
+                    .then((merged) => {
+                        if (gen !== paletteSearchGeneration) return;
+                        if (inputEl.value.trim() !== qTrim) return;
                         ui.renderResults(reorderByRecent(merged, getRecentIds()));
-                    }
-                });
+                    })
+                    .catch((err) => {
+                        console.warn('[command-palette] runSearchWithGlobal:', err);
+                    })
+                    .finally(() => {
+                        if (gen === paletteSearchGeneration) {
+                            inputEl.removeAttribute('aria-busy');
+                        }
+                    });
             }, GLOBAL_SEARCH_DEBOUNCE_MS);
         };
         inputEl.addEventListener('input', inputHandler);
@@ -192,6 +214,9 @@ export function closeCommandPalette() {
         clearTimeout(globalSearchDebounceTimer);
         globalSearchDebounceTimer = null;
     }
+    paletteSearchGeneration += 1;
+    const inputEl = ui.getInputEl();
+    inputEl?.removeAttribute('aria-busy');
     ui.hide();
     if (typeof getVisibleModals === 'function' && getVisibleModals().length === 0) {
         document.body.classList.remove('modal-open', 'overflow-hidden');

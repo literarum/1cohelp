@@ -1,0 +1,99 @@
+/* Глобальное контекстное меню приложения (ПКМ) */
+
+.global-context-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal, 50) + 5);
+    background: transparent;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease-out;
+}
+
+.global-context-menu-backdrop--visible {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+.global-context-menu {
+    position: fixed;
+    z-index: calc(var(--z-modal, 50) + 6);
+    min-width: 240px;
+    max-width: min(320px, 100vw - 16px);
+    padding: 6px 0;
+    margin: 0;
+    list-style: none;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+    box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.12),
+        0 2px 10px rgba(0, 0, 0, 0.08);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    outline: none;
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+    transition:
+        opacity 0.14s ease-out,
+        transform 0.14s ease-out;
+    -webkit-font-smoothing: antialiased;
+}
+
+html.dark .global-context-menu {
+    box-shadow:
+        0 12px 48px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.global-context-menu--open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.global-context-menu__separator {
+    height: 1px;
+    margin: 6px 10px;
+    background: var(--color-border);
+    border: 0;
+}
+
+.global-context-menu__item {
+    display: flex;
+    width: calc(100% - 12px);
+    margin: 0 6px;
+    padding: 9px 12px;
+    align-items: center;
+    text-align: left;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.01em;
+}
+
+/* Ховер только у устройств с реальным hover (меньше «залипаний» после тапа / гибридных сценариев). */
+@media (hover: hover) and (pointer: fine) {
+    .global-context-menu__item:hover:not(:disabled) {
+        background: var(--color-hover-subtle);
+    }
+}
+
+.global-context-menu__item:focus-visible,
+.global-context-menu__item.global-context-menu__item--active {
+    outline: 2px solid var(--color-border-interactive);
+    outline-offset: -1px;
+    background: var(--color-hover-subtle);
+}
+
+.global-context-menu__item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+body.global-context-menu-active {
+    user-select: none;
+}
