@@ -7,7 +7,10 @@
  * подмножестве записей, чтобы не перегружать CPU.
  */
 
-import { buildExportDataObjectFromDb, getStoresToReadForExport } from './import-export.js?v=20260406health';
+import {
+    buildExportDataObjectFromDb,
+    getStoresToReadForExport,
+} from './import-export.js?v=20260406health';
 
 /** Хранилища, для которых сравнивается полное тело записей (обычно небольшие). */
 export const DIFF_FULL_BODY_STORES = ['preferences', 'clientData', 'algorithms'];
@@ -161,7 +164,12 @@ export function countsEqual(a, b) {
 export async function runExportImportDifferentialCheck(db, options = {}) {
     const { quiet = true, deepExportCompare = true } = options;
     if (!db || !db.objectStoreNames) {
-        return { ok: false, tier1Ok: false, tier2Ok: false, detail: 'Нет подключения к IndexedDB.' };
+        return {
+            ok: false,
+            tier1Ok: false,
+            tier2Ok: false,
+            detail: 'Нет подключения к IndexedDB.',
+        };
     }
 
     const storeNames = getStoresToReadForExport(db);

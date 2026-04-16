@@ -23,12 +23,7 @@ export const CA_SORT_MODES = /** @type {const} */ ([
     'question_asc',
 ]);
 
-export const CA_GROUP_MODES = /** @type {const} */ ([
-    'none',
-    'folder',
-    'tag',
-    'source_file',
-]);
+export const CA_GROUP_MODES = /** @type {const} */ (['none', 'folder', 'tag', 'source_file']);
 
 export const CA_FOLDER_FILTER_ALL = 'all';
 export const CA_FOLDER_FILTER_UNFILED = 'unfiled';
@@ -243,7 +238,10 @@ export function getMetaForUnit(metaMap, id) {
  */
 export function filterUnitsByFolder(units, folderFilter, metaMap) {
     const list = Array.isArray(units) ? units : [];
-    const f = folderFilter == null || folderFilter === CA_FOLDER_FILTER_ALL ? CA_FOLDER_FILTER_ALL : folderFilter;
+    const f =
+        folderFilter == null || folderFilter === CA_FOLDER_FILTER_ALL
+            ? CA_FOLDER_FILTER_ALL
+            : folderFilter;
     if (f === CA_FOLDER_FILTER_ALL) return [...list];
 
     return list.filter((unit) => {

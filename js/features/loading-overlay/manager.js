@@ -38,8 +38,12 @@ export const loadingOverlayManager = {
         const snapshot = this.readStoredOverlaySnapshot();
         if (snapshot?.tone === 'dark' || snapshot?.tone === 'light') return snapshot.tone;
         const root = document.documentElement;
-        if (root?.dataset?.theme === 'light' || root?.dataset?.theme === 'dark') return root.dataset.theme;
-        if (root?.dataset?.loadingOverlayTheme === 'light' || root?.dataset?.loadingOverlayTheme === 'dark') {
+        if (root?.dataset?.theme === 'light' || root?.dataset?.theme === 'dark')
+            return root.dataset.theme;
+        if (
+            root?.dataset?.loadingOverlayTheme === 'light' ||
+            root?.dataset?.loadingOverlayTheme === 'dark'
+        ) {
             return root.dataset.loadingOverlayTheme;
         }
         return root.classList.contains('dark') ? 'dark' : 'light';
@@ -257,12 +261,14 @@ export const loadingOverlayManager = {
                 setTimeout(() => {
                     if (runnerToStop?.stop) {
                         runnerToStop.stop();
-                        if (runnerToStop.resize) window.removeEventListener('resize', runnerToStop.resize);
+                        if (runnerToStop.resize)
+                            window.removeEventListener('resize', runnerToStop.resize);
                         runnerToStop.isRunning = false;
                     }
                     if (earlyToStop?.stop) {
                         earlyToStop.stop();
-                        if (earlyToStop.resize) window.removeEventListener('resize', earlyToStop.resize);
+                        if (earlyToStop.resize)
+                            window.removeEventListener('resize', earlyToStop.resize);
                         earlyToStop.isRunning = false;
                     }
                     /* Парковка в DOM вместо remove: id оверлея остаются для UI health / полного аудита index. */
@@ -287,11 +293,13 @@ export const loadingOverlayManager = {
             } else {
                 if (runnerToStop?.stop) {
                     runnerToStop.stop();
-                    if (runnerToStop?.resize) window.removeEventListener('resize', runnerToStop.resize);
+                    if (runnerToStop?.resize)
+                        window.removeEventListener('resize', runnerToStop.resize);
                 }
                 if (earlyToStop?.stop) {
                     earlyToStop.stop();
-                    if (earlyToStop?.resize) window.removeEventListener('resize', earlyToStop.resize);
+                    if (earlyToStop?.resize)
+                        window.removeEventListener('resize', earlyToStop.resize);
                     earlyToStop.isRunning = false;
                 }
                 this.overlayElement = null;
@@ -425,7 +433,8 @@ export const loadingOverlayManager = {
                 this.baseAlphaMultiplier = colorData[3];
                 const sizeBase =
                     config_anim.baseParticleMinSize +
-                    Math.random() * (config_anim.baseParticleMaxSize - config_anim.baseParticleMinSize);
+                    Math.random() *
+                        (config_anim.baseParticleMaxSize - config_anim.baseParticleMinSize);
                 this.baseSize = sizeBase * (config_anim.particleSizeScale ?? 1);
                 this.noiseAmp = 0.03 + Math.random() * 0.04;
                 this.noiseFreq = 0.005 + Math.random() * 0.01;
@@ -457,7 +466,9 @@ export const loadingOverlayManager = {
                 z = tempZ_rotX;
                 const exitScale = getExitScale_anim();
                 const dynamicSphereRadius =
-                    currentSphereRadius * (1 + breathPulse * config_anim.breathAmplitude) * exitScale;
+                    currentSphereRadius *
+                    (1 + breathPulse * config_anim.breathAmplitude) *
+                    exitScale;
                 const perspectiveFactor =
                     config_anim.focalLength /
                     (config_anim.focalLength - z * dynamicSphereRadius * 0.8);
@@ -508,8 +519,12 @@ export const loadingOverlayManager = {
                         );
                         if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
                         const gradient = ctx.createRadialGradient(
-                            this.screenX, this.screenY, haloSize * layer.innerStop,
-                            this.screenX, this.screenY, haloSize,
+                            this.screenX,
+                            this.screenY,
+                            haloSize * layer.innerStop,
+                            this.screenX,
+                            this.screenY,
+                            haloSize,
                         );
                         gradient.addColorStop(
                             0,
@@ -519,7 +534,10 @@ export const loadingOverlayManager = {
                             layer.outerStop,
                             `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.5})`,
                         );
-                        gradient.addColorStop(1, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`);
+                        gradient.addColorStop(
+                            1,
+                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
+                        );
                         ctx.fillStyle = gradient;
                         ctx.beginPath();
                         ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
@@ -528,14 +546,21 @@ export const loadingOverlayManager = {
                 }
                 if (useHalo) {
                     const coreGradient = ctx.createRadialGradient(
-                        this.screenX, this.screenY, 0,
-                        this.screenX, this.screenY, mainSize,
+                        this.screenX,
+                        this.screenY,
+                        0,
+                        this.screenX,
+                        this.screenY,
+                        mainSize,
                     );
                     coreGradient.addColorStop(
                         0,
                         `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`,
                     );
-                    coreGradient.addColorStop(1, `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`);
+                    coreGradient.addColorStop(
+                        1,
+                        `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
+                    );
                     ctx.fillStyle = coreGradient;
                 } else {
                     ctx.fillStyle = `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`;
@@ -563,7 +588,8 @@ export const loadingOverlayManager = {
             setupCanvas_anim();
             themeProfile_anim = manager.getThemeProfile(manager.getResolvedTheme());
             config_anim.colorPalette = themeProfile_anim.palette;
-            config_anim.particleCount = themeProfile_anim.particleCount ?? config_anim.particleCount;
+            config_anim.particleCount =
+                themeProfile_anim.particleCount ?? config_anim.particleCount;
             config_anim.particleSizeScale = themeProfile_anim.particleSizeScale ?? 1;
             particles_anim = [];
             const particleCount = config_anim.particleCount;
@@ -578,7 +604,8 @@ export const loadingOverlayManager = {
                 currentTheme_anim = nextTheme;
                 themeProfile_anim = manager.getThemeProfile(currentTheme_anim);
                 config_anim.colorPalette = themeProfile_anim.palette;
-                config_anim.particleCount = themeProfile_anim.particleCount ?? config_anim.particleCount;
+                config_anim.particleCount =
+                    themeProfile_anim.particleCount ?? config_anim.particleCount;
                 config_anim.particleSizeScale = themeProfile_anim.particleSizeScale ?? 1;
                 particles_anim = [];
                 for (let i = 0; i < config_anim.particleCount; i++) {
@@ -607,7 +634,11 @@ export const loadingOverlayManager = {
             const breathPulse = Math.sin(globalTime_anim * config_anim.breathSpeed);
             const exitGlowMultiplier = getExitGlowMultiplier_anim();
             particles_anim.forEach((p) => {
-                p.projectAndTransform(config_anim.sphereBaseRadius, breathPulse, currentEffectiveSpawnProgress);
+                p.projectAndTransform(
+                    config_anim.sphereBaseRadius,
+                    breathPulse,
+                    currentEffectiveSpawnProgress,
+                );
             });
             particles_anim.forEach((p) => {
                 p.draw(currentEffectiveSpawnProgress, exitGlowMultiplier);

@@ -10,9 +10,16 @@ import {
     setDbMergeDependencies,
     CONFLICT_KIND,
     CONTENT_STORES,
+    runDbMergeBackupPreflight,
     __dbMergeConflictUiInternals,
     __dbMergeScopeInternals,
     __dbMergeUiInternals,
+    summarizeMergeAnalysisStats,
+    summarizeMergePlanForHistory,
+    buildMergeHistoryEntry,
+    loadMergeHistoryEntries,
+    appendMergeHistoryEntry,
+    DB_MERGE_HISTORY_STORAGE_KEY,
 } from './db-merge.js';
 
 describe('db-merge identity and diff logic', () => {
@@ -445,6 +452,56 @@ describe('db-merge identity and diff logic', () => {
 
         State.db = null;
     });
+
+    it('reports monotonic applyMergePlan progress with phases (snapshot, writes, ui_refresh)', async () => {
+        State.db = {
+            ready: true,
+            objectStoreNames: {
+                contains: () => true,
+            },
+        };
+        setDbMergeDependencies({
+            showNotification: vi.fn(),
+            loadBookmarks: vi.fn(async () => {}),
+            loadExtLinks: vi.fn(async () => {}),
+            loadCibLinks: vi.fn(async () => {}),
+            renderReglamentCategories: vi.fn(async () => {}),
+            buildInitialSearchIndex: vi.fn(async () => {}),
+        });
+
+        vi.spyOn(indexedDbModule, 'getAllFromIndexedDB').mockResolvedValue([]);
+        vi.spyOn(indexedDbModule, 'saveToIndexedDB').mockImplementation(async () => 1);
+
+        const progressEvents = [];
+        const mergePlan = {
+            perStore: {
+                bookmarkFolders: {
+                    toInsert: [
+                        { record: { id: 101, name: 'Папка A' } },
+                        { record: { id: 102, name: 'Папка B' } },
+                    ],
+                    toUpdate: [],
+                },
+            },
+        };
+
+        await applyMergePlan(mergePlan, {
+            onProgress: (e) => progressEvents.push({ ...e }),
+        });
+
+        expect(progressEvents.length).toBeGreaterThan(0);
+        let lastPct = -1;
+        progressEvents.forEach((e) => {
+            expect(e.applyPercent).toBeGreaterThanOrEqual(lastPct);
+            lastPct = e.applyPercent;
+        });
+        expect(progressEvents[progressEvents.length - 1].applyPercent).toBe(100);
+        expect(progressEvents[progressEvents.length - 1].phase).toBe('ui_refresh');
+        expect(progressEvents[0].phase).toBe('rollback_snapshot');
+        expect(progressEvents.filter((e) => e.phase === 'indexeddb_write').length).toBe(2);
+
+        State.db = null;
+    });
 });
 
 describe('db-merge conflict UI helpers', () => {
@@ -557,5 +614,244 @@ describe('db-merge ui internals', () => {
 
         expect(shouldShowFooterActions({ hasSelectedFileForAnalysis: false })).toBe(false);
         expect(shouldShowFooterActions({ hasSelectedFileForAnalysis: true })).toBe(true);
+    });
+
+    it('computeDbMergePrimaryDisabled: блокирует кнопку при активном потоке слияния', () => {
+        const { computeDbMergePrimaryDisabled } = __dbMergeUiInternals;
+
+        expect(
+            computeDbMergePrimaryDisabled({
+                footerCompleted: false,
+                mergeFlowInProgress: true,
+                hasAnalysis: true,
+            }),
+        ).toBe(true);
+
+        expect(
+            computeDbMergePrimaryDisabled({
+                footerCompleted: false,
+                mergeFlowInProgress: false,
+                hasAnalysis: true,
+            }),
+        ).toBe(false);
+
+        expect(
+            computeDbMergePrimaryDisabled({
+                footerCompleted: false,
+                mergeFlowInProgress: false,
+                hasAnalysis: false,
+            }),
+        ).toBe(true);
+    });
+
+    it('computeDbMergePrimaryDisabled: после успешного слияния кнопка «Закрыть» доступна', () => {
+        const { computeDbMergePrimaryDisabled } = __dbMergeUiInternals;
+
+        expect(
+            computeDbMergePrimaryDisabled({
+                footerCompleted: true,
+                mergeFlowInProgress: true,
+                hasAnalysis: true,
+            }),
+        ).toBe(false);
+    });
+});
+
+describe('runDbMergeBackupPreflight', () => {
+    it('при отключённой настройке: пропуск бэкапа и пауза как при импорте', async () => {
+        const add = vi.fn();
+        const waitMs = vi.fn(async () => {});
+        const r = await runDbMergeBackupPreflight({
+            disableForcedBackupOnDbMerge: true,
+            performForcedBackup: vi.fn(),
+            exportAllData: vi.fn(),
+            notificationService: { add, dismissImportant: vi.fn() },
+            waitMs,
+        });
+        expect(r.ok).toBe(true);
+        expect(r.outcome).toBe('skipped_by_setting');
+        expect(add).toHaveBeenCalled();
+        expect(waitMs).toHaveBeenCalledWith(1000);
+    });
+
+    it('без exportAllData: fail-closed', async () => {
+        const r = await runDbMergeBackupPreflight({
+            disableForcedBackupOnDbMerge: false,
+            exportAllData: undefined,
+            notificationService: { dismissImportant: vi.fn() },
+        });
+        expect(r.ok).toBe(false);
+        expect(r.reason).toBe('no_export');
+    });
+
+    it('без performForcedBackup: fail-closed (второй контур надёжности)', async () => {
+        const r = await runDbMergeBackupPreflight({
+            disableForcedBackupOnDbMerge: false,
+            exportAllData: vi.fn(),
+            performForcedBackup: undefined,
+            notificationService: { dismissImportant: vi.fn() },
+        });
+        expect(r.ok).toBe(false);
+        expect(r.reason).toBe('no_performForcedBackup');
+    });
+
+    it('вызывает performForcedBackup с operation merge', async () => {
+        const pf = vi.fn(async () => true);
+        const r = await runDbMergeBackupPreflight({
+            disableForcedBackupOnDbMerge: false,
+            exportAllData: vi.fn(),
+            performForcedBackup: pf,
+            notificationService: { dismissImportant: vi.fn() },
+        });
+        expect(pf).toHaveBeenCalledWith({ operation: 'merge' });
+        expect(r.ok).toBe(true);
+        expect(r.outcome).toBe(true);
+    });
+
+    it('aborted_by_user: блокирует слияние', async () => {
+        const r = await runDbMergeBackupPreflight({
+            disableForcedBackupOnDbMerge: false,
+            exportAllData: vi.fn(),
+            performForcedBackup: vi.fn(async () => 'aborted_by_user'),
+            notificationService: { dismissImportant: vi.fn() },
+        });
+        expect(r.ok).toBe(false);
+        expect(r.outcome).toBe('aborted_by_user');
+    });
+});
+
+function createMemoryStorage() {
+    const map = new Map();
+    return {
+        getItem: (k) => (map.has(k) ? map.get(k) : null),
+        setItem: (k, v) => map.set(k, v),
+        removeItem: (k) => map.delete(k),
+    };
+}
+
+describe('db-merge merge history', () => {
+    it('summarizeMergeAnalysisStats суммирует importOnly, conflicts, identical', () => {
+        const analysis = {
+            storeDiffs: [
+                {
+                    importOnly: [1, 2],
+                    conflicts: [1],
+                    identical: [1, 2, 3],
+                    localOnly: [1, 2, 3, 4],
+                },
+                {
+                    importOnly: [1],
+                    conflicts: [],
+                    identical: [],
+                    localOnly: [1, 2, 3, 4, 5],
+                },
+            ],
+        };
+        const s = summarizeMergeAnalysisStats(analysis);
+        expect(s.newInFile).toBe(3);
+        expect(s.conflicts).toBe(1);
+        expect(s.identical).toBe(3);
+        expect(s.localOnly).toBe(9);
+    });
+
+    it('summarizeMergePlanForHistory считает toInsert/toUpdate и алгоритмы (замена)', () => {
+        const mergePlan = {
+            perStore: {
+                algorithms: {
+                    localContainer: null,
+                    importContainer: { section: 'all', data: { main: {} } },
+                },
+                bookmarks: {
+                    toInsert: [{ record: { id: 1 } }],
+                    toUpdate: [{}, {}],
+                },
+            },
+        };
+        const p = summarizeMergePlanForHistory(mergePlan);
+        expect(p.plannedInserts).toBe(2);
+        expect(p.plannedUpdates).toBe(2);
+        expect(p.algorithmsOp).toBe('replace_container');
+    });
+
+    it('summarizeMergePlanForHistory: merge_containers при двух контейнерах', () => {
+        const mergePlan = {
+            perStore: {
+                algorithms: {
+                    localContainer: { section: 'all', data: { main: { a: 1 } } },
+                    importContainer: { section: 'all', data: { main: { b: 2 } } },
+                },
+            },
+        };
+        const p = summarizeMergePlanForHistory(mergePlan);
+        expect(p.algorithmsOp).toBe('merge_containers');
+        expect(p.plannedInserts).toBe(0);
+    });
+
+    it('buildMergeHistoryEntry объединяет анализ и план, задаёт id и метки времени', () => {
+        const analysis = {
+            schemaVersion: '1.7',
+            storeDiffs: [
+                {
+                    importOnly: [1],
+                    conflicts: [],
+                    identical: [],
+                    localOnly: [],
+                },
+            ],
+        };
+        const mergePlan = {
+            perStore: {
+                bookmarks: { toInsert: [{ record: { id: 2 } }], toUpdate: [] },
+            },
+        };
+        const entry = buildMergeHistoryEntry({
+            sourceFileName: '  backup.json ',
+            analysis,
+            mergePlan,
+            completedAt: '2026-04-16T12:00:00.000Z',
+        });
+        expect(entry.v).toBe(1);
+        expect(typeof entry.id).toBe('string');
+        expect(entry.id.length).toBeGreaterThan(4);
+        expect(entry.sourceFileName).toBe('backup.json');
+        expect(entry.fileSchemaVersion).toBe('1.7');
+        expect(entry.newInImportFile).toBe(1);
+        expect(entry.plannedInserts).toBe(1);
+        expect(entry.plannedUpdates).toBe(0);
+        expect(entry.completedAt).toBe('2026-04-16T12:00:00.000Z');
+    });
+
+    it('loadMergeHistoryEntries: битый JSON даёт пустой список (устойчивость)', () => {
+        const st = createMemoryStorage();
+        st.setItem(DB_MERGE_HISTORY_STORAGE_KEY, '{not json');
+        expect(loadMergeHistoryEntries(st)).toEqual([]);
+    });
+
+    it('appendMergeHistoryEntry + loadMergeHistoryEntries: round-trip в памяти', () => {
+        const st = createMemoryStorage();
+        const e1 = buildMergeHistoryEntry({
+            sourceFileName: 'a.json',
+            analysis: {
+                schemaVersion: '1.0',
+                storeDiffs: [{ importOnly: [], conflicts: [], identical: [], localOnly: [] }],
+            },
+            mergePlan: { perStore: {} },
+            completedAt: '2026-01-01T00:00:00.000Z',
+        });
+        appendMergeHistoryEntry(e1, st);
+        const e2 = buildMergeHistoryEntry({
+            sourceFileName: 'b.json',
+            analysis: {
+                schemaVersion: '1.0',
+                storeDiffs: [{ importOnly: [1], conflicts: [], identical: [], localOnly: [] }],
+            },
+            mergePlan: { perStore: {} },
+            completedAt: '2026-01-02T00:00:00.000Z',
+        });
+        appendMergeHistoryEntry(e2, st);
+        const loaded = loadMergeHistoryEntries(st);
+        expect(loaded.length).toBe(2);
+        expect(loaded[0].sourceFileName).toBe('b.json');
+        expect(loaded[1].sourceFileName).toBe('a.json');
     });
 });

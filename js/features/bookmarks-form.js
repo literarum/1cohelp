@@ -167,9 +167,7 @@ export async function handleBookmarkFormSubmit(event) {
     let oldData = null;
     let existingIdsToKeep = [];
     const tagsRaw = form.elements.bookmarkTags && form.elements.bookmarkTags.value;
-    const tagsList = parseTagsFromUserString(
-        typeof tagsRaw === 'string' ? tagsRaw : '',
-    );
+    const tagsList = parseTagsFromUserString(typeof tagsRaw === 'string' ? tagsRaw : '');
 
     const newDataBase = {
         title,

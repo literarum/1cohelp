@@ -70,7 +70,10 @@ describe('training-srs-flip', () => {
     it('setSrsFlipRevealed is no-op for missing nodes', () => {
         const dom = new JSDOM('<div></div>');
         expect(() =>
-            setSrsFlipRevealed(/** @type {HTMLElement} */ (dom.window.document.querySelector('div')), true),
+            setSrsFlipRevealed(
+                /** @type {HTMLElement} */ (dom.window.document.querySelector('div')),
+                true,
+            ),
         ).not.toThrow();
     });
 });

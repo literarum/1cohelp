@@ -104,8 +104,16 @@ function buildLoadingOverlaySnapshot(isDarkTheme) {
             : tone === 'dark'
               ? THEME_DEFAULTS.backgroundDark
               : THEME_DEFAULTS.backgroundLight,
-        primary: primaryRgb ? rgbToHex(primaryRgb) : tone === 'dark' ? THEME_DEFAULTS.primaryDark : THEME_DEFAULTS.primaryLight,
-        secondary: secondaryRgb ? rgbToHex(secondaryRgb) : tone === 'dark' ? THEME_DEFAULTS.secondaryDark : THEME_DEFAULTS.secondaryLight,
+        primary: primaryRgb
+            ? rgbToHex(primaryRgb)
+            : tone === 'dark'
+              ? THEME_DEFAULTS.primaryDark
+              : THEME_DEFAULTS.primaryLight,
+        secondary: secondaryRgb
+            ? rgbToHex(secondaryRgb)
+            : tone === 'dark'
+              ? THEME_DEFAULTS.secondaryDark
+              : THEME_DEFAULTS.secondaryLight,
     };
 }
 

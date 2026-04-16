@@ -6,7 +6,10 @@ import {
 } from '../features/health-report-format.js';
 import { onBackupReminderReEnabled } from '../features/backup-reminder.js';
 import { appCustomizationModalConfig, customizeUIModalConfig } from '../config.js';
-import { collapseModalFullscreenIfActive, ensureFullscreenToggleForConfig } from './modals-manager.js';
+import {
+    collapseModalFullscreenIfActive,
+    ensureFullscreenToggleForConfig,
+} from './modals-manager.js';
 import { syncBorderRadiusSliderPercentLabel } from './ui-settings-modal.js';
 
 let deps = {
@@ -155,7 +158,9 @@ export function initUISettingsModalHandlers() {
         const closeCustomizeUIModalBtn = document.getElementById('closeCustomizeUIModalBtn');
         const openRecentlyDeletedBtn = document.getElementById('openRecentlyDeletedBtn');
         const restartOnboardingTourBtn = document.getElementById('restartOnboardingTourBtn');
-        const openAppCustomizationModalBtn = document.getElementById('openAppCustomizationModalBtn');
+        const openAppCustomizationModalBtn = document.getElementById(
+            'openAppCustomizationModalBtn',
+        );
         const decreaseFontBtn = document.getElementById('decreaseFontBtn');
         const increaseFontBtn = document.getElementById('increaseFontBtn');
         const resetFontBtn = document.getElementById('resetFontBtn');
@@ -215,8 +220,14 @@ export function initUISettingsModalHandlers() {
         }
 
         const appCustomizationModal = document.getElementById('appCustomizationModal');
-        const closeAppCustomizationModalBtn = document.getElementById('closeAppCustomizationModalBtn');
-        if (openAppCustomizationModalBtn && appCustomizationModal && !openAppCustomizationModalBtn.dataset.customizationListenerAttached) {
+        const closeAppCustomizationModalBtn = document.getElementById(
+            'closeAppCustomizationModalBtn',
+        );
+        if (
+            openAppCustomizationModalBtn &&
+            appCustomizationModal &&
+            !openAppCustomizationModalBtn.dataset.customizationListenerAttached
+        ) {
             openAppCustomizationModalBtn.addEventListener('click', () => {
                 if (appCustomizationModal.classList.contains('hidden')) {
                     ensureFullscreenToggleForConfig(appCustomizationModalConfig);
@@ -241,16 +252,56 @@ export function initUISettingsModalHandlers() {
             });
             openAppCustomizationModalBtn.dataset.customizationListenerAttached = 'true';
         }
-        if (closeAppCustomizationModalBtn && appCustomizationModal) {
-            closeAppCustomizationModalBtn.addEventListener('click', () => {
-                collapseModalFullscreenIfActive(
-                    'appCustomizationModal',
-                    appCustomizationModalConfig,
-                );
-                if (typeof deps.closeAnimatedModal === 'function') {
-                    deps.closeAnimatedModal(appCustomizationModal);
+        const requestCloseAppCustomization = async () => {
+            if (!appCustomizationModal) return;
+            if (
+                typeof deps.shouldConfirmBeforeClose === 'function' &&
+                deps.shouldConfirmBeforeClose(appCustomizationModal) &&
+                typeof deps.showUnsavedConfirmModal === 'function'
+            ) {
+                const leave = await deps.showUnsavedConfirmModal();
+                if (!leave) return;
+                if (typeof deps.revertUISettingsOnDiscard === 'function') {
+                    await deps.revertUISettingsOnDiscard();
                 }
-                appCustomizationModal.classList.add('hidden');
+            }
+            collapseModalFullscreenIfActive('appCustomizationModal', appCustomizationModalConfig);
+            if (typeof deps.closeAnimatedModal === 'function') {
+                deps.closeAnimatedModal(appCustomizationModal);
+            }
+        };
+
+        const appCustomizationSaveBtn = document.getElementById('appCustomizationSaveBtn');
+        const appCustomizationCancelBtn = document.getElementById('appCustomizationCancelBtn');
+
+        if (closeAppCustomizationModalBtn && appCustomizationModal) {
+            closeAppCustomizationModalBtn.addEventListener(
+                'click',
+                () => void requestCloseAppCustomization(),
+            );
+        }
+        if (appCustomizationCancelBtn && appCustomizationModal) {
+            appCustomizationCancelBtn.addEventListener(
+                'click',
+                () => void requestCloseAppCustomization(),
+            );
+        }
+        if (appCustomizationSaveBtn && appCustomizationModal) {
+            appCustomizationSaveBtn.addEventListener('click', async () => {
+                if (typeof deps.updatePreviewSettingsFromModal === 'function') {
+                    deps.updatePreviewSettingsFromModal();
+                }
+                if (typeof deps.saveUISettings === 'function') {
+                    const ok = await deps.saveUISettings();
+                    if (!ok) return;
+                    collapseModalFullscreenIfActive(
+                        'appCustomizationModal',
+                        appCustomizationModalConfig,
+                    );
+                    if (typeof deps.closeAnimatedModal === 'function') {
+                        deps.closeAnimatedModal(appCustomizationModal);
+                    }
+                }
             });
         }
         if (appCustomizationModal && !appCustomizationModal.dataset.customizationChangeAttached) {

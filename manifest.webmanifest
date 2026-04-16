@@ -1,5 +1,4 @@
 {
-    "id": "./index.html",
     "name": "Copilot 1СО 2.0",
     "short_name": "1СО Copilot",
     "description": "Локальный помощник оператора: алгоритмы, закладки, регламенты и данные клиента.",
@@ -8,7 +7,6 @@
     "start_url": "./index.html",
     "scope": "./",
     "display": "standalone",
-    "display_override": ["standalone", "minimal-ui"],
     "orientation": "any",
     "background_color": "#12121f",
     "theme_color": "#12121f",

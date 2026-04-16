@@ -59,12 +59,8 @@ export function mountTrainingRichEditor(hostEl, options = {}) {
         }
     };
 
-    toolbar.appendChild(
-        makeToolbarButton('Жирный', 'fas fa-bold', () => runCmd('bold')),
-    );
-    toolbar.appendChild(
-        makeToolbarButton('Курсив', 'fas fa-italic', () => runCmd('italic')),
-    );
+    toolbar.appendChild(makeToolbarButton('Жирный', 'fas fa-bold', () => runCmd('bold')));
+    toolbar.appendChild(makeToolbarButton('Курсив', 'fas fa-italic', () => runCmd('italic')));
     const sep1 = document.createElement('span');
     sep1.className = 'training-rich-toolbar-sep';
     sep1.setAttribute('aria-hidden', 'true');

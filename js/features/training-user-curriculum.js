@@ -6,11 +6,7 @@
  */
 
 import { TRAINING_USER_CURRICULUM_BACKUP_KEY } from '../constants.js';
-import {
-    getAllFromIndexedDB,
-    saveToIndexedDB,
-    deleteFromIndexedDB,
-} from '../db/indexeddb.js';
+import { getAllFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 
 const MAX_BODY_LEN = 50000;
 const MAX_TITLE_LEN = 500;
@@ -60,7 +56,9 @@ export function isRichTextMeaningfullyEmpty(html) {
 export function normalizeQuizItem(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const o = /** @type {Record<string, unknown>} */ (raw);
-    const question = String(o.question || '').trim().slice(0, 2000);
+    const question = String(o.question || '')
+        .trim()
+        .slice(0, 2000);
     let options = Array.isArray(o.options) ? o.options.map((x) => String(x || '').trim()) : [];
     options = options.filter(Boolean).slice(0, MAX_QUIZ_OPTIONS);
     if (!question.length || options.length < 2) return null;
@@ -77,8 +75,12 @@ export function normalizeQuizItem(raw) {
 export function normalizeUserStep(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const o = /** @type {Record<string, unknown>} */ (raw);
-    const id = String(o.id || '').trim().slice(0, 120);
-    const title = String(o.title || '').trim().slice(0, MAX_TITLE_LEN);
+    const id = String(o.id || '')
+        .trim()
+        .slice(0, 120);
+    const title = String(o.title || '')
+        .trim()
+        .slice(0, MAX_TITLE_LEN);
     if (!id || title.length < 1) return null;
     const bodyHtml = sanitizeTrainingBodyHtml(String(o.bodyHtml || ''));
     if (!bodyHtml) return null;
@@ -94,11 +96,16 @@ export function normalizeUserStep(raw) {
 export function normalizeUserTrackRecord(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const o = /** @type {Record<string, unknown>} */ (raw);
-    const id = String(o.id || '').trim().slice(0, 160);
+    const id = String(o.id || '')
+        .trim()
+        .slice(0, 160);
     if (!id || !id.startsWith('user-')) return null;
-    const title = String(o.title || '').trim().slice(0, MAX_TITLE_LEN);
+    const title = String(o.title || '')
+        .trim()
+        .slice(0, MAX_TITLE_LEN);
     if (title.length < 1) return null;
-    const subtitle = o.subtitle != null ? String(o.subtitle).trim().slice(0, MAX_SUBTITLE_LEN) : undefined;
+    const subtitle =
+        o.subtitle != null ? String(o.subtitle).trim().slice(0, MAX_SUBTITLE_LEN) : undefined;
     const stepsRaw = Array.isArray(o.steps) ? o.steps : [];
     /** @type {import('./training-curriculum.js').TrainingStep[]} */
     const steps = stepsRaw.map(normalizeUserStep).filter(Boolean);

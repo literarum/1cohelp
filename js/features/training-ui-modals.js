@@ -4,10 +4,7 @@
  * Модальные диалоги для режима «Обучение» (без window.prompt): список с поиском, формы.
  */
 
-import {
-    isRichTextMeaningfullyEmpty,
-    normalizeQuizItem,
-} from './training-user-curriculum.js';
+import { isRichTextMeaningfullyEmpty, normalizeQuizItem } from './training-user-curriculum.js';
 import { mountTrainingRichEditor } from './training-rich-editor.js';
 
 let activeOverlay = null;
@@ -98,8 +95,12 @@ export function mountTrainingModal(opts) {
             ${opts.subtitle ? `<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">${escapeModalHtml(opts.subtitle)}</p>` : ''}
         </div>
         <div class="flex items-center gap-1 shrink-0">
-            ${showUr ? `<button type="button" id="trainingModalUndoBtn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40" aria-label="Отменить" title="Отменить (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
-            <button type="button" id="trainingModalRedoBtn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40" aria-label="Вернуть" title="Вернуть (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>` : ''}
+            ${
+                showUr
+                    ? `<button type="button" id="trainingModalUndoBtn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40" aria-label="Отменить" title="Отменить (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
+            <button type="button" id="trainingModalRedoBtn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40" aria-label="Вернуть" title="Вернуть (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>`
+                    : ''
+            }
             ${showFs ? `<button type="button" id="trainingModalFsBtn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Развернуть на весь экран" title="Развернуть на весь экран"><i class="fas fa-expand" aria-hidden="true"></i></button>` : ''}
             <button type="button" class="training-modal-close p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Закрыть">
                 <i class="fas fa-times" aria-hidden="true"></i>
@@ -108,8 +109,7 @@ export function mountTrainingModal(opts) {
 
     const body = document.createElement('div');
     body.id = 'trainingUserCurriculumModalBody';
-    body.className =
-        'training-modal-body-area flex-1 min-h-0 overflow-y-auto px-5 py-4';
+    body.className = 'training-modal-body-area flex-1 min-h-0 overflow-y-auto px-5 py-4';
     body.appendChild(opts.bodyEl);
 
     const closeBtn = head.querySelector('.training-modal-close');
@@ -376,7 +376,9 @@ export function openUserCurriculumEditorModal(p) {
     titleEl.value = draft.title || '';
     subEl.value = draft.subtitle || '';
 
-    const delTrackBtn = /** @type {HTMLButtonElement | null} */ (wrap.querySelector('#uctDeleteTrack'));
+    const delTrackBtn = /** @type {HTMLButtonElement | null} */ (
+        wrap.querySelector('#uctDeleteTrack')
+    );
     if (!isBuiltin && initial?.id) {
         delTrackBtn?.classList.remove('hidden');
     }
@@ -539,11 +541,15 @@ export function openUserCurriculumEditorModal(p) {
 
     function renderQuizQuestions(quiz) {
         quizQuestionsEl.innerHTML = '';
-        const items = Array.isArray(quiz) && quiz.length ? quiz : [{ question: '', options: [], correctIndex: 0 }];
+        const items =
+            Array.isArray(quiz) && quiz.length
+                ? quiz
+                : [{ question: '', options: [], correctIndex: 0 }];
         items.forEach((item, idx) => {
             const row = document.createElement('div');
             row.setAttribute('data-uct-q', String(idx));
-            row.className = 'rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50 dark:bg-gray-900/50';
+            row.className =
+                'rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50 dark:bg-gray-900/50';
             const head = document.createElement('div');
             head.className = 'flex justify-between items-center gap-2';
             head.innerHTML = `<span class="text-xs font-medium text-gray-600 dark:text-gray-400">Вопрос ${idx + 1}</span>`;
@@ -592,7 +598,11 @@ export function openUserCurriculumEditorModal(p) {
             );
             row.addEventListener('change', (ev) => {
                 const t = ev.target;
-                if (t instanceof HTMLInputElement && t.type === 'radio' && t.hasAttribute('data-uct-qcorrect-radio')) {
+                if (
+                    t instanceof HTMLInputElement &&
+                    t.type === 'radio' &&
+                    t.hasAttribute('data-uct-qcorrect-radio')
+                ) {
                     row.setAttribute('data-uct-sel', t.value);
                 }
             });
@@ -805,7 +815,15 @@ export function openUserCurriculumEditorModal(p) {
 
     function depsNotifyMissingSteps() {
         const w = /** @type {HTMLElement} */ (wrap.querySelector('#uctSaveTrack'));
-        w?.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }], { duration: 280 });
+        w?.animate(
+            [
+                { transform: 'translateX(0)' },
+                { transform: 'translateX(-4px)' },
+                { transform: 'translateX(4px)' },
+                { transform: 'translateX(0)' },
+            ],
+            { duration: 280 },
+        );
     }
 
     hist.push(snap());
@@ -846,4 +864,3 @@ export function openUserCurriculumEditorModal(p) {
 
     renderStepList();
 }
-

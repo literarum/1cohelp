@@ -289,7 +289,10 @@ function createPanel() {
         syncToParent(panelTextarea.value);
     });
 
-    if (typeof attachInnCtrlClickToTextarea === 'function' && typeof copyToClipboard === 'function') {
+    if (
+        typeof attachInnCtrlClickToTextarea === 'function' &&
+        typeof copyToClipboard === 'function'
+    ) {
         attachInnCtrlClickToTextarea(panelTextarea, copyToClipboard, releasePanelInnPreview);
     }
 

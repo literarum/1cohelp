@@ -41,8 +41,8 @@ describe('collectCollapsedMainAlgoIndicesFromDom', () => {
         <div class="algorithm-step collapsible is-collapsed" data-main-algo-step-index="bad"></div>
       </div>`,
         );
-        expect(collectCollapsedMainAlgoIndicesFromDom(dom.window.document.querySelector('#main'))).toEqual(
-            [1],
-        );
+        expect(
+            collectCollapsedMainAlgoIndicesFromDom(dom.window.document.querySelector('#main')),
+        ).toEqual([1]);
     });
 });

@@ -41,7 +41,9 @@ describe('training-mentor-packs', () => {
     });
 
     it('parseMentorPackImport rejects without copilot1coExport', () => {
-        const r = parseMentorPackImport(JSON.stringify({ kind: MENTOR_QUIZ_EXPORT_KIND, pack: validPack }));
+        const r = parseMentorPackImport(
+            JSON.stringify({ kind: MENTOR_QUIZ_EXPORT_KIND, pack: validPack }),
+        );
         expect(r.ok).toBe(false);
     });
 

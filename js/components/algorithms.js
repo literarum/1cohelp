@@ -1342,7 +1342,10 @@ export function normalizeFormStateForDirtyCheck(state, isMain) {
             s.showNoInnHelp = Boolean(s.showNoInnHelp);
             s.phoneNumbersEnabled = Boolean(s.phoneNumbersEnabled);
             if (Array.isArray(s.phoneNumbers)) {
-                s.phoneNumbers = [...s.phoneNumbers].map(normTextForDirtyCheck).filter(Boolean).sort();
+                s.phoneNumbers = [...s.phoneNumbers]
+                    .map(normTextForDirtyCheck)
+                    .filter(Boolean)
+                    .sort();
             } else {
                 s.phoneNumbers = [];
             }
@@ -1360,9 +1363,13 @@ export function normalizeFormStateForDirtyCheck(state, isMain) {
             } else {
                 delete s.type;
             }
-            s.existingScreenshotIds = sortCommaSeparatedIdsForDirtyCheck(s.existingScreenshotIds || '');
+            s.existingScreenshotIds = sortCommaSeparatedIdsForDirtyCheck(
+                s.existingScreenshotIds || '',
+            );
             s.tempScreenshotsCount = Number(s.tempScreenshotsCount) || 0;
-            s.deletedScreenshotIds = sortCommaSeparatedIdsForDirtyCheck(s.deletedScreenshotIds || '');
+            s.deletedScreenshotIds = sortCommaSeparatedIdsForDirtyCheck(
+                s.deletedScreenshotIds || '',
+            );
             delete s.example;
         }
         out.steps.push(s);
@@ -1463,7 +1470,9 @@ export function hasChanges(modalType) {
         console.log('Initial State:', JSON.stringify(normalizedInitial, null, 2));
         console.log('Current State:', JSON.stringify(normalizedCurrent, null, 2));
     } else {
-        console.log(`hasChanges (${modalType}): Изменения НЕ обнаружены (нормализованное сравнение).`);
+        console.log(
+            `hasChanges (${modalType}): Изменения НЕ обнаружены (нормализованное сравнение).`,
+        );
     }
 
     return changed;

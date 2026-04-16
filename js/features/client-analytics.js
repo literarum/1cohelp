@@ -21,7 +21,11 @@ import {
     SECTION_GRID_COLS,
 } from '../config.js';
 import { escapeHtml } from '../utils/html.js';
-import { activateModalFocus, deactivateModalFocus, getVisibleModals } from '../ui/modals-manager.js';
+import {
+    activateModalFocus,
+    deactivateModalFocus,
+    getVisibleModals,
+} from '../ui/modals-manager.js';
 import {
     buildMaxBlacklistLevelByInnMap,
     getBlacklistLevelForClientInn,
@@ -206,9 +210,7 @@ function buildClientAnalyticsMetaChipsHtml(meta, foldersById, tagsById) {
     const m = normalizeClientAnalyticsCardMeta(meta);
     if (m.folderId != null && foldersById.has(m.folderId)) {
         const name = String(foldersById.get(m.folderId).name || 'Папка');
-        parts.push(
-            `<span class="ca-meta-chip ca-meta-chip--folder">${escapeHtml(name)}</span>`,
-        );
+        parts.push(`<span class="ca-meta-chip ca-meta-chip--folder">${escapeHtml(name)}</span>`);
     }
     for (const tid of m.tagIds || []) {
         if (!tagsById.has(tid)) continue;
@@ -251,16 +253,19 @@ function normalizeClientAnalyticsOrgViewPref(pref) {
     if (typeof groupRaw === 'string' && allowedGroup.has(groupRaw)) {
         base.groupMode = /** @type {CaGroupMode} */ (groupRaw);
     }
-    if (pref.folderFilter === CA_FOLDER_FILTER_ALL || pref.folderFilter === CA_FOLDER_FILTER_UNFILED) {
+    if (
+        pref.folderFilter === CA_FOLDER_FILTER_ALL ||
+        pref.folderFilter === CA_FOLDER_FILTER_UNFILED
+    ) {
         base.folderFilter = pref.folderFilter;
     } else if (pref.folderFilter != null && Number.isFinite(Number(pref.folderFilter))) {
         base.folderFilter = String(Number(pref.folderFilter));
     }
     const tf = pref.tagFilterIds;
     if (Array.isArray(tf)) {
-        base.tagFilterIds = [...new Set(tf.map((n) => Number(n)).filter((n) => Number.isFinite(n)))].sort(
-            (a, b) => a - b,
-        );
+        base.tagFilterIds = [
+            ...new Set(tf.map((n) => Number(n)).filter((n) => Number.isFinite(n))),
+        ].sort((a, b) => a - b);
     }
     return base;
 }
@@ -333,7 +338,11 @@ async function persistClientAnalyticsCardMeta(metaId, meta) {
     const row = { id: metaId, folderId: normalized.folderId, tagIds: normalized.tagIds };
     await saveToIndexedDB('clientAnalyticsCardMeta', row);
     const read = await getFromIndexedDB('clientAnalyticsCardMeta', metaId);
-    if (!read || read.folderId !== row.folderId || JSON.stringify(read.tagIds) !== JSON.stringify(row.tagIds)) {
+    if (
+        !read ||
+        read.folderId !== row.folderId ||
+        JSON.stringify(read.tagIds) !== JSON.stringify(row.tagIds)
+    ) {
         console.warn('[client-analytics] перепроверка clientAnalyticsCardMeta не совпала', metaId);
     }
 }
@@ -349,7 +358,10 @@ async function deleteClientAnalyticsFolderCascade(folderId) {
         if (!row || row.id == null) continue;
         const m = normalizeClientAnalyticsCardMeta(row);
         if (m.folderId === id) {
-            await persistClientAnalyticsCardMeta(String(row.id), { folderId: null, tagIds: m.tagIds });
+            await persistClientAnalyticsCardMeta(String(row.id), {
+                folderId: null,
+                tagIds: m.tagIds,
+            });
         }
     }
     await deleteFromIndexedDB('clientAnalyticsFolders', id);
@@ -367,7 +379,10 @@ async function deleteClientAnalyticsTagCascade(tagId) {
         const m = normalizeClientAnalyticsCardMeta(row);
         if (!m.tagIds.includes(id)) continue;
         const next = m.tagIds.filter((t) => t !== id);
-        await persistClientAnalyticsCardMeta(String(row.id), { folderId: m.folderId, tagIds: next });
+        await persistClientAnalyticsCardMeta(String(row.id), {
+            folderId: m.folderId,
+            tagIds: next,
+        });
     }
     await deleteFromIndexedDB('clientAnalyticsTags', id);
 }
@@ -466,7 +481,9 @@ export function buildClientAnalyticsStructureSignature(parsedRecords) {
         kpp: String(record?.kpp || '').trim(),
         phones: [...new Set(Array.isArray(record?.phones) ? record.phones.map(String) : [])].sort(),
         emails: [...new Set(Array.isArray(record?.emails) ? record.emails.map(String) : [])].sort(),
-        question: String(record?.question || '').replace(/\s+/g, ' ').trim(),
+        question: String(record?.question || '')
+            .replace(/\s+/g, ' ')
+            .trim(),
         confidence: String(record?.confidence || 'medium'),
         listItemIndex:
             record?.listItemIndex != null && Number.isFinite(record.listItemIndex)
@@ -483,14 +500,23 @@ export function buildClientAnalyticsStructureSignature(parsedRecords) {
 
 export function decideClientAnalyticsDuplicateReason(candidate, existingFiles) {
     const files = Array.isArray(existingFiles) ? existingFiles : [];
-    const normalizedName = String(candidate?.name || '').trim().toLowerCase();
+    const normalizedName = String(candidate?.name || '')
+        .trim()
+        .toLowerCase();
     if (!normalizedName) return null;
 
-    const byName = files.find((file) => String(file?.fileName || '').trim().toLowerCase() === normalizedName);
+    const byName = files.find(
+        (file) =>
+            String(file?.fileName || '')
+                .trim()
+                .toLowerCase() === normalizedName,
+    );
     if (byName) return { kind: 'name', fileName: byName.fileName || '' };
 
     if (candidate?.textSha256) {
-        const byContent = files.find((file) => file?.textSha256 && file.textSha256 === candidate.textSha256);
+        const byContent = files.find(
+            (file) => file?.textSha256 && file.textSha256 === candidate.textSha256,
+        );
         if (byContent) return { kind: 'content', fileName: byContent.fileName || '' };
     }
 
@@ -655,13 +681,7 @@ async function deleteRecordsForFile(sourceFileId) {
     const toDel = all.filter((r) => r && r.sourceFileId === sourceFileId);
     for (const rec of toDel) {
         if (deps.updateSearchIndex) {
-            await deps.updateSearchIndex(
-                'clientAnalyticsRecords',
-                rec.id,
-                null,
-                'delete',
-                rec,
-            );
+            await deps.updateSearchIndex('clientAnalyticsRecords', rec.id, null, 'delete', rec);
         }
         await deleteFromIndexedDB('clientAnalyticsRecords', rec.id);
     }
@@ -804,13 +824,7 @@ export async function ingestTxtFile(file, opts = {}) {
             const rid = await saveToIndexedDB('clientAnalyticsRecords', rec);
             const again = await getFromIndexedDB('clientAnalyticsRecords', rid);
             if (again && deps.updateSearchIndex) {
-                await deps.updateSearchIndex(
-                    'clientAnalyticsRecords',
-                    rid,
-                    again,
-                    'add',
-                    null,
-                );
+                await deps.updateSearchIndex('clientAnalyticsRecords', rid, again, 'add', null);
             }
             recordCount++;
         }
@@ -986,11 +1000,9 @@ const CA_LIST_DELETE_BTN_CLASS = [
  */
 function frogBlacklistBadgeHtml(level) {
     const { short } = frogBadgeLabelsForLevel(level);
-    let badgeCls =
-        'bg-green-100 text-green-800 dark:bg-green-800/80 dark:text-green-200';
+    let badgeCls = 'bg-green-100 text-green-800 dark:bg-green-800/80 dark:text-green-200';
     if (level === 2) {
-        badgeCls =
-            'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/80 dark:text-yellow-200';
+        badgeCls = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/80 dark:text-yellow-200';
     }
     if (level === 3) {
         badgeCls = 'bg-red-100 text-red-800 dark:bg-red-800/80 dark:text-red-200';
@@ -1039,10 +1051,7 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null) 
         titlePlain = 'Запись';
     }
     if (bl > 0) {
-        el.setAttribute(
-            'aria-label',
-            `${titlePlain}. ${frogBadgeLabelsForLevel(bl).aria}.`,
-        );
+        el.setAttribute('aria-label', `${titlePlain}. ${frogBadgeLabelsForLevel(bl).aria}.`);
     }
     const frogBadge =
         bl > 0 && rec.inn
@@ -1052,12 +1061,8 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null) 
             : bl > 0
               ? frogBlacklistBadgeHtml(bl)
               : '';
-    const phones = (rec.phones || []).length
-        ? escapeHtml(rec.phones.join(', '))
-        : '—';
-    const emails = (rec.emails || []).length
-        ? escapeHtml(rec.emails.join(', '))
-        : '—';
+    const phones = (rec.phones || []).length ? escapeHtml(rec.phones.join(', ')) : '—';
+    const emails = (rec.emails || []).length ? escapeHtml(rec.emails.join(', ')) : '—';
     const q = escapeHtml((rec.question || '').slice(0, 280));
     const fn = escapeHtml(rec.sourceFileName || '');
     const orgBtn =
@@ -1166,7 +1171,10 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
             `${titlePlain}. ${pluralRuAppeals(n)}. ${frogBadgeLabelsForLevel(bl).aria}.`,
         );
     } else {
-        el.setAttribute('aria-label', `${titlePlain}. ${pluralRuAppeals(n)}. Открыть историю обращений.`);
+        el.setAttribute(
+            'aria-label',
+            `${titlePlain}. ${pluralRuAppeals(n)}. Открыть историю обращений.`,
+        );
     }
     const frogBadge =
         bl > 0 && stack.innKey
@@ -1265,7 +1273,10 @@ export async function renderClientAnalyticsPage() {
             const blEntries = await getAllFromIndexedDB('blacklistedClients');
             blacklistLevelByInn = buildMaxBlacklistLevelByInnMap(blEntries);
         } catch (err) {
-            console.warn('[client-analytics] не удалось загрузить чёрный список для перекрёстной сверки', err);
+            console.warn(
+                '[client-analytics] не удалось загрузить чёрный список для перекрёстной сверки',
+                err,
+            );
         }
     }
     const sorted = records
@@ -1280,11 +1291,15 @@ export async function renderClientAnalyticsPage() {
     const groupedAll = groupClientAnalyticsRecordsForDisplay(sorted);
     const groupedFiltered = groupClientAnalyticsRecordsForDisplay(filtered);
     const cardCountAll = groupedAll.innStacks.length + groupedAll.noInnRecords.length;
-    const cardCountFiltered = groupedFiltered.innStacks.length + groupedFiltered.noInnRecords.length;
+    const cardCountFiltered =
+        groupedFiltered.innStacks.length + groupedFiltered.noInnRecords.length;
     let orgState = {
         folders: [],
         tags: [],
-        metaById: /** @type {Map<string, import('./client-analytics-organization.js').CaCardMeta>} */ (new Map()),
+        metaById:
+            /** @type {Map<string, import('./client-analytics-organization.js').CaCardMeta>} */ (
+                new Map()
+            ),
         foldersById: new Map(),
         tagsById: new Map(),
         view: normalizeClientAnalyticsOrgViewPref(null),
@@ -1299,7 +1314,8 @@ export async function renderClientAnalyticsPage() {
     const countEl = document.getElementById('clientAnalyticsRecordCount');
     if (countEl) {
         const filterSuffix =
-            orgState.view.folderFilter !== CA_FOLDER_FILTER_ALL || (orgState.view.tagFilterIds || []).length
+            orgState.view.folderFilter !== CA_FOLDER_FILTER_ALL ||
+            (orgState.view.tagFilterIds || []).length
                 ? ' · фильтр'
                 : '';
         countEl.textContent =
@@ -1371,7 +1387,10 @@ export async function renderClientAnalyticsPage() {
                 }
                 for (const u of sec.units) {
                     if (u.type === 'inn') {
-                        const blLevel = getBlacklistLevelForClientInn(u.innKey, blacklistLevelByInn);
+                        const blLevel = getBlacklistLevelForClientInn(
+                            u.innKey,
+                            blacklistLevelByInn,
+                        );
                         frag.appendChild(
                             createInnStackCardElement(
                                 { innKey: u.innKey, records: u.records },
@@ -1381,9 +1400,17 @@ export async function renderClientAnalyticsPage() {
                             ),
                         );
                     } else {
-                        const blLevel = getBlacklistLevelForClientInn(u.record.inn, blacklistLevelByInn);
+                        const blLevel = getBlacklistLevelForClientInn(
+                            u.record.inn,
+                            blacklistLevelByInn,
+                        );
                         frag.appendChild(
-                            createRecordCardElement(u.record, viewMode, blLevel, orgPayloadForUnit(u)),
+                            createRecordCardElement(
+                                u.record,
+                                viewMode,
+                                blLevel,
+                                orgPayloadForUnit(u),
+                            ),
                         );
                     }
                 }
@@ -1447,7 +1474,9 @@ export async function showClientAnalyticsInnHistoryModal(innKey) {
     const all = await getAllFromIndexedDB('clientAnalyticsRecords');
     const stack = all
         .filter((r) => r && r.id != null && normalizeInnForBlacklistLookup(r.inn) === key)
-        .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
+        .sort(
+            (a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime(),
+        );
     if (!stack.length) return;
 
     deactivateModalFocus(modal);
@@ -1559,7 +1588,8 @@ ${frogBannerHtml}
 export async function navigateToBlacklistByInn(inn, options = {}) {
     const key = normalizeInnForBlacklistLookup(inn);
     if (!key) return false;
-    const setTab = options.setActiveTabFn || (typeof window !== 'undefined' ? window.setActiveTab : null);
+    const setTab =
+        options.setActiveTabFn || (typeof window !== 'undefined' ? window.setActiveTab : null);
     if (typeof setTab === 'function') {
         await Promise.resolve(
             setTab('blacklistedClients', true, {
@@ -1863,7 +1893,11 @@ export function initClientAnalyticsUi() {
     _handlersBound = true;
 
     const filesListForResize = document.getElementById('clientAnalyticsFilesList');
-    if (filesListForResize && typeof ResizeObserver !== 'undefined' && !filesListForResize._caResizeBound) {
+    if (
+        filesListForResize &&
+        typeof ResizeObserver !== 'undefined' &&
+        !filesListForResize._caResizeBound
+    ) {
         filesListForResize._caResizeBound = true;
         const ro = new ResizeObserver(() => {
             const sec = document.getElementById('clientAnalyticsFilesSection');
@@ -1918,9 +1952,11 @@ export function initClientAnalyticsUi() {
                 a.download = `client-analytics-export-${new Date().toISOString().slice(0, 10)}.json`;
                 a.click();
                 URL.revokeObjectURL(a.href);
-                if (deps.showNotification) deps.showNotification('Экспорт раздела сохранён', 'success');
+                if (deps.showNotification)
+                    deps.showNotification('Экспорт раздела сохранён', 'success');
             } catch (err) {
-                if (deps.showNotification) deps.showNotification(String(err?.message || err), 'error');
+                if (deps.showNotification)
+                    deps.showNotification(String(err?.message || err), 'error');
             }
         });
     }
@@ -2044,7 +2080,8 @@ export function initClientAnalyticsUi() {
             const fid = parseInt(delFile.dataset.fileId, 10);
             (async () => {
                 await deleteAnalyticsFile(fid);
-                if (deps.showNotification) deps.showNotification('Файл и связанные записи удалены', 'info');
+                if (deps.showNotification)
+                    deps.showNotification('Файл и связанные записи удалены', 'info');
                 await renderClientAnalyticsPage();
             })();
         }
@@ -2062,7 +2099,10 @@ export function initClientAnalyticsUi() {
         searchInput.addEventListener('input', async () => {
             clientAnalyticsSearchQuery = searchInput.value || '';
             if (clearSearchBtn) {
-                clearSearchBtn.classList.toggle('hidden', clientAnalyticsSearchQuery.trim().length === 0);
+                clearSearchBtn.classList.toggle(
+                    'hidden',
+                    clientAnalyticsSearchQuery.trim().length === 0,
+                );
             }
             await renderClientAnalyticsPage();
         });
@@ -2198,12 +2238,14 @@ export function initClientAnalyticsUi() {
                     folderId,
                     tagIds,
                 });
-                if (deps.showNotification) deps.showNotification('Папка и теги сохранены', 'success');
+                if (deps.showNotification)
+                    deps.showNotification('Папка и теги сохранены', 'success');
                 closeClientAnalyticsAssignModal();
                 await renderClientAnalyticsPage();
             } catch (err) {
                 console.error(err);
-                if (deps.showNotification) deps.showNotification(String(err?.message || err), 'error');
+                if (deps.showNotification)
+                    deps.showNotification(String(err?.message || err), 'error');
             }
         });
     }
@@ -2221,7 +2263,8 @@ export function initClientAnalyticsUi() {
             const inp = document.getElementById('clientAnalyticsNewFolderName');
             const name = String(inp?.value || '').trim();
             if (!name) {
-                if (deps.showNotification) deps.showNotification('Введите название папки', 'warning');
+                if (deps.showNotification)
+                    deps.showNotification('Введите название папки', 'warning');
                 return;
             }
             const all = await getAllFromIndexedDB('clientAnalyticsFolders');
@@ -2249,7 +2292,8 @@ export function initClientAnalyticsUi() {
             const colorInp = document.getElementById('clientAnalyticsNewTagColor');
             const name = String(inp?.value || '').trim();
             if (!name) {
-                if (deps.showNotification) deps.showNotification('Введите название тега', 'warning');
+                if (deps.showNotification)
+                    deps.showNotification('Введите название тега', 'warning');
                 return;
             }
             const colorRaw = colorInp && 'value' in colorInp ? colorInp.value : '';

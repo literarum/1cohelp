@@ -7,12 +7,7 @@
 
 import { State } from '../app/state.js';
 import { getFromIndexedDB } from '../db/indexeddb.js';
-import {
-    popRedo,
-    popUndo,
-    pushUndoAfterSave,
-    snapshotsEqual,
-} from './entity-edit-history-core.js';
+import { popRedo, popUndo, pushUndoAfterSave, snapshotsEqual } from './entity-edit-history-core.js';
 import {
     deleteScreenshotRecordsNotInTarget,
     readScreenshotRecordsByIds,

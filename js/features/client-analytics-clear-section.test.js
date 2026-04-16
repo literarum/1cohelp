@@ -61,7 +61,9 @@ describe('client-analytics clear section', () => {
         expect(inventory.clientAnalyticsCardMeta).toHaveLength(0);
         expect(inventory.preferences.some((p) => p.id === 'clientAnalyticsOrgView')).toBe(false);
         expect(updateSearchIndex).toHaveBeenCalled();
-        expect(updateSearchIndex.mock.calls.every((c) => c[0] === 'clientAnalyticsRecords')).toBe(true);
+        expect(updateSearchIndex.mock.calls.every((c) => c[0] === 'clientAnalyticsRecords')).toBe(
+            true,
+        );
     });
 
     it('importClientAnalyticsSection reuses purge (empty import leaves stores empty)', async () => {

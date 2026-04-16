@@ -55,6 +55,7 @@ function inferOnboardingAutoPromptConsumed(prefs, defaults) {
     if (ext.length > 0) return true;
     if (prefs.welcomeTextShownInitially === true) return true;
     if (prefs.disableForcedBackupOnImport === true) return true;
+    if (prefs.disableForcedBackupOnDbMerge === true) return true;
     if (prefs.staticHeader === true) return true;
     if (prefs.showBlacklistUsageWarning === false) return true;
     if (typeof prefs.fontSize === 'number' && prefs.fontSize !== (defaults.fontSize ?? 80)) {
@@ -128,6 +129,7 @@ export async function loadUserPreferences() {
         panelVisibility: defaultPanelOrder.map((id) => isPanelVisibleByDefault(id)),
         showBlacklistUsageWarning: true,
         disableForcedBackupOnImport: false,
+        disableForcedBackupOnDbMerge: false,
         staticHeader: false,
         welcomeTextShownInitially: false,
         onboardingTourCompleted: false,
@@ -148,7 +150,9 @@ export async function loadUserPreferences() {
         );
         if (State) {
             State.userPreferences = { ...defaultPreferences };
-            State.userPreferences.borderRadius = clampBorderRadiusPx(State.userPreferences.borderRadius);
+            State.userPreferences.borderRadius = clampBorderRadiusPx(
+                State.userPreferences.borderRadius,
+            );
         }
         return;
     }
@@ -277,7 +281,9 @@ export async function loadUserPreferences() {
         console.error(`${LOG_PREFIX} Ошибка при загрузке/миграции настроек:`, error);
         if (State) {
             State.userPreferences = { ...defaultPreferences };
-            State.userPreferences.borderRadius = clampBorderRadiusPx(State.userPreferences.borderRadius);
+            State.userPreferences.borderRadius = clampBorderRadiusPx(
+                State.userPreferences.borderRadius,
+            );
         }
     }
 }
@@ -308,6 +314,7 @@ export async function saveUserPreferences() {
             'panelVisibility',
             'showBlacklistUsageWarning',
             'disableForcedBackupOnImport',
+            'disableForcedBackupOnDbMerge',
             'staticHeader',
             'welcomeTextShownInitially',
             'onboardingTourCompleted',
@@ -321,6 +328,7 @@ export async function saveUserPreferences() {
         const booleanPreferenceFields = new Set([
             'showBlacklistUsageWarning',
             'disableForcedBackupOnImport',
+            'disableForcedBackupOnDbMerge',
             'staticHeader',
             'welcomeTextShownInitially',
             'onboardingTourCompleted',
@@ -352,7 +360,9 @@ export async function saveUserPreferences() {
             }
         });
 
-        State.userPreferences.borderRadius = clampBorderRadiusPx(State.userPreferences.borderRadius);
+        State.userPreferences.borderRadius = clampBorderRadiusPx(
+            State.userPreferences.borderRadius,
+        );
 
         const dataToSave = {
             id: USER_PREFERENCES_KEY,

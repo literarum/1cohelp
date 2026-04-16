@@ -208,10 +208,7 @@ export async function renderFavoritesPage() {
 
     favoritesToRender = await Promise.all(
         favoritesToRender.map(async (fav) => {
-            if (
-                (fav.itemType === 'bookmark' || fav.itemType === 'bookmark_note') &&
-                !fav.itemUrl
-            ) {
+            if ((fav.itemType === 'bookmark' || fav.itemType === 'bookmark_note') && !fav.itemUrl) {
                 try {
                     const bid = parseInt(fav.originalItemId, 10);
                     if (!Number.isNaN(bid)) {
@@ -222,7 +219,10 @@ export async function renderFavoritesPage() {
                         }
                     }
                 } catch (enrichErr) {
-                    console.warn('[Favorites] Не удалось подставить URL закладки из БД:', enrichErr);
+                    console.warn(
+                        '[Favorites] Не удалось подставить URL закладки из БД:',
+                        enrichErr,
+                    );
                 }
             }
             return fav;
@@ -421,9 +421,10 @@ export function getFavoriteButtonHTML(
     const safeOriginalItemSection = (
         typeof originalItemSection === 'string' ? escapeHtml(originalItemSection) : ''
     ).replace(/"/g, '&quot;');
-    const safeItemUrl = (
-        typeof itemUrl === 'string' ? escapeHtml(itemUrl) : ''
-    ).replace(/"/g, '&quot;');
+    const safeItemUrl = (typeof itemUrl === 'string' ? escapeHtml(itemUrl) : '').replace(
+        /"/g,
+        '&quot;',
+    );
 
     const btnClass =
         uiVariant === 'bookmark-list'
@@ -436,17 +437,18 @@ export function getFavoriteButtonHTML(
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                     'transition-colors',
                 ].join(' ')
-            : uiVariant === 'modal-header'
-              ? [
-                    'toggle-favorite-btn inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl',
-                    'text-gray-500 hover:text-yellow-500 hover:bg-gray-100',
-                    'dark:text-gray-400 dark:hover:text-yellow-300 dark:hover:bg-gray-700',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-                    'transition-colors',
-                ].join(' ')
-              : BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS;
+              : uiVariant === 'modal-header'
+                ? [
+                      'toggle-favorite-btn inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl',
+                      'text-gray-500 hover:text-yellow-500 hover:bg-gray-100',
+                      'dark:text-gray-400 dark:hover:text-yellow-300 dark:hover:bg-gray-700',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                      'transition-colors',
+                  ].join(' ')
+                : BOOKMARK_CARD_FAVORITE_TOGGLE_CLASS;
 
-    const iconSizeClass = uiVariant === 'algorithm-modal-toolbar' ? 'text-base leading-none' : 'text-sm';
+    const iconSizeClass =
+        uiVariant === 'algorithm-modal-toolbar' ? 'text-base leading-none' : 'text-sm';
 
     return `
         <button class="${btnClass}"
@@ -794,7 +796,15 @@ export async function handleFavoriteActionClick(event) {
     console.log(
         `Favorite button clicked (Capturing Phase Logic Active): ID=${originalItemId}, Type=${itemType}, Section=${originalItemSection}`,
     );
-    await toggleFavorite(originalItemId, itemType, originalItemSection, title, description, button, itemUrl);
+    await toggleFavorite(
+        originalItemId,
+        itemType,
+        originalItemSection,
+        title,
+        description,
+        button,
+        itemUrl,
+    );
 }
 
 /**

@@ -92,7 +92,9 @@ describe('client-analytics-parse', () => {
         expect(rows[0].kpp).toBe('770701001');
         expect(rows[0].listItemIndex).toBe(1);
         expect(rows[1].inn).toBe('');
-        expect(rows[1].phones.some((p) => p.endsWith('9037778899') || p === '79037778899')).toBe(true);
+        expect(rows[1].phones.some((p) => p.endsWith('9037778899') || p === '79037778899')).toBe(
+            true,
+        );
         expect(rows[1].listItemIndex).toBe(2);
         expect(rows[2].inn).toBe('7707083893');
         expect(rows[2].listItemIndex).toBe(3);

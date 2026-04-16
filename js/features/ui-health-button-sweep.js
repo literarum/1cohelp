@@ -202,7 +202,9 @@ export async function runFullButtonHealthSweep(deps, report, runWithTimeout, opt
         typeof runWithTimeout === 'function' ? runWithTimeout(promise, ms) : promise;
 
     const initialTab =
-        (deps.State && typeof deps.State.currentSection === 'string' && deps.State.currentSection) ||
+        (deps.State &&
+            typeof deps.State.currentSection === 'string' &&
+            deps.State.currentSection) ||
         (typeof localStorage !== 'undefined' && localStorage.getItem('lastActiveTabCopilot1CO')) ||
         'main';
 
@@ -348,7 +350,11 @@ export async function runFullButtonHealthSweep(deps, report, runWithTimeout, opt
                 try {
                     await runB(Promise.resolve(deps.setActiveTab(tabId, true)), 20000);
                 } catch (err) {
-                    r('warn', `Поверхность UI / кнопки / вкладка ${tabId}`, err?.message || String(err));
+                    r(
+                        'warn',
+                        `Поверхность UI / кнопки / вкладка ${tabId}`,
+                        err?.message || String(err),
+                    );
                     continue;
                 }
                 await sleep(SLEEP_AFTER_TAB_MS);
@@ -379,11 +385,7 @@ export async function runFullButtonHealthSweep(deps, report, runWithTimeout, opt
         if (nameWarnings.length) {
             const s = nameWarnings.slice(0, 20).join('; ');
             const more = nameWarnings.length > 20 ? ` … (+${nameWarnings.length - 20})` : '';
-            r(
-                'warn',
-                'Поверхность UI / кнопки (a11y имя)',
-                `Нет доступного имени: ${s}${more}`,
-            );
+            r('warn', 'Поверхность UI / кнопки (a11y имя)', `Нет доступного имени: ${s}${more}`);
         }
 
         if (layoutWarnings.length) {

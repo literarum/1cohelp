@@ -8,10 +8,12 @@ import {
     getApplicationHealthStateForExport,
     clientDataHealthProbeRecordsMatch,
 } from './application-health-state.js';
+import { clearRuntimeHubBuffer, ingestRuntimeHubIssue } from './runtime-issue-hub.js';
 
 describe('application-health-state', () => {
     beforeEach(() => {
         resetApplicationHealthStateForTests();
+        clearRuntimeHubBuffer();
     });
 
     it('records startup and exposes export snapshot', () => {
@@ -72,16 +74,10 @@ describe('application-health-state', () => {
 
     it('clientDataHealthProbeRecordsMatch compares id and notes', () => {
         expect(
-            clientDataHealthProbeRecordsMatch(
-                { id: 'x', notes: 'a' },
-                { id: 'x', notes: 'a' },
-            ),
+            clientDataHealthProbeRecordsMatch({ id: 'x', notes: 'a' }, { id: 'x', notes: 'a' }),
         ).toBe(true);
         expect(
-            clientDataHealthProbeRecordsMatch(
-                { id: 'x', notes: 'a' },
-                { id: 'x', notes: 'b' },
-            ),
+            clientDataHealthProbeRecordsMatch({ id: 'x', notes: 'a' }, { id: 'x', notes: 'b' }),
         ).toBe(false);
     });
 
@@ -154,5 +150,15 @@ describe('application-health-state', () => {
         });
         const exp = getApplicationHealthStateForExport();
         expect(exp.crossCheckNotes.some((n) => /Тройной контур/.test(n))).toBe(true);
+    });
+
+    it('emits cross-check when live runtime hub shows many repeats of the same fault fingerprint', () => {
+        for (let i = 0; i < 10; i += 1) {
+            ingestRuntimeHubIssue('burst', 'identical failure text');
+        }
+        const exp = getApplicationHealthStateForExport();
+        expect(exp.crossCheckNotes.some((n) => /отпечатк/i.test(n) && /повтор/i.test(n))).toBe(
+            true,
+        );
     });
 });

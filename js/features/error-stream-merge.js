@@ -28,7 +28,7 @@ export function formatCockpitErrorLine(entry) {
 }
 
 /**
- * @param {{ tsIso: string, source: string, title: string, message: string }[]} hubEntries
+ * @param {{ tsIso: string, source: string, title: string, message: string, fingerprint?: string, category?: string, severity?: string, sessionOccurrence?: number }[]} hubEntries
  * @param {{ ts: string, source: string, message: string, extra?: unknown }[]} cockpitEntries
  * @returns {string}
  */

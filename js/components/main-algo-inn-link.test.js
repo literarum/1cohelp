@@ -21,9 +21,9 @@ describe('main-algo-inn-link', () => {
                 description: 'Уточните ИНН организации',
             }),
         ).toBe(false);
-        expect(isLikelyInnClarificationStep({ title: 'Уточнение ИНН', description: 'Уточните ИНН' })).toBe(
-            true,
-        );
+        expect(
+            isLikelyInnClarificationStep({ title: 'Уточнение ИНН', description: 'Уточните ИНН' }),
+        ).toBe(true);
     });
 
     it('stepNeedsNoInnHelpLink: без флагов — эвристика для старых данных', () => {

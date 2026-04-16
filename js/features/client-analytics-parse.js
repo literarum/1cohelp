@@ -82,8 +82,7 @@ export function normalizeRussianPhone(raw) {
  */
 export function extractEmailCandidates(text) {
     if (!text || typeof text !== 'string') return [];
-    const re =
-        /\b[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
+    const re = /\b[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
     const out = [];
     const seen = new Set();
     let m;
@@ -235,7 +234,10 @@ export function extractQuestionHeuristic(segment) {
     for (const mk of markers) {
         const idx = lower.indexOf(mk);
         if (idx !== -1) {
-            const slice = segment.slice(idx, idx + 1500).replace(/\s+/g, ' ').trim();
+            const slice = segment
+                .slice(idx, idx + 1500)
+                .replace(/\s+/g, ' ')
+                .trim();
             return slice;
         }
     }
@@ -365,7 +367,10 @@ export function extractQuestionFromAppealBody(text, inn, kpp, phones) {
     }
     if (kpp) {
         const kppEsc = kpp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        joined = joined.replace(new RegExp(`\\b${kppEsc}\\b`, 'g'), ' ').replace(/\s+/g, ' ').trim();
+        joined = joined
+            .replace(new RegExp(`\\b${kppEsc}\\b`, 'g'), ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
     for (const p of phones || []) {
         const pe = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -423,8 +428,7 @@ export function parseNumberedAppealBlock(blockText) {
     else if (kpp) confidence = 'medium';
 
     let question =
-        extractQuestionFromAppealBody(body, inn, kpp, phones) ||
-        extractQuestionHeuristic(body);
+        extractQuestionFromAppealBody(body, inn, kpp, phones) || extractQuestionHeuristic(body);
     question = normalizeQuestionAfterParse(question, inn);
 
     const centerIdx = primary ? primary.index : 0;

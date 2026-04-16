@@ -417,7 +417,9 @@ function applyPdfThemeStyling({ section, addToolbar, shell, ul }) {
     const isDark = isDarkThemeEnabled(section);
 
     if (addToolbar) {
-        addToolbar.style.borderColor = isDark ? 'rgba(55, 65, 81, 0.7)' : 'rgba(209, 213, 219, 0.8)';
+        addToolbar.style.borderColor = isDark
+            ? 'rgba(55, 65, 81, 0.7)'
+            : 'rgba(209, 213, 219, 0.8)';
     }
 
     if (shell) {
@@ -443,7 +445,9 @@ function applyPdfThemeStyling({ section, addToolbar, shell, ul }) {
 }
 
 function normalizePdfFilename(nextName, fallbackName) {
-    const raw = String(nextName || '').trim().replace(/\s+/g, ' ');
+    const raw = String(nextName || '')
+        .trim()
+        .replace(/\s+/g, ' ');
     if (!raw) return String(fallbackName || 'file.pdf');
     return raw.slice(0, 180);
 }
@@ -614,18 +618,14 @@ export function mountAttachmentAbsentParagraph(container, leadLabel, onActivate)
     if (!container) return;
     container.innerHTML = '';
     const p = document.createElement('p');
-    p.className =
-        'text-sm leading-relaxed text-gray-800 dark:text-gray-400 py-2 px-0.5';
+    p.className = 'text-sm leading-relaxed text-gray-800 dark:text-gray-400 py-2 px-0.5';
     p.appendChild(document.createTextNode(`${leadLabel} `));
     const a = document.createElement('a');
     a.href = '#';
     a.className =
         'attachment-empty-add-link text-primary underline decoration-primary underline-offset-2 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-sm';
     a.textContent = 'отсутствуют';
-    a.setAttribute(
-        'aria-label',
-        `${leadLabel}: открыть редактирование, чтобы добавить вложения`,
-    );
+    a.setAttribute('aria-label', `${leadLabel}: открыть редактирование, чтобы добавить вложения`);
     a.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -729,7 +729,9 @@ async function refreshPdfList(section, parentType, parentId) {
         }
 
         const displayName =
-            typeof pdf?.filename === 'string' && pdf.filename.trim() ? pdf.filename.trim() : 'file.pdf';
+            typeof pdf?.filename === 'string' && pdf.filename.trim()
+                ? pdf.filename.trim()
+                : 'file.pdf';
         const sizeLabel = formatPdfSize(pdf?.size || (pdf?.blob && pdf.blob.size) || 0);
         const iconWrap = document.createElement('div');
         iconWrap.className =
@@ -1019,14 +1021,20 @@ function tryAttachToAlgorithmModal() {
  */
 
 function attachPendingPdfRenameCommitOnModalSavePointerDown() {
-    if (typeof document === 'undefined' || document.documentElement.dataset.pdfSavePointerFlush === '1')
+    if (
+        typeof document === 'undefined' ||
+        document.documentElement.dataset.pdfSavePointerFlush === '1'
+    )
         return;
     document.documentElement.dataset.pdfSavePointerFlush = '1';
     const flushFromModal = (modal) => {
         if (!modal?.querySelectorAll) return;
         modal.querySelectorAll('.pdf-attachments-section li').forEach((li) => {
             const wrap = li.querySelector('.pdf-name-edit-wrap');
-            if (wrap?.classList.contains('flex') && typeof li._pdfCommitPendingRename === 'function') {
+            if (
+                wrap?.classList.contains('flex') &&
+                typeof li._pdfCommitPendingRename === 'function'
+            ) {
                 void li._pdfCommitPendingRename();
             }
         });
@@ -1172,7 +1180,9 @@ export function attachBookmarkPdfHandlers(form) {
                 'flex items-center gap-3 px-3 py-3 sm:px-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/25';
 
             const displayName =
-                typeof file?.name === 'string' && file.name.trim() ? file.name.trim() : `PDF ${idx + 1}`;
+                typeof file?.name === 'string' && file.name.trim()
+                    ? file.name.trim()
+                    : `PDF ${idx + 1}`;
             const sizeLabel = formatPdfSize(file.size || 0);
 
             const iconWrap = document.createElement('div');

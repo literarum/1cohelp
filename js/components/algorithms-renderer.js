@@ -123,7 +123,10 @@ export async function showAlgorithmDetail(algorithm, section) {
                 );
             }
         }
-        if (exportButtonContainer && !exportButtonContainer.querySelector('#exportAlgorithmToPdfBtn')) {
+        if (
+            exportButtonContainer &&
+            !exportButtonContainer.querySelector('#exportAlgorithmToPdfBtn')
+        ) {
             const exportButton = document.createElement('button');
             exportButton.id = 'exportAlgorithmToPdfBtn';
             exportButton.type = 'button';
@@ -158,7 +161,9 @@ export async function showAlgorithmDetail(algorithm, section) {
             favButtonContainer = document.createElement('div');
             favButtonContainer.className =
                 'fav-btn-placeholder-modal flex h-10 w-10 shrink-0 items-center justify-center';
-            const exportHost = headerControlsContainer.querySelector('.export-btn-placeholder-modal');
+            const exportHost = headerControlsContainer.querySelector(
+                '.export-btn-placeholder-modal',
+            );
             if (exportHost && exportHost.parentNode === headerControlsContainer) {
                 headerControlsContainer.insertBefore(favButtonContainer, exportHost.nextSibling);
             } else {
@@ -294,8 +299,7 @@ export async function showAlgorithmDetail(algorithm, section) {
                 isMainAlgorithm && step.isCopyable
                     ? ' data-copyable-step="1" data-step-index="' + index + '"'
                     : '';
-            const stepIndexDataAttr =
-                !isMainAlgorithm ? ` data-step-index="${index}"` : '';
+            const stepIndexDataAttr = !isMainAlgorithm ? ` data-step-index="${index}"` : '';
             const stepHTML = `
                  <div class="algorithm-step bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm border-l-4 border-primary mb-3 relative${copyableAttr ? ' copyable-step-active cursor-pointer' : ''}"${stepIndexDataAttr}${copyableAttr} title="${copyableAttr ? 'Нажмите, чтобы скопировать содержимое шага' : ''}">
                      ${additionalInfoTopHTML}
@@ -383,10 +387,7 @@ export async function showAlgorithmDetail(algorithm, section) {
                         if (typeof window.editAlgorithm === 'function') {
                             window.editAlgorithm(currentAlgorithmId, section);
                         } else {
-                            showNotification?.(
-                                'Редактирование алгоритма недоступно.',
-                                'error',
-                            );
+                            showNotification?.('Редактирование алгоритма недоступно.', 'error');
                         }
                     },
                 },

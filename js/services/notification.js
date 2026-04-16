@@ -138,8 +138,7 @@ export const NotificationService = {
             const existing = this.activeImportantNotifications.get(id);
             const messageSpan = existing.element.querySelector('.notification-message-span');
             if (messageSpan) {
-                const formattedMessage =
-                    linkifyFn(message);
+                const formattedMessage = linkifyFn(message);
                 if (messageSpan.innerHTML !== formattedMessage) {
                     messageSpan.innerHTML = formattedMessage;
                 }
@@ -230,8 +229,7 @@ export const NotificationService = {
         }
 
         const notificationId =
-            fixedId ||
-            `important-rich-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            fixedId || `important-rich-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
         if (fixedId && this.activeImportantNotifications.has(fixedId)) {
             this.dismissImportant(fixedId);
@@ -384,7 +382,10 @@ export const NotificationService = {
 
         const onDocumentActivity = (e) => {
             if (!interactionDismissEnabled) return;
-            if (typeof shouldIgnoreInteractionEvent === 'function' && shouldIgnoreInteractionEvent(e)) {
+            if (
+                typeof shouldIgnoreInteractionEvent === 'function' &&
+                shouldIgnoreInteractionEvent(e)
+            ) {
                 return;
             }
             if (outer.contains(e.target) && e.target.closest('button')) {
@@ -652,8 +653,7 @@ export const NotificationService = {
 
         const messageSpan = document.createElement('span');
         messageSpan.className = 'notification-message-span flex-1 text-sm break-words';
-        messageSpan.innerHTML =
-            linkifyFn(message);
+        messageSpan.innerHTML = linkifyFn(message);
         contentWrapper.appendChild(messageSpan);
 
         notificationElement.appendChild(contentWrapper);

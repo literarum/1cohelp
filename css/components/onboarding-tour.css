@@ -9,7 +9,13 @@
     border-radius: var(--tour-popover-radius);
     box-shadow: var(--tour-popover-shadow);
     max-width: var(--tour-popover-max-width);
-    width: min(var(--tour-popover-max-width), calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline)));
+    width: min(
+        var(--tour-popover-max-width),
+        calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 *
+                var(--content-padding-inline)
+        )
+    );
     padding: var(--tour-popover-padding-block) var(--tour-popover-padding-inline)
         calc(var(--tour-popover-padding-block) - 2px);
     box-sizing: border-box;

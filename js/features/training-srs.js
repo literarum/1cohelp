@@ -93,5 +93,7 @@ export const SRS_PRESETS = Object.freeze({
  */
 export function intervalScaleFromPreset(presetId) {
     const p = SRS_PRESETS[presetId];
-    return p && typeof p.intervalScale === 'number' ? p.intervalScale : SRS_PRESETS.balanced.intervalScale;
+    return p && typeof p.intervalScale === 'number'
+        ? p.intervalScale
+        : SRS_PRESETS.balanced.intervalScale;
 }

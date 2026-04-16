@@ -592,10 +592,7 @@ export const DEFAULT_BORDER_RADIUS_PX = Math.round(
 export function clampBorderRadiusPx(value) {
     const n = typeof value === 'string' ? Number.parseFloat(String(value).trim()) : Number(value);
     if (!Number.isFinite(n)) return DEFAULT_BORDER_RADIUS_PX;
-    return Math.max(
-        BORDER_RADIUS_SLIDER_MIN,
-        Math.min(BORDER_RADIUS_SLIDER_MAX, Math.round(n)),
-    );
+    return Math.max(BORDER_RADIUS_SLIDER_MIN, Math.min(BORDER_RADIUS_SLIDER_MAX, Math.round(n)));
 }
 
 export function getDefaultUISettings(allPanelIdsForDefault) {
@@ -615,6 +612,7 @@ export function getDefaultUISettings(allPanelIdsForDefault) {
                 ? allPanelIdsForDefault.map((id) => isPanelVisibleByDefault(id))
                 : [],
         disableForcedBackupOnImport: false,
+        disableForcedBackupOnDbMerge: false,
         staticHeader: false,
         birthdayModeEnabled: true,
     };

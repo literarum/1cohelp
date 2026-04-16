@@ -395,7 +395,9 @@ describe('color-picker + customization populate', () => {
         sat.focus();
         const s0 = parseInt(document.getElementById('saturation-value').value, 10);
         keySlider(sat, 'ArrowRight');
-        expect(parseInt(document.getElementById('saturation-value').value, 10)).toBe(Math.min(100, s0 + 1));
+        expect(parseInt(document.getElementById('saturation-value').value, 10)).toBe(
+            Math.min(100, s0 + 1),
+        );
     });
 
     it('после изменения с клавиатуры live region содержит HEX текущего цвета', () => {
@@ -442,12 +444,18 @@ describe('color-picker + customization populate', () => {
         setColorPickerStateFromHex('#808080');
         initColorPicker();
 
-        dispatchPointer(slider, 'pointerdown', { pointerType: 'touch', pointerId: 5, clientX: 150 });
+        dispatchPointer(slider, 'pointerdown', {
+            pointerType: 'touch',
+            pointerId: 5,
+            clientX: 150,
+        });
         dispatchPointer(slider, 'pointerup', { pointerType: 'touch', pointerId: 5, clientX: 150 });
         const afterPointerDown = parseInt(document.getElementById('brightness-value').value, 10);
         expect(afterPointerDown).toBeGreaterThan(0);
 
-        slider.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 0 }));
+        slider.dispatchEvent(
+            new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 0 }),
+        );
         const afterClick = parseInt(document.getElementById('brightness-value').value, 10);
         expect(afterClick).toBe(afterPointerDown);
     });
@@ -487,7 +495,11 @@ describe('color-picker + customization populate', () => {
         setColorPickerStateFromHex('#808080');
         initColorPicker();
         const before = parseInt(document.getElementById('brightness-value').value, 10);
-        dispatchPointer(slider, 'pointerdown', { pointerType: 'touch', pointerId: 9, clientX: 176 });
+        dispatchPointer(slider, 'pointerdown', {
+            pointerType: 'touch',
+            pointerId: 9,
+            clientX: 176,
+        });
         dispatchPointer(slider, 'pointerup', { pointerType: 'touch', pointerId: 9, clientX: 176 });
         const after = parseInt(document.getElementById('brightness-value').value, 10);
         expect(after).toBe(before);
@@ -528,7 +540,9 @@ describe('color-picker + customization populate', () => {
         setColorPickerStateFromHex('#808080');
         initColorPicker();
         const before = parseInt(document.getElementById('brightness-value').value, 10);
-        slider.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 176, clientY: 8 }));
+        slider.dispatchEvent(
+            new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 176, clientY: 8 }),
+        );
         const after = parseInt(document.getElementById('brightness-value').value, 10);
         expect(after).toBe(before);
     });
@@ -612,9 +626,24 @@ describe('color-picker + customization populate', () => {
         initColorPicker();
         const before = parseInt(document.getElementById('hue-value').value, 10);
 
-        dispatchPointer(slider, 'pointerdown', { pointerType: 'touch', pointerId: 42, clientX: 300, clientY: 8 });
-        dispatchPointer(slider, 'pointermove', { pointerType: 'touch', pointerId: 42, clientX: NaN, clientY: 8 });
-        dispatchPointer(slider, 'pointerup', { pointerType: 'touch', pointerId: 42, clientX: 300, clientY: 8 });
+        dispatchPointer(slider, 'pointerdown', {
+            pointerType: 'touch',
+            pointerId: 42,
+            clientX: 300,
+            clientY: 8,
+        });
+        dispatchPointer(slider, 'pointermove', {
+            pointerType: 'touch',
+            pointerId: 42,
+            clientX: NaN,
+            clientY: 8,
+        });
+        dispatchPointer(slider, 'pointerup', {
+            pointerType: 'touch',
+            pointerId: 42,
+            clientX: 300,
+            clientY: 8,
+        });
 
         const after = parseInt(document.getElementById('hue-value').value, 10);
         expect(after).toBe(before);
@@ -644,9 +673,24 @@ describe('color-picker + customization populate', () => {
         const beforeL = parseInt(document.getElementById('brightness-value').value, 10);
         expect(beforeL).toBeGreaterThan(80);
 
-        dispatchPointer(slider, 'pointerdown', { pointerType: 'touch', pointerId: 77, clientX: 6, clientY: 8 });
-        dispatchPointer(slider, 'pointermove', { pointerType: 'touch', pointerId: 77, clientX: 9, clientY: 8 });
-        dispatchPointer(slider, 'pointerup', { pointerType: 'touch', pointerId: 77, clientX: 9, clientY: 8 });
+        dispatchPointer(slider, 'pointerdown', {
+            pointerType: 'touch',
+            pointerId: 77,
+            clientX: 6,
+            clientY: 8,
+        });
+        dispatchPointer(slider, 'pointermove', {
+            pointerType: 'touch',
+            pointerId: 77,
+            clientX: 9,
+            clientY: 8,
+        });
+        dispatchPointer(slider, 'pointerup', {
+            pointerType: 'touch',
+            pointerId: 77,
+            clientX: 9,
+            clientY: 8,
+        });
 
         const afterL = parseInt(document.getElementById('brightness-value').value, 10);
         expect(afterL).toBe(beforeL);
@@ -676,9 +720,24 @@ describe('color-picker + customization populate', () => {
         initColorPicker();
         const beforeL = parseInt(document.getElementById('brightness-value').value, 10);
 
-        dispatchPointer(slider, 'pointerdown', { pointerType: 'mouse', pointerId: 31, clientX: 150, clientY: 600 });
-        dispatchPointer(slider, 'pointermove', { pointerType: 'mouse', pointerId: 31, clientX: 450, clientY: 600 });
-        dispatchPointer(slider, 'pointerup', { pointerType: 'mouse', pointerId: 31, clientX: 450, clientY: 600 });
+        dispatchPointer(slider, 'pointerdown', {
+            pointerType: 'mouse',
+            pointerId: 31,
+            clientX: 150,
+            clientY: 600,
+        });
+        dispatchPointer(slider, 'pointermove', {
+            pointerType: 'mouse',
+            pointerId: 31,
+            clientX: 450,
+            clientY: 600,
+        });
+        dispatchPointer(slider, 'pointerup', {
+            pointerType: 'mouse',
+            pointerId: 31,
+            clientX: 450,
+            clientY: 600,
+        });
 
         const afterL = parseInt(document.getElementById('brightness-value').value, 10);
         expect(afterL).not.toBe(beforeL);
@@ -716,9 +775,24 @@ describe('color-picker + customization populate', () => {
         initColorPicker();
         applyPreviewSettingsMock.mockClear();
 
-        dispatchPointer(slider, 'pointerdown', { pointerType: 'mouse', pointerId: 3, clientX: 50, clientY: 8 });
-        dispatchPointer(slider, 'pointermove', { pointerType: 'mouse', pointerId: 3, clientX: 320, clientY: 8 });
-        dispatchPointer(slider, 'pointerup', { pointerType: 'mouse', pointerId: 3, clientX: 320, clientY: 8 });
+        dispatchPointer(slider, 'pointerdown', {
+            pointerType: 'mouse',
+            pointerId: 3,
+            clientX: 50,
+            clientY: 8,
+        });
+        dispatchPointer(slider, 'pointermove', {
+            pointerType: 'mouse',
+            pointerId: 3,
+            clientX: 320,
+            clientY: 8,
+        });
+        dispatchPointer(slider, 'pointerup', {
+            pointerType: 'mouse',
+            pointerId: 3,
+            clientX: 320,
+            clientY: 8,
+        });
 
         expect(State.currentPreviewSettings).not.toBeNull();
         expect(State.currentPreviewSettings.primaryColor).toMatch(/^#/i);

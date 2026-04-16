@@ -42,12 +42,15 @@ function registry() {
                 return v ? parseInt(v, 10) : null;
             },
             reloadUi: async (id) => {
-                if (typeof deps.showAddBookmarkModal === 'function') await deps.showAddBookmarkModal(id);
+                if (typeof deps.showAddBookmarkModal === 'function')
+                    await deps.showAddBookmarkModal(id);
             },
             afterApply: async (record) => {
                 if (typeof deps.loadBookmarks === 'function') await deps.loadBookmarks();
                 if (updateSearchIndex) {
-                    updateSearchIndex('bookmarks', record.id, record, 'update', null).catch(() => {});
+                    updateSearchIndex('bookmarks', record.id, record, 'update', null).catch(
+                        () => {},
+                    );
                 }
             },
         },
@@ -58,7 +61,8 @@ function registry() {
                 return v ? parseInt(v, 10) : null;
             },
             reloadUi: async (id) => {
-                if (typeof deps.showAddEditCibLinkModal === 'function') await deps.showAddEditCibLinkModal(id);
+                if (typeof deps.showAddEditCibLinkModal === 'function')
+                    await deps.showAddEditCibLinkModal(id);
             },
             afterApply: async (record) => {
                 if (typeof deps.loadCibLinks === 'function') deps.loadCibLinks();
@@ -74,12 +78,15 @@ function registry() {
                 return v ? parseInt(v, 10) : null;
             },
             reloadUi: async (id) => {
-                if (typeof deps.showEditExtLinkModal === 'function') await deps.showEditExtLinkModal(id);
+                if (typeof deps.showEditExtLinkModal === 'function')
+                    await deps.showEditExtLinkModal(id);
             },
             afterApply: async (record) => {
                 if (typeof deps.renderExtLinks === 'function') await deps.renderExtLinks();
                 if (updateSearchIndex) {
-                    updateSearchIndex('extLinks', record.id, record, 'update', null).catch(() => {});
+                    updateSearchIndex('extLinks', record.id, record, 'update', null).catch(
+                        () => {},
+                    );
                 }
             },
         },
@@ -95,7 +102,9 @@ function registry() {
             afterApply: async (record) => {
                 if (typeof deps.reloadReglamentsUi === 'function') await deps.reloadReglamentsUi();
                 if (updateSearchIndex) {
-                    updateSearchIndex('reglaments', record.id, record, 'update', null).catch(() => {});
+                    updateSearchIndex('reglaments', record.id, record, 'update', null).catch(
+                        () => {},
+                    );
                 }
             },
         },
@@ -106,12 +115,20 @@ function registry() {
                 return v ? parseInt(v, 10) : null;
             },
             reloadUi: async (id) => {
-                if (typeof deps.showBlacklistEntryModal === 'function') await deps.showBlacklistEntryModal(id);
+                if (typeof deps.showBlacklistEntryModal === 'function')
+                    await deps.showBlacklistEntryModal(id);
             },
             afterApply: async (record) => {
-                if (typeof deps.refreshBlacklistAfterHistory === 'function') await deps.refreshBlacklistAfterHistory();
+                if (typeof deps.refreshBlacklistAfterHistory === 'function')
+                    await deps.refreshBlacklistAfterHistory();
                 if (updateSearchIndex) {
-                    updateSearchIndex('blacklistedClients', record.id, record, 'update', null).catch(() => {});
+                    updateSearchIndex(
+                        'blacklistedClients',
+                        record.id,
+                        record,
+                        'update',
+                        null,
+                    ).catch(() => {});
                 }
             },
         },
@@ -123,12 +140,16 @@ function registry() {
                 return ed ? parseInt(ed, 10) : null;
             },
             reloadUi: async (id) => {
-                if (typeof deps.reloadBookmarkFolderForm === 'function') await deps.reloadBookmarkFolderForm(id);
+                if (typeof deps.reloadBookmarkFolderForm === 'function')
+                    await deps.reloadBookmarkFolderForm(id);
             },
             afterApply: async (record) => {
-                if (typeof deps.afterBookmarkFolderHistory === 'function') await deps.afterBookmarkFolderHistory();
+                if (typeof deps.afterBookmarkFolderHistory === 'function')
+                    await deps.afterBookmarkFolderHistory();
                 if (updateSearchIndex) {
-                    updateSearchIndex('bookmarkFolders', record.id, record, 'update', null).catch(() => {});
+                    updateSearchIndex('bookmarkFolders', record.id, record, 'update', null).catch(
+                        () => {},
+                    );
                 }
             },
         },
@@ -140,12 +161,16 @@ function registry() {
                 return ed ? parseInt(ed, 10) : null;
             },
             reloadUi: async (id) => {
-                if (typeof deps.reloadExtLinkCategoryForm === 'function') await deps.reloadExtLinkCategoryForm(id);
+                if (typeof deps.reloadExtLinkCategoryForm === 'function')
+                    await deps.reloadExtLinkCategoryForm(id);
             },
             afterApply: async (record) => {
-                if (typeof deps.afterExtLinkCategoryHistory === 'function') await deps.afterExtLinkCategoryHistory();
+                if (typeof deps.afterExtLinkCategoryHistory === 'function')
+                    await deps.afterExtLinkCategoryHistory();
                 if (updateSearchIndex) {
-                    updateSearchIndex('extLinkCategories', record.id, record, 'update', null).catch(() => {});
+                    updateSearchIndex('extLinkCategories', record.id, record, 'update', null).catch(
+                        () => {},
+                    );
                 }
             },
         },
@@ -162,9 +187,7 @@ async function confirmDiscardIfNeeded() {
             cancelText: 'Отмена',
         });
     }
-    return confirm(
-        'Отменить несохранённые изменения и перейти к версии из истории?',
-    );
+    return confirm('Отменить несохранённые изменения и перейти к версии из истории?');
 }
 
 /**
@@ -204,7 +227,9 @@ export async function performModalEntityHistoryStep(modalId, direction) {
 
         if (!applied || !targetRecord) {
             showNotification?.(
-                direction === 'undo' ? 'Нет сохранённых версий для отката.' : 'Нет версий для повтора.',
+                direction === 'undo'
+                    ? 'Нет сохранённых версий для отката.'
+                    : 'Нет версий для повтора.',
                 'warning',
             );
             await refreshModalEntityHistoryToolbar(modalId);
@@ -217,7 +242,9 @@ export async function performModalEntityHistoryStep(modalId, direction) {
         }
 
         showNotification?.(
-            direction === 'undo' ? 'Восстановлена предыдущая сохранённая версия.' : 'Восстановлена следующая версия.',
+            direction === 'undo'
+                ? 'Восстановлена предыдущая сохранённая версия.'
+                : 'Восстановлена следующая версия.',
             'success',
         );
     } catch (e) {
@@ -308,10 +335,14 @@ export async function performClientDataHistoryStep(direction) {
         const ta = document.getElementById('clientNotes');
         if (ta) ta.value = targetRecord.notes ?? '';
         if (updateSearchIndex) {
-            updateSearchIndex('clientData', 'current', targetRecord, 'update', null).catch(() => {});
+            updateSearchIndex('clientData', 'current', targetRecord, 'update', null).catch(
+                () => {},
+            );
         }
         showNotification?.(
-            direction === 'undo' ? 'Восстановлена предыдущая версия заметок.' : 'Восстановлена следующая версия.',
+            direction === 'undo'
+                ? 'Восстановлена предыдущая версия заметок.'
+                : 'Восстановлена следующая версия.',
             'success',
         );
     } catch (e) {
@@ -350,7 +381,8 @@ export async function refreshHistoryToolbarForOpenModals() {
  * Делегирование с document.body — кнопки в модалках, создаваемых динамически, подхватываются без повторной инициализации.
  */
 export function initModalEntityHistoryToolbarButtons() {
-    if (typeof document === 'undefined' || document.body.dataset.modalEntityHistoryClickBound) return;
+    if (typeof document === 'undefined' || document.body.dataset.modalEntityHistoryClickBound)
+        return;
     document.body.dataset.modalEntityHistoryClickBound = '1';
 
     document.body.addEventListener(

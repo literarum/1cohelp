@@ -88,10 +88,7 @@ import {
 
 import { storeConfigs } from './js/db/stores.js';
 
-import {
-    removeFromFavoritesDB,
-    loadInitialFavoritesCache,
-} from './js/db/favorites.js';
+import { removeFromFavoritesDB, loadInitialFavoritesCache } from './js/db/favorites.js';
 
 import { NotificationService, showNotification } from './js/services/notification.js';
 import { registerCoreServices } from './js/core/kernel.js';
@@ -157,9 +154,7 @@ import {
 } from './js/features/pdf-attachments.js';
 
 // Google Docs Integration
-import {
-    initGoogleDocSections,
-} from './js/features/google-docs.js';
+import { initGoogleDocSections } from './js/features/google-docs.js';
 
 // Background Health Tests
 import {
@@ -199,6 +194,7 @@ import {
 } from './js/features/engineering-cockpit.js';
 import { initRuntimeIssueHub } from './js/features/runtime-issue-hub.js';
 import { initRuntimeTelemetryObservers } from './js/features/runtime-telemetry-observers.js';
+import { initRuntimeFetchFailureReporting } from './js/features/runtime-fetch-intercept.js';
 
 // UI Customization (PR11)
 import {
@@ -216,9 +212,7 @@ import {
 import { initBackgroundStatusHUD } from './js/ui/background-status-hud.js';
 
 // UI modules from PR11
-import {
-    setEscapeHandlerDependencies,
-} from './js/ui/escape-handler.js';
+import { setEscapeHandlerDependencies } from './js/ui/escape-handler.js';
 import {
     setUnsavedConfirmModalDependencies,
     showUnsavedConfirmModal as showUnsavedConfirmModalModule,
@@ -237,10 +231,7 @@ import {
     initHeaderButtons as initHeaderButtonsModule,
 } from './js/ui/header-buttons.js';
 
-import {
-    setDbMergeDependencies,
-    openDbMergeModal,
-} from './js/features/db-merge.js';
+import { setDbMergeDependencies, openDbMergeModal } from './js/features/db-merge.js';
 import {
     setThemeToggleDependencies,
     initThemeToggle as initThemeToggleModule,
@@ -260,10 +251,7 @@ import {
 } from './js/features/algorithm-step-execution.js';
 
 // SEDO System
-import {
-    initSedoTypesSystem,
-    loadSedoData,
-} from './js/features/sedo.js';
+import { initSedoTypesSystem, loadSedoData } from './js/features/sedo.js';
 
 // Command Palette (Ctrl+K)
 import {
@@ -742,6 +730,7 @@ window.ExportService = ExportService;
 // Ранний перехват консоли для централизованного логирования и снижения шумных warning-сообщений.
 initRuntimeIssueHub();
 initRuntimeTelemetryObservers();
+initRuntimeFetchFailureReporting();
 initEngineeringCockpit();
 
 // ============================================================================
@@ -958,17 +947,18 @@ function addEscapeHandler(modalElement) {
             const visibleModals = getVisibleModals();
             const topmost = getTopmostModal(visibleModals);
             if (topmost && topmost.id === modalElement.id) {
-                if (modalElement.id === 'appCustomizationModal') {
-                    collapseModalFullscreenIfActiveModule(
-                        'appCustomizationModal',
-                        appCustomizationModalConfig,
-                    );
-                }
-                if (modalElement.id === 'customizeUIModal') {
-                    collapseModalFullscreenIfActiveModule(
-                        'customizeUIModal',
-                        customizeUIModalConfig,
-                    );
+                if (
+                    (modalElement.id === 'appCustomizationModal' ||
+                        modalElement.id === 'customizeUIModal') &&
+                    typeof requestCloseModal === 'function'
+                ) {
+                    if (requestCloseModal(modalElement) === false) {
+                        event.stopPropagation();
+                        return;
+                    }
+                    closeSettingsStackModal(modalElement);
+                    event.stopPropagation();
+                    return;
                 }
                 modalElement.classList.add('hidden');
                 removeEscapeHandler(modalElement);
@@ -1285,9 +1275,7 @@ function initScrollNavButtons() {
             openModals.includes(engModal) &&
             engWorkspace &&
             !engWorkspace.classList.contains('hidden');
-        const allowScrollNav =
-            openModals.length === 0 ||
-            (openModals.length === 1 && engUnlocked);
+        const allowScrollNav = openModals.length === 0 || (openModals.length === 1 && engUnlocked);
         const { el: scrollEl, isDocument } = getScrollContainer();
         let scrollHeight, clientHeight, scrollTop;
         if (isDocument) {
@@ -1497,8 +1485,7 @@ console.log('[script.js] Зависимости context-reminders установ
 
 setTrainingDependencies({
     showNotification,
-    showAppConfirm:
-        typeof showAppConfirmModule === 'function' ? showAppConfirmModule : null,
+    showAppConfirm: typeof showAppConfirmModule === 'function' ? showAppConfirmModule : null,
 });
 console.log('[script.js] Зависимости training установлены');
 
@@ -2504,7 +2491,9 @@ const deleteAlgorithmBtn = document.getElementById('deleteAlgorithmBtn');
 if (deleteAlgorithmBtn) {
     deleteAlgorithmBtn.addEventListener('click', newClickHandler);
     deleteAlgorithmBtn._clickHandler = newClickHandler;
-    console.log('Обработчик клика для deleteAlgorithmBtn настроен для использования data-атрибутов.');
+    console.log(
+        'Обработчик клика для deleteAlgorithmBtn настроен для использования data-атрибутов.',
+    );
 }
 
 const _triggerSelectors = [
@@ -3327,6 +3316,20 @@ function closeAnimatedModal(modalElement) {
 }
 
 /**
+ * Закрытие модалок «Настройки» / «Кастомизация» с полноэкранным коллапсом и анимацией (единый контур с кнопками).
+ * @param {HTMLElement} modal
+ */
+function closeSettingsStackModal(modal) {
+    if (!modal) return;
+    if (modal.id === 'appCustomizationModal') {
+        collapseModalFullscreenIfActiveModule('appCustomizationModal', appCustomizationModalConfig);
+    } else if (modal.id === 'customizeUIModal') {
+        collapseModalFullscreenIfActiveModule('customizeUIModal', customizeUIModalConfig);
+    }
+    closeAnimatedModalModule(modal);
+}
+
+/**
  * Запрос на закрытие модалки (Escape или явное действие пользователя; клик по оверлею не закрывает).
  * Централизованная проверка: предупреждение «Выйти без сохранения» показывается только при наличии несохранённых изменений (реестр unsaved-changes-registry).
  * @param {HTMLElement} modal - модальное окно
@@ -3335,6 +3338,10 @@ function closeAnimatedModal(modalElement) {
 function requestCloseModal(modal) {
     if (!modal) return true;
     const closeModalNow = () => {
+        if (modal.id === 'appCustomizationModal' || modal.id === 'customizeUIModal') {
+            closeSettingsStackModal(modal);
+            return;
+        }
         modal.classList.add('hidden');
         if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
         if (getVisibleModals().length === 0) {
@@ -3344,9 +3351,20 @@ function requestCloseModal(modal) {
 
     const confirmAndClose = () => {
         if (typeof showUnsavedConfirmModalModule === 'function') {
-            showUnsavedConfirmModalModule().then((leave) => {
-                if (leave) closeModalNow();
-            });
+            showUnsavedConfirmModalModule()
+                .then(async (leave) => {
+                    if (!leave) return;
+                    if (
+                        (modal.id === 'customizeUIModal' || modal.id === 'appCustomizationModal') &&
+                        typeof revertUISettingsOnDiscardModule === 'function'
+                    ) {
+                        await revertUISettingsOnDiscardModule();
+                    }
+                    closeModalNow();
+                })
+                .catch((err) => {
+                    console.warn('[requestCloseModal] unsaved confirm failed:', err);
+                });
             return false;
         }
         return true;
@@ -3367,6 +3385,9 @@ function initUnsavedChangesRegistry() {
         typeof hasChanges === 'function' ? hasChanges('add') : false,
     );
     registerModalDirtyCheck('customizeUIModal', () => Boolean(State && State.isUISettingsDirty));
+    registerModalDirtyCheck('appCustomizationModal', () =>
+        Boolean(State && State.isUISettingsDirty),
+    );
     registerModalDirtyCheck('bookmarkModal', (modal) => {
         try {
             const form = modal.querySelector('#bookmarkForm');
@@ -4128,6 +4149,7 @@ setDbMergeDependencies({
     showNotification,
     storeConfigs,
     exportAllData: exportAllDataModule,
+    performForcedBackup: (opts) => performForcedBackupModule(opts ?? {}),
     loadBookmarks,
     loadExtLinks,
     loadCibLinks: loadCibLinksModule,
@@ -4285,6 +4307,8 @@ setHotkeysDependencies({
     getTopmostModal: getTopmostModalModule,
     getVisibleModals: getVisibleModalsModule,
     requestCloseModal: typeof requestCloseModal !== 'undefined' ? requestCloseModal : null,
+    closeSettingsStackModal:
+        typeof closeSettingsStackModal !== 'undefined' ? closeSettingsStackModal : null,
     removeEscapeHandler,
     showAddModal: showAddModalModule,
     showAddEditCibLinkModal: showAddEditCibLinkModalModule,

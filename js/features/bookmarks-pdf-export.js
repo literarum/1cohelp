@@ -236,7 +236,10 @@ export async function appendBookmarkScreenshotsForPdfExport(host, screenshots) {
                     imageDataUrls.push(dataUrl);
                 }
             } catch (e) {
-                console.warn('[BookmarksPdfExport] Failed to convert screenshot blob to data URL', e);
+                console.warn(
+                    '[BookmarksPdfExport] Failed to convert screenshot blob to data URL',
+                    e,
+                );
             }
         }
     }
@@ -404,8 +407,7 @@ async function buildAllBookmarksExportElement(
         return String(ta).localeCompare(String(tb), 'ru');
     });
 
-    const shotsMap =
-        screenshotsByBookmarkId instanceof Map ? screenshotsByBookmarkId : new Map();
+    const shotsMap = screenshotsByBookmarkId instanceof Map ? screenshotsByBookmarkId : new Map();
 
     for (const bookmark of sorted) {
         if (!bookmark) continue;

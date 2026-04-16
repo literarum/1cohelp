@@ -196,11 +196,7 @@ html.birthday-mode .app-brand-title__party-emoji {
     vertical-align: -0.02em;
     font-style: normal;
     font-family:
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-        'Segoe UI Symbol',
-        'Noto Color Emoji',
-        sans-serif;
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
 }
 
 html.birthday-mode .app-brand-title__letters-so {
@@ -366,7 +362,10 @@ html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-
     will-change: auto;
 }
 
-html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-host .birthday-confetti {
+html.birthday-mode.birthday-mode--reduced
+    .birthday-fx-layer
+    .birthday-confetti-host
+    .birthday-confetti {
     opacity: 0.38;
     animation-duration: calc(var(--bc-sway-dur, 2.4s) * 2.8);
     animation-timing-function: ease-out;

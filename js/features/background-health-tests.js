@@ -114,14 +114,22 @@ async function runExportPipelineDryRunCheck(depsBag, reportFn, runWithTimeoutFn)
             );
         }
     } catch (err) {
-        reportFn('error', 'Экспорт (сухой прогон)', err?.message || String(err), { system: 'export_import' });
+        reportFn('error', 'Экспорт (сухой прогон)', err?.message || String(err), {
+            system: 'export_import',
+        });
     }
 }
 
 /**
  * Второй контур IndexedDB: та же запись clientData через performDBOperation.get и через обёртку.
  */
-async function verifyClientDataHealthProbeDualRead(depsBag, testId, recordFromWrapper, reportFn, runWithTimeoutFn) {
+async function verifyClientDataHealthProbeDualRead(
+    depsBag,
+    testId,
+    recordFromWrapper,
+    reportFn,
+    runWithTimeoutFn,
+) {
     if (!recordFromWrapper) return;
     if (typeof depsBag.performDBOperation !== 'function') {
         reportFn(
@@ -153,7 +161,9 @@ async function verifyClientDataHealthProbeDualRead(depsBag, testId, recordFromWr
             );
         }
     } catch (err) {
-        reportFn('error', 'IndexedDB (второй контур)', err?.message || String(err), { system: 'storage_idb' });
+        reportFn('error', 'IndexedDB (второй контур)', err?.message || String(err), {
+            system: 'storage_idb',
+        });
     }
 }
 
@@ -282,7 +292,11 @@ export function waitUntilAppInitFinished(timeoutMs = 120000) {
 async function auditBookmarksUiCompatibility(performDBOperation, runWithTimeoutFn) {
     const title = 'Закладки (целостность)';
     if (typeof performDBOperation !== 'function') {
-        return { level: 'warn', title, message: 'performDBOperation недоступен, проверка пропущена.' };
+        return {
+            level: 'warn',
+            title,
+            message: 'performDBOperation недоступен, проверка пропущена.',
+        };
     }
     const allBm = await runWithTimeoutFn(
         performDBOperation('bookmarks', 'readonly', (store) => store.getAll()),
@@ -571,7 +585,10 @@ export function initBackgroundHealthTestsSystem() {
                         .replace(/\/$/, '');
                     if (helperBase) {
                         const ok = await runWithTimeout(
-                            probeHelperAvailability(helperBase, { path: '/health', timeoutMs: 9000 }),
+                            probeHelperAvailability(helperBase, {
+                                path: '/health',
+                                timeoutMs: 9000,
+                            }),
                             12000,
                         );
                         addCheck(
@@ -640,14 +657,13 @@ export function initBackgroundHealthTestsSystem() {
 
             // Watchdog 4: целостность полей закладок (несовместимые типы ломают список/карточки)
             try {
-                const br = await auditBookmarksUiCompatibility(deps.performDBOperation, runWithTimeout);
+                const br = await auditBookmarksUiCompatibility(
+                    deps.performDBOperation,
+                    runWithTimeout,
+                );
                 addCheck(br.level, 'Watchdog / Закладки (целостность)', br.message);
             } catch (err) {
-                addCheck(
-                    'error',
-                    'Watchdog / Закладки (целостность)',
-                    err?.message || String(err),
-                );
+                addCheck('error', 'Watchdog / Закладки (целостность)', err?.message || String(err));
             }
 
             // Watchdog 5: центральный буфер необработанных ошибок и отклонённых промисов
@@ -789,7 +805,11 @@ export function initBackgroundHealthTestsSystem() {
                     !entry.title.startsWith('SLO / ');
                 const mergedChecks = [
                     ...results.checks.filter(notReplacedByWatchdogCycle),
-                    ...cycleChecks.map(({ title, message, system }) => ({ title, message, system })),
+                    ...cycleChecks.map(({ title, message, system }) => ({
+                        title,
+                        message,
+                        system,
+                    })),
                 ];
                 const mergedErrors = [
                     ...results.errors.filter(notReplacedByWatchdogCycle),
@@ -892,12 +912,9 @@ export function initBackgroundHealthTestsSystem() {
                             180000,
                         );
                     } catch (uiErr) {
-                        report(
-                            'warn',
-                            'Поверхность UI',
-                            uiErr?.message || String(uiErr),
-                            { system: 'ui_surface' },
-                        );
+                        report('warn', 'Поверхность UI', uiErr?.message || String(uiErr), {
+                            system: 'ui_surface',
+                        });
                     }
                 }
 
@@ -925,7 +942,13 @@ export function initBackgroundHealthTestsSystem() {
                         report('error', 'IndexedDB', 'Запись не найдена после сохранения.');
                     } else {
                         report('info', 'IndexedDB', 'Запись и чтение работают.');
-                        await verifyClientDataHealthProbeDualRead(deps, testId, record, report, runWithTimeout);
+                        await verifyClientDataHealthProbeDualRead(
+                            deps,
+                            testId,
+                            record,
+                            report,
+                            runWithTimeout,
+                        );
                     }
                 } catch (err) {
                     report('error', 'IndexedDB', err.message);
@@ -1034,8 +1057,12 @@ export function initBackgroundHealthTestsSystem() {
                 try {
                     const caClearBtn = document.getElementById('clientAnalyticsClearAllBtn');
                     const caClearModal = document.getElementById('clientAnalyticsClearAllModal');
-                    const caClearAck = document.getElementById('clientAnalyticsClearAllAcknowledge');
-                    const caClearConfirm = document.getElementById('clientAnalyticsClearAllConfirmBtn');
+                    const caClearAck = document.getElementById(
+                        'clientAnalyticsClearAllAcknowledge',
+                    );
+                    const caClearConfirm = document.getElementById(
+                        'clientAnalyticsClearAllConfirmBtn',
+                    );
                     if (!caClearBtn || !caClearModal || !caClearAck || !caClearConfirm) {
                         report(
                             'error',
@@ -1299,8 +1326,10 @@ export function initBackgroundHealthTestsSystem() {
                         db.objectStoreNames.contains(RECENTLY_DELETED_STORE_NAME)
                     ) {
                         const rdCount = await runWithTimeout(
-                            deps.performDBOperation?.(RECENTLY_DELETED_STORE_NAME, 'readonly', (s) =>
-                                s.count(),
+                            deps.performDBOperation?.(
+                                RECENTLY_DELETED_STORE_NAME,
+                                'readonly',
+                                (s) => s.count(),
                             ),
                             5000,
                         );
@@ -1375,7 +1404,9 @@ export function initBackgroundHealthTestsSystem() {
                 } else if (REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
                     try {
                         let avail =
-                            typeof window !== 'undefined' ? window.__revocationHelperAvailable : null;
+                            typeof window !== 'undefined'
+                                ? window.__revocationHelperAvailable
+                                : null;
                         const helperBase = String(REVOCATION_LOCAL_HELPER_BASE_URL || '')
                             .trim()
                             .replace(/\/$/, '');
@@ -1651,12 +1682,18 @@ export function initBackgroundHealthTestsSystem() {
                                 hud?.finishTask?.('watchdog-first', true);
                             })
                             .catch((err) => {
-                                console.error('[BackgroundHealthTests] Ошибка watchdog-цикла:', err);
+                                console.error(
+                                    '[BackgroundHealthTests] Ошибка watchdog-цикла:',
+                                    err,
+                                );
                                 hud?.finishTask?.('watchdog-first', false);
                             });
                         initBackgroundHealthTestsSystem._watchdogIntervalId = setInterval(() => {
                             runWatchdogCycle('interval').catch((err) => {
-                                console.error('[BackgroundHealthTests] Ошибка watchdog-цикла:', err);
+                                console.error(
+                                    '[BackgroundHealthTests] Ошибка watchdog-цикла:',
+                                    err,
+                                );
                             });
                         }, WATCHDOG_INTERVAL_MS);
                     } catch (finalizeErr) {
@@ -1713,7 +1750,13 @@ export function initBackgroundHealthTestsSystem() {
                     report('error', 'IndexedDB', 'Запись не найдена после сохранения.');
                 } else {
                     report('info', 'IndexedDB', 'Запись и чтение работают.');
-                    await verifyClientDataHealthProbeDualRead(deps, testId, record, report, runWithTimeout);
+                    await verifyClientDataHealthProbeDualRead(
+                        deps,
+                        testId,
+                        record,
+                        report,
+                        runWithTimeout,
+                    );
                 }
             } catch (err) {
                 report('error', 'IndexedDB', err.message);
@@ -2043,11 +2086,7 @@ export function initBackgroundHealthTestsSystem() {
                         avail = probed;
                     }
                     report(
-                        avail === true
-                            ? 'info'
-                            : avail === false
-                              ? 'error'
-                              : 'warn',
+                        avail === true ? 'info' : avail === false ? 'error' : 'warn',
                         'Компонента проверки отзыва',
                         avail === true
                             ? 'Локальная компонента доступна.'
@@ -2069,12 +2108,9 @@ export function initBackgroundHealthTestsSystem() {
                     25000,
                 );
             } catch (err) {
-                report(
-                    'warn',
-                    'Отзыв сертификатов (перекрёстная)',
-                    err?.message || String(err),
-                    { system: 'revocation_crosscheck' },
-                );
+                report('warn', 'Отзыв сертификатов (перекрёстная)', err?.message || String(err), {
+                    system: 'revocation_crosscheck',
+                });
             }
 
             // Тест 6: UI настройки

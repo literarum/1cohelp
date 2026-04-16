@@ -192,7 +192,6 @@ function openGlobalContextMenuAt(clientX, clientY) {
     menuEl.style.left = `${left}px`;
     menuEl.style.top = `${top}px`;
 
-    const enabledIndices = getEnabledButtonIndices(menuEl);
     /* −1: нет «лишней» подсветки первого пункта при открытии мышью (раньше выглядело как залипший ховер на «Главная»). */
     activeIndex = -1;
     requestAnimationFrame(() => {
@@ -212,7 +211,7 @@ function openGlobalContextMenuAt(clientX, clientY) {
             e.preventDefault();
             const cur = indices.indexOf(activeIndex);
             const next =
-                cur === -1 ? indices[0] : indices[(cur + 1) % indices.length] ?? indices[0];
+                cur === -1 ? indices[0] : (indices[(cur + 1) % indices.length] ?? indices[0]);
             activeIndex = next;
             focusMenuItemByDomIndex(activeIndex);
             return;
@@ -223,7 +222,7 @@ function openGlobalContextMenuAt(clientX, clientY) {
             const prev =
                 cur === -1
                     ? indices[indices.length - 1]
-                    : indices[(cur - 1 + indices.length) % indices.length] ?? indices[0];
+                    : (indices[(cur - 1 + indices.length) % indices.length] ?? indices[0]);
             activeIndex = prev;
             focusMenuItemByDomIndex(activeIndex);
             return;

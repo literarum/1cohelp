@@ -112,8 +112,7 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Горячие клавиши',
-        description:
-            'Отсюда открывается справка по горячим клавишам.',
+        description: 'Отсюда открывается справка по горячим клавишам.',
         selectors: ['#showHotkeysBtn', '#customizeUIBtn'],
         side: 'bottom',
         align: 'center',
@@ -259,8 +258,7 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Переключение темы',
-        description:
-            'Кнопка мгновенно переключает светлую и темную тему без перехода в настройки.',
+        description: 'Кнопка мгновенно переключает светлую и темную тему без перехода в настройки.',
         selectors: ['#themeToggle'],
         side: 'bottom',
         align: 'center',
@@ -283,7 +281,8 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Главная',
-        description: 'На главной вкладке расположен основной алгоритм и быстрые действия по клиенту.',
+        description:
+            'На главной вкладке расположен основной алгоритм и быстрые действия по клиенту.',
         tabId: 'main',
         tabNavHighlightTabId: 'main',
         selectors: ['#mainTab'],
@@ -328,7 +327,8 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'СКЗИ',
-        description: 'Алгоритмы по работе с криптосредствами и сертификатами собраны на этой вкладке.',
+        description:
+            'Алгоритмы по работе с криптосредствами и сертификатами собраны на этой вкладке.',
         tabId: 'skzi',
         tabNavHighlightTabId: 'skzi',
         selectors: ['#skziTab'],
@@ -347,8 +347,7 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Web-регистратор',
-        description:
-            'Вкладка для алгоритмов по работе с веб-регистратором.',
+        description: 'Вкладка для алгоритмов по работе с веб-регистратором.',
         tabId: 'webReg',
         tabNavHighlightTabId: 'webReg',
         selectors: ['#webRegTab'],
@@ -357,8 +356,7 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Ссылки 1С',
-        description:
-            'Каталог рабочих ссылок 1С с поиском и быстрым добавлением карточек.',
+        description: 'Каталог рабочих ссылок 1С с поиском и быстрым добавлением карточек.',
         tabId: 'links',
         scrollToTop: true,
         selectors: ['#linksContainer', '#addLinkBtn', '#linkSearchInput', '#linksTab'],
@@ -415,7 +413,12 @@ const TOUR_STEP_BLUEPRINTS = [
         description:
             'Сортировка по дате добавления, по названию или по папке. Переключайте режим по клику на кнопку.',
         tabId: 'bookmarks',
-        selectors: ['#bookmarksSortControls', '#sortBookmarksByDate', '#sortBookmarksByTitle', '#sortBookmarksByFolder'],
+        selectors: [
+            '#bookmarksSortControls',
+            '#sortBookmarksByDate',
+            '#sortBookmarksByTitle',
+            '#sortBookmarksByFolder',
+        ],
         side: 'bottom',
         align: 'center',
     },
@@ -502,8 +505,7 @@ const TOUR_STEP_BLUEPRINTS = [
     },
     {
         title: 'Обучение: содержимое раздела',
-        description:
-            'Здесь отображаются карточки модулей, шаги, мини-квизы и отметки о прочтении.',
+        description: 'Здесь отображаются карточки модулей, шаги, мини-квизы и отметки о прочтении.',
         tabId: 'training',
         tabNavHighlightTabId: 'training',
         selectors: ['#trainingMount .training-body', '#trainingMount', '#trainingTab'],
@@ -626,11 +628,7 @@ function resolveFirstAvailableElement(selectors) {
 function resolveVisibleTabNavTarget(panelId) {
     if (!panelId || typeof document.getElementById !== 'function') return null;
     const tabEl = document.getElementById(`${panelId}Tab`);
-    if (
-        tabEl &&
-        typeof tabEl.getClientRects === 'function' &&
-        tabEl.getClientRects().length > 0
-    ) {
+    if (tabEl && typeof tabEl.getClientRects === 'function' && tabEl.getClientRects().length > 0) {
         return tabEl;
     }
     const moreBtn = document.getElementById('moreTabsBtn');
@@ -711,7 +709,9 @@ function buildHighlightProxyForSelectors(selectors, padding = 6) {
     const rects = selectors
         .map((selector) => document.querySelector(selector))
         .filter(Boolean)
-        .map((el) => (typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null))
+        .map((el) =>
+            typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null,
+        )
         .filter((rect) => rect && rect.width > 0 && rect.height > 0);
 
     if (rects.length === 0) return null;
@@ -768,7 +768,10 @@ function hideElementBySelector(selector) {
  */
 function closeTransientModalsForTour(preserveSelectors = []) {
     const preserveSet = new Set(Array.isArray(preserveSelectors) ? preserveSelectors : []);
-    if (typeof window.closeRecentlyDeletedModal === 'function' && !preserveSet.has('#recentlyDeletedModal')) {
+    if (
+        typeof window.closeRecentlyDeletedModal === 'function' &&
+        !preserveSet.has('#recentlyDeletedModal')
+    ) {
         try {
             window.closeRecentlyDeletedModal();
         } catch (error) {
@@ -788,7 +791,11 @@ function activateTourTab(tabId) {
     if (!tabId || typeof deps.setActiveTab !== 'function') return;
     const bypassWarning = TAB_WARNING_BYPASS.has(tabId);
     Promise.resolve(deps.setActiveTab(tabId, bypassWarning)).catch((error) => {
-        console.warn('[onboarding-tour] Не удалось переключить вкладку для шага тура:', tabId, error);
+        console.warn(
+            '[onboarding-tour] Не удалось переключить вкладку для шага тура:',
+            tabId,
+            error,
+        );
     });
 
     if (tabId === 'links') {
@@ -831,7 +838,10 @@ function buildTourSteps() {
                 if (blueprint.tabId) activateTourTab(blueprint.tabId);
 
                 const openSelectors = blueprint.openSelectors || [];
-                if (blueprint.skipOpenSelectorsWhenVisible && typeof blueprint.skipOpenSelectorsWhenVisible === 'object') {
+                if (
+                    blueprint.skipOpenSelectorsWhenVisible &&
+                    typeof blueprint.skipOpenSelectorsWhenVisible === 'object'
+                ) {
                     const toOpen = openSelectors.filter((sel) => {
                         const modalSel = blueprint.skipOpenSelectorsWhenVisible[sel];
                         if (!modalSel) return true;
@@ -868,7 +878,11 @@ function buildTourSteps() {
                 const openTrigger = resolveFirstAvailableElement(openSelectors);
                 if (openTrigger) return openTrigger;
 
-                return resolveFirstAvailableElement(['#mainTab', '#searchInput', '#openCommandPaletteBtn']);
+                return resolveFirstAvailableElement([
+                    '#mainTab',
+                    '#searchInput',
+                    '#openCommandPaletteBtn',
+                ]);
             };
         }
 
@@ -894,7 +908,10 @@ async function persistOnboardingAutoPromptConsumed() {
         try {
             await deps.saveUserPreferences();
         } catch (error) {
-            console.warn('[onboarding-tour] Не удалось сохранить флаг автопоказа онбординга:', error);
+            console.warn(
+                '[onboarding-tour] Не удалось сохранить флаг автопоказа онбординга:',
+                error,
+            );
         }
     }
 }
@@ -951,7 +968,9 @@ function syncPopoverArrowToElement(highlightedElement = null) {
         highlightedElement && typeof highlightedElement.getBoundingClientRect === 'function'
             ? highlightedElement
             : document.querySelector('.driver-active-element');
-    const popoverEl = document.querySelector('.driver-popover.onboarding-tour-popover') || document.querySelector('.driver-popover');
+    const popoverEl =
+        document.querySelector('.driver-popover.onboarding-tour-popover') ||
+        document.querySelector('.driver-popover');
     if (!element || !popoverEl) return;
     const wrapper = popoverEl;
     const arrow = popoverEl.querySelector('.driver-popover-arrow');
@@ -1090,7 +1109,10 @@ export async function startOnboardingTour() {
                 void markTourCompleted();
                 if (typeof deps.setActiveTab === 'function') {
                     void Promise.resolve(deps.setActiveTab('main')).catch((error) => {
-                        console.warn('[onboarding-tour] Не удалось перейти на вкладку «Главная» после тура:', error);
+                        console.warn(
+                            '[onboarding-tour] Не удалось перейти на вкладку «Главная» после тура:',
+                            error,
+                        );
                     });
                 }
                 if (previouslyFocused && document.contains(previouslyFocused)) {

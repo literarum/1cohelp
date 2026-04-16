@@ -187,9 +187,7 @@ describe('client-analytics blacklist navigation', () => {
         const focus = vi.fn();
         globalThis.document = {
             getElementById: vi.fn((id) =>
-                id === 'blacklistSearchInput'
-                    ? { value: '', dispatchEvent, focus }
-                    : null,
+                id === 'blacklistSearchInput' ? { value: '', dispatchEvent, focus } : null,
             ),
         };
         const setActiveTabFn = vi.fn(async () => {});

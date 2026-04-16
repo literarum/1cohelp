@@ -177,7 +177,9 @@ function getRenderedBackgroundHex(_settings) {
     if (themedOverride) return themedOverride;
 
     const TD = THEME_DEFAULTS_REF;
-    const fallbackHex = domDark ? TD?.backgroundDark || '#12121f' : TD?.backgroundLight || '#f9fafb';
+    const fallbackHex = domDark
+        ? TD?.backgroundDark || '#12121f'
+        : TD?.backgroundLight || '#f9fafb';
     return normalizeHex(fallbackHex);
 }
 
@@ -246,7 +248,8 @@ function setHandleLogicalPercent(slider, handle, logical0to100) {
     } else {
         centerGlobalX = mappingRect.left + hw + (lp / 100) * travel;
     }
-    const leftPercent = ((centerGlobalX - sliderRect.left) / Math.max(sliderRect.width, 1e-6)) * 100;
+    const leftPercent =
+        ((centerGlobalX - sliderRect.left) / Math.max(sliderRect.width, 1e-6)) * 100;
     handle.style.left = `${Math.max(0, Math.min(100, leftPercent))}%`;
 }
 
@@ -353,7 +356,9 @@ function bindHexInputAndCopyControls() {
         btn.dataset.hexCopyBound = 'true';
         btn.addEventListener('click', async () => {
             const hex =
-                typeof hslToHex === 'function' ? hslToHex(pickerHsl.h, pickerHsl.s, pickerHsl.l) : '';
+                typeof hslToHex === 'function'
+                    ? hslToHex(pickerHsl.h, pickerHsl.s, pickerHsl.l)
+                    : '';
             const text = hex.toUpperCase();
             try {
                 if (navigator.clipboard?.writeText) {
@@ -543,7 +548,8 @@ function applyPreviewFromPickerHsl() {
     const { h, s, l } = pickerHsl;
     if (typeof hslToHex !== 'function') return;
     const hex = hslToHex(h, s, l);
-    const target = (State && State.uiModalState && State.uiModalState.currentColorTarget) || 'elements';
+    const target =
+        (State && State.uiModalState && State.uiModalState.currentColorTarget) || 'elements';
 
     if (State) {
         ensureCurrentPreviewSettingsObject();
@@ -558,7 +564,8 @@ function applyPreviewFromPickerHsl() {
                 cps.customTextColor = hex;
                 cps.isTextCustom = true;
             }
-            if (typeof updatePreviewSettingsFromModal === 'function') updatePreviewSettingsFromModal();
+            if (typeof updatePreviewSettingsFromModal === 'function')
+                updatePreviewSettingsFromModal();
             if (typeof applyPreviewSettings === 'function') applyPreviewSettings(cps);
             State.isUISettingsDirty = true;
         }
@@ -580,7 +587,8 @@ function updateDualThemePreviewStrip() {
     const target = State.uiModalState?.currentColorTarget || 'elements';
     const prev = State.currentPreviewSettings;
     const TD = THEME_DEFAULTS_REF;
-    const primary = prev.primaryColor || DEFAULT_UI_SETTINGS?.primaryColor || TD?.primary || DEFAULT_HEX;
+    const primary =
+        prev.primaryColor || DEFAULT_UI_SETTINGS?.primaryColor || TD?.primary || DEFAULT_HEX;
 
     const neutralLight = '#f9fafb';
     const neutralDark = '#12121f';
@@ -660,11 +668,7 @@ function effectiveThemeIsDark(settings) {
  * Без этого dual-preview рисовал оба столбца через симметричный derive и расходился с реальными --override-background-*.
  */
 function activeUiThemeKeyForBackground(settings) {
-    const mode =
-        settings?.theme ||
-        settings?.themeMode ||
-        DEFAULT_UI_SETTINGS?.themeMode ||
-        'dark';
+    const mode = settings?.theme || settings?.themeMode || DEFAULT_UI_SETTINGS?.themeMode || 'dark';
     if (mode === 'dark') return 'dark';
     if (mode === 'light') return 'light';
     try {

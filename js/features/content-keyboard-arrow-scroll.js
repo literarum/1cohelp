@@ -17,7 +17,8 @@ function onDocumentKeydownCapture(event) {
     if (typeof event.isComposing === 'boolean' && event.isComposing) return;
 
     const active = document.activeElement;
-    if (shouldSkipKeyboardArrowScrollAcceleration(active instanceof Element ? active : null)) return;
+    if (shouldSkipKeyboardArrowScrollAcceleration(active instanceof Element ? active : null))
+        return;
 
     const scrollParent = findVerticalOverflowScrollParent(
         active instanceof Element ? active : document.body,
@@ -30,16 +31,16 @@ function onDocumentKeydownCapture(event) {
 
     const st =
         scrollParent === document.documentElement
-            ? window.scrollY ?? document.documentElement.scrollTop ?? 0
-            : scrollParent.scrollTop ?? 0;
+            ? (window.scrollY ?? document.documentElement.scrollTop ?? 0)
+            : (scrollParent.scrollTop ?? 0);
     const ch =
         scrollParent === document.documentElement
             ? window.innerHeight
-            : scrollParent.clientHeight ?? 0;
+            : (scrollParent.clientHeight ?? 0);
     const sh =
         scrollParent === document.documentElement
             ? document.documentElement.scrollHeight
-            : scrollParent.scrollHeight ?? 0;
+            : (scrollParent.scrollHeight ?? 0);
 
     const atTop = st <= 0;
     const atBottom = st + ch >= sh - 1;

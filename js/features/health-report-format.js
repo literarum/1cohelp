@@ -67,12 +67,18 @@ export function inferSystemFromTitle(title) {
     if (/Поиск|searchIndex|индекс|Индекс/i.test(t)) return 'search';
     if (/Экспорт|Импорт|File System|экспорт|резервн/i.test(t)) return 'export_import';
     if (/слиян|merge|Merge|совместимост/i.test(t)) return 'merge';
-    if (/Yandex|отзыв|API проверки|Компонента проверки|проверки отзыва/i.test(t)) return 'revocation';
+    if (/Yandex|отзыв|API проверки|Компонента проверки|проверки отзыва/i.test(t))
+        return 'revocation';
     if (/Целостность данных/i.test(t)) return 'data_integrity';
-    if (/IndexedDB|хранилищ|clientData|Алгоритмы|Закладки|Черн|Избранное|Заметки|Регламент|Ссылки|pdfFiles|screenshots|СЭДО|Корзина удалений|sedoTypes/i.test(t))
+    if (
+        /IndexedDB|хранилищ|clientData|Алгоритмы|Закладки|Черн|Избранное|Заметки|Регламент|Ссылки|pdfFiles|screenshots|СЭДО|Корзина удалений|sedoTypes/i.test(
+            t,
+        )
+    )
         return 'data_content';
     if (/автосохран|Autosave/i.test(t)) return 'autosave';
-    if (/Глобальные ошибки|буфере сбоев|runtime.?hub|Необработанные ошибки/i.test(t)) return 'runtime_errors';
+    if (/Глобальные ошибки|буфере сбоев|runtime.?hub|Необработанные ошибки/i.test(t))
+        return 'runtime_errors';
     if (/UI |Стили|ResizeObserver|Кастомизация|Настройки интерфейса|^UI /i.test(t)) return 'ui';
     if (/Clipboard|Буфер обмена/i.test(t)) return 'clipboard';
     if (/Уведомления|Notification/i.test(t)) return 'notifications';

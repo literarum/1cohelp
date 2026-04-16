@@ -179,7 +179,10 @@ export function ensureBirthdayGarland() {
         for (let i = 0; i < GARLAND_BULB_COUNT; i++) {
             const bulb = document.createElement('span');
             bulb.className = 'birthday-garland__bulb';
-            bulb.style.setProperty('--bulb-color', GARLAND_BULB_COLORS[i % GARLAND_BULB_COLORS.length]);
+            bulb.style.setProperty(
+                '--bulb-color',
+                GARLAND_BULB_COLORS[i % GARLAND_BULB_COLORS.length],
+            );
             bulb.style.setProperty('--tw-delay', `${(i % 9) * 0.14}s`);
             row.appendChild(bulb);
         }

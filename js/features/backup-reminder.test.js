@@ -1,10 +1,7 @@
 'use strict';
 
 import { describe, it, expect } from 'vitest';
-import {
-    shouldShowBackupReminder,
-    BACKUP_REMINDER_INTERVAL_MS,
-} from './backup-reminder.js';
+import { shouldShowBackupReminder, BACKUP_REMINDER_INTERVAL_MS } from './backup-reminder.js';
 
 describe('shouldShowBackupReminder', () => {
     const interval = BACKUP_REMINDER_INTERVAL_MS;

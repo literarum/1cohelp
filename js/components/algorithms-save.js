@@ -1055,12 +1055,11 @@ export async function deleteAlgorithm(algorithmId, section) {
                     const putTrash = recentlyDeletedStore.put(recentlyDeletedRecord);
                     putTrash.onsuccess = () => resolve();
                     putTrash.onerror = (e) => {
-                        console.error('[TX Delete] Ошибка записи в recentlyDeleted:', e.target.error);
-                        reject(
-                            new Error(
-                                `Ошибка записи в корзину: ${e.target.error?.message}`,
-                            ),
+                        console.error(
+                            '[TX Delete] Ошибка записи в recentlyDeleted:',
+                            e.target.error,
                         );
+                        reject(new Error(`Ошибка записи в корзину: ${e.target.error?.message}`));
                     };
                 }),
             );

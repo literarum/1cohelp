@@ -259,7 +259,11 @@ html.dark #healthReportModal .health-report-item {
 #healthReportModal .health-subsystem-summary {
     padding: 0.75rem 1rem;
     border-radius: 0.75rem;
-    background: color-mix(in srgb, var(--color-surface-2, #f8fafc) 92%, var(--color-text-primary, #111) 4%);
+    background: color-mix(
+        in srgb,
+        var(--color-surface-2, #f8fafc) 92%,
+        var(--color-text-primary, #111) 4%
+    );
     border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
     margin-bottom: 1.25rem;
 }

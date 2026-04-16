@@ -129,7 +129,8 @@ export function inferDomZoneLabel(id) {
     if (id.startsWith('xmlAnalyzer')) return 'XML-анализатор';
     if (id.startsWith('fnsCert')) return 'Проверка сертификата ФНС';
     /* clearClientAnalyticsSearchBtn и прочие id с подстрокой ClientAnalytics */
-    if (id.startsWith('clientAnalytics') || /clientanalytics/i.test(id)) return 'Аналитика клиентов';
+    if (id.startsWith('clientAnalytics') || /clientanalytics/i.test(id))
+        return 'Аналитика клиентов';
     if (id.startsWith('reminder')) return 'Напоминания';
     if (id.includes('Modal') || id.includes('Lightbox') || id === 'screenshotLightbox') {
         return 'Модальные окна';
@@ -171,7 +172,8 @@ export function filterDomAuditMissingIdsForConditionalMainAlgo(missingIds, mainS
 export function filterDomAuditMissingIdsForBirthdayMode(missingIds, doc) {
     if (!Array.isArray(missingIds) || missingIds.length === 0) return missingIds;
     const hasBirthdayNodesMissing =
-        missingIds.includes(BIRTHDAY_FX_LAYER_DOM_ID) || missingIds.includes(BIRTHDAY_GARLAND_DOM_ID);
+        missingIds.includes(BIRTHDAY_FX_LAYER_DOM_ID) ||
+        missingIds.includes(BIRTHDAY_GARLAND_DOM_ID);
     if (!hasBirthdayNodesMissing) return missingIds;
     const root = doc?.documentElement;
     const birthdayModeEnabled =

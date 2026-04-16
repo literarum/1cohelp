@@ -9,7 +9,12 @@ export const COCKPIT_SCROLL_NAV_THRESHOLD = 2;
  * @param {number} clientHeight
  * @param {number} [threshold]
  */
-export function computeCockpitScrollNavState(scrollTop, scrollHeight, clientHeight, threshold = COCKPIT_SCROLL_NAV_THRESHOLD) {
+export function computeCockpitScrollNavState(
+    scrollTop,
+    scrollHeight,
+    clientHeight,
+    threshold = COCKPIT_SCROLL_NAV_THRESHOLD,
+) {
     const overflowDelta = scrollHeight - clientHeight;
     const show = overflowDelta > 1;
     const canScrollUp = scrollTop > threshold;

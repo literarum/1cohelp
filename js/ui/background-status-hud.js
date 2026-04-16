@@ -717,7 +717,9 @@ export function initBackgroundStatusHUD() {
             ? new Date(STATE.watchdog.lastAutosaveAt).toLocaleString('ru-RU')
             : '—';
         const summaryOkClass =
-            errorsForReport.length === 0 ? 'health-report-summary-ok' : 'health-report-summary-fail';
+            errorsForReport.length === 0
+                ? 'health-report-summary-ok'
+                : 'health-report-summary-fail';
 
         body.innerHTML = `
             <div class="health-report-body-scroll">

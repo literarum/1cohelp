@@ -27,9 +27,7 @@ describe('global-context-menu', () => {
     it('shouldDeferToNativeContextMenu: INPUT/TEXTAREA/SELECT', () => {
         const ev = { shiftKey: false };
         expect(shouldDeferToNativeContextMenu(ev, document.createElement('input'))).toBe(true);
-        expect(shouldDeferToNativeContextMenu(ev, document.createElement('textarea'))).toBe(
-            true,
-        );
+        expect(shouldDeferToNativeContextMenu(ev, document.createElement('textarea'))).toBe(true);
         expect(shouldDeferToNativeContextMenu(ev, document.createElement('select'))).toBe(true);
     });
 

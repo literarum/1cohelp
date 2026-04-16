@@ -59,7 +59,8 @@ export function initThemeToggle() {
         if (prefsSaved) {
             const customizeUIModal = document.getElementById('customizeUIModal');
             const customizationModal = document.getElementById('appCustomizationModal');
-            const settingsModalOpen = customizeUIModal && !customizeUIModal.classList.contains('hidden');
+            const settingsModalOpen =
+                customizeUIModal && !customizeUIModal.classList.contains('hidden');
             if (settingsModalOpen) {
                 const modalWithTheme = customizationModal || customizeUIModal;
                 const nextThemeRadio = modalWithTheme?.querySelector(

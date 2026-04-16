@@ -6,11 +6,7 @@
  */
 
 import { TRAINING_MENTOR_QUIZ_PACKS_BACKUP_KEY } from '../constants.js';
-import {
-    getAllFromIndexedDB,
-    saveToIndexedDB,
-    deleteFromIndexedDB,
-} from '../db/indexeddb.js';
+import { getAllFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 import {
     normalizeQuizItem,
     sanitizeTrainingBodyHtml,
@@ -56,10 +52,11 @@ export function normalizeMentorQuizPack(raw) {
     const o = /** @type {Record<string, unknown>} */ (raw);
     const id = String(o.id || '').trim();
     if (!id.startsWith('mentor-')) return null;
-    const title = String(o.title || '').trim().slice(0, 500);
+    const title = String(o.title || '')
+        .trim()
+        .slice(0, 500);
     if (title.length < 1) return null;
-    const subtitle =
-        o.subtitle != null ? String(o.subtitle).trim().slice(0, 500) : undefined;
+    const subtitle = o.subtitle != null ? String(o.subtitle).trim().slice(0, 500) : undefined;
     const instructionsHtml = sanitizeTrainingBodyHtml(String(o.instructionsHtml || ''));
     const qRaw = Array.isArray(o.questions) ? o.questions : [];
     const questions = qRaw.map(normalizeQuizItem).filter(Boolean);
@@ -225,7 +222,10 @@ export function parseMentorPackImport(text) {
     }
     const o = /** @type {Record<string, unknown>} */ (parsed);
     if (o.copilot1coExport !== true) {
-        return { ok: false, message: 'Отсутствует признак copilot1coExport — отказ из соображений безопасности.' };
+        return {
+            ok: false,
+            message: 'Отсутствует признак copilot1coExport — отказ из соображений безопасности.',
+        };
     }
     if (o.kind !== MENTOR_QUIZ_EXPORT_KIND) {
         return { ok: false, message: `Ожидался kind="${MENTOR_QUIZ_EXPORT_KIND}".` };
@@ -238,7 +238,10 @@ export function parseMentorPackImport(text) {
     }
     const inner = normalizeMentorQuizPack(o.pack);
     if (!inner) {
-        return { ok: false, message: 'Поле pack не прошло проверку (заголовок, id mentor-*, вопросы).' };
+        return {
+            ok: false,
+            message: 'Поле pack не прошло проверку (заголовок, id mentor-*, вопросы).',
+        };
     }
     return { ok: true, pack: inner };
 }

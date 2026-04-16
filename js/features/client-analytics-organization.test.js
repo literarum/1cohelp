@@ -84,7 +84,10 @@ describe('client-analytics-organization sort', () => {
             ],
             noInnRecords: [],
         };
-        let units = sortClientAnalyticsDisplayUnits(buildDisplayUnitsFromGrouped(grouped), 'appeals_desc');
+        let units = sortClientAnalyticsDisplayUnits(
+            buildDisplayUnitsFromGrouped(grouped),
+            'appeals_desc',
+        );
         expect(units[0].type).toBe('inn');
         expect(units[0].innKey).toBe('1111111111');
     });
@@ -164,7 +167,9 @@ describe('client-analytics-organization grouping', () => {
             { id: 2, name: 'Б', sortOrder: 1 },
         ];
         const sections = groupClientAnalyticsUnitsForRender(units, 'tag', [], tags, meta);
-        const withInn = sections.filter((s) => s.units.some((u) => getClientAnalyticsUnitMetaId(u) === 'inn:7707083893'));
+        const withInn = sections.filter((s) =>
+            s.units.some((u) => getClientAnalyticsUnitMetaId(u) === 'inn:7707083893'),
+        );
         expect(withInn.length).toBe(2);
         const untagged = sections.find((s) => s.key === 'tag:untagged');
         expect(untagged.units).toHaveLength(1);

@@ -28,7 +28,8 @@ export function escapeTrainingSrsHtml(s) {
 export function buildSrsFlipCardSectionHtml(card) {
     const front = escapeTrainingSrsHtml(card.front);
     const back = escapeTrainingSrsHtml(card.back);
-    const rawId = card.cardId != null && String(card.cardId).trim() !== '' ? String(card.cardId) : '';
+    const rawId =
+        card.cardId != null && String(card.cardId).trim() !== '' ? String(card.cardId) : '';
     const safeBackId = rawId ? `training-srs-flip-back-${rawId.replace(/[^\w-]/g, '')}` : '';
     const backIdAttr = safeBackId ? ` id="${escapeTrainingSrsHtml(safeBackId)}"` : '';
     const toggleControlsAttr = safeBackId
@@ -63,7 +64,11 @@ export function buildSrsFlipCardSectionHtml(card) {
  * @returns {el is HTMLElement}
  */
 function isHtmlElement(el) {
-    return !!el && el.nodeType === 1 && typeof (/** @type {HTMLElement} */ (el)).setAttribute === 'function';
+    return (
+        !!el &&
+        el.nodeType === 1 &&
+        typeof (/** @type {HTMLElement} */ (el).setAttribute) === 'function'
+    );
 }
 
 export function setSrsFlipRevealed(root, revealed) {

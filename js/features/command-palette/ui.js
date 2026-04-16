@@ -130,16 +130,14 @@ export function onKeydown(e) {
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (currentResults.length === 0) return;
-        selectedIndex =
-            selectedIndex === currentResults.length - 1 ? 0 : selectedIndex + 1;
+        selectedIndex = selectedIndex === currentResults.length - 1 ? 0 : selectedIndex + 1;
         updateHighlight();
         return;
     }
     if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (currentResults.length === 0) return;
-        selectedIndex =
-            selectedIndex === 0 ? currentResults.length - 1 : selectedIndex - 1;
+        selectedIndex = selectedIndex === 0 ? currentResults.length - 1 : selectedIndex - 1;
         updateHighlight();
         return;
     }

@@ -124,11 +124,15 @@ function readQuizFromDom(quizQuestionsEl) {
  */
 function renderQuizQuestions(quizQuestionsEl, items) {
     quizQuestionsEl.innerHTML = '';
-    const list = Array.isArray(items) && items.length ? items : [{ question: '', options: [], correctIndex: 0 }];
+    const list =
+        Array.isArray(items) && items.length
+            ? items
+            : [{ question: '', options: [], correctIndex: 0 }];
     list.forEach((item, idx) => {
         const row = document.createElement('div');
         row.setAttribute('data-mq-q', String(idx));
-        row.className = 'rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50 dark:bg-gray-900/50';
+        row.className =
+            'rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50 dark:bg-gray-900/50';
         const head = document.createElement('div');
         head.className = 'flex justify-between items-center gap-2';
         head.innerHTML = `<span class="text-xs font-medium text-gray-600 dark:text-gray-400">Вопрос ${idx + 1}</span>`;
@@ -177,7 +181,11 @@ function renderQuizQuestions(quizQuestionsEl, items) {
         );
         row.addEventListener('change', (ev) => {
             const t = ev.target;
-            if (t instanceof HTMLInputElement && t.type === 'radio' && t.hasAttribute('data-mq-qcorrect-radio')) {
+            if (
+                t instanceof HTMLInputElement &&
+                t.type === 'radio' &&
+                t.hasAttribute('data-mq-qcorrect-radio')
+            ) {
                 row.setAttribute('data-mq-sel', t.value);
             }
         });

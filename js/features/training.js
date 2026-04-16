@@ -219,10 +219,7 @@ async function openUserCurriculumEditorFlow(trackId) {
         onSave: async (track) => {
             const merged = {
                 ...track,
-                id:
-                    track.id && String(track.id).startsWith('user-')
-                        ? track.id
-                        : newUserTrackId(),
+                id: track.id && String(track.id).startsWith('user-') ? track.id : newUserTrackId(),
                 mode: 'textbook',
                 createdAt: initial?.createdAt || track.createdAt || new Date().toISOString(),
             };
@@ -444,7 +441,12 @@ export function initTrainingSystem() {
             })();
             return;
         }
-        if (t && t instanceof HTMLInputElement && t.id === 'trainingMentorImportFile' && t.files?.length) {
+        if (
+            t &&
+            t instanceof HTMLInputElement &&
+            t.id === 'trainingMentorImportFile' &&
+            t.files?.length
+        ) {
             const f = t.files[0];
             t.value = '';
             if (f) void handleMentorImportFile(f);
@@ -850,7 +852,12 @@ async function handleSrsGrade(cardId, grade) {
     }
     if (!card) return;
     const q = gradeToQuality(/** @type {any} */ (grade));
-    const next = sm2Schedule(q, card.repetitions || 0, card.easeFactor || 2.5, card.intervalDays || 0);
+    const next = sm2Schedule(
+        q,
+        card.repetitions || 0,
+        card.easeFactor || 2.5,
+        card.intervalDays || 0,
+    );
     const interval = scaleInterval(next.intervalDays, scale);
     const dueAt = nextDueFromInterval(Date.now(), interval);
     const updated = {
@@ -1098,9 +1105,13 @@ async function handleMentorImportFile(file) {
     try {
         await saveMentorQuizPack(State, toSave);
         logTrainingEvent('info', 'MENTOR_PACK_IMPORT', toSave.id);
-        deps.showNotification?.('Пакет импортирован. При необходимости нажмите «Отправить в учебник».', 'success', {
-            duration: 4000,
-        });
+        deps.showNotification?.(
+            'Пакет импортирован. При необходимости нажмите «Отправить в учебник».',
+            'success',
+            {
+                duration: 4000,
+            },
+        );
         await renderTrainingPage();
     } catch (e) {
         logTrainingEvent('error', 'MENTOR_IMPORT_SAVE', String(e));
@@ -1268,10 +1279,14 @@ function renderTrainingTrackSection(progress, track) {
                         <div class="flex-1 min-w-0">
                             <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-50">${escapeHtml(step.title)}</h4>
                             <div class="training-step-body prose-dark mt-2 text-gray-700 dark:text-gray-300">${locked ? '<p class="text-gray-500">Завершите предыдущий шаг и квиз (если есть).</p>' : step.bodyHtml}</div>
-                            ${!locked ? `<div class="mt-4 flex flex-wrap gap-2">
+                            ${
+                                !locked
+                                    ? `<div class="mt-4 flex flex-wrap gap-2">
                                 <button type="button" class="training-ack-btn px-4 py-2 rounded-xl text-primary text-sm font-medium disabled:opacity-40" data-training-ack data-track="${escapeHtml(track.id)}" data-step="${escapeHtml(sid)}" ${ackDisabled ? 'disabled' : ''}>${tp.acknowledged[sid] ? 'Прочитано' : 'Прочитал / понял'}</button>
                                 <button type="button" class="training-weak-mark-btn px-3 py-2 rounded-xl text-sm text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20" data-training-mark-weak data-track="${escapeHtml(track.id)}" data-step="${escapeHtml(sid)}">Ошибся здесь</button>
-                            </div>` : ''}
+                            </div>`
+                                    : ''
+                            }
                             ${!locked ? quizSection : ''}
                         </div>
                     </div>
@@ -1279,26 +1294,22 @@ function renderTrainingTrackSection(progress, track) {
         })
         .join('');
 
-    const pct =
-        track.steps.length === 0 ? 100 : Math.round((fi / track.steps.length) * 100);
+    const pct = track.steps.length === 0 ? 100 : Math.round((fi / track.steps.length) * 100);
 
-    const userActions =
-        String(track.id).startsWith('user-') ?
-            `<div class="flex items-center gap-1 shrink-0">
+    const userActions = String(track.id).startsWith('user-')
+        ? `<div class="flex items-center gap-1 shrink-0">
                 <button type="button" class="training-icon-btn text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60" data-training-user-edit data-track-id="${escapeHtml(track.id)}" aria-label="Изменить модуль" title="Изменить"><i class="fas fa-pen text-sm" aria-hidden="true"></i></button>
                 <button type="button" class="training-icon-btn text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" data-training-user-delete data-track-id="${escapeHtml(track.id)}" aria-label="Удалить модуль" title="Удалить"><i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>
             </div>`
-        :   '';
+        : '';
 
-    const builtinHideBtn =
-        !String(track.id).startsWith('user-') ?
-            `<button type="button" class="training-icon-btn shrink-0 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30" data-training-builtin-hide data-track-id="${escapeHtml(track.id)}" aria-label="Убрать стандартный модуль из списка" title="Убрать из списка"><i class="fas fa-eye-slash text-sm" aria-hidden="true"></i></button>`
-        :   '';
+    const builtinHideBtn = !String(track.id).startsWith('user-')
+        ? `<button type="button" class="training-icon-btn shrink-0 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30" data-training-builtin-hide data-track-id="${escapeHtml(track.id)}" aria-label="Убрать стандартный модуль из списка" title="Убрать из списка"><i class="fas fa-eye-slash text-sm" aria-hidden="true"></i></button>`
+        : '';
 
-    const builtinEditBtn =
-        !String(track.id).startsWith('user-') ?
-            `<button type="button" class="training-icon-btn shrink-0 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60" data-training-builtin-edit data-track-id="${escapeHtml(track.id)}" aria-label="Настроить стандартный модуль" title="Настроить"><i class="fas fa-sliders-h text-sm" aria-hidden="true"></i></button>`
-        :   '';
+    const builtinEditBtn = !String(track.id).startsWith('user-')
+        ? `<button type="button" class="training-icon-btn shrink-0 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60" data-training-builtin-edit data-track-id="${escapeHtml(track.id)}" aria-label="Настроить стандартный модуль" title="Настроить"><i class="fas fa-sliders-h text-sm" aria-hidden="true"></i></button>`
+        : '';
 
     return `<section class="training-track-card rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/80 shadow-sm overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1334,18 +1345,17 @@ function renderTextbook(progress, userTracks) {
         </div>`;
     const userSections = sortedUser.map((t) => renderTrainingTrackSection(progress, t)).join('');
     const emptyUserHint =
-        sortedUser.length === 0 ?
-            '<p class="text-sm text-gray-500 dark:text-gray-400 mb-8">Пока нет своих модулей — нажмите «Новый модуль», добавьте шаги и при необходимости квизы.</p>'
-        :   '';
+        sortedUser.length === 0
+            ? '<p class="text-sm text-gray-500 dark:text-gray-400 mb-8">Пока нет своих модулей — нажмите «Новый модуль», добавьте шаги и при необходимости квизы.</p>'
+            : '';
     const hiddenBuiltin = new Set(progress.hiddenBuiltinTrackIds || []);
     const visibleBuiltinDefs = TRAINING_TRACKS.filter((t) => !hiddenBuiltin.has(t.id));
-    const builtinIntro =
-        visibleBuiltinDefs.length ?
-            `
+    const builtinIntro = visibleBuiltinDefs.length
+        ? `
         <div class="pt-4 pb-2 border-t border-gray-200 dark:border-gray-700 mt-4">
             <h3 class="text-xl font-bold text-gray-900 dark:text-gray-50">Стандартные материалы</h3>
         </div>`
-        :   '';
+        : '';
     const builtinSections = visibleBuiltinDefs
         .map((t) => {
             const eff = getEffectiveBuiltinTrack(t.id, cachedBuiltinOverrides);

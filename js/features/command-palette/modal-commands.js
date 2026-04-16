@@ -225,7 +225,8 @@ const MODAL_REGISTRY = [
         subtitle: 'Корзина удалённых материалов',
         score: 0.9,
         keywords: ['недавно удал', 'корзин', 'trash', 'восстановить'],
-        run: () => tryWindowFn('openRecentlyDeletedModal') || tryClickIds(['openRecentlyDeletedBtn']),
+        run: () =>
+            tryWindowFn('openRecentlyDeletedModal') || tryClickIds(['openRecentlyDeletedBtn']),
     },
     {
         key: 'favoritesPanel',

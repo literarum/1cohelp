@@ -2,10 +2,7 @@
 
 import { TRAINING_TRACKS } from './training-curriculum.js';
 import { TRAINING_PROGRESS_BACKUP_KEY } from '../constants.js';
-import {
-    getFromIndexedDB,
-    saveToIndexedDB,
-} from '../db/indexeddb.js';
+import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 
 const PROGRESS_ID = 'default';
 
@@ -52,8 +49,12 @@ export function mergeTrackProgressMaps(a, b) {
     const B = b && typeof b === 'object' ? b : {};
     const ids = new Set([...Object.keys(out), ...Object.keys(B)]);
     for (const tid of ids) {
-        const x = /** @type {Record<string, unknown>} */ (out[tid] && typeof out[tid] === 'object' ? out[tid] : {});
-        const y = /** @type {Record<string, unknown>} */ (B[tid] && typeof B[tid] === 'object' ? B[tid] : {});
+        const x = /** @type {Record<string, unknown>} */ (
+            out[tid] && typeof out[tid] === 'object' ? out[tid] : {}
+        );
+        const y = /** @type {Record<string, unknown>} */ (
+            B[tid] && typeof B[tid] === 'object' ? B[tid] : {}
+        );
         const ax = x.acknowledged && typeof x.acknowledged === 'object' ? x.acknowledged : {};
         const ay = y.acknowledged && typeof y.acknowledged === 'object' ? y.acknowledged : {};
         const acknowledged = { ...ax, ...ay };
@@ -72,8 +73,14 @@ export function mergeTrackProgressMaps(a, b) {
         for (const [k, v] of Object.entries(ry)) {
             quizRuns[k] = Math.max(Number(rx[k]) || 0, Number(v) || 0);
         }
-        const qfx = x.quizFeedbackByStep && typeof x.quizFeedbackByStep === 'object' ? x.quizFeedbackByStep : {};
-        const qfy = y.quizFeedbackByStep && typeof y.quizFeedbackByStep === 'object' ? y.quizFeedbackByStep : {};
+        const qfx =
+            x.quizFeedbackByStep && typeof x.quizFeedbackByStep === 'object'
+                ? x.quizFeedbackByStep
+                : {};
+        const qfy =
+            y.quizFeedbackByStep && typeof y.quizFeedbackByStep === 'object'
+                ? y.quizFeedbackByStep
+                : {};
         const quizFeedbackByStep = { ...qfx, ...qfy };
         out[tid] = { ...x, ...y, acknowledged, quizPassed, quizRuns, quizFeedbackByStep };
     }

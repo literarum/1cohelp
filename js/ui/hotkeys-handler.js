@@ -32,6 +32,8 @@ let saveUserPreferences = null;
 let getTopmostModal = null;
 let getVisibleModals = null;
 let requestCloseModal = null;
+/** @type {((modal: HTMLElement) => void) | null} */
+let closeSettingsStackModal = null;
 let removeEscapeHandler = null;
 let showAddModal = null;
 let showAddEditCibLinkModal = null;
@@ -77,6 +79,8 @@ export function setHotkeysDependencies(deps) {
     if (deps.getTopmostModal !== undefined) getTopmostModal = deps.getTopmostModal;
     if (deps.getVisibleModals !== undefined) getVisibleModals = deps.getVisibleModals;
     if (deps.requestCloseModal !== undefined) requestCloseModal = deps.requestCloseModal;
+    if (deps.closeSettingsStackModal !== undefined)
+        closeSettingsStackModal = deps.closeSettingsStackModal;
     if (deps.removeEscapeHandler !== undefined) removeEscapeHandler = deps.removeEscapeHandler;
     if (deps.showAddModal !== undefined) showAddModal = deps.showAddModal;
     if (deps.showAddEditCibLinkModal !== undefined)
@@ -107,8 +111,7 @@ export function setHotkeysDependencies(deps) {
  * Обработчик клика по ссылке "Клиент не знает ИНН" (делегирование событий)
  */
 export function handleNoInnLinkEvent(event) {
-    const link =
-        event.target.closest('a#noInnLink') || event.target.closest('a[id^="noInnLink_"]');
+    const link = event.target.closest('a#noInnLink') || event.target.closest('a[id^="noInnLink_"]');
     if (link) {
         event.preventDefault();
         if (typeof showNoInnModal === 'function') {
@@ -291,8 +294,7 @@ export async function handleGlobalHotkey(event) {
         !isInputFocusedEarly &&
         (code === 'KeyU' || code === 'KeyR')
     ) {
-        const visibleForHistory =
-            typeof getVisibleModals === 'function' ? getVisibleModals() : [];
+        const visibleForHistory = typeof getVisibleModals === 'function' ? getVisibleModals() : [];
         const topModalForHistory =
             typeof getTopmostModal === 'function' && visibleForHistory.length
                 ? getTopmostModal(visibleForHistory)
@@ -310,10 +312,7 @@ export async function handleGlobalHotkey(event) {
                 }
                 return;
             }
-        } else if (
-            topModalForHistory &&
-            MODAL_IDS_WITH_HISTORY.includes(topModalForHistory.id)
-        ) {
+        } else if (topModalForHistory && MODAL_IDS_WITH_HISTORY.includes(topModalForHistory.id)) {
             event.preventDefault();
             event.stopPropagation();
             if (code === 'KeyU') {
@@ -637,7 +636,10 @@ export async function handleGlobalHotkey(event) {
                 if (reglamentDetailModal && !reglamentDetailModal.classList.contains('hidden')) {
                     reglamentDetailModal.classList.add('hidden');
                 }
-                if (clientAnalyticsClearAllModal && !clientAnalyticsClearAllModal.classList.contains('hidden')) {
+                if (
+                    clientAnalyticsClearAllModal &&
+                    !clientAnalyticsClearAllModal.classList.contains('hidden')
+                ) {
                     closeClientAnalyticsClearAllModal();
                 } else if (
                     clientAnalyticsDetailModal &&
@@ -761,7 +763,10 @@ export async function handleGlobalHotkey(event) {
             console.log('[GlobalHotkey Esc] Закрытие подтверждения очистки базы клиентов');
             closeClientAnalyticsClearAllModal();
             closedSomethingInChain = true;
-        } else if (clientAnalyticsDetailModal && !clientAnalyticsDetailModal.classList.contains('hidden')) {
+        } else if (
+            clientAnalyticsDetailModal &&
+            !clientAnalyticsDetailModal.classList.contains('hidden')
+        ) {
             console.log('[GlobalHotkey Esc] Закрытие карточки аналитики клиентов');
             closeClientAnalyticsDetailModal();
             closedSomethingInChain = true;
@@ -782,15 +787,24 @@ export async function handleGlobalHotkey(event) {
                             (topmost.id === 'editModal' ||
                                 topmost.id === 'addModal' ||
                                 topmost.id === 'customizeUIModal' ||
+                                topmost.id === 'appCustomizationModal' ||
                                 topmost.id === 'bookmarkModal')
                         ) {
                             if (requestCloseModal(topmost) === false) {
                                 return;
                             }
                         }
-                        topmost.classList.add('hidden');
-                        if (typeof removeEscapeHandler === 'function') {
-                            removeEscapeHandler(topmost);
+                        if (
+                            (topmost.id === 'customizeUIModal' ||
+                                topmost.id === 'appCustomizationModal') &&
+                            typeof closeSettingsStackModal === 'function'
+                        ) {
+                            closeSettingsStackModal(topmost);
+                        } else {
+                            topmost.classList.add('hidden');
+                            if (typeof removeEscapeHandler === 'function') {
+                                removeEscapeHandler(topmost);
+                            }
                         }
                     } else {
                         console.log(

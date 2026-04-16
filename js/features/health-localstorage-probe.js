@@ -23,12 +23,9 @@ export function runLocalStorageHealthProbe(reportFn, opts = {}) {
               : null;
 
     if (!storage || typeof storage.setItem !== 'function') {
-        reportFn(
-            'warn',
-            'localStorage (второй контур)',
-            'localStorage недоступен в этой среде.',
-            { system: 'storage_ls' },
-        );
+        reportFn('warn', 'localStorage (второй контур)', 'localStorage недоступен в этой среде.', {
+            system: 'storage_ls',
+        });
         return;
     }
 

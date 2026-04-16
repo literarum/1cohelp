@@ -38,7 +38,11 @@ describe('ui-health-button-sweep', () => {
             calls.push(tabId);
         });
         const report = vi.fn();
-        await runFullButtonHealthSweep({ setActiveTab, State: { currentSection: 'main' } }, report, (p) => p);
+        await runFullButtonHealthSweep(
+            { setActiveTab, State: { currentSection: 'main' } },
+            report,
+            (p) => p,
+        );
         expect(setActiveTab).toHaveBeenCalled();
         expect(calls[calls.length - 1]).toBe('main');
         expect(HEALTH_BUTTON_SWEEP_TAB_IDS.length).toBeGreaterThan(10);
@@ -86,7 +90,11 @@ describe('ui-health-button-sweep', () => {
         const clickSpy = vi.spyOn(HTMLElement.prototype, 'click').mockImplementation(() => {});
         const setActiveTab = vi.fn(async () => {});
         const report = vi.fn();
-        await runFullButtonHealthSweep({ setActiveTab, State: { currentSection: 'main' } }, report, (p) => p);
+        await runFullButtonHealthSweep(
+            { setActiveTab, State: { currentSection: 'main' } },
+            report,
+            (p) => p,
+        );
         expect(clickSpy).not.toHaveBeenCalled();
         clickSpy.mockRestore();
     });

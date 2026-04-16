@@ -3,7 +3,7 @@
  */
 'use strict';
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { openAnimatedModal, closeAnimatedModal, setModalDependencies } from './modal.js';
 
 /** @param {HTMLElement} modal */

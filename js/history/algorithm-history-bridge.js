@@ -6,12 +6,7 @@
  */
 
 import { State } from '../app/state.js';
-import {
-    popRedo,
-    popUndo,
-    pushUndoAfterSave,
-    snapshotsEqual,
-} from './entity-edit-history-core.js';
+import { popRedo, popUndo, pushUndoAfterSave, snapshotsEqual } from './entity-edit-history-core.js';
 import {
     collectScreenshotIdsFromAlgorithmSteps,
     readScreenshotRecordsByIds,
@@ -89,7 +84,9 @@ function applyAlgorithmEntryToMemory(algorithmData, section, algorithmIdStr, tar
         targetAlgorithms.main = algorithmData;
     } else {
         if (!targetAlgorithms[section]) targetAlgorithms[section] = [];
-        const idx = targetAlgorithms[section].findIndex((a) => String(a?.id) === String(algorithmIdStr));
+        const idx = targetAlgorithms[section].findIndex(
+            (a) => String(a?.id) === String(algorithmIdStr),
+        );
         if (idx >= 0) {
             targetAlgorithms[section][idx] = algorithmData;
         } else {
@@ -233,9 +230,7 @@ export async function performAlgorithmHistoryStep(direction) {
     const currentSnap = await buildCurrentAlgorithmSnapshot(section, algorithmIdStr);
 
     const result =
-        direction === 'undo'
-            ? popUndo(stacks, currentSnap)
-            : popRedo(stacks, currentSnap);
+        direction === 'undo' ? popUndo(stacks, currentSnap) : popRedo(stacks, currentSnap);
 
     if (!result.target || result.error) {
         showNotification?.(
@@ -271,7 +266,9 @@ export async function performAlgorithmHistoryStep(direction) {
         }
 
         showNotification?.(
-            direction === 'undo' ? 'Восстановлена предыдущая сохранённая версия.' : 'Восстановлена следующая версия.',
+            direction === 'undo'
+                ? 'Восстановлена предыдущая сохранённая версия.'
+                : 'Восстановлена следующая версия.',
             'success',
         );
     } catch (e) {

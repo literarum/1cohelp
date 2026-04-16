@@ -13,7 +13,10 @@ vi.mock('./training-curriculum.js', () => ({
     ],
 }));
 
-import { getEffectiveBuiltinTrack, normalizeBuiltinTrackRecord } from './training-builtin-curriculum.js';
+import {
+    getEffectiveBuiltinTrack,
+    normalizeBuiltinTrackRecord,
+} from './training-builtin-curriculum.js';
 
 const MOCK_STEPS = [{ id: 's1', title: 'Step', bodyHtml: '<p>x</p>' }];
 

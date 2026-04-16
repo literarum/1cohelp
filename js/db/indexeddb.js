@@ -560,7 +560,9 @@ export async function getAllFromIndexWithKeyVariants(storeName, indexName, index
             for (const row of rows) {
                 if (!row) continue;
                 const dedupeKey =
-                    row.id !== null && row.id !== undefined ? `id:${row.id}` : `fallback:${out.length}`;
+                    row.id !== null && row.id !== undefined
+                        ? `id:${row.id}`
+                        : `fallback:${out.length}`;
                 if (!seen.has(dedupeKey)) {
                     seen.add(dedupeKey);
                     out.push(row);

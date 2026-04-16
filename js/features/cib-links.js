@@ -458,9 +458,7 @@ export async function renderCibLinks(links) {
 
         const linkDisplay = linkValueHtml(link.link);
         const linkDisplayCard = linkValueHtmlCard(link.link);
-        const descHtml = link.description
-            ? linkify(link.description)
-            : '';
+        const descHtml = link.description ? linkify(link.description) : '';
 
         if (currentView === 'list') {
             linkElement.className =

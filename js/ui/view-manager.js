@@ -171,9 +171,12 @@ export function applyView(container, view) {
             container.classList.add(...gridColsClassesBase);
         }
         if (
-            ['bookmarksContainer', 'extLinksContainer', 'linksContainer', 'clientAnalyticsContainer'].includes(
-                sectionId,
-            )
+            [
+                'bookmarksContainer',
+                'extLinksContainer',
+                'linksContainer',
+                'clientAnalyticsContainer',
+            ].includes(sectionId)
         ) {
             container.classList.add('gap-4');
         } else if (sectionId === 'reglamentCategoryGrid') {

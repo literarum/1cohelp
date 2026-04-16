@@ -553,7 +553,9 @@ export function applyPanelOrderAndVisibility(order, visibility) {
  * @param {object} [navOptions] - contextual-back: navigationSource, scrollRestore, reglamentsSnapshot
  */
 export async function setActiveTab(tabId, warningJustAccepted = false, navOptions = {}) {
-    const next = tabSwitchChain.then(() => setActiveTabCore(tabId, warningJustAccepted, navOptions));
+    const next = tabSwitchChain.then(() =>
+        setActiveTabCore(tabId, warningJustAccepted, navOptions),
+    );
     tabSwitchChain = next.catch(() => {});
     return next;
 }
@@ -585,7 +587,11 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
 
     let targetContent = document.getElementById(targetContentId);
     // Резервный контур: динамический раздел "Шаблоны" может не быть создан к моменту клика.
-    if (!targetContent && tabId === 'shablony' && typeof window.initGoogleDocSections === 'function') {
+    if (
+        !targetContent &&
+        tabId === 'shablony' &&
+        typeof window.initGoogleDocSections === 'function'
+    ) {
         try {
             window.initGoogleDocSections();
             targetContent = document.getElementById(targetContentId);
@@ -622,7 +628,8 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
     }
 
     allTabButtons.forEach((button) => {
-        const isActive = button.id === targetTabId && tabId !== 'favorites' && tabId !== 'reminders';
+        const isActive =
+            button.id === targetTabId && tabId !== 'favorites' && tabId !== 'reminders';
         if (isActive) {
             button.classList.add('tab-active');
             button.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
@@ -720,7 +727,10 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
     }
 
     if (targetContent && tabId === 'clientAnalytics') {
-        if (deps.renderClientAnalyticsPage && typeof deps.renderClientAnalyticsPage === 'function') {
+        if (
+            deps.renderClientAnalyticsPage &&
+            typeof deps.renderClientAnalyticsPage === 'function'
+        ) {
             await deps.renderClientAnalyticsPage();
         } else if (typeof window.renderClientAnalyticsPage === 'function') {
             await window.renderClientAnalyticsPage();

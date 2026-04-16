@@ -298,7 +298,9 @@
 
 /* Редактор модуля: в режиме шага верх и низ размыты, фокус на панели шага */
 .training-user-editor-blur-when-step {
-    transition: filter 0.32s ease, opacity 0.32s ease;
+    transition:
+        filter 0.32s ease,
+        opacity 0.32s ease;
 }
 
 .training-user-editor--step-focus .training-user-editor-blur-when-step {
@@ -634,12 +636,16 @@
             0 0 0 1px rgba(196, 181, 253, 0.1);
     }
 
-    .training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:hover .training-srs-flip__inner {
+    .training-srs-flip:not(.training-srs-flip--revealed)
+        .training-srs-flip__stage:hover
+        .training-srs-flip__inner {
         transform: rotateY(9deg) translateZ(14px);
         transition-duration: 0.24s;
     }
 
-    .training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:hover .training-srs-flip__inner {
+    .training-srs-flip.training-srs-flip--revealed
+        .training-srs-flip__stage:hover
+        .training-srs-flip__inner {
         transform: rotateY(171deg) translateZ(14px);
         transition-duration: 0.24s;
     }
@@ -670,12 +676,16 @@
         0 0 0 1px rgba(196, 181, 253, 0.1);
 }
 
-.training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:focus-visible .training-srs-flip__inner {
+.training-srs-flip:not(.training-srs-flip--revealed)
+    .training-srs-flip__stage:focus-visible
+    .training-srs-flip__inner {
     transform: rotateY(9deg) translateZ(14px);
     transition-duration: 0.24s;
 }
 
-.training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:focus-visible .training-srs-flip__inner {
+.training-srs-flip.training-srs-flip--revealed
+    .training-srs-flip__stage:focus-visible
+    .training-srs-flip__inner {
     transform: rotateY(171deg) translateZ(14px);
     transition-duration: 0.24s;
 }
@@ -685,11 +695,15 @@
     transition-duration: 0.1s;
 }
 
-.training-srs-flip:not(.training-srs-flip--revealed) .training-srs-flip__stage:active .training-srs-flip__inner {
+.training-srs-flip:not(.training-srs-flip--revealed)
+    .training-srs-flip__stage:active
+    .training-srs-flip__inner {
     transform: rotateY(4deg) translateZ(6px) scale(0.995);
 }
 
-.training-srs-flip.training-srs-flip--revealed .training-srs-flip__stage:active .training-srs-flip__inner {
+.training-srs-flip.training-srs-flip--revealed
+    .training-srs-flip__stage:active
+    .training-srs-flip__inner {
     transform: rotateY(176deg) translateZ(6px) scale(0.995);
 }
 

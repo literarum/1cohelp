@@ -12,7 +12,12 @@
         align-items: stretch !important;
     }
 
-    #staticHeaderWrapper header > div > div.header-toolbar-row > #topHeaderActions .header-toolbar-cluster-scroll {
+    #staticHeaderWrapper
+        header
+        > div
+        > div.header-toolbar-row
+        > #topHeaderActions
+        .header-toolbar-cluster-scroll {
         justify-content: flex-end !important;
     }
 }

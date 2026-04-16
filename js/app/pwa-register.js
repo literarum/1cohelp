@@ -5,6 +5,9 @@ import { ASSET_QUERY_VERSION } from '../constants-pwa.js';
 /** @type {string|null} предотвращает повторную привязку обработчиков к тому же waiting worker */
 let wiredWaitingScriptUrl = null;
 
+/** Один раз на документ: updatefound / фокус-обновления (дубли при head-register + module). */
+let registrationLifecycleWired = false;
+
 /**
  * @returns {HTMLElement}
  */
@@ -82,7 +85,11 @@ function wireWaitingWorker(registration) {
 
     try {
         if (typeof window.showNotification === 'function') {
-            window.showNotification('Доступна новая версия. Нажмите «Обновить» в панели сверху.', 'info', 8000);
+            window.showNotification(
+                'Доступна новая версия. Нажмите «Обновить» в панели сверху.',
+                'info',
+                8000,
+            );
         }
     } catch {
         /* no-op */
@@ -165,22 +172,34 @@ export function initPwaShell() {
         return;
     }
 
-    const swUrl = new URL('sw.js', window.location.href);
-    const scope = new URL('./', window.location.href);
+    const swUrl =
+        typeof window.__COPILOT_SW_URL__ === 'string' && window.__COPILOT_SW_URL__
+            ? window.__COPILOT_SW_URL__
+            : new URL('sw.js', window.location.href).href;
+    const scope =
+        typeof window.__COPILOT_SW_SCOPE__ === 'string' && window.__COPILOT_SW_SCOPE__
+            ? window.__COPILOT_SW_SCOPE__
+            : new URL('./', window.location.href).href;
 
     navigator.serviceWorker
-        .register(swUrl.href, { scope: scope.href, updateViaCache: 'none' })
+        .register(swUrl, { scope, updateViaCache: 'none' })
         .then((registration) => {
-            listenForInstallingWorker(registration);
+            if (!registrationLifecycleWired) {
+                registrationLifecycleWired = true;
+                listenForInstallingWorker(registration);
+            }
             if (registration.waiting && navigator.serviceWorker.controller) {
                 wireWaitingWorker(registration);
             }
 
             const check = () => registration.update().catch(() => {});
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') check();
-            });
-            window.addEventListener('focus', check);
+            if (!window.__COPILOT_PWA_LIFECYCLE_REFRESH__) {
+                window.__COPILOT_PWA_LIFECYCLE_REFRESH__ = true;
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') check();
+                });
+                window.addEventListener('focus', check);
+            }
         })
         .catch((err) => {
             console.warn('[pwa] service worker registration failed', err);

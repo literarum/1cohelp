@@ -27,10 +27,7 @@ export const DEFAULT_CLIENT_SLO_BUDGETS = {
  */
 export function percentileSorted(sortedAsc, p) {
     if (!sortedAsc.length) return null;
-    const idx = Math.min(
-        sortedAsc.length - 1,
-        Math.max(0, Math.ceil(p * sortedAsc.length) - 1),
-    );
+    const idx = Math.min(sortedAsc.length - 1, Math.max(0, Math.ceil(p * sortedAsc.length) - 1));
     return sortedAsc[idx];
 }
 
@@ -56,7 +53,10 @@ function saveRaw(data) {
     memoryFallbackStore = { samples: Array.isArray(data.samples) ? [...data.samples] : [] };
     if (typeof localStorage !== 'undefined') {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ samples: memoryFallbackStore.samples }));
+            localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({ samples: memoryFallbackStore.samples }),
+            );
         } catch {
             /* квота или приватный режим — остаётся только память */
         }

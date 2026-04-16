@@ -55,13 +55,17 @@ describe('ui-health-surface-registry', () => {
     it('filterDomAuditMissingIdsForConditionalMainAlgo убирает noInnLink если ни один шаг не требует ссылки', () => {
         const raw = ['searchInput', NO_INN_LINK_DOM_ID];
         expect(
-            filterDomAuditMissingIdsForConditionalMainAlgo(raw, [{ title: 'Просто шаг', showNoInnHelp: false }]),
+            filterDomAuditMissingIdsForConditionalMainAlgo(raw, [
+                { title: 'Просто шаг', showNoInnHelp: false },
+            ]),
         ).toEqual(['searchInput']);
     });
 
     it('filterDomAuditMissingIdsForConditionalMainAlgo оставляет noInnLink при inn_step', () => {
         const raw = [NO_INN_LINK_DOM_ID];
-        expect(filterDomAuditMissingIdsForConditionalMainAlgo(raw, [{ type: 'inn_step' }])).toEqual(raw);
+        expect(filterDomAuditMissingIdsForConditionalMainAlgo(raw, [{ type: 'inn_step' }])).toEqual(
+            raw,
+        );
     });
 
     it('filterDomAuditMissingIdsForBirthdayMode убирает birthday-узлы, когда режим выключен', () => {

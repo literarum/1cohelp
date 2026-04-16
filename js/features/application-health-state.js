@@ -1,5 +1,7 @@
 'use strict';
 
+import { getRuntimeHubBufferMeta } from './runtime-issue-hub.js';
+
 /**
  * Оркестрация самотестирования: фазы (готовность / живучесть / глубокий ручной прогон),
  * кольцевой журнал watchdog и перекрёстные заметки для экспорта диагностики (двойной контур наблюдаемости).
@@ -143,6 +145,21 @@ function evaluateCrossCheckNotes() {
                 'Тройной контур: после «чистого» старта в последнем плановом watchdog накопились только рантайм-сбои при нуле ошибок чеклиста — сверьте буфер runtime и HUD.',
             );
         }
+    }
+
+    try {
+        const hub = getRuntimeHubBufferMeta();
+        if (
+            hub.faultCount >= 8 &&
+            hub.uniqueFaultFingerprints <= 2 &&
+            hub.duplicatePressure === 'high'
+        ) {
+            notes.push(
+                'Двойной контур: в буфере runtime много записей при почти одном отпечатке (повторяющийся сбой) — проверьте HUD, журнал кокпита и последний экспорт диагностики.',
+            );
+        }
+    } catch {
+        /* метаданные хаба не должны ломать экспорт состояния */
     }
 
     return notes;

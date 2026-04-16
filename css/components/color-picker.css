@@ -64,7 +64,10 @@ html.dark .app-customization-hex-input[aria-invalid='true'] {
     min-width: 0;
 }
 
-#appCustomizationModal #advancedColorPicker .app-customization-sliders :is(#hue-slider, #saturation-slider, #brightness-slider) {
+#appCustomizationModal
+    #advancedColorPicker
+    .app-customization-sliders
+    :is(#hue-slider, #saturation-slider, #brightness-slider) {
     overflow: visible;
     width: 100%;
     max-width: 100%;
@@ -86,20 +89,27 @@ html.dark .app-customization-hex-input[aria-invalid='true'] {
 }
 
 #appCustomizationModal .customization-theme-preview-card__accent {
-    transition: opacity 0.15s ease, background-color 0.15s ease;
+    transition:
+        opacity 0.15s ease,
+        background-color 0.15s ease;
 }
 
 /* Фокус клавиатуры на слайдерах HSL (role="slider") */
 #appCustomizationModal #advancedColorPicker .app-customization-sliders [role='slider']:focus {
     outline: none;
 }
-#appCustomizationModal #advancedColorPicker .app-customization-sliders [role='slider']:focus-visible {
+#appCustomizationModal
+    #advancedColorPicker
+    .app-customization-sliders
+    [role='slider']:focus-visible {
     outline: 2px solid var(--color-primary, #9933ff);
     outline-offset: 3px;
 }
 
 /* Не fixed rounded-full (9999px): при --border-radius: 0 дорожки прямоугольные, иначе «капсула» от глобального радиуса */
-#appCustomizationModal #advancedColorPicker :is(#hue-slider, #saturation-slider, #brightness-slider),
+#appCustomizationModal
+    #advancedColorPicker
+    :is(#hue-slider, #saturation-slider, #brightness-slider),
 #appCustomizationModal #advancedColorPicker [data-color-track] {
     border-radius: min(50%, calc(var(--border-radius, 0px) * 2));
 }

@@ -6,7 +6,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
-const BIRTHDAY_CSS_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../css/components/birthday-mode.css');
+const BIRTHDAY_CSS_PATH = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../css/components/birthday-mode.css',
+);
 import {
     getBirthdayModeEnabled,
     prefersReducedMotion,
@@ -134,7 +137,9 @@ describe('birthday-mode', () => {
         const g1 = ensureBirthdayGarland();
         const g2 = ensureBirthdayGarland();
         expect(g1).toBe(g2);
-        expect(document.querySelectorAll('#birthdayGarland .birthday-garland__bulb').length).toBe(22);
+        expect(document.querySelectorAll('#birthdayGarland .birthday-garland__bulb').length).toBe(
+            22,
+        );
     });
 
     it('волна: у лампочек --garland-wave-y, у провода SVG-path', () => {
@@ -173,7 +178,9 @@ describe('birthday-mode', () => {
         expect(raw).toMatch(
             /html\.birthday-mode\s+\.app-brand-title__party-emoji\s*\{[\s\S]*?font-size:\s*0\.92em/s,
         );
-        expect(raw).toMatch(/html\.birthday-mode\s+\.app-brand-title__letters-so\s*\{[\s\S]*?margin-left/s);
+        expect(raw).toMatch(
+            /html\.birthday-mode\s+\.app-brand-title__letters-so\s*\{[\s\S]*?margin-left/s,
+        );
     });
 
     it('контейнер гирлянды: без overflow-hidden на основном блоке (регрессия «радуга» при обрезке filter)', () => {
@@ -232,17 +239,31 @@ describe('birthday-mode', () => {
 
     it('CSS: reduced mode для конфетти — мягкое падение, не статичная линия', () => {
         const raw = readFileSync(BIRTHDAY_CSS_PATH, 'utf8');
-        const reducedStart = raw.indexOf('html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-host {');
-        expect(reducedStart).toBeGreaterThan(-1);
-        const reducedEnd = raw.indexOf(
-            'html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-host .birthday-confetti',
-            reducedStart,
+        const reducedStart = raw.indexOf(
+            'html.birthday-mode.birthday-mode--reduced .birthday-fx-layer .birthday-confetti-host {',
         );
+        expect(reducedStart).toBeGreaterThan(-1);
+        /* После Prettier селектор вложенного `.birthday-confetti` может быть многострочным — ищем границу блока хоста по закрывающей скобке. */
+        let depth = 0;
+        let reducedEnd = -1;
+        for (let i = reducedStart; i < raw.length; i += 1) {
+            const ch = raw[i];
+            if (ch === '{') depth += 1;
+            if (ch === '}') {
+                depth -= 1;
+                if (depth === 0) {
+                    reducedEnd = i + 1;
+                    break;
+                }
+            }
+        }
         expect(reducedEnd).toBeGreaterThan(reducedStart);
         const reducedHostBlock = raw.slice(reducedStart, reducedEnd);
         expect(reducedHostBlock).not.toMatch(/animation:\s*none/);
         expect(reducedHostBlock).not.toMatch(/top:\s*8%/);
-        expect(reducedHostBlock).toMatch(/animation-duration:\s*calc\(\s*var\(--bc-dur,\s*7s\)\s*\*\s*2\.2\s*\)/);
+        expect(reducedHostBlock).toMatch(
+            /animation-duration:\s*calc\(\s*var\(--bc-dur,\s*7s\)\s*\*\s*2\.2\s*\)/,
+        );
     });
 
     it('конфетти: хост на частицу; --bc-sway и --bc-sway-neg на чипе', () => {
@@ -252,7 +273,9 @@ describe('birthday-mode', () => {
             removeEventListener: vi.fn(),
         });
         applyBirthdayModeToDocument(true);
-        const hosts = document.querySelectorAll(`#${BIRTHDAY_FX_LAYER_ID} .${BIRTHDAY_CONFETTI_HOST_CLASS}`);
+        const hosts = document.querySelectorAll(
+            `#${BIRTHDAY_FX_LAYER_ID} .${BIRTHDAY_CONFETTI_HOST_CLASS}`,
+        );
         const pieces = document.querySelectorAll(`#${BIRTHDAY_FX_LAYER_ID} .birthday-confetti`);
         expect(hosts.length).toBe(pieces.length);
         expect(hosts.length).toBeGreaterThan(40);

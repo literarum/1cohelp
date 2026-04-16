@@ -381,25 +381,52 @@ export async function importReglaments(reglaments) {
 // ============================================================================
 
 /**
- * Выполняет принудительное резервное копирование перед импортом
+ * Копии предупреждений для импорта и слияния (одинаковая защита, разный контекст).
+ * @param {'import' | 'merge'} operation
  */
-export async function performForcedBackup() {
-    const backupWarningMessagePlain =
-        'Создать резервную копию текущей базы данных перед импортом?\n\n' +
-        'ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.\n\n' +
-        "Нажмите 'Сделать бэкап', чтобы создать резервную копию (рекомендуется).\n" +
-        "Нажмите 'Без бэкапа', чтобы продолжить импорт без резервной копии (на свой страх и риск).";
-    const backupWarningMessageHtml =
-        '<p class="mb-3">Создать резервную копию текущей базы данных перед импортом?</p>' +
-        '<p class="mb-3"><span class="app-confirm-warning-caps text-red-600 dark:text-red-400 font-semibold underline uppercase">ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.</span></p>' +
-        '<p class="mb-2">Нажмите «Сделать бэкап», чтобы создать резервную копию (рекомендуется).</p>' +
-        '<p>Нажмите «Без бэкапа», чтобы продолжить импорт без резервной копии (на свой страх и риск).</p>';
+function getForcedBackupCopy(operation) {
+    const isMerge = operation === 'merge';
+    const actionAcc = isMerge ? 'слияние' : 'импорт';
+    return {
+        title: isMerge
+            ? 'Резервное копирование перед слиянием баз'
+            : 'Резервное копирование перед импортом',
+        backupWarningMessagePlain:
+            `Создать резервную копию текущей базы данных перед ${isMerge ? 'слиянием' : 'импортом'}?\n\n` +
+            'ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.\n\n' +
+            "Нажмите 'Сделать бэкап', чтобы создать резервную копию (рекомендуется).\n" +
+            `Нажмите 'Без бэкапа', чтобы продолжить ${actionAcc} без резервной копии (на свой страх и риск).`,
+        backupWarningMessageHtml:
+            `<p class="mb-3">Создать резервную копию текущей базы данных перед ${isMerge ? 'слиянием' : 'импортом'}?</p>` +
+            '<p class="mb-3"><span class="app-confirm-warning-caps text-red-600 dark:text-red-400 font-semibold underline uppercase">ОТКАЗ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ МОЖЕТ ПРИВЕСТИ К ПОЛНОЙ И НЕОБРАТИМОЙ ПОТЕРЕ ДАННЫХ.</span></p>' +
+            '<p class="mb-2">Нажмите «Сделать бэкап», чтобы создать резервную копию (рекомендуется).</p>' +
+            `<p>Нажмите «Без бэкапа», чтобы продолжить ${actionAcc} без резервной копии (на свой страх и риск).</p>`,
+        userGestureBody: isMerge
+            ? 'Автоматическое резервное копирование не удалось из-за ограничений безопасности браузера. ' +
+              'Слияние прервано. Попробуйте сначала экспортировать данные вручную.'
+            : 'Автоматическое резервное копирование не удалось из-за ограничений безопасности браузера. ' +
+              'Импорт прерван. Попробуйте сначала экспортировать данные вручную.',
+        backupCancelledBody: isMerge
+            ? 'Резервное копирование было отменено или не удалось. Слияние прервано.'
+            : 'Резервное копирование было отменено или не удалось. Импорт прерван.',
+    };
+}
+
+/**
+ * Принудительное резервное копирование с явным выбором пользователя (импорт / слияние).
+ * @param {{ operation?: 'import' | 'merge' }} [options]
+ * @returns {Promise<boolean|'skipped_by_user'|'aborted_by_user'>}
+ */
+export async function performForcedBackup(options = {}) {
+    const operation = options && options.operation === 'merge' ? 'merge' : 'import';
+    const copy = getForcedBackupCopy(operation);
+    const { backupWarningMessagePlain, backupWarningMessageHtml, title } = copy;
     let backupPromptAction;
     if (deps.showAppConfirm) {
         document.body.classList.add('app-backup-warning-perimeter-pulse');
         try {
             backupPromptAction = await deps.showAppConfirm({
-                title: 'Резервное копирование перед импортом',
+                title,
                 message: backupWarningMessageHtml,
                 messageIsHtml: true,
                 confirmText: 'Сделать бэкап',
@@ -425,12 +452,11 @@ export async function performForcedBackup() {
                 typeof exportOutcome === 'object' &&
                 exportOutcome.errorType === 'UserGestureRequired'
             ) {
-                deps.NotificationService?.add(
-                    'Автоматическое резервное копирование не удалось из-за ограничений безопасности браузера. ' +
-                        'Импорт прерван. Попробуйте сначала экспортировать данные вручную.',
-                    'error',
-                    { important: true, duration: 0, id: 'backup-gesture-error-critical-pfb' },
-                );
+                deps.NotificationService?.add(copy.userGestureBody, 'error', {
+                    important: true,
+                    duration: 0,
+                    id: 'backup-gesture-error-critical-pfb',
+                });
                 return false;
             } else if (exportOutcome === true) {
                 deps.NotificationService?.add(
@@ -443,11 +469,11 @@ export async function performForcedBackup() {
                 );
                 return true;
             } else {
-                deps.NotificationService?.add(
-                    'Резервное копирование было отменено или не удалось. Импорт прерван.',
-                    'error',
-                    { important: true, duration: 7000, id: 'forced-backup-failed-pfb' },
-                );
+                deps.NotificationService?.add(copy.backupCancelledBody, 'error', {
+                    important: true,
+                    duration: 7000,
+                    id: 'forced-backup-failed-pfb',
+                });
                 return false;
             }
         } catch (error) {
@@ -468,7 +494,7 @@ export async function performForcedBackup() {
         return 'skipped_by_user';
     } else {
         console.log(
-            '[performForcedBackup] Пользователь закрыл окно предупреждения (dismiss). Импорт полностью отменен.',
+            '[performForcedBackup] Пользователь закрыл окно предупреждения (dismiss). Операция полностью отменена.',
         );
         return 'aborted_by_user';
     }
@@ -2021,8 +2047,7 @@ function blobToBase64ForExport(blob) {
         if (!(blob instanceof Blob)) return resolve(null);
         const reader = new FileReader();
         reader.onerror = (e) => reject(e.target.error);
-        reader.onload = () =>
-            resolve({ base64: reader.result.split(',')[1], type: blob.type });
+        reader.onload = () => resolve({ base64: reader.result.split(',')[1], type: blob.type });
         reader.readAsDataURL(blob);
     });
 }
@@ -2036,8 +2061,7 @@ export function getStoresToReadForExport(db) {
     if (!db || !db.objectStoreNames) return [];
     const allStoreNames = Array.from(db.objectStoreNames);
     return allStoreNames.filter(
-        (storeName) =>
-            storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
+        (storeName) => storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
     );
 }
 
@@ -2074,11 +2098,7 @@ async function readExportStoreResultsFromDb(db, readMode, storesToRead) {
                 const request = tx.objectStore(storeName).getAll();
                 request.onsuccess = (e) => resolve({ storeName, data: e.target.result });
                 request.onerror = (e) =>
-                    reject(
-                        new Error(
-                            `Ошибка чтения из ${storeName}: ${e.target.error?.message}`,
-                        ),
-                    );
+                    reject(new Error(`Ошибка чтения из ${storeName}: ${e.target.error?.message}`));
             } catch (err) {
                 reject(err instanceof Error ? err : new Error(String(err)));
             }
@@ -2095,11 +2115,7 @@ async function readExportStoreResultsFromDb(db, readMode, storesToRead) {
 async function applyScreenshotAndPdfBlobConversionForExport(results, { quiet }) {
     const blobToBase64 = blobToBase64ForExport;
     const screenshotData = results.find((r) => r.storeName === 'screenshots');
-    if (
-        screenshotData &&
-        Array.isArray(screenshotData.data) &&
-        screenshotData.data.length > 0
-    ) {
+    if (screenshotData && Array.isArray(screenshotData.data) && screenshotData.data.length > 0) {
         if (!quiet)
             deps.NotificationService?.add(
                 `Обработка ${screenshotData.data.length} скриншотов.`,
@@ -2128,11 +2144,10 @@ async function applyScreenshotAndPdfBlobConversionForExport(results, { quiet }) 
             (item) => item && item.blob instanceof Blob,
         ).length;
         if (!quiet)
-            deps.NotificationService?.add(
-                `Обработка ${convertiblePdfCount} PDF-файлов.`,
-                'info',
-                { duration: 2000, id: 'export-pdf-processing' },
-            );
+            deps.NotificationService?.add(`Обработка ${convertiblePdfCount} PDF-файлов.`, 'info', {
+                duration: 2000,
+                id: 'export-pdf-processing',
+            });
         const pdfConversionPromises = pdfData.data.map(async (item) => {
             if (item && item.blob instanceof Blob) {
                 try {

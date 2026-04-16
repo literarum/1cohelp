@@ -109,9 +109,7 @@ export function populateCustomizationModalControls(settings) {
                 ? 'dark'
                 : 'light'
             : themeValRaw;
-    const themeRadio = modal.querySelector(
-        `input[name="themeMode"][value="${effectiveThemeVal}"]`,
-    );
+    const themeRadio = modal.querySelector(`input[name="themeMode"][value="${effectiveThemeVal}"]`);
     if (themeRadio) themeRadio.checked = true;
 
     const borderRadiusSlider = modal.querySelector('#borderRadiusSlider');
@@ -124,7 +122,7 @@ export function populateCustomizationModalControls(settings) {
     if (densitySlider) densitySlider.value = String(settings.contentDensity ?? 3);
 
     const colorTargetSelector = modal.querySelector('#colorTargetSelector');
-    const target = (State?.uiModalState?.currentColorTarget) || 'elements';
+    const target = State?.uiModalState?.currentColorTarget || 'elements';
     const targetRadio = colorTargetSelector?.querySelector(`input[value="${target}"]`);
     if (targetRadio) targetRadio.checked = true;
 
@@ -153,6 +151,13 @@ export function populateModalControls(settings) {
     const disableForcedBackupToggle = modal.querySelector('#toggleDisableForcedBackup');
     if (disableForcedBackupToggle) {
         disableForcedBackupToggle.checked = settings.disableForcedBackupOnImport ?? false;
+    }
+
+    const disableForcedBackupOnDbMergeToggle = modal.querySelector(
+        '#toggleDisableForcedBackupOnDbMerge',
+    );
+    if (disableForcedBackupOnDbMergeToggle) {
+        disableForcedBackupOnDbMergeToggle.checked = settings.disableForcedBackupOnDbMerge ?? false;
     }
 
     const staticHeaderToggle = modal.querySelector('#toggleStaticHeader');
@@ -232,6 +237,9 @@ export function getSettingsFromModal() {
 
     const showBlacklistWarningToggle = modal.querySelector('#toggleBlacklistWarning');
     const disableForcedBackupToggle = modal.querySelector('#toggleDisableForcedBackup');
+    const disableForcedBackupOnDbMergeToggle = modal.querySelector(
+        '#toggleDisableForcedBackupOnDbMerge',
+    );
     const staticHeaderToggle = modal.querySelector('#toggleStaticHeader');
     const backupReminderToggle = modal.querySelector('#toggleBackupReminder');
     const birthdayModeToggle = modal.querySelector('#toggleBirthdayMode');
@@ -270,7 +278,8 @@ export function getSettingsFromModal() {
             fromRadiusSlider !== null
                 ? fromRadiusSlider
                 : clampBorderRadiusPx(State.currentPreviewSettings?.borderRadius),
-        contentDensity: parseInt(densitySlider?.value) || State.currentPreviewSettings?.contentDensity || 3,
+        contentDensity:
+            parseInt(densitySlider?.value) || State.currentPreviewSettings?.contentDensity || 3,
         panelOrder: panelOrder,
         panelVisibility: panelVisibility,
         showBlacklistUsageWarning: showBlacklistWarningToggle
@@ -278,6 +287,9 @@ export function getSettingsFromModal() {
             : false,
         disableForcedBackupOnImport: disableForcedBackupToggle
             ? disableForcedBackupToggle.checked
+            : false,
+        disableForcedBackupOnDbMerge: disableForcedBackupOnDbMergeToggle
+            ? disableForcedBackupOnDbMergeToggle.checked
             : false,
         staticHeader: staticHeaderToggle ? staticHeaderToggle.checked : false,
         backupReminderEnabled: backupReminderToggle ? backupReminderToggle.checked : true,

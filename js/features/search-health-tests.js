@@ -71,11 +71,7 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             const version = status.version != null ? status.version : '—';
             const err = status.error ? String(status.error) : null;
             if (err) {
-                r(
-                    'error',
-                    'Поиск: статус индекса',
-                    `Ошибка при последнем построении: ${err}.`,
-                );
+                r('error', 'Поиск: статус индекса', `Ошибка при последнем построении: ${err}.`);
             } else if (!built) {
                 r(
                     'warn',
@@ -171,11 +167,7 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
             r('error', 'Поиск: выполнение', err.message || String(err));
         }
     } else {
-        r(
-            'info',
-            'Поиск: выполнение',
-            'getGlobalSearchResults не передан, проверка пропущена.',
-        );
+        r('info', 'Поиск: выполнение', 'getGlobalSearchResults не передан, проверка пропущена.');
     }
 
     // 5) Токенизация (tokenizeNormalized)
@@ -184,11 +176,7 @@ export async function runSearchAndIndexHealthTests(deps, report, runWithTimeout)
         if (!Array.isArray(tokens)) {
             r('warn', 'Поиск: токенизация', 'tokenizeNormalized вернул не массив.');
         } else if (tokens.length === 0) {
-            r(
-                'warn',
-                'Поиск: токенизация',
-                'tokenizeNormalized("тест") вернул пустой массив.',
-            );
+            r('warn', 'Поиск: токенизация', 'tokenizeNormalized("тест") вернул пустой массив.');
         } else {
             r('info', 'Поиск: токенизация', 'tokenizeNormalized работает.');
         }

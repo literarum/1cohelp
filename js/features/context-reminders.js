@@ -315,10 +315,13 @@ export function openReminderModal(options = {}) {
 
     titleInput.value = options.title || '';
     noteInput.value = options.note || '';
-    intentSelect.value = options.intent && REMINDER_INTENT_LABELS[options.intent] ? options.intent : 'return_to';
+    intentSelect.value =
+        options.intent && REMINDER_INTENT_LABELS[options.intent] ? options.intent : 'return_to';
 
     const base = new Date();
-    let dueDate = options.dueAt ? new Date(options.dueAt) : addCalendarDaysUtc(base, options.daysFromNow != null ? options.daysFromNow : 7);
+    let dueDate = options.dueAt
+        ? new Date(options.dueAt)
+        : addCalendarDaysUtc(base, options.daysFromNow != null ? options.daysFromNow : 7);
     if (!Number.isFinite(dueDate.getTime())) {
         dueDate = addCalendarDaysUtc(base, 7);
     }
@@ -454,11 +457,19 @@ async function openReminderContext(row) {
         return;
     }
     if (t === 'client') {
-        deps.showNotification?.('Откройте главную вкладку — блок «Информация по обращению».', 'info', 5000);
+        deps.showNotification?.(
+            'Откройте главную вкладку — блок «Информация по обращению».',
+            'info',
+            5000,
+        );
         await deps.setActiveTab?.('main');
         return;
     }
-    deps.showNotification?.('Для этого типа контекста откройте соответствующий раздел вручную.', 'info', 4000);
+    deps.showNotification?.(
+        'Для этого типа контекста откройте соответствующий раздел вручную.',
+        'info',
+        4000,
+    );
 }
 
 function bindReminderListClicks() {
@@ -541,8 +552,12 @@ export function initContextRemindersSystem() {
                 true,
             );
         }
-        modal.querySelector('#reminderModalCloseBtn')?.addEventListener('click', closeReminderModal);
-        modal.querySelector('#reminderModalCancelBtn')?.addEventListener('click', closeReminderModal);
+        modal
+            .querySelector('#reminderModalCloseBtn')
+            ?.addEventListener('click', closeReminderModal);
+        modal
+            .querySelector('#reminderModalCancelBtn')
+            ?.addEventListener('click', closeReminderModal);
         modal.querySelector('#reminderFormSubmitBtn')?.addEventListener('click', (e) => {
             e.preventDefault();
             submitReminderForm().catch(() => {});

@@ -5,6 +5,8 @@
  * Вынесено из script.js
  */
 
+import { buildClientNotesInputCompositeHandler } from './client-notes-input-debounce.js';
+
 let State = null;
 let debounce = null;
 let saveClientData = null;
@@ -262,23 +264,18 @@ export async function initClientDataSystem() {
         console.log(`${LOG_PREFIX} Старое ИНН-превью уничтожено.`);
     }
 
-    State.clientNotesInputHandler = debounce(async () => {
-        try {
-            console.log(`${LOG_PREFIX} Debounce-таймер сработал. Выполняем действия...`);
-            const currentText = clientNotes.value;
-
-            console.log(`${LOG_PREFIX}   -> Вызов await saveClientData()`);
-            await saveClientData();
-
-            console.log(`${LOG_PREFIX}   -> Вызов await checkForBlacklistedInn()`);
-            await checkForBlacklistedInn(currentText);
-        } catch (error) {
-            console.error(`${LOG_PREFIX} Ошибка внутри debounced-обработчика:`, error);
-        }
-    }, 750);
+    State.clientNotesInputHandler = buildClientNotesInputCompositeHandler(
+        debounce,
+        clientNotes,
+        LOG_PREFIX,
+        saveClientData,
+        checkForBlacklistedInn,
+    );
 
     clientNotes.addEventListener('input', State.clientNotesInputHandler);
-    console.log(`${LOG_PREFIX} Новый обработчик 'input' с debounce и await успешно привязан.`);
+    console.log(
+        `${LOG_PREFIX} Обработчик 'input': отдельный debounce для ЧС по ИНН и для автосохранения.`,
+    );
 
     State.clientNotesKeydownHandler = (event) => {
         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {

@@ -28,25 +28,26 @@
     scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-light);
 }
 
-html.dark :is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-) {
+html.dark
+    :is(
+        .custom-scrollbar,
+        html,
+        #searchResults,
+        .modal-content-area-fullscreen-scroll,
+        #algorithmSteps,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1,
+        #reglamentModal .modal-content-area,
+        #reglamentDetailModal #reglamentDetailContent,
+        #extLinkModal .modal-content-area,
+        #cibLinkModal .modal-content-area,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1,
+        #bookmarkDetailModal #bookmarkDetailOuterContent,
+        #addModal .p-content.overflow-y-auto.flex-1,
+        #editModal .p-content.overflow-y-auto.flex-1,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1,
+        #appCustomizationModal .p-content.overflow-y-auto.flex-1,
+        #engineeringCockpitModal .engineering-cockpit-content
+    ) {
     scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-dark);
 }
 
@@ -97,25 +98,26 @@ html.dark :is(
     border-radius: 15px;
 }
 
-html.dark :is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-)::-webkit-scrollbar-track {
+html.dark
+    :is(
+        .custom-scrollbar,
+        html,
+        #searchResults,
+        .modal-content-area-fullscreen-scroll,
+        #algorithmSteps,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1,
+        #reglamentModal .modal-content-area,
+        #reglamentDetailModal #reglamentDetailContent,
+        #extLinkModal .modal-content-area,
+        #cibLinkModal .modal-content-area,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1,
+        #bookmarkDetailModal #bookmarkDetailOuterContent,
+        #addModal .p-content.overflow-y-auto.flex-1,
+        #editModal .p-content.overflow-y-auto.flex-1,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1,
+        #appCustomizationModal .p-content.overflow-y-auto.flex-1,
+        #engineeringCockpitModal .engineering-cockpit-content
+    )::-webkit-scrollbar-track {
     background-color: var(--scrollbar-track-color-dark);
 }
 
@@ -148,24 +150,24 @@ html.dark :is(
 }
 
 :is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-)::-webkit-scrollbar-thumb:hover {
+        .custom-scrollbar,
+        html,
+        #searchResults,
+        .modal-content-area-fullscreen-scroll,
+        #algorithmSteps,
+        #hotkeysModal .p-6.overflow-y-auto.flex-1,
+        #reglamentModal .modal-content-area,
+        #reglamentDetailModal #reglamentDetailContent,
+        #extLinkModal .modal-content-area,
+        #cibLinkModal .modal-content-area,
+        #bookmarkModal .p-content.overflow-y-auto.flex-1,
+        #bookmarkDetailModal #bookmarkDetailOuterContent,
+        #addModal .p-content.overflow-y-auto.flex-1,
+        #editModal .p-content.overflow-y-auto.flex-1,
+        #customizeUIModal .p-content.overflow-y-auto.flex-1,
+        #appCustomizationModal .p-content.overflow-y-auto.flex-1,
+        #engineeringCockpitModal .engineering-cockpit-content
+    )::-webkit-scrollbar-thumb:hover {
     background-color: var(
         --scrollbar-thumb-hover-bg,
         var(--color-hover-subtle, var(--override-scrollbar-thumb-dark, var(--color-border)))

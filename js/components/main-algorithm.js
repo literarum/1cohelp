@@ -99,10 +99,7 @@ export async function saveMainAlgoCollapseState(state) {
     }
     try {
         if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(
-                MAIN_ALGO_COLLAPSE_LOCAL_MIRROR_KEY,
-                JSON.stringify(normalized),
-            );
+            localStorage.setItem(MAIN_ALGO_COLLAPSE_LOCAL_MIRROR_KEY, JSON.stringify(normalized));
         }
     } catch (e) {
         console.warn('[saveMainAlgoCollapseState] Ошибка зеркала localStorage:', e);

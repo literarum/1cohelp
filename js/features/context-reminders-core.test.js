@@ -25,9 +25,15 @@ describe('context-reminders-core', () => {
 
     it('isPendingDue is true only for pending with due in the past', () => {
         const now = Date.UTC(2026, 4, 1, 10, 0, 0); // 1 мая 2026, 10:00 UTC
-        expect(isPendingDue({ status: 'pending', dueAt: '2026-05-01T09:00:00.000Z' }, now)).toBe(true);
-        expect(isPendingDue({ status: 'pending', dueAt: '2026-05-01T11:00:00.000Z' }, now)).toBe(false);
-        expect(isPendingDue({ status: 'done', dueAt: '2026-05-01T09:00:00.000Z' }, now)).toBe(false);
+        expect(isPendingDue({ status: 'pending', dueAt: '2026-05-01T09:00:00.000Z' }, now)).toBe(
+            true,
+        );
+        expect(isPendingDue({ status: 'pending', dueAt: '2026-05-01T11:00:00.000Z' }, now)).toBe(
+            false,
+        );
+        expect(isPendingDue({ status: 'done', dueAt: '2026-05-01T09:00:00.000Z' }, now)).toBe(
+            false,
+        );
     });
 
     it('intentLabel falls back', () => {

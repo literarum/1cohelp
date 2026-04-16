@@ -1,10 +1,6 @@
 'use strict';
 
-import {
-    CURRENT_SCHEMA_VERSION,
-    DB_NAME,
-    DB_VERSION,
-} from '../constants.js';
+import { CURRENT_SCHEMA_VERSION, DB_NAME, DB_VERSION } from '../constants.js';
 import {
     getRuntimeHubBufferMeta,
     getRuntimeHubFaultEntries,
@@ -12,6 +8,8 @@ import {
 } from './runtime-issue-hub.js';
 import { getPwaCockpitBlock } from '../app/pwa-register.js';
 import { getApplicationHealthStateForExport } from './application-health-state.js';
+import { getRuntimeTelemetrySupportSnapshot } from './runtime-telemetry-observers.js';
+import { getRuntimeFetchInterceptMeta } from './runtime-fetch-intercept.js';
 
 /**
  * Синхронные «флаги» окружения браузера (первый контур; второй — getHighEntropyValues ниже).
@@ -134,8 +132,7 @@ export async function buildCopilotDiagnosticBundle(ctx = {}) {
     }
 
     const hud = typeof ctx.getHudDiagnostics === 'function' ? ctx.getHudDiagnostics() : null;
-    const watchdog =
-        typeof ctx.getWatchdog === 'function' ? ctx.getWatchdog() : null;
+    const watchdog = typeof ctx.getWatchdog === 'function' ? ctx.getWatchdog() : null;
 
     const logs = typeof ctx.getLogs === 'function' ? ctx.getLogs() : [];
     const cockpitErrors = typeof ctx.getCockpitErrors === 'function' ? ctx.getCockpitErrors() : [];
@@ -167,6 +164,8 @@ export async function buildCopilotDiagnosticBundle(ctx = {}) {
             hubFaults,
             performanceSignals: getRuntimeHubPerformanceSignalsForHealth(40),
             cockpitErrorBuffer: cockpitErrors,
+            telemetryObservers: getRuntimeTelemetrySupportSnapshot(),
+            fetchFailureReporting: getRuntimeFetchInterceptMeta(),
         },
         logs: {
             entries: logs,
@@ -184,6 +183,9 @@ export function diagnosticBundleToJsonString(bundle) {
 }
 
 export function suggestDiagnosticFilename(prefix = 'copilot-diagnostic') {
-    const safe = new Date().toISOString().replace(/[:]/g, '-').replace(/\.\d{3}Z$/, 'Z');
+    const safe = new Date()
+        .toISOString()
+        .replace(/[:]/g, '-')
+        .replace(/\.\d{3}Z$/, 'Z');
     return `${prefix}-${safe}.json`;
 }

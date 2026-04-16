@@ -96,7 +96,10 @@ export function parseSearchQueryTagsAndText(rawQuery) {
             tagFilters.push(nt);
         }
     }
-    let textQuery = q.replace(/(?:^|[\s])#[^\s#]+/g, ' ').replace(/\s+/g, ' ').trim();
+    let textQuery = q
+        .replace(/(?:^|[\s])#[^\s#]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     return { textQuery, tagFilters };
 }
 

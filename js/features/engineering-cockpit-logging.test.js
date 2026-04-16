@@ -62,6 +62,24 @@ describe('engineering-cockpit-logging', () => {
         expect(x.bufferCapacity).toBe(1500);
     });
 
+    it('buildCockpitLoggingCrosscheck surfaces hub duplicate pressure fields', () => {
+        const x = buildCockpitLoggingCrosscheck(
+            [],
+            {
+                faultCount: 10,
+                uniqueFaultFingerprints: 1,
+                duplicatePressure: 'high',
+                fingerprintRepeatMax: 10,
+                topFingerprintRepeats: [{ fingerprint: 'abc', count: 10 }],
+            },
+            1500,
+        );
+        expect(x.hubFaultDiversityRatio).toBeCloseTo(0.1);
+        expect(x.hubDuplicatePressure).toBe('high');
+        expect(x.hubFingerprintRepeatMax).toBe(10);
+        expect(x.hubTopFingerprintRepeats).toHaveLength(1);
+    });
+
     it('isValidCockpitLogFilterLevel', () => {
         expect(isValidCockpitLogFilterLevel('all')).toBe(true);
         expect(isValidCockpitLogFilterLevel('nope')).toBe(false);

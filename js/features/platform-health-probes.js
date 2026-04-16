@@ -28,10 +28,20 @@ function formatMb(bytes) {
  * @returns {Promise<{ level: 'info'|'warn'|'error', title: string, message: string, system?: string }[]>}
  */
 export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) {
-    const tag = opts.probeTag === 'manual' || opts.probeTag === 'watchdog' ? opts.probeTag : 'startup';
-    const lsKey = tag === 'manual' ? 'health-check-manual' : tag === 'watchdog' ? 'health-check-watchdog' : 'health-check';
+    const tag =
+        opts.probeTag === 'manual' || opts.probeTag === 'watchdog' ? opts.probeTag : 'startup';
+    const lsKey =
+        tag === 'manual'
+            ? 'health-check-manual'
+            : tag === 'watchdog'
+              ? 'health-check-watchdog'
+              : 'health-check';
     const ssKey =
-        tag === 'manual' ? 'health-session-manual' : tag === 'watchdog' ? 'health-session-watchdog' : 'health-session';
+        tag === 'manual'
+            ? 'health-session-manual'
+            : tag === 'watchdog'
+              ? 'health-session-watchdog'
+              : 'health-session';
 
     /** @type {{ level: 'info'|'warn'|'error', title: string, message: string }[]} */
     const rows = [];
@@ -50,7 +60,11 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
                 message: 'Не удалось проверить запись/чтение.',
             });
         } else {
-            rows.push({ level: 'info', title: 'localStorage', message: 'Запись и чтение доступны.' });
+            rows.push({
+                level: 'info',
+                title: 'localStorage',
+                message: 'Запись и чтение доступны.',
+            });
         }
     } catch (err) {
         rows.push({
@@ -65,7 +79,8 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
         rows.push({
             level: 'warn',
             title: 'Безопасный контекст',
-            message: 'Страница загружена не по HTTPS. Некоторые API (clipboard, storage) недоступны.',
+            message:
+                'Страница загружена не по HTTPS. Некоторые API (clipboard, storage) недоступны.',
         });
     } else {
         rows.push({
@@ -83,7 +98,11 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
             message: 'Офлайн. API проверки сертификатов недоступны.',
         });
     } else {
-        rows.push({ level: 'info', title: 'Сеть', message: 'Подключение к сети есть (navigator.onLine).' });
+        rows.push({
+            level: 'info',
+            title: 'Сеть',
+            message: 'Подключение к сети есть (navigator.onLine).',
+        });
     }
 
     // Network Information API (дублирующий индикатор, где доступен)
@@ -122,7 +141,8 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
         rows.push({
             level: sv === 'ok' ? 'info' : 'warn',
             title: 'sessionStorage',
-            message: sv === 'ok' ? 'Запись и чтение доступны.' : 'Не удалось проверить запись/чтение.',
+            message:
+                sv === 'ok' ? 'Запись и чтение доступны.' : 'Не удалось проверить запись/чтение.',
         });
     } catch (err) {
         rows.push({
@@ -179,7 +199,11 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
                     : 'Данные могут быть очищены при нехватке места (persistence не гарантирована).',
             });
         } catch {
-            rows.push({ level: 'info', title: 'Хранилище (persistence)', message: 'Проверка persistence недоступна.' });
+            rows.push({
+                level: 'info',
+                title: 'Хранилище (persistence)',
+                message: 'Проверка persistence недоступна.',
+            });
         }
     } else {
         rows.push({
@@ -246,7 +270,8 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
         rows.push({
             level: 'warn',
             title: 'Вкладка (восстановление)',
-            message: 'Страница была выгружена браузером (wasDiscarded). Состояние могло сброситься.',
+            message:
+                'Страница была выгружена браузером (wasDiscarded). Состояние могло сброситься.',
         });
     }
 

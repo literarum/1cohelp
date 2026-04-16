@@ -14,13 +14,21 @@
 
 #engineeringCockpitModal .engineering-cockpit-shell.engineering-cockpit-shell--compact {
     width: auto;
-    max-width: min(28rem, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline)));
+    max-width: min(
+        28rem,
+        calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 *
+                var(--content-padding-inline)
+        )
+    );
     height: auto;
     min-height: 0;
     max-height: 80vh;
 }
 
-#engineeringCockpitModal .engineering-cockpit-shell.engineering-cockpit-shell--compact .engineering-cockpit-fullscreen-btn {
+#engineeringCockpitModal
+    .engineering-cockpit-shell.engineering-cockpit-shell--compact
+    .engineering-cockpit-fullscreen-btn {
     display: none;
 }
 
@@ -42,7 +50,10 @@
     background-color: var(--color-surface-1);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
-    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -109,7 +120,9 @@
     background-color: var(--color-primary);
     color: var(--color-text-on-primary);
     border: none;
-    transition: opacity 150ms ease, transform 150ms ease;
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -142,7 +155,10 @@
     border-radius: var(--cockpit-radius);
     padding: 0.375rem 0.75rem;
     font-size: 0.8rem;
-    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease;
 }
 
 .engineering-cockpit-tab-btn:hover {
@@ -170,7 +186,9 @@
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
     font-size: 0.875rem;
-    transition: background-color 150ms ease, color 150ms ease;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
 }
 
 .engineering-cockpit-toolbar-btn:hover {
@@ -251,7 +269,10 @@
     color: var(--color-text-secondary);
     border: 1px solid var(--color-border);
     font-size: 0.875rem;
-    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease;
 }
 
 .engineering-cockpit-icon-btn:hover {

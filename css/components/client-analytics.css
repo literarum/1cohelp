@@ -133,7 +133,9 @@ html.dark #clientAnalyticsContent .client-analytics-files-panel {
     transition: transform 160ms ease;
 }
 
-#clientAnalyticsContent .client-analytics-files-toggle-btn[aria-expanded='true'] .client-analytics-files-toggle-icon {
+#clientAnalyticsContent
+    .client-analytics-files-toggle-btn[aria-expanded='true']
+    .client-analytics-files-toggle-icon {
     transform: rotate(180deg);
 }
 
@@ -198,21 +200,13 @@ html.dark #clientAnalyticsContent .client-analytics-files-scroll-hint {
     height: 1.35rem;
     pointer-events: none;
     border-radius: 0 0 0.375rem 0.375rem;
-    background: linear-gradient(
-        to bottom,
-        rgb(255 255 255 / 0),
-        var(--color-surface-2, #ffffff)
-    );
+    background: linear-gradient(to bottom, rgb(255 255 255 / 0), var(--color-surface-2, #ffffff));
 }
 
 html.dark
     #clientAnalyticsContent
     .client-analytics-files-scroll-outer.client-analytics-files-scroll-outer--clip::after {
-    background: linear-gradient(
-        to bottom,
-        rgb(17 24 39 / 0),
-        rgb(17 24 39 / 0.92)
-    );
+    background: linear-gradient(to bottom, rgb(17 24 39 / 0), rgb(17 24 39 / 0.92));
 }
 
 /*
@@ -249,16 +243,20 @@ html.dark #clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-fil
     height: 12px !important;
 }
 
-#clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-track {
+#clientAnalyticsContent
+    #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-track {
     background-color: #e2e8f0 !important;
     border-radius: 6px;
 }
 
-html.dark #clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-track {
+html.dark
+    #clientAnalyticsContent
+    #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-track {
     background-color: #1e293b !important;
 }
 
-#clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb {
+#clientAnalyticsContent
+    #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb {
     background-color: #64748b !important;
     border-radius: 6px;
     border: none !important;
@@ -266,15 +264,20 @@ html.dark #clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-fil
     min-height: 2rem;
 }
 
-#clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb:hover {
+#clientAnalyticsContent
+    #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb:hover {
     background-color: #475569 !important;
 }
 
-html.dark #clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb {
+html.dark
+    #clientAnalyticsContent
+    #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb {
     background-color: #94a3b8 !important;
 }
 
-html.dark #clientAnalyticsContent #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb:hover {
+html.dark
+    #clientAnalyticsContent
+    #clientAnalyticsFilesList.client-analytics-files-list::-webkit-scrollbar-thumb:hover {
     background-color: #cbd5e1 !important;
 }
 

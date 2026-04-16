@@ -14,7 +14,12 @@
 }
 
 #dbMergeModal .db-merge-dialog {
-    max-width: min(56rem, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)));
+    max-width: min(
+        56rem,
+        calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)
+        )
+    );
     width: 100%;
     height: 90vh;
     max-height: 90vh;
@@ -912,7 +917,15 @@ html.dark #dbMergeModal .db-merge-conflict-pane pre {
     margin-top: 0.5rem;
 }
 
+#dbMergeModal .db-merge-progress-meter {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
 #dbMergeModal .db-merge-progress-track {
+    flex: 1;
+    min-width: 0;
     height: 0.5rem;
     border-radius: 9999px;
     background: var(--color-surface-1);
@@ -930,13 +943,29 @@ html.dark #dbMergeModal .db-merge-progress-track {
     transition: width 0.22s ease-out;
 }
 
-#dbMergeModal .db-merge-progress-text {
+#dbMergeModal .db-merge-progress-percent {
+    flex-shrink: 0;
     font-size: 0.8125rem;
-    color: var(--color-text-secondary);
-    margin-top: 0.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary);
+    min-width: 2.75rem;
+    text-align: right;
 }
 
-html.dark #dbMergeModal .db-merge-progress-text {
+html.dark #dbMergeModal .db-merge-progress-percent {
+    color: var(--color-text-primary);
+}
+
+#dbMergeModal .db-merge-progress-detail {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--color-text-secondary);
+    margin-top: 0.5rem;
+    word-break: break-word;
+}
+
+html.dark #dbMergeModal .db-merge-progress-detail {
     color: var(--color-text-secondary);
 }
 
@@ -979,11 +1008,164 @@ html.dark #dbMergeModal .db-merge-risk-hint--aside {
     border-top-color: var(--color-border);
 }
 
+/* ----- История слияний (боковая панель) ----- */
+#dbMergeModal .db-merge-history-wrap {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+}
+
+html.dark #dbMergeModal .db-merge-history-wrap {
+    border-top-color: var(--color-border);
+}
+
+#dbMergeModal .db-merge-history-toggle {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-1);
+    color: var(--color-text-primary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.3;
+    cursor: pointer;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+
+#dbMergeModal .db-merge-history-toggle:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface-1));
+}
+
+#dbMergeModal .db-merge-history-toggle:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+#dbMergeModal .db-merge-history-toggle-label {
+    text-align: left;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#dbMergeModal .db-merge-history-toggle-chevron {
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    opacity: 0.75;
+    transition: transform 0.2s ease;
+}
+
+#dbMergeModal .db-merge-history-toggle.is-expanded .db-merge-history-toggle-chevron {
+    transform: rotate(-180deg);
+}
+
+html.dark #dbMergeModal .db-merge-history-toggle {
+    background: var(--color-surface-1);
+    border-color: var(--color-border);
+    color: var(--color-text-primary);
+}
+
+#dbMergeModal .db-merge-history-panel {
+    margin-top: 0.5rem;
+    max-height: 14rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 0.125rem;
+}
+
+#dbMergeModal .db-merge-history-panel.hidden {
+    display: none;
+}
+
+#dbMergeModal .db-merge-history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+#dbMergeModal .db-merge-history-item {
+    padding: 0.5rem 0.55rem;
+    border-radius: 0.45rem;
+    border: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-surface-1) 92%, transparent);
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: var(--color-text-secondary);
+}
+
+html.dark #dbMergeModal .db-merge-history-item {
+    border-color: var(--color-border);
+    background: color-mix(in srgb, var(--color-surface-1) 88%, transparent);
+}
+
+#dbMergeModal .db-merge-history-item-head {
+    margin-bottom: 0.2rem;
+}
+
+#dbMergeModal .db-merge-history-item-time {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: 0.78rem;
+}
+
+#dbMergeModal .db-merge-history-item-file {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-bottom: 0.25rem;
+    color: var(--color-text-primary);
+}
+
+#dbMergeModal .db-merge-history-item-file .fa-database {
+    margin-top: 0.1rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+#dbMergeModal .db-merge-history-item-file-name {
+    word-break: break-word;
+    min-width: 0;
+}
+
+#dbMergeModal .db-merge-history-item-metrics,
+#dbMergeModal .db-merge-history-item-meta,
+#dbMergeModal .db-merge-history-item-schema,
+#dbMergeModal .db-merge-history-item-alg {
+    font-size: 0.72rem;
+}
+
+#dbMergeModal .db-merge-history-item-sep {
+    opacity: 0.45;
+    padding: 0 0.15rem;
+}
+
+#dbMergeModal .db-merge-history-empty {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+
 #dbMergeModal .db-merge-footer-actions {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     margin-left: auto;
+}
+
+/* Длительная операция слияния: контейнер aria-busy (MDN) + курсор ожидания на заблокированной кнопке */
+#dbMergeModal[aria-busy='true'] #dbMergeStartBtn:disabled {
+    cursor: wait;
 }
 
 #dbMergeModal .db-merge-footer-btn {

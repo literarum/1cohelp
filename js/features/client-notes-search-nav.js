@@ -424,13 +424,9 @@ export async function navigateMainTabToAppealNotesMatch(rawTerm, deps = {}) {
     mainTa.setSelectionRange(hit.start, hit.end);
 
     const panelSynced =
-        panelTextarea &&
-        panelTextarea !== mainTa &&
-        panelTextarea.value === mainTa.value;
+        panelTextarea && panelTextarea !== mainTa && panelTextarea.value === mainTa.value;
     const usePanelFlash =
-        panelSynced &&
-        typeof isClientNotesPanelOpen === 'function' &&
-        isClientNotesPanelOpen();
+        panelSynced && typeof isClientNotesPanelOpen === 'function' && isClientNotesPanelOpen();
 
     if (panelSynced) {
         scrollTextareaToCharIndex(panelTextarea, hit.start);

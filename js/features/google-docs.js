@@ -488,7 +488,9 @@ export function normalizeShablonyData(rawData) {
                             .map(([key, value]) => `${key}: ${String(value).trim()}`);
                     } else {
                         title = String(entries[0][1]).trim();
-                        paras = entries.slice(1).map(([key, value]) => `${key}: ${String(value).trim()}`);
+                        paras = entries
+                            .slice(1)
+                            .map(([key, value]) => `${key}: ${String(value).trim()}`);
                     }
                 }
             }
@@ -708,9 +710,7 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
                     line.trim().startsWith('▸')),
         );
         if (hasHeaders) return data;
-        const plain = data
-            .map((line) => (line == null ? '' : String(line).trim()))
-            .filter(Boolean);
+        const plain = data.map((line) => (line == null ? '' : String(line).trim())).filter(Boolean);
         if (!plain.length) return data;
         return ['➧ Шаблоны', ...plain];
     })();
@@ -869,7 +869,9 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
               })
             : false;
         const allHaveErrors =
-            Array.isArray(results) && results.length > 0 && results.every((item) => Boolean(item?.error));
+            Array.isArray(results) &&
+            results.length > 0 &&
+            results.every((item) => Boolean(item?.error));
 
         if (!hasUsableData && allHaveErrors) {
             const cachedEntry = loadGoogleDocCacheEntry(docId);

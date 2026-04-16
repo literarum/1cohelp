@@ -696,7 +696,8 @@ export function getTextForItem(storeName, itemData) {
         case 'clientAnalyticsRecords':
             if (itemData.inn) textsByField.inn = cleanHtml(String(itemData.inn));
             if (itemData.kpp) textsByField.kpp = cleanHtml(String(itemData.kpp));
-            if (itemData.phonesJoined) textsByField.phones = cleanHtml(String(itemData.phonesJoined));
+            if (itemData.phonesJoined)
+                textsByField.phones = cleanHtml(String(itemData.phonesJoined));
             if (itemData.emailsJoined)
                 textsByField.emails = cleanHtml(String(itemData.emailsJoined));
             if (itemData.question) textsByField.question = cleanHtml(String(itemData.question));
@@ -717,7 +718,12 @@ export function getTextForItem(storeName, itemData) {
                     line = `${line} · ${itemData.sourceFileName}`;
                 } else if (itemData.sourceFileName && !itemData.inn && itemData.phonesJoined) {
                     line = `${line} · ${itemData.sourceFileName}`;
-                } else if (itemData.sourceFileName && !itemData.inn && !itemData.phonesJoined && itemData.kpp) {
+                } else if (
+                    itemData.sourceFileName &&
+                    !itemData.inn &&
+                    !itemData.phonesJoined &&
+                    itemData.kpp
+                ) {
                     line = `${line} · ${itemData.sourceFileName}`;
                 }
                 textsByField.titleLine = cleanHtml(line.trim());
@@ -1983,9 +1989,7 @@ export async function buildInitialSearchIndex(progressCallback) {
             const results = await fetchGoogleDocs([SHABLONY_DOC_ID], false);
             const data = results?.[0]?.data || results?.[0]?.content?.data || [];
             const normalized = normalizeShablonyData(data);
-            const flat = Array.isArray(normalized)
-                ? normalized.map((line) => String(line))
-                : [];
+            const flat = Array.isArray(normalized) ? normalized.map((line) => String(line)) : [];
             const blocks = parseShablonyContent(flat);
             blocks.forEach((block) =>
                 processItemInMemory(
@@ -2228,7 +2232,9 @@ export async function performSearch(query) {
     }
 
     if (!State.db) {
-        console.warn('[performSearch] DB not ready — показ локальных подсказок (ИНН в обращении, разделы).');
+        console.warn(
+            '[performSearch] DB not ready — показ локальных подсказок (ИНН в обращении, разделы).',
+        );
         renderSearchWithoutIndexDb();
         return;
     }
@@ -2310,7 +2316,7 @@ export async function performSearch(query) {
 
         // Fallback-аудит: если индекс не дал результата, делаем медленный скан по хранилищам,
         // чтобы не терять навигацию для элементов, которые еще не попали в индекс.
-        const fallbackText = ((textQuery || '').trim() || query.trim());
+        const fallbackText = (textQuery || '').trim() || query.trim();
         if (limitedResults.length === 0 && fallbackText.length >= 2) {
             try {
                 const fallbackRegex = fallbackText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2463,7 +2469,13 @@ export async function getGlobalSearchResults(query) {
         return sectionMatches;
     }
 
-    const finalResults = await processSearchResults(candidateDocs, q, q, originalQueryTokens, tagFilters);
+    const finalResults = await processSearchResults(
+        candidateDocs,
+        q,
+        q,
+        originalQueryTokens,
+        tagFilters,
+    );
     const appealSuggestions = await resolveAppealNotesDigitSuggestions(q);
     let mergedFinal = finalResults;
     if (appealSuggestions.length > 0) {
@@ -2670,12 +2682,7 @@ async function collectCandidatesForSingleQueryToken(queryToken, searchContext) {
     const indexStore = transaction.objectStore('searchIndex');
     const indexEntries = await fetchIndexEntriesForQueryToken(indexStore, queryToken);
     for (const indexEntry of indexEntries) {
-        accumulateIndexEntryIntoCandidateMap(
-            candidateDocs,
-            indexEntry,
-            queryToken,
-            searchContext,
-        );
+        accumulateIndexEntryIntoCandidateMap(candidateDocs, indexEntry, queryToken, searchContext);
     }
     recomputeCandidateBm25Scores(candidateDocs);
     return candidateDocs;
@@ -3117,9 +3124,7 @@ async function processSearchResults(
 
     let fullResults = await loadFullDataForResults(filteredEntries);
     if (tagFilters && tagFilters.length > 0) {
-        fullResults = fullResults.filter((entry) =>
-            itemMatchesAllTags(entry.itemData, tagFilters),
-        );
+        fullResults = fullResults.filter((entry) => itemMatchesAllTags(entry.itemData, tagFilters));
     }
 
     const groupedByActualItem = new Map();
@@ -3173,17 +3178,12 @@ async function processSearchResults(
     });
 
     const phraseParsedForBonus = parseSearchQueryTagsAndText(originalQuery);
-    const phraseNeedleForBonus = (
-        phraseParsedForBonus.textQuery ||
-        originalQuery ||
-        ''
-    )
+    const phraseNeedleForBonus = (phraseParsedForBonus.textQuery || originalQuery || '')
         .toLowerCase()
         .replace(/ё/g, 'е')
         .replace(/\s+/g, ' ')
         .trim();
-    const phraseNeedleIsMultiWord =
-        phraseNeedleForBonus.split(/\s+/).filter(Boolean).length >= 2;
+    const phraseNeedleIsMultiWord = phraseNeedleForBonus.split(/\s+/).filter(Boolean).length >= 2;
 
     const searchResults = [];
     for (const [, group] of groupedByActualItem.entries()) {
@@ -3506,11 +3506,10 @@ function convertItemToSearchResult(ref, itemData, score) {
                     result.title = `${itemData.sourceFileName || 'Запись аналитики'}`;
                 }
             }
-            result.description = (
-                itemData.question ||
-                itemData.contextSnippet ||
-                ''
-            ).substring(0, 160);
+            result.description = (itemData.question || itemData.contextSnippet || '').substring(
+                0,
+                160,
+            );
             break;
         case 'preferences':
             if (itemIdFromRef === SEDO_CONFIG_KEY) {
@@ -3957,11 +3956,7 @@ export async function handleSearchResultClick(result) {
                             ? isClientNotesWindowOpen
                             : undefined,
                 });
-                if (
-                    !jumped &&
-                    typeof showNotification === 'function' &&
-                    term.trim() !== ''
-                ) {
+                if (!jumped && typeof showNotification === 'function' && term.trim() !== '') {
                     showNotification(
                         'Не удалось найти выделенный фрагмент в поле «Информация по обращению».',
                         'info',
@@ -4130,12 +4125,12 @@ export function initSearchSystem() {
     const handleClickOutside = (event) => {
         const target = event.target;
         const isClickOnToggle =
-            toggleAdvancedSearchBtn && (target === toggleAdvancedSearchBtn || toggleAdvancedSearchBtn.contains(target));
+            toggleAdvancedSearchBtn &&
+            (target === toggleAdvancedSearchBtn || toggleAdvancedSearchBtn.contains(target));
         const isClickInsideAdvancedPanel =
             advancedSearchOptions && advancedSearchOptions.contains(target);
         const isClickInsideFilters = Array.from(searchFieldFilters).some(
-            (filter) =>
-                filter.contains(target) || filter.closest?.('label')?.contains(target),
+            (filter) => filter.contains(target) || filter.closest?.('label')?.contains(target),
         );
 
         if (
@@ -4156,7 +4151,11 @@ export function initSearchSystem() {
             }
         }
 
-        if (advancedSearchOptions && toggleAdvancedSearchBtn && !advancedSearchOptions.classList.contains('hidden')) {
+        if (
+            advancedSearchOptions &&
+            toggleAdvancedSearchBtn &&
+            !advancedSearchOptions.classList.contains('hidden')
+        ) {
             if (!isClickInsideAdvancedPanel && !isClickOnToggle) {
                 advancedSearchOptions.classList.add('hidden');
                 toggleAdvancedSearchBtn.setAttribute('aria-expanded', 'false');
@@ -4217,9 +4216,7 @@ export function initSearchSystem() {
             setActiveTab,
             panelTextarea: panelTa,
             isClientNotesPanelOpen:
-                typeof isClientNotesWindowOpen === 'function'
-                    ? isClientNotesWindowOpen
-                    : undefined,
+                typeof isClientNotesWindowOpen === 'function' ? isClientNotesWindowOpen : undefined,
         });
     });
 

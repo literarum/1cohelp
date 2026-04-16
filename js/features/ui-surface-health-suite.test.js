@@ -70,19 +70,22 @@ describe('ui-surface-health-suite', () => {
         it('не считает ошибкой только отсутствие noInnLink если шаги не требуют ссылки', () => {
             document.body.innerHTML = '';
             const report = vi.fn();
-            const spy = vi.spyOn(uiHealthSurfaceRegistry, 'resolveMonitoredDomIds').mockReturnValue({
-                allIds: [uiHealthSurfaceRegistry.NO_INN_LINK_DOM_ID],
-                indexCount: 1,
-                runtimeExtraCount: 0,
-                dynamicIds: [],
-                dataHealthAttributeOrphans: 0,
-            });
+            const spy = vi
+                .spyOn(uiHealthSurfaceRegistry, 'resolveMonitoredDomIds')
+                .mockReturnValue({
+                    allIds: [uiHealthSurfaceRegistry.NO_INN_LINK_DOM_ID],
+                    indexCount: 1,
+                    runtimeExtraCount: 0,
+                    dynamicIds: [],
+                    dataHealthAttributeOrphans: 0,
+                });
             try {
                 runFullSurfaceDomAudit(report, { getMainAlgorithmSteps: () => [{ title: 'Шаг' }] });
                 const err = report.mock.calls.find((c) => c[0] === 'error');
                 expect(err).toBeUndefined();
                 const ok = report.mock.calls.find(
-                    (c) => c[0] === 'info' && typeof c[2] === 'string' && c[2].includes('все в DOM'),
+                    (c) =>
+                        c[0] === 'info' && typeof c[2] === 'string' && c[2].includes('все в DOM'),
                 );
                 expect(ok).toBeDefined();
             } finally {
@@ -95,13 +98,15 @@ describe('ui-surface-health-suite', () => {
             document.documentElement.dataset.birthdayMode = 'off';
             document.documentElement.classList.remove('birthday-mode');
             const report = vi.fn();
-            const spy = vi.spyOn(uiHealthSurfaceRegistry, 'resolveMonitoredDomIds').mockReturnValue({
-                allIds: ['birthdayFxLayer', 'birthdayGarland'],
-                indexCount: 2,
-                runtimeExtraCount: 0,
-                dynamicIds: [],
-                dataHealthAttributeOrphans: 0,
-            });
+            const spy = vi
+                .spyOn(uiHealthSurfaceRegistry, 'resolveMonitoredDomIds')
+                .mockReturnValue({
+                    allIds: ['birthdayFxLayer', 'birthdayGarland'],
+                    indexCount: 2,
+                    runtimeExtraCount: 0,
+                    dynamicIds: [],
+                    dataHealthAttributeOrphans: 0,
+                });
             try {
                 runFullSurfaceDomAudit(report);
                 const err = report.mock.calls.find((c) => c[0] === 'error');
@@ -218,7 +223,9 @@ describe('ui-surface-health-suite', () => {
                     c[2].includes('зонд геометрии интерактивов отключён'),
             );
             expect(passiveGeo).toBeDefined();
-            const coverage = report.mock.calls.find((c) => c[1] === 'Поверхность UI / геометрия (охват)');
+            const coverage = report.mock.calls.find(
+                (c) => c[1] === 'Поверхность UI / геометрия (охват)',
+            );
             expect(coverage).toBeUndefined();
         });
 
@@ -234,7 +241,9 @@ describe('ui-surface-health-suite', () => {
                     c[2].includes('зонд геометрии интерактивов отключён'),
             );
             expect(passiveGeo).toBeUndefined();
-            const coverage = report.mock.calls.find((c) => c[1] === 'Поверхность UI / геометрия (охват)');
+            const coverage = report.mock.calls.find(
+                (c) => c[1] === 'Поверхность UI / геометрия (охват)',
+            );
             expect(coverage).toBeDefined();
         });
     });

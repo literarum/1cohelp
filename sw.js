@@ -67,7 +67,9 @@ async function precacheShellBestEffort(cache, urls) {
         }
     }
     if (ok === 0 && urls.length > 0) {
-        console.error('[sw] precache: ни один shell-ресурс не закэширован; офлайн после первого визита восстановится через SWR.');
+        console.error(
+            '[sw] precache: ни один shell-ресурс не закэширован; офлайн после первого визита восстановится через SWR.',
+        );
     }
     return { ok, failed };
 }

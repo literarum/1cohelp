@@ -158,7 +158,11 @@ export function syncBodyScrollLockAfterModalClose() {
  * @param {string} scrollableSelector - CSS-селектор области с overflow-y: auto/scroll
  */
 export function attachModalBackdropWheelScroll(modalElement, scrollableSelector) {
-    if (!modalElement || !scrollableSelector || modalElement.dataset.backdropWheelScrollAttached === '1')
+    if (
+        !modalElement ||
+        !scrollableSelector ||
+        modalElement.dataset.backdropWheelScrollAttached === '1'
+    )
         return;
     modalElement.dataset.backdropWheelScrollAttached = '1';
     modalElement.addEventListener(

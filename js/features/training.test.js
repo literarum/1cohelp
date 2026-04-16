@@ -14,7 +14,12 @@ import {
     reconcileTrainingProgress,
     normalizeHiddenBuiltinTrackIds,
 } from './training-store.js';
-import { trainingStepKey, getTrackById, getStepById, TRAINING_TRACKS } from './training-curriculum.js';
+import {
+    trainingStepKey,
+    getTrackById,
+    getStepById,
+    TRAINING_TRACKS,
+} from './training-curriculum.js';
 import { sortUserTracksForDisplay, isTrackFullyComplete, applyQuizRetake } from './training.js';
 
 describe('training-srs', () => {

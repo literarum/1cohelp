@@ -1525,7 +1525,10 @@ export function initFNSCertificateRevocationSystem() {
                     'danger',
                 );
             } else if (!uiModel.statusUnknown) {
-                setStatus('\u2713 Результат: сертификат действителен (по успешно проверенным CRL)', 'success');
+                setStatus(
+                    '\u2713 Результат: сертификат действителен (по успешно проверенным CRL)',
+                    'success',
+                );
             } else if (successfulChecks === 0) {
                 setStatus(
                     '\u2716 Результат: проверка отзыва не завершена — статус сертификата неизвестен',

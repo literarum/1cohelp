@@ -205,13 +205,11 @@ export async function showScreenshotViewerModal(screenshots, algorithmId, algori
     const updateViewButtons = () => {
         if (!modalState.gridBtn || !modalState.listBtn) return;
         const isGrid = currentView === 'grid';
-        const active =
-            'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100';
-        const idle = 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
-        modalState.gridBtn.className =
-            `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isGrid ? active : idle}`;
-        modalState.listBtn.className =
-            `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${!isGrid ? active : idle}`;
+        const active = 'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100';
+        const idle =
+            'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
+        modalState.gridBtn.className = `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isGrid ? active : idle}`;
+        modalState.listBtn.className = `rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${!isGrid ? active : idle}`;
         modalState.gridBtn.setAttribute('aria-pressed', isGrid ? 'true' : 'false');
         modalState.listBtn.setAttribute('aria-pressed', !isGrid ? 'true' : 'false');
     };
@@ -379,9 +377,10 @@ export function renderScreenshotThumbnails(
             : 'view-item group relative aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow transition cursor-pointer border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-900';
         item.tabIndex = 0;
         const posAmongValid =
-            screenshots.slice(0, index).filter(
-                (s) => s && s.blob instanceof Blob && typeof s.id !== 'undefined',
-            ).length + 1;
+            screenshots
+                .slice(0, index)
+                .filter((s) => s && s.blob instanceof Blob && typeof s.id !== 'undefined').length +
+            1;
         item.title = embedded
             ? `Открыть изображение (${posAmongValid} из ${total}). Клавиша Enter.`
             : `Скриншот ${screenshot.id || index + 1}`;
@@ -610,7 +609,8 @@ export function renderScreenshotList(
     }
 
     container.innerHTML = '';
-    container.className = 'flex flex-col divide-y divide-gray-100 dark:divide-gray-700/80 p-2 sm:p-3';
+    container.className =
+        'flex flex-col divide-y divide-gray-100 dark:divide-gray-700/80 p-2 sm:p-3';
     console.log(
         `[renderScreenshotList] Начало рендеринга. Передано скриншотов: ${screenshots.length}.`,
     );
@@ -666,7 +666,8 @@ export function renderScreenshotList(
         viewButton.type = 'button';
         viewButton.className =
             'flex-shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700';
-        viewButton.innerHTML = '<i class="far fa-eye text-[11px] opacity-80" aria-hidden="true"></i> Просмотр';
+        viewButton.innerHTML =
+            '<i class="far fa-eye text-[11px] opacity-80" aria-hidden="true"></i> Просмотр';
         viewButton.setAttribute('aria-label', `Просмотреть скриншот ${screenshot.id}`);
 
         const blobIndexForLightbox = validBlobsForLightbox.findIndex((b) => b === screenshot.blob);
@@ -1212,7 +1213,9 @@ export function renderScreenshotIcon(algorithmId, stepIndex, hasScreenshots = fa
                                     transition-colors duration-150 ease-out
                                     focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900
                                     ${enabledClasses}
-                                `.replace(/\s+/g, ' ').trim();
+                                `
+        .replace(/\s+/g, ' ')
+        .trim();
 
     const iconWrapClass = isDisabled
         ? 'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gray-200/60 text-gray-400 dark:bg-gray-700/80 dark:text-gray-500'

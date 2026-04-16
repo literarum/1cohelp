@@ -26,6 +26,8 @@ import {
     isValidCockpitLogFilterLevel,
 } from './engineering-cockpit-logging.js';
 import { bindEngineeringCockpitScrollNav } from './engineering-cockpit-scroll-nav.js';
+import { getRuntimeTelemetrySupportSnapshot } from './runtime-telemetry-observers.js';
+import { getRuntimeFetchInterceptMeta } from './runtime-fetch-intercept.js';
 
 const ENGINEERING_PASSWORD = '05213587';
 const LOG_BUFFER_LIMIT = 1500;
@@ -111,7 +113,8 @@ function cockpitSerialize(value, maxLen = 900) {
                 if (src) bits.push(`src=${src.length > 500 ? `${src.slice(0, 500)}…` : src}`);
             }
         }
-        if (typeof value.message === 'string' && value.message) bits.push(`message=${value.message}`);
+        if (typeof value.message === 'string' && value.message)
+            bits.push(`message=${value.message}`);
         const s = bits.join(' ');
         return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
     }
@@ -143,7 +146,8 @@ function buildRuntimeErrorMessage(errorLike) {
     if (errorLike instanceof Error)
         return errorLike.stack || errorLike.message || String(errorLike);
     if (typeof errorLike === 'string') return errorLike;
-    if (typeof Event !== 'undefined' && errorLike instanceof Event) return cockpitSerialize(errorLike, 4000);
+    if (typeof Event !== 'undefined' && errorLike instanceof Event)
+        return cockpitSerialize(errorLike, 4000);
     return errorLike?.stack || errorLike?.message || safeSerialize(errorLike, 4000);
 }
 
@@ -169,8 +173,7 @@ function installConsoleInterceptors() {
     if (console.__engineeringCockpitInstalled) return;
 
     const patchMethod = (method, nativeMethod) => {
-        const forward =
-            typeof nativeMethod === 'function' ? nativeMethod : nativeConsole.log;
+        const forward = typeof nativeMethod === 'function' ? nativeMethod : nativeConsole.log;
         console[method] = (...args) => {
             addLog(method, args);
             if (method === 'error') {
@@ -282,6 +285,10 @@ function getSystemOverview() {
             getRuntimeHubBufferMeta(),
             LOG_BUFFER_LIMIT,
         ),
+        observability: {
+            telemetryObservers: getRuntimeTelemetrySupportSnapshot(),
+            fetchFailureReporting: getRuntimeFetchInterceptMeta(),
+        },
         performance: {
             timeOrigin: performance.timeOrigin,
             now: performance.now(),
@@ -318,9 +325,7 @@ async function renderActiveTab() {
     }
     refs.overview.textContent = safeSerialize(overviewData, 200000);
 
-    const filterLevel = isValidCockpitLogFilterLevel(state.logFilter)
-        ? state.logFilter
-        : 'all';
+    const filterLevel = isValidCockpitLogFilterLevel(state.logFilter) ? state.logFilter : 'all';
     const filteredLogs = filterCockpitLogEntries(state.logs, filterLevel);
     if (refs.logMeta) {
         refs.logMeta.textContent =
@@ -405,9 +410,7 @@ function bindUi() {
         unlockBtn: document.getElementById('engineeringCockpitUnlockBtn'),
         authMessage: document.getElementById('engineeringCockpitAuthMessage'),
         refreshBtn: document.getElementById('engineeringCockpitRefreshBtn'),
-        runManualDiagnosticBtn: document.getElementById(
-            'engineeringCockpitRunManualDiagnosticBtn',
-        ),
+        runManualDiagnosticBtn: document.getElementById('engineeringCockpitRunManualDiagnosticBtn'),
         clearLogsBtn: document.getElementById('engineeringCockpitClearLogsBtn'),
         copySnapshotBtn: document.getElementById('engineeringCockpitCopySnapshotBtn'),
         exportDiagnosticBtn: document.getElementById('engineeringCockpitExportDiagnosticBtn'),
@@ -475,9 +478,7 @@ function bindUi() {
     });
 
     refs.exportLogsBtn?.addEventListener('click', () => {
-        const filterLevel = isValidCockpitLogFilterLevel(state.logFilter)
-            ? state.logFilter
-            : 'all';
+        const filterLevel = isValidCockpitLogFilterLevel(state.logFilter) ? state.logFilter : 'all';
         const filteredLogs = filterCockpitLogEntries(state.logs, filterLevel);
         const body = formatCockpitLogText(filteredLogs);
         const header = `Copilot 1СО — машинное отделение · логи\nфильтр: ${filterLevel}\nсформировано: ${nowIso()}\n---\n`;

@@ -85,7 +85,11 @@ export async function runLightDataIntegrityPass(deps, opts = {}) {
     };
 
     if (typeof performDBOperation !== 'function' || typeof runWithTimeout !== 'function') {
-        add('warn', T('Контур'), 'performDBOperation или runWithTimeout недоступны — проверка пропущена.');
+        add(
+            'warn',
+            T('Контур'),
+            'performDBOperation или runWithTimeout недоступны — проверка пропущена.',
+        );
         return out;
     }
 
@@ -178,8 +182,9 @@ export async function runLightDataIntegrityPass(deps, opts = {}) {
         algoContainer = null;
     }
     const algorithmIds = collectAlgorithmIdsFromAlgorithmsStore(algoContainer);
-    const hasMainAlgo =
-        Boolean(algoContainer?.data?.main && typeof algoContainer.data.main === 'object');
+    const hasMainAlgo = Boolean(
+        algoContainer?.data?.main && typeof algoContainer.data.main === 'object',
+    );
 
     let bookmarks = [];
     let links = [];
@@ -190,58 +195,65 @@ export async function runLightDataIntegrityPass(deps, opts = {}) {
     let shots = [];
 
     try {
-        bookmarks = (await runWithTimeout(
-            performDBOperation('bookmarks', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        bookmarks =
+            (await runWithTimeout(
+                performDBOperation('bookmarks', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('Закладки'), `Чтение: ${e?.message || e}`);
     }
     try {
-        links = (await runWithTimeout(
-            performDBOperation('links', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        links =
+            (await runWithTimeout(
+                performDBOperation('links', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('Ссылки 1С'), `Чтение: ${e?.message || e}`);
     }
     try {
-        extLinks = (await runWithTimeout(
-            performDBOperation('extLinks', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        extLinks =
+            (await runWithTimeout(
+                performDBOperation('extLinks', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('Внешние ссылки'), `Чтение: ${e?.message || e}`);
     }
     try {
-        reglaments = (await runWithTimeout(
-            performDBOperation('reglaments', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        reglaments =
+            (await runWithTimeout(
+                performDBOperation('reglaments', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('Регламенты'), `Чтение: ${e?.message || e}`);
     }
     try {
-        favorites = (await runWithTimeout(
-            performDBOperation('favorites', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        favorites =
+            (await runWithTimeout(
+                performDBOperation('favorites', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('Избранное'), `Чтение: ${e?.message || e}`);
     }
     try {
-        pdfs = (await runWithTimeout(
-            performDBOperation('pdfFiles', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        pdfs =
+            (await runWithTimeout(
+                performDBOperation('pdfFiles', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('PDF'), `Чтение: ${e?.message || e}`);
     }
     try {
-        shots = (await runWithTimeout(
-            performDBOperation('screenshots', 'readonly', (s) => s.getAll()),
-            timeoutMs,
-        )) || [];
+        shots =
+            (await runWithTimeout(
+                performDBOperation('screenshots', 'readonly', (s) => s.getAll()),
+                timeoutMs,
+            )) || [];
     } catch (e) {
         add('warn', T('Скриншоты'), `Чтение: ${e?.message || e}`);
     }
@@ -321,9 +333,17 @@ export async function runLightDataIntegrityPass(deps, opts = {}) {
         if (typeof l.link !== 'string' || !l.link.trim()) emptyCib++;
     }
     if (emptyCib > 0) {
-        add('warn', T('Ссылки 1С (поле link)'), `Записей с пустым или некорректным link: ${emptyCib}.`);
+        add(
+            'warn',
+            T('Ссылки 1С (поле link)'),
+            `Записей с пустым или некорректным link: ${emptyCib}.`,
+        );
     } else {
-        add('info', T('Ссылки 1С (поле link)'), `Проверено ${links.length} записей — поле link заполнено.`);
+        add(
+            'info',
+            T('Ссылки 1С (поле link)'),
+            `Проверено ${links.length} записей — поле link заполнено.`,
+        );
     }
 
     /** Избранное: сироты */

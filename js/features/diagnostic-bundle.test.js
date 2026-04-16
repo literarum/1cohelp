@@ -30,6 +30,19 @@ describe('diagnostic-bundle', () => {
         });
         expect(bundle.runtime.hubBufferMeta).toMatchObject({
             capacity: expect.any(Number),
+            duplicatePressure: expect.any(String),
+            severityHistogram: expect.objectContaining({
+                critical: expect.any(Number),
+                high: expect.any(Number),
+            }),
+        });
+        expect(bundle.runtime.telemetryObservers).toMatchObject({
+            reportingObserver: expect.any(Boolean),
+            longtaskObserver: expect.any(Boolean),
+        });
+        expect(bundle.runtime.fetchFailureReporting).toMatchObject({
+            installed: expect.any(Boolean),
+            nativeFetchPatched: expect.any(Boolean),
         });
         expect(bundle.pwa).toBeDefined();
         expect(bundle.pwa).toMatchObject({

@@ -1006,10 +1006,14 @@ function ensureTimerDOMRefs() {
     if (!timerDisplayElement) {
         timerDisplayElement = document.getElementById('timerDisplay');
     }
-    if (timerDisplayElement && (!State.timerElements.minutesSpan || !inDoc(State.timerElements.minutesSpan))) {
+    if (
+        timerDisplayElement &&
+        (!State.timerElements.minutesSpan || !inDoc(State.timerElements.minutesSpan))
+    ) {
         State.timerElements.minutesSpan = document.getElementById('timerMinutesDisplay');
         State.timerElements.secondsSpan = document.getElementById('timerSecondsDisplay');
-        State.timerElements.colonSpan = timerDisplayElement && timerDisplayElement.querySelector('.timer-colon');
+        State.timerElements.colonSpan =
+            timerDisplayElement && timerDisplayElement.querySelector('.timer-colon');
     }
     if (timerToggleButton && !inDoc(timerToggleButton)) timerToggleButton = null;
     if (!timerToggleButton) {

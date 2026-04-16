@@ -71,7 +71,10 @@ describe('probeHelperAvailability', () => {
     });
 
     it('returns false on fetch rejection', async () => {
-        vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() => Promise.reject(new Error('network down'))),
+        );
         await expect(
             probeHelperAvailability('https://api.example', { path: '/api/health', timeoutMs: 100 }),
         ).resolves.toBe(false);

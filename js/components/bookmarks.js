@@ -248,11 +248,11 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
     const shotCount = screenshotIds.length;
     const screenshotButtonHTML = hasScreenshots
         ? listRow
-          ? `
+            ? `
         <button type="button" data-action="view-screenshots" class="${listIconBtnFocusedClass}" title="Изображения (${shotCount})" aria-label="Просмотреть изображения закладки, ${shotCount} шт.">
             <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400" aria-hidden="true"><i class="far fa-images text-xs"></i></span>
         </button>`
-          : `
+            : `
         <button type="button" data-action="view-screenshots" class="inline-flex h-9 min-w-[2.25rem] items-center justify-center gap-1.5 rounded-xl border border-gray-200/90 bg-white px-2 text-gray-600 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/90 dark:hover:text-gray-100" title="Просмотреть изображения (${shotCount})" aria-label="Просмотреть изображения закладки, ${shotCount} шт.">
             <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400" aria-hidden="true"><i class="far fa-images text-xs"></i></span>
             <span class="hidden sm:inline text-xs font-medium tabular-nums">${shotCount}</span>
@@ -298,9 +298,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
     const editDeleteClass = listRow ? listIconBtnFocusedClass : cardIconBtnClass;
 
     const actionsHTML = `
-        <div class="bookmark-actions flex items-center ${
-            listRow ? 'gap-1' : 'gap-0.5'
-        } ${
+        <div class="bookmark-actions flex items-center ${listRow ? 'gap-1' : 'gap-0.5'} ${
             viewMode === 'cards'
                 ? 'absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200'
                 : 'flex-shrink-0 ml-auto pl-2'
@@ -1944,8 +1942,7 @@ export async function handleBookmarkAction(event) {
     } else if (action === 'delete') {
         const titleEl = bookmarkItem.querySelector('h3');
         const title =
-            (titleEl?.textContent || titleEl?.title || '').trim() ||
-            `закладку с ID ${bookmarkId}`;
+            (titleEl?.textContent || titleEl?.title || '').trim() || `закладку с ID ${bookmarkId}`;
         const confirmModal =
             typeof showAppConfirm === 'function'
                 ? showAppConfirm
@@ -1955,8 +1952,7 @@ export async function handleBookmarkAction(event) {
         const confirmed = confirmModal
             ? await confirmModal({
                   title: 'Удаление закладки',
-                  message:
-                      `Вы уверены, что хотите удалить закладку «${title}»? Связанные скриншоты будут удалены вместе с ней. Восстановить запись можно через раздел «Недавно удалённые».`,
+                  message: `Вы уверены, что хотите удалить закладку «${title}»? Связанные скриншоты будут удалены вместе с ней. Восстановить запись можно через раздел «Недавно удалённые».`,
                   confirmText: 'Удалить',
                   cancelText: 'Отмена',
                   confirmClass: 'bg-red-600 hover:bg-red-700 text-white',

@@ -14,7 +14,13 @@ export const UI_BG_THEME_FACTORS = Object.freeze({ darkRel: 0.75, lightRel: 0.2 
 /**
  * По базовому цвету фона (пипетка) возвращает вычисленные фоны для светлой и тёмной темы.
  */
-export function deriveThemeBackgroundPairFromHex(bgHex, hexToHslFn, hslToHexFn, adjustHslFn, options = {}) {
+export function deriveThemeBackgroundPairFromHex(
+    bgHex,
+    hexToHslFn,
+    hslToHexFn,
+    adjustHslFn,
+    options = {},
+) {
     const baseHsl = hexToHslFn(bgHex);
     if (!baseHsl) return { light: bgHex, dark: bgHex };
     const { darkRel, lightRel } = UI_BG_THEME_FACTORS;
@@ -105,8 +111,12 @@ export async function applyPreviewSettings(settings) {
 
     let primaryRaw =
         settings?.primaryColor || (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor);
-    if (typeof primaryRaw !== 'string' || !/^#[a-fA-F0-9]{3}([a-fA-F0-9]{3})?$/.test(primaryRaw.trim())) {
-        primaryRaw = (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor) || THEME_DEFAULTS.primary;
+    if (
+        typeof primaryRaw !== 'string' ||
+        !/^#[a-fA-F0-9]{3}([a-fA-F0-9]{3})?$/.test(primaryRaw.trim())
+    ) {
+        primaryRaw =
+            (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor) || THEME_DEFAULTS.primary;
     }
     const primaryNorm = normalizeHex6(primaryRaw.trim()) || normalizeHex6(THEME_DEFAULTS.primary);
     const { primary, secondary, verified } = applyPrimaryPairWithVerification(

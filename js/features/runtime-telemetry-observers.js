@@ -3,6 +3,7 @@
 /**
  * Третий контур телеметрии: Reporting API (CSP, deprecation) и Performance longtask.
  * События попадают в тот же буфер, что window.error / unhandledrejection (runtime-issue-hub).
+ * Четвёртый контур — неуспешные fetch: см. runtime-fetch-intercept.js (после initRuntimeIssueHub).
  *
  * @see https://developer.mozilla.org/en-US/docs/Web/API/Reporting_API
  * @see https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming

@@ -226,7 +226,10 @@ export async function showBookmarkDetailModal(bookmarkId) {
                         daysFromNow: 7,
                     });
                 } else if (Number.isNaN(currentId)) {
-                    deps.showNotification?.('Не удалось определить закладку для напоминания.', 'error');
+                    deps.showNotification?.(
+                        'Не удалось определить закладку для напоминания.',
+                        'error',
+                    );
                 }
             }
         });

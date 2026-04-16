@@ -263,10 +263,7 @@ export async function appInit(context = 'normal') {
             }
 
             const favoritesContainer = document.getElementById('favoritesContainer');
-            if (
-                favoritesContainer &&
-                typeof handleFavoriteContainerClick === 'function'
-            ) {
+            if (favoritesContainer && typeof handleFavoriteContainerClick === 'function') {
                 favoritesContainer.removeEventListener('click', handleFavoriteContainerClick);
                 favoritesContainer.addEventListener('click', handleFavoriteContainerClick);
                 console.log(
@@ -326,12 +323,10 @@ export async function appInit(context = 'normal') {
                     showRemindersHeaderButton._clickHandlerInstance,
                 );
                 console.log(
-                    "[appInit - Reminders] Обработчик для кнопки напоминаний в шапке (#showRemindersHeaderBtn) инициализирован.",
+                    '[appInit - Reminders] Обработчик для кнопки напоминаний в шапке (#showRemindersHeaderBtn) инициализирован.',
                 );
             } else {
-                console.warn(
-                    "[appInit - Reminders] Кнопка #showRemindersHeaderBtn не найдена.",
-                );
+                console.warn('[appInit - Reminders] Кнопка #showRemindersHeaderBtn не найдена.');
             }
 
             if (typeof loadUserPreferences === 'function') {
@@ -867,14 +862,15 @@ export async function appInit(context = 'normal') {
                 };
                 initContextualBackNavigation({
                     getSectionTitle: (id) =>
-                        sectionExtraTitles[id] ||
-                        tabsConfig.find((t) => t.id === id)?.name ||
-                        id,
+                        sectionExtraTitles[id] || tabsConfig.find((t) => t.id === id)?.name || id,
                     showReglamentsForCategory,
                     setActiveTab,
                 });
             } catch (ctxBackError) {
-                console.error('[appInit V3] ✗ Ошибка инициализации контекстной навигации «назад»:', ctxBackError);
+                console.error(
+                    '[appInit V3] ✗ Ошибка инициализации контекстной навигации «назад»:',
+                    ctxBackError,
+                );
             }
             updateTotalAppInitProgress(STAGE_WEIGHTS_APP_INIT.FINAL_UI, 'FinalUI');
 

@@ -37,9 +37,9 @@ describe('toggleModalFullscreen + customizeUIModalConfig', () => {
             customizeUIModalConfig.contentAreaSelector,
         );
 
-        expect(document.getElementById('customizeUIModal').classList.contains('is-fullscreen')).toBe(
-            true,
-        );
+        expect(
+            document.getElementById('customizeUIModal').classList.contains('is-fullscreen'),
+        ).toBe(true);
         expect(panel.classList.contains('bg-white')).toBe(true);
         expect(panel.classList.contains('dark:bg-gray-800')).toBe(true);
 
@@ -51,9 +51,9 @@ describe('toggleModalFullscreen + customizeUIModalConfig', () => {
             customizeUIModalConfig.contentAreaSelector,
         );
 
-        expect(document.getElementById('customizeUIModal').classList.contains('is-fullscreen')).toBe(
-            false,
-        );
+        expect(
+            document.getElementById('customizeUIModal').classList.contains('is-fullscreen'),
+        ).toBe(false);
     });
 
     it('ensureFullscreenToggleForConfig привязывает клик по кнопке', () => {

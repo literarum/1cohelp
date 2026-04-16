@@ -4,10 +4,7 @@
  * Персистентное хранение стеков отката/повтора по ключу сущности (IndexedDB).
  */
 
-import {
-    ENTITY_EDIT_HISTORY_STORE,
-    ENTITY_HISTORY_LOCAL_MIRROR_PREFIX,
-} from '../constants.js';
+import { ENTITY_EDIT_HISTORY_STORE, ENTITY_HISTORY_LOCAL_MIRROR_PREFIX } from '../constants.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 
 /**

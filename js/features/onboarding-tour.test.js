@@ -127,9 +127,7 @@ describe('onboarding-tour coverage', () => {
         expect(trainingBodyStep?.tabNavHighlightTabId).toBe('training');
         expect(trainingBodyStep?.description || '').not.toMatch(/локально/i);
         expect(blueprints.some((step) => step.title.includes('Палитра команд'))).toBe(true);
-        expect(
-            blueprints.some((step) => step.title.includes('Настройки приложения')),
-        ).toBe(true);
+        expect(blueprints.some((step) => step.title.includes('Настройки приложения'))).toBe(true);
         expect(blueprints.some((step) => step.title.includes('Мастер слияния баз данных'))).toBe(
             true,
         );
@@ -157,7 +155,8 @@ describe('onboarding-tour coverage', () => {
 
         const elementMock = { id: 'blacklistedClientsTab' };
         globalThis.document = {
-            querySelector: (selector) => (selector === '#blacklistedClientsTab' ? elementMock : null),
+            querySelector: (selector) =>
+                selector === '#blacklistedClientsTab' ? elementMock : null,
             body: {
                 classList: {
                     remove: vi.fn(),
@@ -176,7 +175,14 @@ describe('onboarding-tour coverage', () => {
 
     it('detects popover side relative to highlighted element', () => {
         const detect = __onboardingTourInternals.detectPopoverSide;
-        const elementRect = { top: 200, bottom: 260, left: 200, right: 320, width: 120, height: 60 };
+        const elementRect = {
+            top: 200,
+            bottom: 260,
+            left: 200,
+            right: 320,
+            width: 120,
+            height: 60,
+        };
 
         expect(
             detect(elementRect, {
@@ -227,7 +233,14 @@ describe('onboarding-tour coverage', () => {
             removeAttribute: vi.fn(),
             style: {},
         };
-        const popoverRect = { top: 100, left: 100, right: 400, bottom: 220, width: 300, height: 120 };
+        const popoverRect = {
+            top: 100,
+            left: 100,
+            right: 400,
+            bottom: 220,
+            width: 300,
+            height: 120,
+        };
         const elementRect = { top: 240, left: 200, right: 260, bottom: 300, width: 60, height: 60 };
 
         const popover = {
@@ -235,7 +248,14 @@ describe('onboarding-tour coverage', () => {
             getBoundingClientRect: () => popoverRect,
         };
         const parent = {
-            getBoundingClientRect: () => ({ top: 0, left: 0, right: 1920, bottom: 1080, width: 1920, height: 1080 }),
+            getBoundingClientRect: () => ({
+                top: 0,
+                left: 0,
+                right: 1920,
+                bottom: 1080,
+                width: 1920,
+                height: 1080,
+            }),
         };
         popover.parentElement = parent;
 

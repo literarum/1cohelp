@@ -26,8 +26,10 @@ let deps = {
     showNotification: null,
     showAppConfirm: null,
     storeConfigs: null,
-    /** Полный экспорт БД (резервная копия). Обязателен перед слиянием. */
+    /** Полный экспорт БД (резервная копия и слияние). */
     exportAllData: null,
+    /** Тот же диалог выбора бэкапа, что и при импорте (`performForcedBackup` из import-export). */
+    performForcedBackup: null,
     // Функции для обновления UI/поиска после merge:
     loadBookmarks: null,
     loadExtLinks: null,
@@ -95,6 +97,68 @@ function resolveStoresFromSelectedScopes(selectedScopeValues) {
         });
     });
     return stores;
+}
+
+/** Постоянное предупреждение при слиянии без резервной копии (аналог импорта). */
+export const MERGE_WITHOUT_BACKUP_WARNING_ID = 'merge-without-backup-warning-permanent';
+
+const MERGE_BACKUP_PREFLIGHT_DISMISS_IDS = [
+    MERGE_WITHOUT_BACKUP_WARNING_ID,
+    'backup-skipped-by-setting-merge-temp',
+    'critical-backup-warning-prompt',
+    'forced-backup-success-pfb',
+    'forced-backup-failed-pfb',
+    'backup-gesture-error-critical-pfb',
+];
+
+/**
+ * Резервный контур перед apply: настройка «без бэкапа», либо тот же confirm, что при импорте.
+ * @param {{
+ *   disableForcedBackupOnDbMerge?: boolean,
+ *   performForcedBackup?: null | ((opts: { operation: 'merge' }) => Promise<unknown>),
+ *   exportAllData?: null | ((opts: { isForcedBackupMode?: boolean }) => Promise<unknown>),
+ *   notificationService?: null | { dismissImportant?: Function, add?: Function },
+ *   waitMs?: (n: number) => Promise<void>,
+ * }} args
+ * @returns {Promise<{ ok: boolean, outcome?: unknown, reason?: string }>}
+ */
+export async function runDbMergeBackupPreflight(args) {
+    const {
+        disableForcedBackupOnDbMerge,
+        performForcedBackup,
+        exportAllData,
+        notificationService,
+        waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    } = args || {};
+
+    if (typeof exportAllData !== 'function') {
+        return { ok: false, reason: 'no_export' };
+    }
+
+    MERGE_BACKUP_PREFLIGHT_DISMISS_IDS.forEach((id) => notificationService?.dismissImportant?.(id));
+
+    if (disableForcedBackupOnDbMerge === true) {
+        notificationService?.add?.(
+            'Принудительное резервное копирование перед слиянием отключено в настройках. Слияние начнётся без бэкапа.',
+            'warning',
+            { important: true, duration: 7000, id: 'backup-skipped-by-setting-merge-temp' },
+        );
+        await waitMs(1000);
+        return { ok: true, outcome: 'skipped_by_setting' };
+    }
+
+    if (typeof performForcedBackup !== 'function') {
+        return { ok: false, reason: 'no_performForcedBackup' };
+    }
+
+    const backupOutcome = await performForcedBackup({ operation: 'merge' });
+    if (backupOutcome === 'aborted_by_user') {
+        return { ok: false, outcome: 'aborted_by_user' };
+    }
+    if (backupOutcome === true || backupOutcome === 'skipped_by_user') {
+        return { ok: true, outcome: backupOutcome };
+    }
+    return { ok: false, outcome: backupOutcome };
 }
 
 function buildScopeSelectionSummary(selectedScopeValues) {
@@ -284,7 +348,11 @@ function normalizeImportedRecordForStore(storeName, record, ctx) {
         normalized.originalItemId = String(normalized.originalItemId);
     }
 
-    if (storeName === 'reminders' && typeof normalized.contextId !== 'undefined' && normalized.contextId !== null) {
+    if (
+        storeName === 'reminders' &&
+        typeof normalized.contextId !== 'undefined' &&
+        normalized.contextId !== null
+    ) {
         normalized.contextId = String(normalized.contextId);
     }
 
@@ -841,14 +909,71 @@ const MERGE_APPLICATION_ORDER = [
     'mentorQuizPackages',
 ];
 
+const MERGE_STORE_LABELS = {
+    algorithms: 'Алгоритмы',
+    bookmarkFolders: 'Папки закладок',
+    extLinkCategories: 'Категории внешних ссылок',
+    reglaments: 'Регламенты',
+    extLinks: 'Внешние ссылки',
+    bookmarks: 'Закладки',
+    favorites: 'Избранное',
+    reminders: 'Напоминания',
+    pdfFiles: 'PDF-вложения',
+    screenshots: 'Снимки экрана',
+    trainingProgress: 'Прогресс обучения',
+    trainingSrsCards: 'SRS-карточки',
+    trainingWeakSpots: 'Слабые места (обучение)',
+    trainingUserCurriculum: 'Учебный план пользователя',
+    trainingBuiltinCurriculum: 'Встроенный учебный план',
+    mentorQuizPackages: 'Пакеты квизов',
+};
+
+function mergeStoreHumanLabel(storeName) {
+    return MERGE_STORE_LABELS[storeName] || String(storeName || '');
+}
+
+/**
+ * Число дискретных шагов прогресса при applyMergePlan (снимок + записи + UI-обновление).
+ */
+function countMergeApplyTicks(mergePlan, snapshotStoreNames) {
+    const names = Array.isArray(snapshotStoreNames) ? snapshotStoreNames : [];
+    let ticks = names.length;
+    for (const storeName of MERGE_APPLICATION_ORDER) {
+        const plan = mergePlan.perStore?.[storeName];
+        if (!plan) continue;
+        if (storeName === 'algorithms') {
+            const localContainer = extractAlgorithmsContainerRecord(plan.localContainer);
+            const importContainer = extractAlgorithmsContainerRecord(plan.importContainer);
+            if (!importContainer && !localContainer) continue;
+            if (!localContainer && importContainer) {
+                ticks += 1;
+                continue;
+            }
+            if (localContainer && !importContainer) continue;
+            ticks += 2;
+            continue;
+        }
+        ticks += (plan.toInsert?.length || 0) + (plan.toUpdate?.length || 0);
+    }
+    ticks += 1;
+    return Math.max(1, ticks);
+}
+
 function cloneRecordForRollback(record) {
     return clonePlain(record);
 }
 
-async function createRollbackSnapshot(storeNames) {
+async function createRollbackSnapshot(storeNames, onAfterEachStoreRead) {
     const snapshot = {};
-    for (const storeName of storeNames) {
+    const list = Array.isArray(storeNames) ? storeNames : [];
+    const total = list.length;
+    let index = 0;
+    for (const storeName of list) {
         snapshot[storeName] = await getAllFromIndexedDB(storeName);
+        index += 1;
+        if (typeof onAfterEachStoreRead === 'function') {
+            onAfterEachStoreRead({ storeName, index, total });
+        }
     }
     return snapshot;
 }
@@ -952,14 +1077,274 @@ export function buildMergePlan(analysisResult, userResolutions) {
     return plan;
 }
 
+// ============================================================================
+// ИСТОРИЯ СЛИЯНИЙ (локальный журнал в localStorage + UI в модалке)
+// ============================================================================
+
+/** @typedef {{ v: 1, id: string, completedAt: string, sourceFileName: string, fileSchemaVersion: string, newInImportFile: number, conflictCountAtAnalysis: number, identicalInAnalysis: number, plannedInserts: number, plannedUpdates: number, algorithmsOp: 'none'|'replace_container'|'merge_containers' }} DbMergeHistoryEntry */
+
+export const DB_MERGE_HISTORY_STORAGE_KEY = 'copilot1co_db_merge_history_v1';
+export const DB_MERGE_HISTORY_SESSION_EXPANDED_KEY = 'copilot1co_db_merge_history_ui_expanded';
+
+const DB_MERGE_HISTORY_DOC_VERSION = 1;
+const DB_MERGE_HISTORY_MAX_ENTRIES = 60;
+
+function nonNegativeInt(n, fallback = 0) {
+    const x = typeof n === 'number' ? n : Number(n);
+    if (!Number.isFinite(x) || x < 0) return fallback;
+    return Math.floor(x);
+}
+
+/**
+ * Сводка по результату анализа (до решений по конфликтам).
+ * @param {object|null|undefined} analysis
+ */
+export function summarizeMergeAnalysisStats(analysis) {
+    const empty = { newInFile: 0, conflicts: 0, identical: 0, localOnly: 0 };
+    if (!analysis || typeof analysis !== 'object' || !Array.isArray(analysis.storeDiffs)) {
+        return empty;
+    }
+    let newInFile = 0;
+    let conflicts = 0;
+    let identical = 0;
+    let localOnly = 0;
+    for (const d of analysis.storeDiffs) {
+        newInFile += Array.isArray(d.importOnly) ? d.importOnly.length : 0;
+        conflicts += Array.isArray(d.conflicts) ? d.conflicts.length : 0;
+        identical += Array.isArray(d.identical) ? d.identical.length : 0;
+        localOnly += Array.isArray(d.localOnly) ? d.localOnly.length : 0;
+    }
+    return { newInFile, conflicts, identical, localOnly };
+}
+
+/**
+ * Сводка плана слияния после решений пользователя (что реально пойдёт в apply).
+ * @param {object|null|undefined} mergePlan
+ */
+export function summarizeMergePlanForHistory(mergePlan) {
+    if (!mergePlan || typeof mergePlan !== 'object') {
+        return { plannedInserts: 0, plannedUpdates: 0, algorithmsOp: 'none' };
+    }
+    let plannedInserts = 0;
+    let plannedUpdates = 0;
+    let algorithmsOp = 'none';
+    const alg = mergePlan.perStore?.algorithms;
+    if (alg) {
+        const lc = extractAlgorithmsContainerRecord(alg.localContainer);
+        const ic = extractAlgorithmsContainerRecord(alg.importContainer);
+        if (ic && !lc) {
+            plannedInserts += 1;
+            algorithmsOp = 'replace_container';
+        } else if (ic && lc) {
+            algorithmsOp = 'merge_containers';
+        }
+    }
+    for (const storeName of MERGE_APPLICATION_ORDER) {
+        if (storeName === 'algorithms') continue;
+        const p = mergePlan.perStore?.[storeName];
+        if (!p) continue;
+        plannedInserts += Array.isArray(p.toInsert) ? p.toInsert.length : 0;
+        plannedUpdates += Array.isArray(p.toUpdate) ? p.toUpdate.length : 0;
+    }
+    return { plannedInserts, plannedUpdates, algorithmsOp };
+}
+
+/**
+ * @param {{ sourceFileName?: string, analysis: object, mergePlan: object, completedAt?: string }} args
+ * @returns {DbMergeHistoryEntry}
+ */
+export function buildMergeHistoryEntry(args) {
+    const analysis = args?.analysis;
+    const mergePlan = args?.mergePlan;
+    const rawName = typeof args?.sourceFileName === 'string' ? args.sourceFileName.trim() : '';
+    const completedAt =
+        typeof args?.completedAt === 'string' && args.completedAt.trim()
+            ? args.completedAt.trim()
+            : new Date().toISOString();
+    const ast = summarizeMergeAnalysisStats(analysis);
+    const pl = summarizeMergePlanForHistory(mergePlan);
+    return {
+        v: 1,
+        id: newMergeHistoryEntryId(),
+        completedAt,
+        sourceFileName: rawName || 'Файл без имени',
+        fileSchemaVersion:
+            analysis && typeof analysis.schemaVersion === 'string'
+                ? analysis.schemaVersion
+                : String(analysis?.schemaVersion ?? ''),
+        newInImportFile: nonNegativeInt(ast.newInFile),
+        conflictCountAtAnalysis: nonNegativeInt(ast.conflicts),
+        identicalInAnalysis: nonNegativeInt(ast.identical),
+        plannedInserts: nonNegativeInt(pl.plannedInserts),
+        plannedUpdates: nonNegativeInt(pl.plannedUpdates),
+        algorithmsOp:
+            pl.algorithmsOp === 'replace_container' || pl.algorithmsOp === 'merge_containers'
+                ? pl.algorithmsOp
+                : 'none',
+    };
+}
+
+function newMergeHistoryEntryId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `mh_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeStoredMergeHistoryEntry(raw) {
+    if (!raw || typeof raw !== 'object' || raw.v !== 1) return null;
+    const id =
+        typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : newMergeHistoryEntryId();
+    const completedAt = typeof raw.completedAt === 'string' ? raw.completedAt.trim() : '';
+    if (!completedAt) return null;
+    const sourceFileName =
+        typeof raw.sourceFileName === 'string' && raw.sourceFileName.trim()
+            ? raw.sourceFileName.trim()
+            : 'Файл без имени';
+    const fileSchemaVersion =
+        typeof raw.fileSchemaVersion === 'string'
+            ? raw.fileSchemaVersion
+            : String(raw.fileSchemaVersion ?? '');
+    return {
+        v: 1,
+        id,
+        completedAt,
+        sourceFileName,
+        fileSchemaVersion,
+        newInImportFile: nonNegativeInt(raw.newInImportFile),
+        conflictCountAtAnalysis: nonNegativeInt(raw.conflictCountAtAnalysis),
+        identicalInAnalysis: nonNegativeInt(raw.identicalInAnalysis),
+        plannedInserts: nonNegativeInt(raw.plannedInserts),
+        plannedUpdates: nonNegativeInt(raw.plannedUpdates),
+        algorithmsOp:
+            raw.algorithmsOp === 'replace_container' || raw.algorithmsOp === 'merge_containers'
+                ? raw.algorithmsOp
+                : 'none',
+    };
+}
+
+/**
+ * @param {{ getItem: (k: string) => string|null }} storageLike
+ * @returns {DbMergeHistoryEntry[]}
+ */
+export function loadMergeHistoryEntries(storageLike) {
+    const storage = storageLike ?? globalThis.localStorage;
+    if (!storage || typeof storage.getItem !== 'function') return [];
+    try {
+        const raw = storage.getItem(DB_MERGE_HISTORY_STORAGE_KEY);
+        if (!raw) return [];
+        const doc = JSON.parse(raw);
+        if (
+            !doc ||
+            typeof doc !== 'object' ||
+            doc.v !== DB_MERGE_HISTORY_DOC_VERSION ||
+            !Array.isArray(doc.entries)
+        ) {
+            return [];
+        }
+        return doc.entries.map(normalizeStoredMergeHistoryEntry).filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * @param {DbMergeHistoryEntry[]} entries
+ * @param {{ setItem: (k: string, v: string) => void }} storageLike
+ */
+function saveMergeHistoryEntries(entries, storageLike) {
+    const storage = storageLike ?? globalThis.localStorage;
+    if (!storage || typeof storage.setItem !== 'function') return;
+    const trimmed = entries.slice(0, DB_MERGE_HISTORY_MAX_ENTRIES);
+    const doc = { v: DB_MERGE_HISTORY_DOC_VERSION, entries: trimmed };
+    storage.setItem(DB_MERGE_HISTORY_STORAGE_KEY, JSON.stringify(doc));
+}
+
+/**
+ * @param {DbMergeHistoryEntry} entry
+ * @param {{ getItem: (k: string) => string|null, setItem: (k: string, v: string) => void }} storageLike
+ */
+export function appendMergeHistoryEntry(entry, storageLike) {
+    if (!entry || entry.v !== 1) return;
+    const normalized = normalizeStoredMergeHistoryEntry(entry);
+    if (!normalized) return;
+    const storage = storageLike ?? globalThis.localStorage;
+    const prev = loadMergeHistoryEntries(storage);
+    const next = [normalized, ...prev.filter((e) => e.id !== normalized.id)].slice(
+        0,
+        DB_MERGE_HISTORY_MAX_ENTRIES,
+    );
+    try {
+        saveMergeHistoryEntries(next, storage);
+    } catch (e) {
+        console.warn('[DbMerge] Не удалось сохранить историю слияний:', e);
+    }
+}
+
+function formatMergeHistoryAlgorithmsLine(algorithmsOp) {
+    if (algorithmsOp === 'replace_container') return 'Алгоритмы: подстановка импорта';
+    if (algorithmsOp === 'merge_containers') return 'Алгоритмы: объединение';
+    return '';
+}
+
+function renderMergeHistoryListInto(ulEl, emptyEl, entries) {
+    if (!ulEl) return;
+    ulEl.innerHTML = '';
+    if (!entries.length) {
+        emptyEl?.classList.remove('hidden');
+        return;
+    }
+    emptyEl?.classList.add('hidden');
+    const frag = document.createDocumentFragment();
+    for (const entry of entries) {
+        const li = document.createElement('li');
+        li.className = 'db-merge-history-item';
+        const dt = new Date(entry.completedAt);
+        const when = Number.isNaN(dt.getTime())
+            ? '—'
+            : dt.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'medium' });
+        const algLine = formatMergeHistoryAlgorithmsLine(entry.algorithmsOp);
+        const schemaLine = entry.fileSchemaVersion
+            ? `Версия схемы файла: ${escapeHtml(entry.fileSchemaVersion)}`
+            : '';
+        li.innerHTML = `
+            <div class="db-merge-history-item-head">
+                <span class="db-merge-history-item-time">${escapeHtml(when)}</span>
+            </div>
+            <div class="db-merge-history-item-file" title="${escapeHtml(entry.sourceFileName)}">
+                <i class="fas fa-database" aria-hidden="true"></i>
+                <span class="db-merge-history-item-file-name">${escapeHtml(entry.sourceFileName)}</span>
+            </div>
+            <div class="db-merge-history-item-metrics">
+                <span>Новых в файле: <strong>${entry.newInImportFile}</strong></span>
+                <span class="db-merge-history-item-sep">·</span>
+                <span>Вставок по плану: <strong>${entry.plannedInserts}</strong></span>
+                <span class="db-merge-history-item-sep">·</span>
+                <span>Обновлений: <strong>${entry.plannedUpdates}</strong></span>
+            </div>
+            <div class="db-merge-history-item-meta">
+                <span>Конфликтов при анализе: ${entry.conflictCountAtAnalysis}</span>
+                <span class="db-merge-history-item-sep">·</span>
+                <span>Совпадений: ${entry.identicalInAnalysis}</span>
+            </div>
+            ${schemaLine ? `<div class="db-merge-history-item-schema">${schemaLine}</div>` : ''}
+            ${algLine ? `<div class="db-merge-history-item-alg">${escapeHtml(algLine)}</div>` : ''}
+        `;
+        frag.appendChild(li);
+    }
+    ulEl.appendChild(frag);
+}
+
 /**
  * Применяет MergePlan к IndexedDB с учётом зависимостей и ремаппинга ID.
  * Ожидается, что перед вызовом выполнен анализ и пользователь подтвердил
  * решения по конфликтам.
  *
- * Возвращает true при успешном завершении.
+ * @param {object} mergePlan
+ * @param {{ onProgress?: (evt: object) => void }} [options] — onProgress: детальный прогресс (снимок, записи, UI).
+ * @returns {Promise<boolean>}
  */
-export async function applyMergePlan(mergePlan) {
+export async function applyMergePlan(mergePlan, options = {}) {
     if (!State.db) {
         throw new Error('База данных не инициализирована, слияние невозможно.');
     }
@@ -1001,8 +1386,57 @@ export async function applyMergePlan(mergePlan) {
         State.db &&
         State.db.objectStoreNames &&
         typeof State.db.objectStoreNames.contains === 'function';
+
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const totalTicks = countMergeApplyTicks(mergePlan, storesWithChanges);
+    let doneTicks = 0;
+
+    const bump = (partial) => {
+        doneTicks = Math.min(doneTicks + 1, totalTicks);
+        const applyPercent = Math.min(100, Math.round((doneTicks / totalTicks) * 100));
+        if (onProgress) {
+            onProgress({
+                applyPercent,
+                doneTicks,
+                totalTicks,
+                ...partial,
+            });
+        }
+    };
+
+    const writeAndBump = async (storeName, record, meta = {}) => {
+        const res = await saveToIndexedDB(storeName, record);
+        const human = mergeStoreHumanLabel(storeName);
+        const { op = 'write', index, total, detail } = meta;
+        let line = detail;
+        if (!line) {
+            if (op === 'insert' && index && total) {
+                line = `${human}: вставка ${index}/${total} · перенос в IndexedDB (новый ключ)`;
+            } else if (op === 'update' && index && total) {
+                line = `${human}: обновление ${index}/${total} · IndexedDB put (локальный id сохранён)`;
+            } else {
+                line = `${human}: запись · IndexedDB put`;
+            }
+        }
+        bump({
+            phase: 'indexeddb_write',
+            storeName,
+            op,
+            detail: line,
+        });
+        return res;
+    };
+
     const rollbackSnapshot = canCreateRollbackSnapshot
-        ? await createRollbackSnapshot(storesWithChanges)
+        ? await createRollbackSnapshot(storesWithChanges, ({ storeName, index, total }) => {
+              bump({
+                  phase: 'rollback_snapshot',
+                  storeName,
+                  detail: `Снимок для отката: чтение «${mergeStoreHumanLabel(
+                      storeName,
+                  )}» из IndexedDB (${index}/${total})`,
+              });
+          })
         : {};
 
     const applyForStore = async (storeName, storePlan) => {
@@ -1042,7 +1476,12 @@ export async function applyMergePlan(mergePlan) {
             }
 
             if (!localContainer && importContainer) {
-                await saveToIndexedDB('algorithms', importContainer);
+                await writeAndBump('algorithms', importContainer, {
+                    op: 'insert',
+                    detail: `${mergeStoreHumanLabel(
+                        'algorithms',
+                    )}: полная замена контейнера импортируемой версией · IndexedDB`,
+                });
                 return;
             }
 
@@ -1050,6 +1489,12 @@ export async function applyMergePlan(mergePlan) {
                 return;
             }
 
+            bump({
+                phase: 'algorithms_merge_compute',
+                detail: `${mergeStoreHumanLabel(
+                    'algorithms',
+                )}: вычисление объединения в памяти (сопоставление id и ссылок между блоками)…`,
+            });
             const { mergedData, algorithmIdMap } = mergeAlgorithmsData(
                 localContainer?.data,
                 importContainer?.data,
@@ -1059,28 +1504,48 @@ export async function applyMergePlan(mergePlan) {
                 idMapping.algorithms.set(String(originalId), mappedId);
             });
 
-            await saveToIndexedDB('algorithms', {
-                section: 'all',
-                data: mergedData,
-            });
+            await writeAndBump(
+                'algorithms',
+                {
+                    section: 'all',
+                    data: mergedData,
+                },
+                {
+                    op: 'update',
+                    detail: `${mergeStoreHumanLabel(
+                        'algorithms',
+                    )}: запись объединённого графа в IndexedDB`,
+                },
+            );
             return;
         }
 
-        // Родительские store'ы – сначала создаём/обновляем их, собирая mapping.
         if (storeName === 'bookmarkFolders' || storeName === 'extLinkCategories') {
-            for (const op of storePlan.toInsert) {
+            const inserts = storePlan.toInsert || [];
+            const updates = storePlan.toUpdate || [];
+            for (let i = 0; i < inserts.length; i++) {
+                const op = inserts[i];
                 const insertRecord = { ...op.record };
                 delete insertRecord.id;
                 delete insertRecord._id;
-                const newId = await saveToIndexedDB(storeName, insertRecord);
+                const newId = await writeAndBump(storeName, insertRecord, {
+                    op: 'insert',
+                    index: i + 1,
+                    total: inserts.length,
+                });
                 if (typeof op.record.id !== 'undefined') {
                     idMapping[storeName].set(op.record.id, newId);
                 }
             }
-            for (const op of storePlan.toUpdate) {
+            for (let i = 0; i < updates.length; i++) {
+                const op = updates[i];
                 const { local, incoming } = op;
                 const updated = { ...incoming, id: local.id };
-                await saveToIndexedDB(storeName, updated);
+                await writeAndBump(storeName, updated, {
+                    op: 'update',
+                    index: i + 1,
+                    total: updates.length,
+                });
                 if (typeof incoming.id !== 'undefined') {
                     idMapping[storeName].set(incoming.id, local.id);
                 }
@@ -1089,7 +1554,10 @@ export async function applyMergePlan(mergePlan) {
         }
 
         if (storeName === 'reglaments' || storeName === 'extLinks' || storeName === 'bookmarks') {
-            for (const op of storePlan.toInsert) {
+            const inserts = storePlan.toInsert || [];
+            const updates = storePlan.toUpdate || [];
+            for (let i = 0; i < inserts.length; i++) {
+                const op = inserts[i];
                 const incoming = { ...op.record };
 
                 if (storeName === 'bookmarks' && typeof incoming.folder !== 'undefined') {
@@ -1105,13 +1573,18 @@ export async function applyMergePlan(mergePlan) {
 
                 const originalId = incoming.id;
                 delete incoming.id;
-                const newId = await saveToIndexedDB(storeName, incoming);
+                const newId = await writeAndBump(storeName, incoming, {
+                    op: 'insert',
+                    index: i + 1,
+                    total: inserts.length,
+                });
                 if (typeof originalId !== 'undefined') {
                     idMapping[storeName].set(originalId, newId);
                 }
             }
 
-            for (const op of storePlan.toUpdate) {
+            for (let i = 0; i < updates.length; i++) {
+                const op = updates[i];
                 const { local, incoming } = op;
                 const updated = { ...incoming, id: local.id };
 
@@ -1126,7 +1599,11 @@ export async function applyMergePlan(mergePlan) {
                     updated.category = mappedCategoryId;
                 }
 
-                await saveToIndexedDB(storeName, updated);
+                await writeAndBump(storeName, updated, {
+                    op: 'update',
+                    index: i + 1,
+                    total: updates.length,
+                });
                 if (typeof incoming.id !== 'undefined') {
                     idMapping[storeName].set(incoming.id, local.id);
                 }
@@ -1135,7 +1612,10 @@ export async function applyMergePlan(mergePlan) {
         }
 
         if (storeName === 'favorites') {
-            for (const op of storePlan.toInsert) {
+            const inserts = storePlan.toInsert || [];
+            const updates = storePlan.toUpdate || [];
+            for (let i = 0; i < inserts.length; i++) {
+                const op = inserts[i];
                 const incoming = { ...op.record };
                 const mappedOriginalId =
                     getMappedValue(idMapping.algorithms, incoming.originalItemId) ??
@@ -1145,10 +1625,15 @@ export async function applyMergePlan(mergePlan) {
                     incoming.originalItemId;
                 incoming.originalItemId = String(mappedOriginalId);
                 delete incoming.id;
-                await saveToIndexedDB('favorites', incoming);
+                await writeAndBump('favorites', incoming, {
+                    op: 'insert',
+                    index: i + 1,
+                    total: inserts.length,
+                });
             }
 
-            for (const op of storePlan.toUpdate) {
+            for (let i = 0; i < updates.length; i++) {
+                const op = updates[i];
                 const { local, incoming } = op;
                 const updated = { ...incoming, id: local.id };
                 const mappedOriginalId =
@@ -1158,7 +1643,11 @@ export async function applyMergePlan(mergePlan) {
                     getMappedValue(idMapping.reglaments, updated.originalItemId) ??
                     updated.originalItemId;
                 updated.originalItemId = String(mappedOriginalId);
-                await saveToIndexedDB('favorites', updated);
+                await writeAndBump('favorites', updated, {
+                    op: 'update',
+                    index: i + 1,
+                    total: updates.length,
+                });
             }
             return;
         }
@@ -1189,41 +1678,64 @@ export async function applyMergePlan(mergePlan) {
                 return mapped === undefined || mapped === null ? contextId : String(mapped);
             };
 
-            for (const op of storePlan.toInsert) {
+            const inserts = storePlan.toInsert || [];
+            const updates = storePlan.toUpdate || [];
+            for (let i = 0; i < inserts.length; i++) {
+                const op = inserts[i];
                 const incoming = { ...op.record };
                 incoming.contextId = mapReminderContextId(incoming.contextType, incoming.contextId);
                 delete incoming.id;
-                await saveToIndexedDB('reminders', incoming);
+                await writeAndBump('reminders', incoming, {
+                    op: 'insert',
+                    index: i + 1,
+                    total: inserts.length,
+                });
             }
 
-            for (const op of storePlan.toUpdate) {
+            for (let i = 0; i < updates.length; i++) {
+                const op = updates[i];
                 const { local, incoming } = op;
                 const updated = { ...incoming, id: local.id };
                 updated.contextId = mapReminderContextId(updated.contextType, updated.contextId);
-                await saveToIndexedDB('reminders', updated);
+                await writeAndBump('reminders', updated, {
+                    op: 'update',
+                    index: i + 1,
+                    total: updates.length,
+                });
             }
             return;
         }
 
         if (storeName === 'pdfFiles') {
-            for (const op of storePlan.toInsert) {
+            const inserts = storePlan.toInsert || [];
+            for (let i = 0; i < inserts.length; i++) {
+                const op = inserts[i];
                 const incoming = { ...op.record };
                 const mappedParentId = mapParentEntityId(incoming.parentType, incoming.parentId);
                 incoming.parentId = String(mappedParentId);
                 delete incoming.id;
-                await saveToIndexedDB('pdfFiles', incoming);
+                await writeAndBump('pdfFiles', incoming, {
+                    op: 'insert',
+                    index: i + 1,
+                    total: inserts.length,
+                });
             }
             return;
         }
 
         if (storeName === 'screenshots') {
-            // Для скриншотов просто переносим записи с ремаппингом parentId там, где это возможно.
-            for (const op of storePlan.toInsert) {
+            const inserts = storePlan.toInsert || [];
+            for (let i = 0; i < inserts.length; i++) {
+                const op = inserts[i];
                 const incoming = { ...op.record };
                 const mappedParentId = mapParentEntityId(incoming.parentType, incoming.parentId);
                 incoming.parentId = mappedParentId;
                 delete incoming.id;
-                await saveToIndexedDB('screenshots', incoming);
+                await writeAndBump('screenshots', incoming, {
+                    op: 'insert',
+                    index: i + 1,
+                    total: inserts.length,
+                });
             }
         }
     };
@@ -1259,8 +1771,11 @@ export async function applyMergePlan(mergePlan) {
         throw applyError;
     }
 
-    // Обновление UI и поиска после успешного применения
     try {
+        bump({
+            phase: 'ui_refresh',
+            detail: 'Обновление интерфейса: закладки, внешние ссылки, регламенты, напоминания; перестроение поискового индекса…',
+        });
         await Promise.all([
             deps.loadBookmarks?.(),
             deps.loadExtLinks?.(),
@@ -1275,7 +1790,7 @@ export async function applyMergePlan(mergePlan) {
         }
         deps.showNotification?.('Слияние баз данных успешно завершено.', 'success');
     } catch (e) {
-        console.error('[DbMerge] Ошибка при обновлении UI/поиска после merge:', e);
+        console.error('[DbMerge] Ошибка при обновленении UI/поиска после merge:', e);
         deps.showNotification?.(
             'Слияние выполнено, но обновление интерфейса завершилось с ошибкой. Проверьте консоль.',
             'warning',
@@ -1422,8 +1937,19 @@ function shouldShowFooterActions({ hasSelectedFileForAnalysis }) {
     return Boolean(hasSelectedFileForAnalysis);
 }
 
+/**
+ * Правило доступности/UX для основной кнопки футера слияния (двойная проверка с флагом потока).
+ * @param {{ footerCompleted: boolean, mergeFlowInProgress: boolean, hasAnalysis: boolean }} args
+ * @returns {boolean}
+ */
+function computeDbMergePrimaryDisabled({ footerCompleted, mergeFlowInProgress, hasAnalysis }) {
+    if (footerCompleted) return false;
+    return Boolean(mergeFlowInProgress || !hasAnalysis);
+}
+
 export const __dbMergeUiInternals = {
     shouldShowFooterActions,
+    computeDbMergePrimaryDisabled,
 };
 
 // ============================================================================
@@ -1452,6 +1978,15 @@ export function openDbMergeModal() {
         return;
     }
 
+    const riskHintTextEl = existing.querySelector('#dbMergeRiskHint > span');
+    if (riskHintTextEl) {
+        const skipForced =
+            State.userPreferences && State.userPreferences.disableForcedBackupOnDbMerge === true;
+        riskHintTextEl.textContent = skipForced
+            ? 'В настройках отключено предложение резервной копии перед слиянием. Рекомендуется сделать экспорт вручную перед операцией.'
+            : 'Перед слиянием будет показано предупреждение с выбором: полная резервная копия или отказ по подтверждению — как при импорте базы.';
+    }
+
     const closeButtons = existing.querySelectorAll('.db-merge-close-btn');
     closeButtons.forEach((btn) => {
         if (!btn._dbMergeCloseHandler) {
@@ -1471,7 +2006,9 @@ export function openDbMergeModal() {
     const overallStatsEl = document.getElementById('dbMergeOverallStats');
     const conflictsContainer = document.getElementById('dbMergeConflictsContainer');
     const progressBar = document.getElementById('dbMergeProgressBar');
-    const progressText = document.getElementById('dbMergeProgressText');
+    const progressTrack = document.getElementById('dbMergeProgressTrack');
+    const progressPercent = document.getElementById('dbMergeProgressPercent');
+    const progressDetail = document.getElementById('dbMergeProgressDetail');
     const cancelBtn = document.getElementById('dbMergeCancelBtn');
     const startBtn = document.getElementById('dbMergeStartBtn');
     const footerEl = existing.querySelector('.db-merge-footer');
@@ -1483,6 +2020,10 @@ export function openDbMergeModal() {
     const stepResolve = document.getElementById('dbMergeStepResolve');
     const stepApply = document.getElementById('dbMergeStepApply');
     const globalPolicySelect = document.getElementById('dbMergeGlobalConflictPolicy');
+    const historyToggleBtn = existing.querySelector('#dbMergeHistoryToggle');
+    const historyPanelEl = existing.querySelector('#dbMergeHistoryPanel');
+    const historyListEl = existing.querySelector('#dbMergeHistoryList');
+    const historyEmptyEl = existing.querySelector('#dbMergeHistoryEmpty');
     const FOOTER_MODE = {
         DEFAULT: 'default',
         COMPLETED: 'completed',
@@ -1508,6 +2049,10 @@ export function openDbMergeModal() {
     let currentMergePlan = null;
     let footerMode = FOOTER_MODE.DEFAULT;
     let hasSelectedFileForAnalysis = false;
+    /** Защита от повторного запуска и гонок UI на время резервной копии + applyMergePlan. */
+    let mergeFlowInProgress = false;
+    /** Имя выбранного JSON для слияния (для журнала истории). */
+    let lastMergeSourceFileName = '';
 
     const closeModal = () => {
         existing.classList.add('hidden');
@@ -1527,7 +2072,11 @@ export function openDbMergeModal() {
 
         cancelBtn.textContent = 'Отмена';
         startBtn.textContent = 'Запустить слияние';
-        startBtn.disabled = !lastAnalysis;
+        startBtn.disabled = computeDbMergePrimaryDisabled({
+            footerCompleted: false,
+            mergeFlowInProgress,
+            hasAnalysis: Boolean(lastAnalysis),
+        });
     };
 
     const syncFooterVisibility = () => {
@@ -1731,12 +2280,70 @@ export function openDbMergeModal() {
         return { perStorePolicy, conflicts };
     };
 
-    const animateProgress = (targetPercent, label) => {
-        if (!progressBar || !progressText) return;
+    const readHistoryExpandedSession = () => {
+        try {
+            return (
+                globalThis.sessionStorage?.getItem(DB_MERGE_HISTORY_SESSION_EXPANDED_KEY) === '1'
+            );
+        } catch {
+            return false;
+        }
+    };
+
+    const writeHistoryExpandedSession = (expanded) => {
+        try {
+            if (expanded) {
+                globalThis.sessionStorage?.setItem(DB_MERGE_HISTORY_SESSION_EXPANDED_KEY, '1');
+            } else {
+                globalThis.sessionStorage?.removeItem(DB_MERGE_HISTORY_SESSION_EXPANDED_KEY);
+            }
+        } catch {
+            /* sessionStorage может быть недоступен */
+        }
+    };
+
+    const applyMergeHistoryExpandedState = (expanded) => {
+        if (!historyToggleBtn || !historyPanelEl) return;
+        writeHistoryExpandedSession(expanded);
+        historyToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const label = historyToggleBtn.querySelector('.db-merge-history-toggle-label');
+        if (label) {
+            label.textContent = expanded ? 'Скрыть историю слияний' : 'Показать историю слияний';
+        }
+        historyPanelEl.classList.toggle('hidden', !expanded);
+        historyToggleBtn.classList.toggle('is-expanded', expanded);
+    };
+
+    const refreshMergeHistoryListOnly = () => {
+        if (!historyListEl) return;
+        const entries = loadMergeHistoryEntries();
+        renderMergeHistoryListInto(historyListEl, historyEmptyEl, entries);
+    };
+
+    const animateProgress = (targetPercent, labelOrOpts) => {
+        if (!progressBar || !progressDetail) return;
         const clamped = Math.max(0, Math.min(100, targetPercent));
         progressBar.style.width = `${clamped}%`;
         progressBar.style.transition = 'width 220ms ease-out';
-        progressText.textContent = label || `Прогресс: ${clamped.toFixed(0)}%`;
+        if (progressTrack) {
+            progressTrack.setAttribute('aria-valuenow', String(Math.round(clamped)));
+        }
+        if (progressPercent) {
+            progressPercent.textContent = `${clamped.toFixed(0)}%`;
+        }
+        if (typeof labelOrOpts === 'string') {
+            progressDetail.textContent = labelOrOpts;
+            return;
+        }
+        if (labelOrOpts && typeof labelOrOpts === 'object') {
+            const detailLine = labelOrOpts.detail || labelOrOpts.message || '';
+            const tickLine = labelOrOpts.applyTicks ? ` · операций: ${labelOrOpts.applyTicks}` : '';
+            progressDetail.textContent = detailLine
+                ? `${detailLine}${tickLine}`
+                : `Прогресс: ${clamped.toFixed(0)}%${tickLine}`;
+            return;
+        }
+        progressDetail.textContent = `Прогресс: ${clamped.toFixed(0)}%`;
     };
 
     const getSelectedScopeValues = () =>
@@ -1784,6 +2391,7 @@ export function openDbMergeModal() {
         lastAnalysis = null;
         currentMergePlan = null;
         hasSelectedFileForAnalysis = false;
+        lastMergeSourceFileName = '';
         if (fileInput) fileInput.value = '';
         if (fileInfoEl) {
             fileInfoEl.classList.add('hidden');
@@ -1805,6 +2413,7 @@ export function openDbMergeModal() {
 
     const runAnalysis = async (file) => {
         if (!fileInfoEl || !analysisPlaceholder) return;
+        lastMergeSourceFileName = file && file.name ? String(file.name) : '';
         fileInfoEl.classList.remove('hidden');
         fileInfoEl.textContent = `Файл: ${file.name} (${(file.size / 1024).toFixed(1)} КБ)`;
         analysisPlaceholder.textContent = 'Выполняется анализ структуры и дублей…';
@@ -1906,63 +2515,128 @@ export function openDbMergeModal() {
                 return;
             }
             if (!lastAnalysis) return;
+            if (mergeFlowInProgress) return;
             if (typeof deps.exportAllData !== 'function') {
                 deps.showNotification?.('Экспорт данных не доступен. Слияние отключено.', 'error');
                 return;
             }
-            setStep('apply');
-            animateProgress(5, 'Создание резервной копии текущей базы…');
-            let backupOk = false;
-            try {
-                const exportOutcome = await deps.exportAllData({ isForcedBackupMode: true });
-                if (
-                    typeof exportOutcome === 'object' &&
-                    exportOutcome &&
-                    exportOutcome.errorType === 'UserGestureRequired'
-                ) {
-                    deps.showNotification?.(
-                        'Сохраните резервную копию вручную (Экспорт данных), затем повторите слияние.',
-                        'error',
-                    );
-                    animateProgress(0, 'Требуется ручной экспорт.');
+
+            mergeFlowInProgress = true;
+            existing.setAttribute('aria-busy', 'true');
+            if (startBtn) {
+                startBtn.disabled = true;
+            }
+
+            const endMergeFlowUi = () => {
+                mergeFlowInProgress = false;
+                existing.removeAttribute('aria-busy');
+                if (footerMode === FOOTER_MODE.COMPLETED) {
+                    if (startBtn) startBtn.disabled = false;
                     return;
                 }
-                backupOk = exportOutcome === true;
-            } catch (e) {
-                console.error('[DbMerge] Ошибка при создании бэкапа:', e);
-                deps.showNotification?.(
-                    'Не удалось создать резервную копию. Слияние отменено.',
-                    'error',
-                );
-                animateProgress(0, 'Ошибка резервного копирования.');
-                return;
-            }
-            if (!backupOk) {
-                deps.showNotification?.(
-                    'Резервная копия не создана или отменена. Слияние невозможно.',
-                    'error',
-                );
-                animateProgress(0, 'Слияние отменено: нет бэкапа.');
-                return;
-            }
-            const resolutions = collectUserResolutions();
-            currentMergePlan = buildMergePlan(lastAnalysis, resolutions);
-            animateProgress(10, 'Подготовка плана слияния…');
-            try {
-                await applyMergePlan(currentMergePlan);
-                animateProgress(100, 'Слияние успешно завершено.');
-                setFooterMode(FOOTER_MODE.COMPLETED);
-            } catch (e) {
-                console.error('[DbMerge] Ошибка при применении плана слияния:', e);
-                deps.showNotification?.('Ошибка при слиянии. Подробности в консоли.', 'error');
-                animateProgress(0, 'Ошибка слияния.');
                 setFooterMode(FOOTER_MODE.DEFAULT);
+            };
+
+            try {
+                setStep('apply');
+                animateProgress(5, 'Проверка резервного копирования…');
+
+                const pre = await runDbMergeBackupPreflight({
+                    disableForcedBackupOnDbMerge:
+                        State.userPreferences?.disableForcedBackupOnDbMerge === true,
+                    performForcedBackup: deps.performForcedBackup,
+                    exportAllData: deps.exportAllData,
+                    notificationService: deps.NotificationService,
+                });
+
+                if (!pre.ok) {
+                    if (pre.reason === 'no_export') {
+                        deps.showNotification?.(
+                            'Экспорт данных не доступен. Слияние отключено.',
+                            'error',
+                        );
+                        animateProgress(0, 'Экспорт недоступен.');
+                        return;
+                    }
+                    if (pre.reason === 'no_performForcedBackup') {
+                        deps.showNotification?.(
+                            'Внутренняя ошибка: не настроен диалог резервного копирования. Слияние отменено.',
+                            'error',
+                        );
+                        animateProgress(0, 'Нет performForcedBackup.');
+                        return;
+                    }
+                    if (pre.outcome === 'aborted_by_user') {
+                        animateProgress(0, 'Слияние отменено.');
+                        return;
+                    }
+                    animateProgress(0, 'Резервная копия не создана. Слияние отменено.');
+                    return;
+                }
+
+                if (pre.outcome === 'skipped_by_user') {
+                    deps.NotificationService?.add(
+                        'ВЫ ОТКАЗАЛИСЬ ОТ РЕЗЕРВНОГО КОПИРОВАНИЯ. Продолжение слияния может привести к потере данных.',
+                        'error',
+                        { important: true, duration: 0, id: MERGE_WITHOUT_BACKUP_WARNING_ID },
+                    );
+                }
+
+                const resolutions = collectUserResolutions();
+                currentMergePlan = buildMergePlan(lastAnalysis, resolutions);
+                animateProgress(10, 'Подготовка плана слияния…');
+                try {
+                    const mapApplyToModalPercent = (applyPercent) =>
+                        Math.min(99, Math.round(10 + applyPercent * 0.89));
+                    await applyMergePlan(currentMergePlan, {
+                        onProgress: (evt) => {
+                            const modalPct = mapApplyToModalPercent(evt.applyPercent ?? 0);
+                            animateProgress(modalPct, {
+                                detail: evt.detail || '',
+                                applyTicks:
+                                    typeof evt.doneTicks === 'number' &&
+                                    typeof evt.totalTicks === 'number'
+                                        ? `${evt.doneTicks}/${evt.totalTicks}`
+                                        : '',
+                            });
+                        },
+                    });
+                    animateProgress(100, 'Слияние успешно завершено.');
+                    try {
+                        const historyEntry = buildMergeHistoryEntry({
+                            sourceFileName: lastMergeSourceFileName,
+                            analysis: lastAnalysis,
+                            mergePlan: currentMergePlan,
+                        });
+                        appendMergeHistoryEntry(historyEntry);
+                        refreshMergeHistoryListOnly();
+                    } catch (histErr) {
+                        console.warn('[DbMerge] Не удалось записать историю слияния:', histErr);
+                    }
+                    setFooterMode(FOOTER_MODE.COMPLETED);
+                } catch (e) {
+                    console.error('[DbMerge] Ошибка при применении плана слияния:', e);
+                    deps.showNotification?.('Ошибка при слиянии. Подробности в консоли.', 'error');
+                    animateProgress(0, 'Ошибка слияния.');
+                }
+            } finally {
+                endMergeFlowUi();
             }
         };
         startBtn.addEventListener('click', startBtn._dbMergeStartHandler);
     }
 
+    if (historyToggleBtn && !historyToggleBtn._dbMergeHistoryToggleHandler) {
+        historyToggleBtn._dbMergeHistoryToggleHandler = () => {
+            const cur = historyToggleBtn.getAttribute('aria-expanded') === 'true';
+            applyMergeHistoryExpandedState(!cur);
+        };
+        historyToggleBtn.addEventListener('click', historyToggleBtn._dbMergeHistoryToggleHandler);
+    }
+
     resetMergeFlow();
+    refreshMergeHistoryListOnly();
+    applyMergeHistoryExpandedState(readHistoryExpandedSession());
     existing.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
     initSplitters();

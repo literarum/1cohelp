@@ -288,15 +288,14 @@ function _presentBackupReminderToast(opts = {}) {
 
     NS.showImportantRich({
         id: BACKUP_REMINDER_TOAST_ID,
-        message:
-            'Сделайте резервную копию информационной базы, чтобы не потерять данные.',
+        message: 'Сделайте резервную копию информационной базы, чтобы не потерять данные.',
         type: 'warning',
         minVisibleBeforeInteractionDismissMs: BACKUP_REMINDER_MIN_VISIBLE_MS,
         dismissAfterActivityDelayMs: 2000,
         shouldIgnoreInteractionEvent: (e) =>
             Boolean(
                 e?.target?.closest?.('#appConfirmModal') ||
-                    e?.target?.closest?.('#backupReminderDeferModal'),
+                e?.target?.closest?.('#backupReminderDeferModal'),
             ),
         onDismiss: () => {
             _markLastShown(Date.now());

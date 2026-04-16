@@ -12,6 +12,22 @@
         <meta name="apple-mobile-web-app-title" content="1СО Copilot" />
         <link rel="manifest" href="manifest.webmanifest" />
         <link rel="apple-touch-icon" href="icons/icon-180.png" />
+        <!-- Ранняя регистрация SW: критерий installable (controller до конца загрузки) для Chromium/Yandex. -->
+        <script>
+            (function earlyPwaServiceWorker() {
+                try {
+                    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+                    var swUrl = new URL('sw.js', location.href).href;
+                    var scope = new URL('./', location.href).href;
+                    window.__COPILOT_SW_URL__ = swUrl;
+                    window.__COPILOT_SW_SCOPE__ = scope;
+                    navigator.serviceWorker.register(swUrl, {
+                        scope: scope,
+                        updateViaCache: 'none',
+                    });
+                } catch (_) {}
+            })();
+        </script>
         <script type="text/javascript">
             (function bootstrapEngineeringConsole() {
                 if (typeof window === 'undefined' || !window.console) return;
@@ -94,8 +110,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260415-235329-a3adb05"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260415-235329-a3adb05"></script>
+        <script src="js/vendor-config.js?v=legacy-20260416-233055-d48b8c6"></script>
+        <script src="js/vendor-loader.js?v=legacy-20260416-233055-d48b8c6"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -161,12 +177,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260415-235329-a3adb05"
+            href="css/tailwind.generated.css?v=legacy-20260416-233055-d48b8c6"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260415-235329-a3adb05" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260415-235329-a3adb05" />
+        <link rel="stylesheet" href="css/main.css?v=legacy-20260416-233055-d48b8c6" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260416-233055-d48b8c6" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -3366,6 +3382,37 @@
 
                                         <div
                                             class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                            id="uiDbMergeBackupSettingsSection"
+                                        >
+                                            <label
+                                                for="toggleDisableForcedBackupOnDbMerge"
+                                                class="app-toggle flex items-center cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    id="toggleDisableForcedBackupOnDbMerge"
+                                                    name="disableForcedBackupOnDbMerge"
+                                                    class="app-toggle-input"
+                                                />
+                                                <span class="app-toggle__track"></span>
+                                                <span
+                                                    class="ml-3 text-sm text-gray-700 dark:text-gray-300"
+                                                    >Отключить принудительный бэкап при слиянии
+                                                    баз</span
+                                                >
+                                            </label>
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8"
+                                            >
+                                                Если включено, перед запуском слияния не будет
+                                                показываться предложение сделать резервную копию
+                                                (как при отключённом бэкапе для импорта). Используйте
+                                                только при осознанном риске.
+                                            </p>
+                                        </div>
+
+                                        <div
+                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
                                         >
                                             <label
                                                 for="toggleStaticHeader"
@@ -3961,6 +4008,26 @@
                                 </section>
                             </div>
                         </div>
+                        <div
+                            class="app-customization-footer p-content flex-shrink-0 border-t border-gray-200/90 dark:border-gray-700/90 bg-gray-50/80 dark:bg-gray-900/40"
+                        >
+                            <div class="flex justify-end gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    id="appCustomizationCancelBtn"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition"
+                                >
+                                    Отмена
+                                </button>
+                                <button
+                                    type="button"
+                                    id="appCustomizationSaveBtn"
+                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
+                                >
+                                    Сохранить
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4160,9 +4227,44 @@
                                         aria-hidden="true"
                                     ></i>
                                     <span
-                                        >Перед слиянием будет создана полная резервная копия текущей
-                                        базы данных.</span
+                                        >Перед слиянием будет показано предупреждение с выбором:
+                                        полная резервная копия или отказ по подтверждению — как при
+                                        импорте базы.</span
                                     >
+                                </div>
+                                <div class="db-merge-history-wrap">
+                                    <button
+                                        type="button"
+                                        id="dbMergeHistoryToggle"
+                                        class="db-merge-history-toggle"
+                                        aria-expanded="false"
+                                        aria-controls="dbMergeHistoryPanel"
+                                    >
+                                        <span class="db-merge-history-toggle-label"
+                                            >Показать историю слияний</span
+                                        >
+                                        <i
+                                            class="fas fa-chevron-down db-merge-history-toggle-chevron"
+                                            aria-hidden="true"
+                                        ></i>
+                                    </button>
+                                    <div
+                                        id="dbMergeHistoryPanel"
+                                        class="db-merge-history-panel hidden"
+                                        role="region"
+                                        aria-label="История слияний баз данных"
+                                    >
+                                        <ul
+                                            id="dbMergeHistoryList"
+                                            class="db-merge-history-list"
+                                        ></ul>
+                                        <p
+                                            id="dbMergeHistoryEmpty"
+                                            class="db-merge-history-empty hidden"
+                                        >
+                                            Пока нет завершённых слияний в этом браузере.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </aside>
@@ -4281,19 +4383,36 @@
                                         Выполнение слияния
                                     </h3>
                                     <div class="db-merge-progress-wrap">
-                                        <div class="db-merge-progress-track">
+                                        <div class="db-merge-progress-meter">
                                             <div
-                                                id="dbMergeProgressBar"
-                                                class="db-merge-progress-bar"
-                                                style="width: 0%"
-                                            ></div>
+                                                id="dbMergeProgressTrack"
+                                                class="db-merge-progress-track"
+                                                role="progressbar"
+                                                aria-valuemin="0"
+                                                aria-valuemax="100"
+                                                aria-valuenow="0"
+                                                aria-label="Прогресс слияния базы данных"
+                                            >
+                                                <div
+                                                    id="dbMergeProgressBar"
+                                                    class="db-merge-progress-bar"
+                                                    style="width: 0%"
+                                                ></div>
+                                            </div>
+                                            <span
+                                                id="dbMergeProgressPercent"
+                                                class="db-merge-progress-percent"
+                                                aria-hidden="true"
+                                            >0%</span>
                                         </div>
-                                        <div
-                                            id="dbMergeProgressText"
-                                            class="db-merge-progress-text"
+                                        <p
+                                            id="dbMergeProgressDetail"
+                                            class="db-merge-progress-detail"
+                                            aria-live="polite"
+                                            aria-atomic="true"
                                         >
                                             Готово к запуску слияния.
-                                        </div>
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -5994,7 +6113,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260415-235329-a3adb05"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260415-235329-a3adb05"></script>
+        <script type="module" src="./script.js?v=legacy-20260416-233055-d48b8c6"></script>
+        <script type="module" src="./js/entry.js?v=legacy-20260416-233055-d48b8c6"></script>
     </body>
 </html>

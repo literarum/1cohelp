@@ -552,9 +552,8 @@ export async function openRecentlyDeletedModal() {
                     notify('Запись восстановлена', 'success');
                     await reloadModalList();
                 } else if (action === 'delete-permanently') {
-                    const result = await permanentlyRemoveRecentlyDeletedEntryWithUserConfirm(
-                        entryId,
-                    );
+                    const result =
+                        await permanentlyRemoveRecentlyDeletedEntryWithUserConfirm(entryId);
                     if (result.removed) {
                         notify('Запись удалена из корзины', 'info');
                         await reloadModalList();

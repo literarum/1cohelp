@@ -54,12 +54,7 @@ describe('google-docs transport compatibility', () => {
     });
 
     it('filterShablonyDataByQuery preserves block boundaries (no orphan lines under wrong header)', () => {
-        const flat = [
-            '➧ Block A',
-            'alpha only',
-            '➧ Block B',
-            'beta unique token',
-        ];
+        const flat = ['➧ Block A', 'alpha only', '➧ Block B', 'beta unique token'];
         const filtered = __googleDocsInternals.filterShablonyDataByQuery(flat, 'beta');
         expect(filtered.some((l) => String(l).includes('alpha'))).toBe(false);
         expect(filtered.join('\n')).toContain('Block B');
@@ -67,12 +62,7 @@ describe('google-docs transport compatibility', () => {
     });
 
     it('filterShablonyDataByQuery includes full block when query matches body only', () => {
-        const flat = [
-            '➧ Title A',
-            'no match',
-            '➧ Title B',
-            'only this has matchword',
-        ];
+        const flat = ['➧ Title A', 'no match', '➧ Title B', 'only this has matchword'];
         const filtered = __googleDocsInternals.filterShablonyDataByQuery(flat, 'matchword');
         expect(filtered.join('\n')).toContain('Title B');
         expect(filtered.join('\n')).toContain('matchword');

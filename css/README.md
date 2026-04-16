@@ -56,27 +56,27 @@ css/
 
 ### Брейкпоинты (справочно)
 
-| Имя  | Ширина  | Назначение                    |
-|------|---------|--------------------------------|
-| xs   | 360px   | Очень малые телефоны          |
-| sm   | 640px   | Телефоны landscape            |
-| md   | 768px   | Планшеты portrait             |
-| lg   | 1024px  | Планшеты landscape / ноутбуки |
-| xl   | 1280px  | Десктоп                       |
-| 2xl  | 1536px  | Большие мониторы              |
-| 3xl  | 1920px  | Широкие экраны                |
+| Имя | Ширина | Назначение                    |
+| --- | ------ | ----------------------------- |
+| xs  | 360px  | Очень малые телефоны          |
+| sm  | 640px  | Телефоны landscape            |
+| md  | 768px  | Планшеты portrait             |
+| lg  | 1024px | Планшеты landscape / ноутбуки |
+| xl  | 1280px | Десктоп                       |
+| 2xl | 1536px | Большие мониторы              |
+| 3xl | 1920px | Широкие экраны                |
 
 ### Переменные из responsive.css
 
-| Переменная                 | Назначение |
-|----------------------------|------------|
+| Переменная                          | Назначение                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
 | `--safe-area-top/right/bottom/left` | Отступы от вырезов (notch, Dynamic Island, home indicator); fallback `0` на десктопе |
-| `--content-padding-inline` | Адаптивные горизонтальные отступы контента (`clamp`) |
-| `--content-padding-block`   | Адаптивные вертикальные отступы |
-| `--modal-margin-inline`    | Отступ модалок от краёв viewport |
-| `--text-fluid-title`       | Fluid размер заголовка (header h1) |
-| `--text-fluid-subtitle`    | Fluid размер подзаголовка |
-| `--touch-target-min`       | Минимальный размер touch-цели (44px, Apple HIG) |
+| `--content-padding-inline`          | Адаптивные горизонтальные отступы контента (`clamp`)                                 |
+| `--content-padding-block`           | Адаптивные вертикальные отступы                                                      |
+| `--modal-margin-inline`             | Отступ модалок от краёв viewport                                                     |
+| `--text-fluid-title`                | Fluid размер заголовка (header h1)                                                   |
+| `--text-fluid-subtitle`             | Fluid размер подзаголовка                                                            |
+| `--touch-target-min`                | Минимальный размер touch-цели (44px, Apple HIG)                                      |
 
 В `index.html` для учёта safe area на устройствах с вырезами задан `viewport-fit=cover` в meta viewport.
 
@@ -96,27 +96,27 @@ css/
 
 ### Семантические переменные (обязательно использовать в компонентах)
 
-| Переменная                                                       | Назначение                                                |
-| ---------------------------------------------------------------- | --------------------------------------------------------- |
-| `--color-initial-bg`                                             | Фон первого кадра до загрузки темы                        |
-| `--color-text-primary`                                           | Основной текст на фоне surface/background                 |
-| `--color-text-secondary`                                         | Второстепенный текст, подписи                             |
-| `--color-text-placeholder`                                       | Плейсхолдеры полей ввода                                  |
-| `--color-text-on-primary`                                        | Текст на кнопках/элементах с primary-фоном (обычно белый) |
-| `--color-background`                                             | Фон страницы                                              |
-| `--color-surface-1`                                              | Подложки, заголовки блоков                                |
-| `--color-surface-2`                                              | Карточки, модалки, основной контент                       |
-| `--color-surface-3`                                              | Hover/акцент поверх surface-2                             |
-| `--color-border`, `--color-border-subtle`                         | Границы и разделители (subtlе — для таббара и т.п.)       |
-| `--color-border-interactive`                                     | Границы полей ввода, интерактивных элементов              |
-| `--color-input-bg`                                               | Фон input/textarea/select                                 |
-| `--color-hover-subtle`                                           | Лёгкий hover-фон                                          |
-| `--color-primary`, `--color-secondary`                           | Акцентные цвета (кнопки, ссылки, активные табы)           |
-| `--color-favorites-icon`, `--color-favorites-icon-hover`         | Иконка избранного в хедере                                |
-| `--color-link` / `--color-link-hover`                            | Ссылки в тёмной теме (в светлой — из primary/text)        |
-| `--color-red-text`, `--color-red-border`, `--color-red-hover-bg`, `--color-red-solid`, `--color-red-bg-*` | Деструктивные действия и ошибки |
-| `--hint-bg`, `--hint-border`, `--hint-text`, `--hint-action`, `--hint-bg-strong` | Подсказки (hint-блоки)                    |
-| `--shadow-overlay`                                               | Тень оверлея (например, lightbox)                         |
+| Переменная                                                                                                | Назначение                                                |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `--color-initial-bg`                                                                                      | Фон первого кадра до загрузки темы                        |
+| `--color-text-primary`                                                                                    | Основной текст на фоне surface/background                 |
+| `--color-text-secondary`                                                                                  | Второстепенный текст, подписи                             |
+| `--color-text-placeholder`                                                                                | Плейсхолдеры полей ввода                                  |
+| `--color-text-on-primary`                                                                                 | Текст на кнопках/элементах с primary-фоном (обычно белый) |
+| `--color-background`                                                                                      | Фон страницы                                              |
+| `--color-surface-1`                                                                                       | Подложки, заголовки блоков                                |
+| `--color-surface-2`                                                                                       | Карточки, модалки, основной контент                       |
+| `--color-surface-3`                                                                                       | Hover/акцент поверх surface-2                             |
+| `--color-border`, `--color-border-subtle`                                                                 | Границы и разделители (subtlе — для таббара и т.п.)       |
+| `--color-border-interactive`                                                                              | Границы полей ввода, интерактивных элементов              |
+| `--color-input-bg`                                                                                        | Фон input/textarea/select                                 |
+| `--color-hover-subtle`                                                                                    | Лёгкий hover-фон                                          |
+| `--color-primary`, `--color-secondary`                                                                    | Акцентные цвета (кнопки, ссылки, активные табы)           |
+| `--color-favorites-icon`, `--color-favorites-icon-hover`                                                  | Иконка избранного в хедере                                |
+| `--color-link` / `--color-link-hover`                                                                     | Ссылки в тёмной теме (в светлой — из primary/text)        |
+| `--color-red-text`, `--color-red-border`, `--color-red-hover-bg`, `--color-red-solid`, `--color-red-bg-*` | Деструктивные действия и ошибки                           |
+| `--hint-bg`, `--hint-border`, `--hint-text`, `--hint-action`, `--hint-bg-strong`                          | Подсказки (hint-блоки)                                    |
+| `--shadow-overlay`                                                                                        | Тень оверлея (например, lightbox)                         |
 
 Значения задаются в `:root` (светлая тема) и в `html.dark` (тёмная тема). Переопределения по темам: `--override-<token>-light`, `--override-<token>-dark`.
 

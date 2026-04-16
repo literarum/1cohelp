@@ -33,8 +33,14 @@ describe('clearAllApplicationData', () => {
 
     it('removes training localStorage mirrors (copilot1co: namespace)', async () => {
         localStorage.setItem(TRAINING_PROGRESS_BACKUP_KEY, '{"id":"default"}');
-        localStorage.setItem(TRAINING_USER_CURRICULUM_BACKUP_KEY, '{"schemaVersion":1,"tracks":[]}');
-        localStorage.setItem(TRAINING_MENTOR_QUIZ_PACKS_BACKUP_KEY, '{"schemaVersion":1,"packs":[]}');
+        localStorage.setItem(
+            TRAINING_USER_CURRICULUM_BACKUP_KEY,
+            '{"schemaVersion":1,"tracks":[]}',
+        );
+        localStorage.setItem(
+            TRAINING_MENTOR_QUIZ_PACKS_BACKUP_KEY,
+            '{"schemaVersion":1,"packs":[]}',
+        );
         localStorage.setItem(ONBOARDING_AUTO_OFFER_STORAGE_KEY, '1');
         localStorage.setItem('copilot1co:gdoc-cache:test-doc', '{}');
 

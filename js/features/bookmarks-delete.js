@@ -41,7 +41,9 @@ export async function deleteBookmark(id) {
     }
 
     if (bookmarkDeletesInFlight.has(numericId)) {
-        console.warn(`deleteBookmark: удаление закладки ${numericId} уже выполняется, пропуск дубликата.`);
+        console.warn(
+            `deleteBookmark: удаление закладки ${numericId} уже выполняется, пропуск дубликата.`,
+        );
         return;
     }
     bookmarkDeletesInFlight.add(numericId);
@@ -79,10 +81,7 @@ export async function deleteBookmark(id) {
                 `Ошибка при получении данных закладки ${numericId} перед удалением:`,
                 fetchError,
             );
-            showNotification?.(
-                'Не удалось получить данные закладки. Удаление отменено.',
-                'error',
-            );
+            showNotification?.('Не удалось получить данные закладки. Удаление отменено.', 'error');
             return;
         }
 
@@ -174,7 +173,9 @@ export async function deleteBookmark(id) {
         }
 
         await Promise.all(deletePromises);
-        console.log('Все запросы на удаление (корзина + закладка + скриншоты) успешно инициированы.');
+        console.log(
+            'Все запросы на удаление (корзина + закладка + скриншоты) успешно инициированы.',
+        );
 
         await new Promise((resolve, reject) => {
             transaction.oncomplete = () => {

@@ -174,20 +174,29 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
     padding: 0.5rem 0.75rem !important;
 }
 #algorithmModal {
-    padding: var(--safe-area-top) max(var(--content-padding-inline), var(--safe-area-right)) var(--safe-area-bottom) max(var(--content-padding-inline), var(--safe-area-left));
+    padding: var(--safe-area-top) max(var(--content-padding-inline), var(--safe-area-right))
+        var(--safe-area-bottom) max(var(--content-padding-inline), var(--safe-area-left));
     box-sizing: border-box;
 }
 
 /* Единые ограничения по viewport для всех модалок с .modal-inner-container; учёт safe area и адаптивных отступов (layout/responsive.css) */
 .modal-inner-container {
     max-height: min(90vh, calc(100vh - 96px));
-    max-width: min(920px, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)));
+    max-width: min(
+        920px,
+        calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)
+        )
+    );
     box-sizing: border-box;
 }
 @media (max-width: 640px) {
     .modal-inner-container {
         max-height: calc(100vh - 64px);
-        max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline));
+        max-width: calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 *
+                var(--content-padding-inline)
+        );
     }
 }
 @media (max-height: 480px) {
@@ -198,14 +207,22 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 
 #customizeUIModal .modal-inner-container {
     max-height: calc(100vh - 96px);
-    max-width: min(920px, calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)));
+    max-width: min(
+        920px,
+        calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--modal-margin-inline)
+        )
+    );
     display: flex;
     flex-direction: column;
 }
 @media (max-width: 640px) {
     #customizeUIModal .modal-inner-container {
         max-height: calc(100vh - 64px);
-        max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 2 * var(--content-padding-inline));
+        max-width: calc(
+            100vw - var(--safe-area-left) - var(--safe-area-right) - 2 *
+                var(--content-padding-inline)
+        );
     }
 }
 
@@ -316,7 +333,10 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 #appCustomizationModal .modal-inner-container {
     /* Почти вся высота окна: убран жёсткий потолок 640px, из‑за которого была постоянная прокрутка */
     max-height: min(94vh, calc(100vh - 1rem));
-    max-width: min(56rem, calc(100vw - 1rem - var(--safe-area-left, 0px) - var(--safe-area-right, 0px)));
+    max-width: min(
+        56rem,
+        calc(100vw - 1rem - var(--safe-area-left, 0px) - var(--safe-area-right, 0px))
+    );
     display: flex;
     flex-direction: column;
 }
@@ -534,7 +554,9 @@ html.dark #appCustomizationModal .app-customization-segment-label {
     opacity: 1;
 }
 
-#appCustomizationModal .app-customization-segment-input:focus-visible + .app-customization-segment-label {
+#appCustomizationModal
+    .app-customization-segment-input:focus-visible
+    + .app-customization-segment-label {
     box-shadow:
         0 0 0 2px var(--color-surface-2, #fff),
         0 0 0 4px var(--color-primary, #3b82f6);

@@ -6,7 +6,11 @@
  */
 
 export { loadingOverlayManager } from './manager.js';
-export { resolveThemeFromStorage, readStoredOverlaySnapshot, applyLoadingOverlayThemeVars } from './theme-resolver.js';
+export {
+    resolveThemeFromStorage,
+    readStoredOverlaySnapshot,
+    applyLoadingOverlayThemeVars,
+} from './theme-resolver.js';
 export { getThemeProfile } from './particles-config.js';
 export {
     THEME_HINT_KEY,

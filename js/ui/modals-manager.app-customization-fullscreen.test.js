@@ -37,7 +37,9 @@ describe('toggleModalFullscreen + appCustomizationModalConfig', () => {
             appCustomizationModalConfig.contentAreaSelector,
         );
 
-        expect(document.getElementById('appCustomizationModal').classList.contains('is-fullscreen')).toBe(true);
+        expect(
+            document.getElementById('appCustomizationModal').classList.contains('is-fullscreen'),
+        ).toBe(true);
         expect(panel.classList.contains('bg-white')).toBe(true);
         expect(panel.classList.contains('dark:bg-gray-800')).toBe(true);
 
@@ -49,7 +51,9 @@ describe('toggleModalFullscreen + appCustomizationModalConfig', () => {
             appCustomizationModalConfig.contentAreaSelector,
         );
 
-        expect(document.getElementById('appCustomizationModal').classList.contains('is-fullscreen')).toBe(false);
+        expect(
+            document.getElementById('appCustomizationModal').classList.contains('is-fullscreen'),
+        ).toBe(false);
         expect(panel.classList.contains('bg-white')).toBe(true);
         expect(panel.classList.contains('dark:bg-gray-800')).toBe(true);
     });
