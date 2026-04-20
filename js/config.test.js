@@ -33,9 +33,9 @@ describe('config defaults', () => {
         expect(clampBorderRadiusPx(99)).toBe(BORDER_RADIUS_SLIDER_MAX);
     });
 
-    it('enables birthday mode by default', () => {
+    it('disables birthday mode by default', () => {
         const defaults = getDefaultUISettings(['main', 'clientAnalytics', 'training']);
-        expect(defaults.birthdayModeEnabled).toBe(true);
+        expect(defaults.birthdayModeEnabled).toBe(false);
     });
 
     it('hides client analytics and training sections by default', () => {

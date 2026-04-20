@@ -614,7 +614,7 @@ export function getDefaultUISettings(allPanelIdsForDefault) {
         disableForcedBackupOnImport: false,
         disableForcedBackupOnDbMerge: false,
         staticHeader: false,
-        birthdayModeEnabled: true,
+        birthdayModeEnabled: false,
     };
 }
 

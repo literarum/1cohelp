@@ -68,6 +68,16 @@ function inferOnboardingAutoPromptConsumed(prefs, defaults) {
     return false;
 }
 
+/**
+ * Режим «день рождения»: переключатель убран из UI — сохранённое `true` мигрируем в `false`
+ * (память + перезапись в IndexedDB при следующем saveUserPreferences из loadUserPreferences).
+ * @param {Record<string, unknown>|null|undefined} prefs
+ */
+export function normalizeBirthdayModeUserPreference(prefs) {
+    if (!prefs || typeof prefs !== 'object') return;
+    prefs.birthdayModeEnabled = false;
+}
+
 // ============================================================================
 // ОСНОВНЫЕ ФУНКЦИИ
 // ============================================================================
@@ -138,7 +148,7 @@ export async function loadUserPreferences() {
         /** Напоминания о резервном копировании (тост каждые 3 ч). false — отключено. */
         backupReminderEnabled: true,
         /** Праздничное оформление «день рождения» (эмодзи 🎉 вместо «1» в логотипе, конфетти, рамка, мягкое свечение кнопок) */
-        birthdayModeEnabled: true,
+        birthdayModeEnabled: false,
         clientNotesFontSize: 100,
         employeeExtension: '',
         textareaHeights: {},
@@ -268,6 +278,8 @@ export async function loadUserPreferences() {
                 /* ignore */
             }
         }
+
+        normalizeBirthdayModeUserPreference(finalSettings);
 
         State.userPreferences = { ...finalSettings };
         // Вызываем saveUserPreferences напрямую из модуля

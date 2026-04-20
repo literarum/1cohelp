@@ -556,8 +556,7 @@ export function initUISettingsModalHandlers() {
         customizeUIModal.addEventListener('change', (e) => {
             if (
                 e.target.matches('input[name="staticHeader"]') ||
-                e.target.matches('input[name="backupReminderEnabled"]') ||
-                e.target.matches('input[name="birthdayModeEnabled"]')
+                e.target.matches('input[name="backupReminderEnabled"]')
             ) {
                 if (e.target.matches('input[name="backupReminderEnabled"]') && e.target.checked) {
                     try {

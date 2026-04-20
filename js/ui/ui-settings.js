@@ -7,6 +7,7 @@
 
 import { getFromIndexedDB } from '../db/indexeddb.js';
 import { isPanelVisibleByDefault } from '../config.js';
+import { normalizeBirthdayModeUserPreference } from '../app/user-preferences.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ
@@ -62,6 +63,8 @@ export async function loadUISettings() {
         );
         await loadUserPreferences();
     }
+
+    normalizeBirthdayModeUserPreference(State.userPreferences);
 
     State.originalUISettings = JSON.parse(JSON.stringify(State.userPreferences));
     State.currentPreviewSettings = JSON.parse(JSON.stringify(State.userPreferences));
@@ -262,6 +265,8 @@ export async function applyUISettings() {
         }
     }
 
+    normalizeBirthdayModeUserPreference(settingsToApply);
+
     if (
         typeof State.originalUISettings !== 'object' ||
         Object.keys(State.originalUISettings).length === 0
@@ -330,6 +335,8 @@ export async function applyInitialUISettings() {
             await loadUserPreferences();
         }
     }
+
+    normalizeBirthdayModeUserPreference(State.userPreferences);
 
     State.originalUISettings = JSON.parse(JSON.stringify(State.userPreferences));
     State.currentPreviewSettings = JSON.parse(JSON.stringify(State.userPreferences));

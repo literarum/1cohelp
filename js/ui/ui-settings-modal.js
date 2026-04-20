@@ -170,11 +170,6 @@ export function populateModalControls(settings) {
         backupReminderToggle.checked = settings.backupReminderEnabled !== false;
     }
 
-    const birthdayModeToggle = modal.querySelector('#toggleBirthdayMode');
-    if (birthdayModeToggle) {
-        birthdayModeToggle.checked = settings.birthdayModeEnabled === true;
-    }
-
     const fontSizeLabel = modal.querySelector('#fontSizeLabel');
     if (fontSizeLabel) fontSizeLabel.textContent = (settings.fontSize ?? 100) + '%';
 
@@ -242,7 +237,6 @@ export function getSettingsFromModal() {
     );
     const staticHeaderToggle = modal.querySelector('#toggleStaticHeader');
     const backupReminderToggle = modal.querySelector('#toggleBackupReminder');
-    const birthdayModeToggle = modal.querySelector('#toggleBirthdayMode');
 
     const primaryColor =
         State.currentPreviewSettings.primaryColor || DEFAULT_UI_SETTINGS.primaryColor;
@@ -293,7 +287,7 @@ export function getSettingsFromModal() {
             : false,
         staticHeader: staticHeaderToggle ? staticHeaderToggle.checked : false,
         backupReminderEnabled: backupReminderToggle ? backupReminderToggle.checked : true,
-        birthdayModeEnabled: birthdayModeToggle ? birthdayModeToggle.checked : false,
+        birthdayModeEnabled: false,
     };
 }
 
