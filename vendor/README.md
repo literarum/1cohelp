@@ -27,7 +27,7 @@ No other code changes are required.
 1. Download the new build from the same CDN or official source (see table above).
 2. Put files under the same path pattern, e.g. `vendor/sortablejs/<new-version>/Sortable.min.js`.
 3. Update `site/js/vendor-config.js`: change `localPath` (and optionally `cdnUrl`) for that vendor.
-4. Test the relevant page (main app, client-notes-standalone, downloads).
+4. Test the relevant page (main app, client-notes-standalone).
 
 ### One-off download commands (from project root)
 
