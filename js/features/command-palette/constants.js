@@ -113,11 +113,6 @@ export const TABS = [
         label: 'Чёрный список',
         synonyms: ['черный', 'чёрный', 'список', 'blacklist', 'жаб'],
     },
-    {
-        tabId: 'fnsCert',
-        label: 'Проверка сертификата на отзыв',
-        synonyms: ['сертификат', 'отзыв', 'фнс', 'revocation'],
-    },
     { tabId: 'xmlAnalyzer', label: 'Анализатор XML', synonyms: ['xml', 'анализатор', 'анализ'] },
     { tabId: 'favorites', label: 'Избранное', synonyms: ['избранное', 'избранн', 'favorites'] },
 ];

@@ -204,6 +204,7 @@ export function openCommandPalette() {
     }
     const initialResults = runSearch('', algorithms);
     ui.renderResults(reorderByRecent(initialResults, getRecentIds()));
+    if (keydownHandler) document.removeEventListener('keydown', keydownHandler, true);
     keydownHandler = (e) => ui.onKeydown(e);
     document.addEventListener('keydown', keydownHandler, true);
     requestAnimationFrame(() => inputEl?.focus());
