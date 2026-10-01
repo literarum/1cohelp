@@ -12,6 +12,7 @@ import {
     RECENTLY_DELETED_TRACKED_STORES,
     ARCHIVE_FOLDER_ID,
 } from '../constants.js';
+import { escapeHtml } from '../utils/html.js';
 import {
     activateModalFocus,
     deactivateModalFocus,
@@ -48,9 +49,13 @@ function isTrackedStoreName(storeName) {
 
 function clonePayload(payload) {
     try {
-        return JSON.parse(JSON.stringify(payload));
+        return structuredClone(payload);
     } catch {
-        return payload;
+        try {
+            return JSON.parse(JSON.stringify(payload));
+        } catch {
+            return payload;
+        }
     }
 }
 
@@ -208,10 +213,10 @@ function renderList(entries) {
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-900/40">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <div class="font-semibold text-gray-900 dark:text-gray-100 truncate">${title}</div>
+                            <div class="font-semibold text-gray-900 dark:text-gray-100 truncate">${escapeHtml(String(title))}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Тип: <code>${entry.storeName}</code> ·
-                                ID: <code>${String(entry.entityId)}</code> ·
+                                Тип: <code>${escapeHtml(String(entry.storeName))}</code> ·
+                                ID: <code>${escapeHtml(String(entry.entityId))}</code> ·
                                 Удалено: ${formatDeletedDate(entry.deletedAt)}
                             </div>
                         </div>

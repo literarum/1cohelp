@@ -1,10 +1,15 @@
 'use strict';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearRuntimeHubBuffer, getRuntimeHubFaultEntries } from './runtime-issue-hub.js';
+import {
+    clearRuntimeHubBuffer,
+    getRuntimeHubFaultEntries,
+    getRuntimeHubPerformanceSignalsForHealth,
+} from './runtime-issue-hub.js';
 import {
     getRuntimeFetchInterceptMeta,
     initRuntimeFetchFailureReporting,
+    isExternalOrOfflineFetchFailure,
     resetRuntimeFetchInterceptForTests,
 } from './runtime-fetch-intercept.js';
 
@@ -32,7 +37,7 @@ describe('runtime-fetch-intercept', () => {
             }),
         );
         initRuntimeFetchFailureReporting();
-        await globalThis.fetch('https://api.example.com/data');
+        await globalThis.fetch('/api/data');
         const rows = getRuntimeHubFaultEntries(10);
         expect(rows.some((r) => r.source === 'fetch.http_error')).toBe(true);
         expect(rows.find((r) => r.source === 'fetch.http_error')?.category).toBe('network_fetch');
@@ -42,7 +47,7 @@ describe('runtime-fetch-intercept', () => {
     it('records thrown fetch errors', async () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
         initRuntimeFetchFailureReporting();
-        await expect(globalThis.fetch('https://x.test/z')).rejects.toThrow(/fetch/i);
+        await expect(globalThis.fetch('/z')).rejects.toThrow(/fetch/i);
         expect(getRuntimeHubFaultEntries(10).some((r) => r.source === 'fetch.network_error')).toBe(
             true,
         );
@@ -63,5 +68,27 @@ describe('runtime-fetch-intercept', () => {
         expect(
             getRuntimeHubFaultEntries(5).filter((r) => r.source.startsWith('fetch.')),
         ).toHaveLength(0);
+    });
+
+    it('records failures of external origins as signals, not faults', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+        initRuntimeFetchFailureReporting();
+        await expect(globalThis.fetch('https://script.google.com/macros/s/x/exec')).rejects.toThrow(
+            /fetch/i,
+        );
+        expect(getRuntimeHubFaultEntries(10).some((r) => r.source === 'fetch.network_error')).toBe(
+            false,
+        );
+        expect(
+            getRuntimeHubPerformanceSignalsForHealth(10).some((r) =>
+                r.title.includes('fetch.network_error'),
+            ),
+        ).toBe(true);
+    });
+
+    it('classifies same-origin failures as faults and cross-origin as signals', () => {
+        expect(isExternalOrOfflineFetchFailure('/assets/app.js')).toBe(false);
+        expect(isExternalOrOfflineFetchFailure('https://example.org/x')).toBe(true);
+        expect(isExternalOrOfflineFetchFailure(new URL('https://example.org/x'))).toBe(true);
     });
 });

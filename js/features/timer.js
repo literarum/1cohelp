@@ -684,7 +684,7 @@ export function startTimerInternal() {
     console.log(
         `Таймер запускается/возобновляется. Новое targetEndTime: ${new Date(
             targetEndTime,
-        ).toLocaleTimeString()}`,
+        ).toLocaleTimeString('ru-RU')}`,
     );
 
     isTimerRunning = true;
@@ -716,7 +716,7 @@ export function startTimerInternal() {
     timerRafId = requestAnimationFrame(scheduleTimerDisplayRaf);
     console.log(
         'Таймер запущен (внутренний интервал). targetEndTime:',
-        new Date(targetEndTime).toLocaleTimeString(),
+        new Date(targetEndTime).toLocaleTimeString('ru-RU'),
     );
 }
 
@@ -1140,12 +1140,9 @@ export function initTimerSystem() {
         if (currentPermission === 'granted') {
             notificationPermissionState = 'granted';
         } else if (currentPermission === 'denied') {
+            // Состояние запоминаем молча: предупреждение при каждом открытии приложения — шум.
+            // Пользователь увидит подсказку при запуске таймера (kickOffTimerNotificationPermissionFromUserGesture).
             notificationPermissionState = 'denied';
-            NotificationService.add(
-                'Системные уведомления таймера заблокированы. Вы можете не увидеть оповещение о завершении. Проверьте настройки браузера и ОС (Windows: «Фокусировка внимания», macOS: «Не беспокоить»).',
-                'warning',
-                { duration: 10000 },
-            );
         } else {
             notificationPermissionState = 'default';
         }

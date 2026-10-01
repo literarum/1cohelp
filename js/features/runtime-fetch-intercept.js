@@ -49,6 +49,35 @@ function shouldRecordFailedHttpResponse(res) {
 }
 
 /**
+ * Сбой запроса к внешнему origin (Google Apps Script и т.п.) или потеря сети — деградация связи,
+ * а не дефект приложения: пишем как сигнал (signalOnly), чтобы самотестирование и HUD не краснели
+ * из-за недоступного/заблокированного внешнего сервиса при исправных локальных данных.
+ * Сбои собственного origin (404 на ресурсы приложения и т.п.) остаются сбоями.
+ * @param {RequestInfo | URL} input
+ * @returns {boolean}
+ */
+export function isExternalOrOfflineFetchFailure(input) {
+    try {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+        const raw =
+            typeof input === 'string'
+                ? input
+                : typeof URL !== 'undefined' && input instanceof URL
+                  ? input.href
+                  : typeof Request !== 'undefined' && input instanceof Request
+                    ? input.url
+                    : String(input);
+        const base =
+            typeof location !== 'undefined' && location.href ? location.href : 'https://placeholder.invalid';
+        const target = new URL(raw, base);
+        const own = typeof location !== 'undefined' && location.origin ? location.origin : '';
+        return Boolean(own) && target.origin !== own;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Идемпотентная установка обёртки globalThis.fetch (сразу после initRuntimeIssueHub).
  */
 export function initRuntimeFetchFailureReporting() {
@@ -73,11 +102,13 @@ export function initRuntimeFetchFailureReporting() {
                         status: res.status,
                         responseType: res.type,
                     },
-                    { mirror: true },
+                    { mirror: true, signalOnly: isExternalOrOfflineFetchFailure(args[0]) },
                 );
             }
             return res;
         } catch (err) {
+            // Намеренная отмена (AbortController) — не сбой сети
+            if (err && err.name === 'AbortError') throw err;
             const url = summarizeFetchTarget(args[0]);
             ingestRuntimeHubIssue(
                 'fetch.network_error',
@@ -87,7 +118,7 @@ export function initRuntimeFetchFailureReporting() {
                     tag: 'FETCH',
                     url,
                 },
-                { mirror: true },
+                { mirror: true, signalOnly: isExternalOrOfflineFetchFailure(args[0]) },
             );
             throw err;
         }

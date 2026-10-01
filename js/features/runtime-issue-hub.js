@@ -254,6 +254,11 @@ export function ingestRuntimeHubIssue(source, errorLike, extra = null, opts = {}
             lastTs: ts,
         };
         fingerprintStats.set(fingerprint, next);
+        // Ограничение размера: уникальные тексты ошибок иначе раздувают карту без предела
+        if (fingerprintStats.size > 500) {
+            const oldest = fingerprintStats.keys().next().value;
+            fingerprintStats.delete(oldest);
+        }
         sessionOccurrence = next.count;
     }
 
@@ -353,7 +358,7 @@ export function getRuntimeHubFaultEntries(limit = 300) {
 
 /**
  * Количество сбоев в буфере за окно времени (мс), удовлетворяющих предикату.
- * Для перекрёстной самодиагностики подсистемы отзыва (второй контур к UI проверки серта).
+ * Для перекрёстной самодиагностики подсистем (второй контур к буферу runtime hub).
  * @param {number} windowMs
  * @param {(e: RuntimeHubEntry) => boolean} predicate
  */

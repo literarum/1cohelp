@@ -26,22 +26,22 @@ describe('runtime-issue-hub', () => {
     });
 
     it('countRuntimeHubFaultsSince counts matching faults within window', () => {
-        ingestRuntimeHubIssue('FNS Revocation', 'crl failed');
+        ingestRuntimeHubIssue('Remote Source', 'fetch failed');
         expect(
             countRuntimeHubFaultsSince(
                 60_000,
-                (e) => e.source === 'FNS Revocation' || e.title.includes('FNS Revocation'),
+                (e) => e.source === 'Remote Source' || e.title.includes('Remote Source'),
             ),
         ).toBe(1);
-        expect(countRuntimeHubFaultsSince(60_000, (e) => e.source === 'FNS Revocation')).toBe(1);
+        expect(countRuntimeHubFaultsSince(60_000, (e) => e.source === 'Remote Source')).toBe(1);
         expect(countRuntimeHubFaultsSince(60_000, (e) => e.source === 'other')).toBe(0);
     });
 
     it('countRuntimeHubFaultsSince excludes entries older than window', () => {
-        ingestRuntimeHubIssue('FNS Revocation', 'old');
+        ingestRuntimeHubIssue('Remote Source', 'old');
         vi.setSystemTime(new Date('2026-04-14T12:05:00.000Z'));
-        expect(countRuntimeHubFaultsSince(60_000, (e) => e.source === 'FNS Revocation')).toBe(0);
-        expect(countRuntimeHubFaultsSince(400_000, (e) => e.source === 'FNS Revocation')).toBe(1);
+        expect(countRuntimeHubFaultsSince(60_000, (e) => e.source === 'Remote Source')).toBe(0);
+        expect(countRuntimeHubFaultsSince(400_000, (e) => e.source === 'Remote Source')).toBe(1);
     });
 
     it('countRuntimeHubFaultsSince ignores signalOnly entries', () => {

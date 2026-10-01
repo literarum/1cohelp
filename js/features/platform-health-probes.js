@@ -95,7 +95,7 @@ export async function collectPlatformHealthProbeRows(runWithTimeout, opts = {}) 
         rows.push({
             level: 'info',
             title: 'Сеть',
-            message: 'Офлайн. API проверки сертификатов недоступны.',
+            message: 'Офлайн. Приложение работает по локальным данным; облачные документы (Google) недоступны.',
         });
     } else {
         rows.push({

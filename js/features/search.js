@@ -1256,7 +1256,7 @@ export async function updateSearchIndex(
                         await updateSearchIndexForItem(dataForIndexing, storeName);
                     }
                 } else if (operation === 'update') {
-                    if (!isNewItemArchived && oldItemData) {
+                    if (!isNewItemArchived) {
                         await removeFromSearchIndex(refItemId, storeName);
                     }
 
@@ -1271,7 +1271,7 @@ export async function updateSearchIndex(
                     }
                 }
             } else {
-                if (operation === 'update' && oldItemData) {
+                if (operation === 'update') {
                     await removeFromSearchIndex(refItemId, storeName);
                 }
                 await updateSearchIndexForItem(dataForIndexing, storeName);
@@ -2004,8 +2004,9 @@ export async function buildInitialSearchIndex(progressCallback) {
             processedItems++;
             if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
         } catch (error) {
-            console.error(`${LOG_PREFIX_BUILD} Error processing Google Doc shablony:`, error);
-            overallSuccess = false;
+            // Внешний документ (Google Apps Script) недоступен офлайн — это не повод помечать
+            // весь локальный индекс как неудачный и перестраивать его при каждом запуске.
+            console.warn(`${LOG_PREFIX_BUILD} Google Doc «Шаблоны» недоступен, пропуск:`, error);
             processedItems++;
             if (progressCallback) progressCallback(processedItems, totalItemsToEstimate, false);
         }
@@ -2182,7 +2183,10 @@ async function searchByTagsOnly(tagFilters, originalQuery) {
 /**
  * Выполняет поиск
  */
+let performSearchSeq = 0;
 export async function performSearch(query) {
+    const mySeq = ++performSearchSeq;
+    const isStale = () => mySeq !== performSearchSeq;
     const searchResultsContainer = document.getElementById('searchResults');
     const MIN_SEARCH_LENGTH = 1;
     const loadingIndicatorHTML =
@@ -2260,6 +2264,7 @@ export async function performSearch(query) {
             const tagResults =
                 tagFilters.length > 0 ? await searchByTagsOnly(tagFilters, query) : [];
             const appealOnly = await resolveAppealNotesDigitSuggestions(query);
+            if (isStale()) return;
             const combinedZero = [...sectionMatches, ...tagResults, ...appealOnly];
             const sortedZero = sortSearchResults(combinedZero);
             const limitedZero = diversifyResults(sortedZero, MAX_SEARCH_RESULTS_DISPLAY);
@@ -2306,6 +2311,7 @@ export async function performSearch(query) {
         );
 
         const appealSuggestions = await resolveAppealNotesDigitSuggestions(query);
+        if (isStale()) return;
         let mergedFinalResults = finalResults;
         if (appealSuggestions.length > 0) {
             mergedFinalResults = finalResults.filter((r) => r.type !== 'clientNote');
@@ -2343,6 +2349,7 @@ export async function performSearch(query) {
                 console.warn('[performSearch] Fallback regex search failed:', fallbackError);
             }
         }
+        if (isStale()) return;
         const endTime = performance.now();
         const executionTime = endTime - startTime;
 
@@ -2361,6 +2368,7 @@ export async function performSearch(query) {
         }
     } catch (error) {
         console.error('[performSearch] Ошибка поиска:', error);
+        if (isStale()) return;
         const msg = error && /** @type {any} */ (error).message ? String(error.message) : '';
         const looksLikeDb =
             /indexeddb|idb|database|баз[аы]\s+данн/i.test(msg) ||

@@ -161,15 +161,21 @@ class ReportAnalyzerApp {
             this.dropZone.addEventListener('drop', (e) => this.handleFileDrop(e));
         }
 
+        // Постоянный скрытый input внутри корня вкладки: отсоединённый от DOM input
+        // в части браузеров (iOS Safari) не доставляет событие change.
         const openFilePicker = () => {
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.xml,.zip,.txt,.json';
-            fileInput.style.display = 'none';
-            fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-            document.body.appendChild(fileInput);
-            fileInput.click();
-            document.body.removeChild(fileInput);
+            if (!this._fileInput) {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.xml,.zip,.txt,.json';
+                fileInput.hidden = true;
+                fileInput.setAttribute('aria-hidden', 'true');
+                fileInput.tabIndex = -1;
+                fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+                this.root.appendChild(fileInput);
+                this._fileInput = fileInput;
+            }
+            this._fileInput.click();
         };
         if (this.loadFileBtn) {
             this.loadFileBtn.addEventListener('click', openFilePicker);
@@ -435,9 +441,16 @@ class ReportAnalyzerApp {
     }
 
     handleFileSelect(event) {
-        const file = event.target.files[0];
+        const input = event.target;
+        const file = input.files && input.files[0];
         if (file) {
             this.readFileAndAnalyze(file);
+        }
+        // Сброс: повторный выбор того же файла (после «Очистить») должен снова вызывать change.
+        try {
+            input.value = '';
+        } catch {
+            // ignore
         }
     }
 
@@ -469,6 +482,9 @@ class ReportAnalyzerApp {
                 throw new Error(content.error);
             }
 
+            if (!content.data || !String(content.data).trim()) {
+                throw new Error('Файл пуст.');
+            }
             this.dataInputTextarea.value = content.data;
             this.updateAnalyzeButtonState();
             this.analyzeData();
@@ -604,7 +620,7 @@ class ReportAnalyzerApp {
 
         const valueHtml = `<div class="font-mono text-xs break-all">${this.sanitizeText(thumbprint)}<span class="font-sans">${this.sanitizeText(statusText)}</span></div>`;
 
-        return this.createField('Отпечаток:', valueHtml, statusType);
+        return this.createField('Отпечаток:', valueHtml, statusType, { html: true });
     }
 
     async handleAppClicks(event) {
@@ -685,10 +701,10 @@ class ReportAnalyzerApp {
         const contentEl = clone.querySelector('.accordion-content');
 
         details.open = isOpen;
-        titleEl.textContent = this.sanitizeText(title);
+        titleEl.textContent = this._raw(title);
 
         if (typeof content === 'string') {
-            contentEl.innerHTML = content;
+            contentEl.textContent = content;
         } else if (content.nodeType) {
             contentEl.appendChild(content);
         }
@@ -696,20 +712,73 @@ class ReportAnalyzerApp {
         return clone;
     }
 
+    /** Сырой текст для textContent/dataset (без HTML-экранирования, чтобы не было двойного экранирования) */
+    _raw(text) {
+        return text == null ? '' : String(text);
+    }
+
+    /** Экранированный HTML — ТОЛЬКО для подстановки в innerHTML */
     sanitizeText(text) {
         const element = document.createElement('div');
         element.innerText = text;
         return element.innerHTML;
     }
 
+    /**
+     * Человекочитаемое описание ошибки парсера XML (вместо англоязычного текста <parsererror> браузера).
+     * @param {string} rawText
+     * @returns {string}
+     */
+    _describeXmlParseError(rawText) {
+        const raw = String(rawText || '').replace(/\s+/g, ' ').trim();
+        const m = raw.match(/error on line (\d+) at column (\d+):\s*(.*?)(?:\s*Below is a rendering.*)?$/i);
+        const where = m ? `строка ${m[1]}, позиция ${m[2]}` : '';
+        const detail = m ? m[3] : raw;
+        let reason = detail;
+        if (/entity amplification|entity.*(loop|depth)|Detected an entity reference loop/i.test(detail)) {
+            reason = 'слишком большое раскрытие XML-сущностей (возможная XML-бомба), документ отклонён';
+        } else if (/Opening and ending tag mismatch/i.test(detail)) {
+            reason = 'не совпадают открывающий и закрывающий теги';
+        } else if (/Extra content at the end/i.test(detail)) {
+            reason = 'лишнее содержимое после корневого элемента';
+        } else if (/Document is empty|Start tag expected/i.test(detail)) {
+            reason = 'документ пуст или не начинается с XML-тега';
+        } else if (/Premature end of data/i.test(detail)) {
+            reason = 'документ оборван (неожиданный конец данных)';
+        } else if (/Entity '.*' not defined/i.test(detail)) {
+            reason = 'используется неопределённая сущность (например, &nbsp;)';
+        } else if (/Encoding|encoding/i.test(detail)) {
+            reason = 'не удалось обработать кодировку документа';
+        }
+        return `Некорректный XML${where ? ` (${where})` : ''}: ${reason || 'неверный формат.'}`;
+    }
+
+    /** Дата/время для отчёта: пусто и невалидное значение → '' (поле скрывается), не 01.01.1970 и не «Invalid Date». */
+    _fmtDateTime(value) {
+        if (value === null || value === undefined || String(value).trim() === '') return '';
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('ru-RU');
+    }
+
     getText(parent, tagName, namespace = null) {
-        const elements = namespace
+        if (!parent) return '';
+        let elements = namespace
             ? parent.getElementsByTagNameNS(namespace, tagName)
             : parent.getElementsByTagName(tagName);
+        if (!elements[0] && !namespace && parent.getElementsByTagNameNS) {
+            // Документ с префиксом пространства имён: ищем по локальному имени.
+            elements = parent.getElementsByTagNameNS('*', tagName);
+        }
         return elements[0] ? elements[0].textContent.trim() : '';
     }
 
-    createField(label, value, type = 'default') {
+    _fmtDateOnly(value) {
+        if (!value) return '—';
+        const d = new Date(value);
+        return isNaN(d) ? String(value) : d.toLocaleDateString('ru-RU');
+    }
+
+    createField(label, value, type = 'default', { html = false } = {}) {
         if (value === null || value === undefined || String(value).trim() === '') {
             return document.createDocumentFragment();
         }
@@ -724,13 +793,12 @@ class ReportAnalyzerApp {
         const keyEl = clone.querySelector('.info-key');
         const valueEl = clone.querySelector('.info-value');
 
-        keyEl.textContent = this.sanitizeText(label);
+        keyEl.textContent = this._raw(label);
 
-        const valueIsHtml = /<[a-z][\s\S]*>/i.test(String(value));
-        if (valueIsHtml) {
+        if (html) {
             valueEl.innerHTML = String(value);
         } else {
-            valueEl.textContent = this.sanitizeText(String(value));
+            valueEl.textContent = this._raw(value);
         }
 
         if (type === 'success') valueEl.classList.add('text-green-600', 'dark:text-green-400');
@@ -1094,8 +1162,8 @@ class ReportAnalyzerApp {
             try {
                 const jsonData = JSON.parse(rawData);
                 if (jsonData && typeof jsonData === 'object' && 'messages' in jsonData) {
+                    // Отрисовку завершает блок finally (единственный вызов finalizeAnalysis).
                     analysisResultNode = this.renderSedoLog(jsonData);
-                    this.finalizeAnalysis(analysisResultNode);
                     return;
                 }
             } catch {
@@ -1109,22 +1177,28 @@ class ReportAnalyzerApp {
                 this.dataInputTextarea.value = rawData;
             }
 
-            const { fixedXml } = this._fixBrokenUriEncoding(rawData);
+            const { fixedXml: fixedXmlRaw } = this._fixBrokenUriEncoding(rawData);
+            // Внешние сущности (SYSTEM/PUBLIC) не нужны для анализа: вырезаем объявления,
+            // чтобы парсер даже не пытался обратиться к file:// или сети (защита от XXE).
+            const fixedXml = fixedXmlRaw.replace(/<!ENTITY\s+[^>]*?\b(?:SYSTEM|PUBLIC)\b[^>]*>/gi, '');
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(fixedXml, 'application/xml');
 
             if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
                 const errorNode = xmlDoc.getElementsByTagName('parsererror')[0];
-                throw new Error(
-                    `Ошибка разбора XML: ${errorNode ? errorNode.textContent : 'Неверный формат.'}`,
+                const parseError = new Error(
+                    this._describeXmlParseError(errorNode ? errorNode.textContent : ''),
                 );
+                parseError.isXmlParseError = true;
+                throw parseError;
             }
 
             const signatureCertData = await this._tryParseSignatureCertificate(xmlDoc);
             const basicInfo = this._tryParseBasicInfo(xmlDoc);
 
             try {
-                const rootTag = xmlDoc.documentElement.tagName;
+                // localName: корень с префиксом пространства имён (ns:ТипОтчет) тоже распознаётся.
+                const rootTag = xmlDoc.documentElement.localName;
                 switch (rootTag) {
                     case 'ТипОтчет':
                         const diagnosticData = this._parseDiagnosticReportData(xmlDoc);
@@ -1188,7 +1262,8 @@ class ReportAnalyzerApp {
             console.error('Критическая ошибка анализа:', e);
             const errorDiv = document.createElement('div');
             errorDiv.className = 'content-card text-red-700 dark:text-red-300 border-red-400';
-            errorDiv.innerHTML = `<h3 class="text-h3 text-red-800 dark:text-red-200">Критическая ошибка анализа</h3><p>${this.sanitizeText(e.message)}</p><p>Пожалуйста, проверьте, что данные являются корректным XML или JSON файлом.</p>`;
+            const errorTitle = e && e.isXmlParseError ? 'Не удалось разобрать XML' : 'Критическая ошибка анализа';
+            errorDiv.innerHTML = `<h3 class="text-h3 text-red-800 dark:text-red-200">${errorTitle}</h3><p>${this.sanitizeText(e.message)}</p><p>Пожалуйста, проверьте, что данные являются корректным XML или JSON файлом.</p>`;
             analysisResultNode = errorDiv;
         } finally {
             this.finalizeAnalysis(analysisResultNode);
@@ -1606,7 +1681,7 @@ class ReportAnalyzerApp {
         list.className = 'list-disc list-inside space-y-1 text-sm';
         warnings.forEach((msg) => {
             const item = document.createElement('li');
-            item.textContent = this.sanitizeText(msg);
+            item.textContent = String(msg);
             list.appendChild(item);
         });
         container.appendChild(list);
@@ -2117,11 +2192,11 @@ class ReportAnalyzerApp {
 
                 const baseDoc = event.baseDocument;
                 const baseText = baseDoc
-                    ? `${baseDoc.name} №${baseDoc.number} от ${new Date(baseDoc.date).toLocaleDateString('ru-RU')}`
+                    ? `${baseDoc.name} №${baseDoc.number} от ${this._fmtDateOnly(baseDoc.date)}`
                     : '—';
 
                 tr.innerHTML = `
-                    <td class="p-2 align-top">${new Date(event.date).toLocaleDateString('ru-RU')}</td>
+                    <td class="p-2 align-top">${this.sanitizeText(this._fmtDateOnly(event.date))}</td>
                     <td class="p-2 align-top"><span class="font-semibold">${this.sanitizeText(event.type)}</span></td>
                     <td class="p-2 align-top">
                         <p>${this.sanitizeText(event.position)}</p>
@@ -2190,7 +2265,7 @@ class ReportAnalyzerApp {
         const metaContent = document.createDocumentFragment();
         metaContent.appendChild(this.createField('Источник:', data.meta.programVersion));
         metaContent.appendChild(
-            this.createField('Дата отчета:', new Date(data.meta.dateTime).toLocaleString('ru-RU')),
+            this.createField('Дата отчета:', this._fmtDateTime(data.meta.dateTime)),
         );
         metaContent.appendChild(this.createField('Версия формата:', data.meta.formatVersion));
         wrapper.appendChild(this._createAccordion('Общая информация', metaContent, true));
@@ -2212,7 +2287,7 @@ class ReportAnalyzerApp {
             subscriberContent.appendChild(
                 this.createField(
                     'Срок действия:',
-                    `${new Date(data.subscriber.account.licenseStart).toLocaleDateString()} - ${new Date(data.subscriber.account.licenseEnd).toLocaleDateString()}`,
+                    `${new Date(data.subscriber.account.licenseStart).toLocaleDateString('ru-RU')} - ${new Date(data.subscriber.account.licenseEnd).toLocaleDateString('ru-RU')}`,
                 ),
             );
             subscriberContent.appendChild(
@@ -2325,7 +2400,7 @@ class ReportAnalyzerApp {
 
             data.checks.certificates.forEach((cert) => {
                 const isExpired = new Date(cert.validUntil) < new Date();
-                let status = `Годен до: ${new Date(cert.validUntil).toLocaleDateString()}`;
+                let status = `Годен до: ${new Date(cert.validUntil).toLocaleDateString('ru-RU')}`;
                 if (isExpired) status += ' (ИСТЁК)';
 
                 const certItem = document.createElement('div');
@@ -2604,6 +2679,7 @@ class ReportAnalyzerApp {
         const formatDate = (dateString) => {
             if (!dateString) return '—';
             const date = new Date(dateString);
+            if (Number.isNaN(date.getTime())) return String(dateString);
             return date.toLocaleString('ru-RU', {
                 year: 'numeric',
                 month: '2-digit',
@@ -2666,7 +2742,7 @@ class ReportAnalyzerApp {
                 row.dataset.rawJson = JSON.stringify(msg, null, 2);
 
                 const senderEl = clone.querySelector('.sedo-sender');
-                senderEl.textContent = this.sanitizeText(msg.sender_id || '—');
+                senderEl.textContent = this._raw(msg.sender_id || '—');
                 if (msg.sender_id === 'Фонд')
                     senderEl.classList.add('text-blue-600', 'dark:text-blue-400');
                 else if (msg.sender_id === 'Страхователь')
@@ -2675,7 +2751,7 @@ class ReportAnalyzerApp {
 
                 const statusEl = clone.querySelector('.sedo-status');
                 if (msg.status) {
-                    statusEl.textContent = this.sanitizeText(msg.status);
+                    statusEl.textContent = this._raw(msg.status);
                     if (msg.status.toLowerCase().includes('ошибк')) {
                         statusEl.classList.add('text-red-600', 'dark:text-red-400');
                     } else {
@@ -2683,8 +2759,8 @@ class ReportAnalyzerApp {
                     }
                 }
 
-                clone.querySelector('.sedo-type').textContent = this.sanitizeText(msg.type || '—');
-                clone.querySelector('.sedo-title').textContent = this.sanitizeText(
+                clone.querySelector('.sedo-type').textContent = this._raw(msg.type || '—');
+                clone.querySelector('.sedo-title').textContent = this._raw(
                     msg.title || 'Без заголовка',
                 );
                 clone.querySelector('.sedo-date').textContent = formatDate(msg.date);
@@ -2766,23 +2842,23 @@ class ReportAnalyzerApp {
             const clone = template.content.cloneNode(true);
             const item = clone.querySelector('.cert-list-item');
 
-            item.dataset.thumbprint = this.sanitizeText(cert.thumbprint);
+            item.dataset.thumbprint = this._raw(cert.thumbprint);
 
             const orgEl = clone.querySelector('.cert-org');
             const orgText = cert.recipientType
                 ? `${cert.orgName} [${cert.recipientType}]`
                 : cert.orgName || 'Организация не указана';
-            orgEl.textContent = this.sanitizeText(orgText);
+            orgEl.textContent = this._raw(orgText);
             orgEl.title = orgEl.textContent;
             orgEl.classList.add('font-semibold', 'truncate');
 
             const fioEl = clone.querySelector('.cert-fio');
-            fioEl.textContent = this.sanitizeText(cert.ownerFio || 'ФИО не указано');
+            fioEl.textContent = this._raw(cert.ownerFio || 'ФИО не указано');
             fioEl.title = fioEl.textContent;
             fioEl.classList.add('text-sm', 'text-slate-500', 'dark:text-slate-400', 'truncate');
 
             const thumbprintEl = clone.querySelector('.cert-thumbprint');
-            thumbprintEl.textContent = this.sanitizeText(cert.thumbprint);
+            thumbprintEl.textContent = this._raw(cert.thumbprint);
             thumbprintEl.title = `Отпечаток: ${thumbprintEl.textContent}`;
             thumbprintEl.classList.add(
                 'text-xs',
@@ -3094,7 +3170,7 @@ class ReportAnalyzerApp {
         const contentEl = clone.querySelector('.accordion-content');
 
         details.open = isOpen;
-        titleEl.textContent = this.sanitizeText(title);
+        titleEl.textContent = this._raw(title);
 
         if (contentElement && contentElement.nodeType) {
             contentEl.appendChild(contentElement);
@@ -3155,13 +3231,13 @@ class ReportAnalyzerApp {
         entries.forEach((log) => {
             const clone = template.content.cloneNode(true);
 
-            clone.querySelector('.log-event').textContent = this.sanitizeText(log.event);
+            clone.querySelector('.log-event').textContent = this._raw(log.event);
             clone.querySelector('.log-date').textContent = new Date(log.date).toLocaleString(
                 'ru-RU',
             );
 
             const levelEl = clone.querySelector('.log-level');
-            levelEl.textContent = this.sanitizeText(log.level);
+            levelEl.textContent = this._raw(log.level);
             if (log.level === 'Ошибка') levelEl.classList.add('text-red-500', 'font-bold');
             if (log.level === 'Предупреждение') levelEl.classList.add('text-amber-500');
 
@@ -3176,13 +3252,13 @@ class ReportAnalyzerApp {
                 } catch {
                     const p = document.createElement('p');
                     p.className = 'text-sm text-slate-600 dark:text-slate-400 mt-1';
-                    p.textContent = this.sanitizeText(log.comment);
+                    p.textContent = this._raw(log.comment);
                     commentWrapper.appendChild(p);
                 }
             } else {
                 const p = document.createElement('p');
                 p.className = 'text-sm text-slate-600 dark:text-slate-400 mt-1';
-                p.textContent = this.sanitizeText(log.comment);
+                p.textContent = this._raw(log.comment);
                 commentWrapper.appendChild(p);
             }
 
@@ -3225,7 +3301,7 @@ class ReportAnalyzerApp {
             <p><strong>ID:</strong> <span class="font-mono text-xs">${this.sanitizeText(msg.id)}</span></p>
             <p><strong>От:</strong> ${this.sanitizeText(msg.from)}</p>
             <p><strong>Тема:</strong> ${this.sanitizeText(msg.subject)}</p>
-            <p><strong>Дата:</strong> ${new Date(msg.transportDate).toLocaleString('ru-RU')}</p>
+            <p><strong>Дата:</strong> ${this.sanitizeText(this._fmtDateTime(msg.transportDate) || '—')}</p>
         </div>`,
                 )
                 .join('') +
@@ -3250,13 +3326,15 @@ class ReportAnalyzerApp {
             this.createField(
                 'Тип заявления: ',
                 statementTypeMap[data.general.statementType] ||
-                    `Неизвестный (${data.general.statementType})`,
+                    (data.general.statementType
+                        ? `Неизвестный (${data.general.statementType})`
+                        : 'Не указан'),
             ),
         );
         generalContent.appendChild(
             this.createField(
                 'Дата формирования: ',
-                new Date(data.general.dateTime).toLocaleString('ru-RU'),
+                this._fmtDateTime(data.general.dateTime),
             ),
         );
         generalContent.appendChild(this.createField('Версия формата: ', data.general.formVersion));
@@ -3274,7 +3352,9 @@ class ReportAnalyzerApp {
                 'Тип: ',
                 data.general.isJuridical === 'true'
                     ? 'Юридическое лицо'
-                    : 'Индивидуальный предприниматель',
+                    : data.general.isJuridical === 'false'
+                      ? 'Индивидуальный предприниматель'
+                      : '',
             ),
         );
         orgContent.appendChild(this.createField('Телефон: ', data.general.phone));
@@ -3405,7 +3485,7 @@ class ReportAnalyzerApp {
         metaContent.appendChild(
             this.createField(
                 'Дата формирования: ',
-                new Date(data.meta.creationTimestamp).toLocaleString('ru-RU'),
+                this._fmtDateTime(data.meta.creationTimestamp),
             ),
         );
         metaContent.appendChild(this.createField('Версия программы: ', data.meta.programVersion));
@@ -3525,7 +3605,7 @@ class ReportAnalyzerApp {
 
                 const title = document.createElement('p');
                 title.className = 'font-semibold text-slate-800 dark:text-slate-200';
-                title.textContent = this.sanitizeText(
+                title.textContent = this._raw(
                     this.controllingAuthorityMap[rec.type] ||
                         rec.name ||
                         `Неизвестный орган: ${rec.type}`,
@@ -3535,21 +3615,21 @@ class ReportAnalyzerApp {
                 if (rec.code) {
                     const code = document.createElement('p');
                     code.className = 'text-sm text-slate-600 dark:text-slate-400';
-                    code.textContent = `Код органа: ${this.sanitizeText(rec.code)}`;
+                    code.textContent = `Код органа: ${this._raw(rec.code)}`;
                     recipientCard.appendChild(code);
                 }
 
                 if (rec.name) {
                     const nameEl = document.createElement('p');
                     nameEl.className = 'text-sm text-slate-600 dark:text-slate-400';
-                    nameEl.textContent = `Наименование: ${this.sanitizeText(rec.name)}`;
+                    nameEl.textContent = `Наименование: ${this._raw(rec.name)}`;
                     recipientCard.appendChild(nameEl);
                 }
 
                 if (rec.kppList.length > 0) {
                     const kppEl = document.createElement('p');
                     kppEl.className = 'text-sm text-slate-600 dark:text-slate-400';
-                    kppEl.textContent = `Перечень КПП: ${this.sanitizeText(rec.kppList.join(', '))}`;
+                    kppEl.textContent = `Перечень КПП: ${this._raw(rec.kppList.join(', '))}`;
                     recipientCard.appendChild(kppEl);
                 }
 
@@ -4016,10 +4096,10 @@ class ReportAnalyzerApp {
             button.classList.add('px-3', 'py-1');
         }
 
-        button.dataset.certThumbprint = this.sanitizeText(thumbprint);
+        button.dataset.certThumbprint = this._raw(thumbprint);
         button.title = buttonTitle;
         button.disabled = isDisabled;
-        button.textContent = this.sanitizeText(text);
+        button.textContent = this._raw(text);
 
         return button;
     }

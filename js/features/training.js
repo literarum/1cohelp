@@ -864,7 +864,8 @@ async function handleSrsGrade(cardId, grade) {
         ...card,
         repetitions: next.repetitions,
         easeFactor: next.easeFactor,
-        intervalDays: interval,
+        // Храним НЕмасштабированный SM-2 интервал: масштаб применяется только к dueAt (иначе множится от повторения к повторению)
+        intervalDays: next.intervalDays,
         dueAt,
         updatedAt: new Date().toISOString(),
     };
