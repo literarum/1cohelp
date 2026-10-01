@@ -235,6 +235,64 @@
         }
     }
 
+    var lazyPromises = {};
+
+    /**
+     * Загружает скрипт-вендор по требованию (один раз). Сначала локальный файл, при ошибке — CDN.
+     * @param {string|string[]} ids - id из VENDOR_REGISTRY (порядок важен: pdf-lib перед fontkit)
+     * @returns {Promise<boolean>} true, если глобальный объект доступен после загрузки
+     */
+    function ensureVendor(ids) {
+        var list = Array.isArray(ids) ? ids : [ids];
+        return list.reduce(function (chain, id) {
+            return chain.then(function (okSoFar) {
+                return ensureOne(id).then(function (ok) {
+                    return okSoFar && ok;
+                });
+            });
+        }, Promise.resolve(true));
+    }
+
+    function ensureOne(id) {
+        var entry = REGISTRY[id];
+        if (!entry || entry.type !== 'script') return Promise.resolve(false);
+        if (!isScriptMissing(entry)) return Promise.resolve(true);
+        if (lazyPromises[id]) return lazyPromises[id];
+        function inject(url) {
+            return new Promise(function (resolve) {
+                var script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                if (entry.attrs) {
+                    for (var k in entry.attrs) {
+                        if (Object.prototype.hasOwnProperty.call(entry.attrs, k))
+                            script.setAttribute(k, entry.attrs[k]);
+                    }
+                }
+                script.onload = function () {
+                    resolve(true);
+                };
+                script.onerror = function () {
+                    script.remove();
+                    resolve(false);
+                };
+                document.head.appendChild(script);
+            });
+        }
+        var localUrl = USE_LOCAL && entry.localPath ? entry.localPath : entry.cdnUrl;
+        lazyPromises[id] = inject(localUrl)
+            .then(function (ok) {
+                if (ok && !isScriptMissing(entry)) return true;
+                return entry.cdnUrl && entry.cdnUrl !== localUrl ? inject(entry.cdnUrl) : false;
+            })
+            .then(function (ok) {
+                var loaded = !isScriptMissing(entry);
+                if (!loaded) delete lazyPromises[id]; // позволит повторить попытку (например, после появления сети)
+                return loaded;
+            });
+        return lazyPromises[id];
+    }
+
     global.VendorLoader = {
         getVendorUrl: getVendorUrl,
         loadVendors: loadVendors,
@@ -242,5 +300,6 @@
         writeVendors: writeVendors,
         runVendorFallback: runVendorFallback,
         waitForSortable: waitForSortable,
+        ensureVendor: ensureVendor,
     };
 })(typeof window !== 'undefined' ? window : this);

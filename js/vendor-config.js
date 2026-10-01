@@ -55,7 +55,9 @@
     };
 
     /** Load order for main app: scripts first (pdf-lib before fontkit), then Font Awesome. */
-    var MAIN_ORDER = ['sortablejs', 'pdf-lib', 'fontkit', 'xlsx', 'fontawesome'];
+    var MAIN_ORDER = ['sortablejs', 'fontawesome'];
+    /** Тяжёлые библиотеки (~4 МБ): грузятся по требованию через VendorLoader.ensureVendor(). pdf-lib раньше fontkit. */
+    var LAZY_VENDORS = ['pdf-lib', 'fontkit', 'xlsx'];
     /** Standalone page: Font Awesome + Tailwind CSS (via built file; no script). */
     var STANDALONE_ORDER = ['fontawesome'];
     /** Downloads page: Tailwind only (CSS or fallback script). */
@@ -71,5 +73,6 @@
         USE_LOCAL_VENDORS: USE_LOCAL_VENDORS,
         VENDOR_REGISTRY: VENDOR_REGISTRY,
         PAGE_PROFILES: PAGE_PROFILES,
+        LAZY_VENDORS: LAZY_VENDORS,
     };
 })(typeof window !== 'undefined' ? window : this);
