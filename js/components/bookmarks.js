@@ -16,6 +16,7 @@ import {
     SECTION_GRID_COLS,
 } from '../config.js';
 import { ARCHIVE_FOLDER_ID, ARCHIVE_FOLDER_NAME } from '../constants.js';
+import { SEED_FLAG, setSeedFlag, shouldSeedDefaults } from '../db/seed-flags.js';
 import { updateSearchIndex } from '../features/search.js';
 import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
 import { State as GlobalState } from '../app/state.js';
@@ -351,10 +352,10 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                     ${folderBadgeHTML}
                     <span class="text-gray-500 dark:text-gray-400" title="Добавлено: ${new Date(
                         bookmark.dateAdded || Date.now(),
-                    ).toLocaleString()}">
+                    ).toLocaleString('ru-RU')}">
                         <i class="far fa-clock mr-1 opacity-75"></i>${new Date(
                             bookmark.dateAdded || Date.now(),
-                        ).toLocaleDateString()}
+                        ).toLocaleDateString('ru-RU')}
                     </span>
                     ${urlHostnameHTML}
                 </div>
@@ -584,7 +585,7 @@ export async function loadBookmarks() {
         folders = await getAllFromIndexedDB('bookmarkFolders');
         console.log(`loadBookmarks: Найдено ${folders?.length || 0} существующих папок.`);
 
-        if (!folders || folders.length === 0) {
+        if (await shouldSeedDefaults(SEED_FLAG.BOOKMARK_FOLDERS, folders?.length || 0)) {
             console.log('Папки не найдены, создаем папки по умолчанию...');
             const defaultFoldersData = [
                 { name: 'Общие', color: 'blue', dateAdded: new Date().toISOString() },
@@ -616,6 +617,7 @@ export async function loadBookmarks() {
                 );
             }
             folders = createdFoldersWithIds;
+            await setSeedFlag(SEED_FLAG.BOOKMARK_FOLDERS);
         }
 
         await renderBookmarkFolders(folders || []);
@@ -631,7 +633,11 @@ export async function loadBookmarks() {
         bookmarks = await getAllFromIndexedDB('bookmarks');
         console.log(`loadBookmarks: Найдено ${bookmarks?.length || 0} существующих закладок.`);
 
-        if ((!bookmarks || bookmarks.length === 0) && folders && folders.length > 0) {
+        if (
+            folders &&
+            folders.length > 0 &&
+            (await shouldSeedDefaults(SEED_FLAG.BOOKMARKS, bookmarks?.length || 0))
+        ) {
             console.log('Закладки не найдены, создаем примеры закладок...');
             if (firstFolderId === null && folders.length > 0) {
                 firstFolderId = folders[0].id;
@@ -687,6 +693,7 @@ export async function loadBookmarks() {
                 );
             }
             bookmarks = bookmarksWithIds;
+            await setSeedFlag(SEED_FLAG.BOOKMARKS);
         }
 
         const folderMap = (folders || []).reduce((map, folder) => {

@@ -742,10 +742,10 @@ export async function showReglamentDetail(reglamentId) {
                 ? categoryInfo.title
                 : reglament.category || 'Без категории';
             const dateAdded = reglament.dateAdded
-                ? new Date(reglament.dateAdded).toLocaleDateString()
+                ? new Date(reglament.dateAdded).toLocaleDateString('ru-RU')
                 : 'Неизвестно';
             const dateUpdated = reglament.dateUpdated
-                ? new Date(reglament.dateUpdated).toLocaleDateString()
+                ? new Date(reglament.dateUpdated).toLocaleDateString('ru-RU')
                 : null;
 
             let metaParts = [
