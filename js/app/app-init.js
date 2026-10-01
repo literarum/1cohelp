@@ -5,12 +5,6 @@
  * Вынесен из script.js для уменьшения мегафайла и улучшения модульности.
  */
 
-import { probeHelperAvailability } from '../features/revocation-helper-probe.js';
-import { REVOCATION_API_BASE_URL } from '../config.js';
-import {
-    REVOCATION_LOCAL_HELPER_BASE_URL,
-    REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER,
-} from '../config/revocation-sources.js';
 import { getCoreService, notify } from '../core/kernel.js';
 import { initBackupReminderScheduler } from '../features/backup-reminder.js';
 import { initContextualBackNavigation } from '../features/contextual-back-navigation.js';
@@ -74,7 +68,6 @@ export async function appInit(context = 'normal') {
         initTimerSystem,
         initSedoTypesSystem,
         initBlacklistSystem,
-        initFNSCertificateRevocationSystem,
         initAlgorithmsPdfExportSystem,
         initBackgroundHealthTestsSystem,
         initReloadButton,
@@ -189,21 +182,6 @@ export async function appInit(context = 'normal') {
         console.error('NotificationService is not defined or init method is missing!');
     }
     updateTotalAppInitProgress(STAGE_WEIGHTS_APP_INIT.NOTIFICATION_SERVICE, 'NotificationService');
-
-    if (REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER && REVOCATION_LOCAL_HELPER_BASE_URL) {
-        probeHelperAvailability(REVOCATION_LOCAL_HELPER_BASE_URL).then((ok) => {
-            if (typeof window !== 'undefined') window.__revocationHelperAvailable = ok;
-        });
-    } else if (
-        !REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER &&
-        typeof REVOCATION_API_BASE_URL === 'string' &&
-        REVOCATION_API_BASE_URL.trim()
-    ) {
-        const apiBase = REVOCATION_API_BASE_URL.trim().replace(/\/$/, '');
-        probeHelperAvailability(apiBase, { path: '/api/health' }).then((ok) => {
-            if (typeof window !== 'undefined') window.__revocationHelperAvailable = ok;
-        });
-    }
 
     let dbInitialized = false;
 
@@ -615,14 +593,6 @@ export async function appInit(context = 'normal') {
                         typeof initBlacklistSystem === 'function'
                             ? initBlacklistSystem
                             : () => console.warn('initBlacklistSystem not defined'),
-                    critical: false,
-                },
-                {
-                    name: 'initFNSCertificateRevocationSystem',
-                    func:
-                        typeof initFNSCertificateRevocationSystem === 'function'
-                            ? initFNSCertificateRevocationSystem
-                            : () => console.warn('initFNSCertificateRevocationSystem not defined'),
                     critical: false,
                 },
                 {

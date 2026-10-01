@@ -67,6 +67,8 @@ function wireWaitingWorker(registration) {
 
     const dismiss = () => {
         banner.hidden = true;
+        // Новый деплой в этой же сессии должен снова показать баннер
+        wiredWaitingScriptUrl = '';
     };
 
     btnDismiss.onclick = dismiss;
@@ -100,6 +102,7 @@ function wireWaitingWorker(registration) {
  * @param {ServiceWorkerRegistration} registration
  */
 function listenForInstallingWorker(registration) {
+    if (!registration || typeof registration.addEventListener !== 'function') return;
     registration.addEventListener('updatefound', () => {
         const installing = registration.installing;
         if (!installing) return;
@@ -188,6 +191,7 @@ export function initPwaShell() {
                 registrationLifecycleWired = true;
                 listenForInstallingWorker(registration);
             }
+            if (!registration) return;
             if (registration.waiting && navigator.serviceWorker.controller) {
                 wireWaitingWorker(registration);
             }

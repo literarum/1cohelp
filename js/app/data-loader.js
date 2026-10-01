@@ -295,9 +295,12 @@ export async function loadFromIndexedDB() {
         console.log(
             'Загрузка данных из IndexedDB (loadFromIndexedDB) успешно завершена (алгоритмы и связанные данные).',
         );
+        loadFailedBlocksSave = false;
         return true;
     } catch (error) {
         console.error('КРИТИЧЕСКАЯ ОШИБКА в loadFromIndexedDB:', error);
+        // Защита: в памяти теперь значения по умолчанию — их нельзя записывать поверх пользовательских данных
+        loadFailedBlocksSave = true;
         if (!algorithms) {
             console.error(
                 '[loadFromIndexedDB] algorithms не определен! Зависимости не установлены.',
@@ -333,8 +336,21 @@ export async function loadFromIndexedDB() {
  * Сохраняет данные в IndexedDB
  * @returns {Promise<boolean>} Promise, который разрешается с флагом успешного сохранения
  */
+let loadFailedBlocksSave = false;
+
 export async function saveDataToIndexedDB() {
     const { algorithms, getClientData, showNotification } = dependencies;
+
+    if (loadFailedBlocksSave) {
+        console.error('Save blocked: предыдущая загрузка из IndexedDB завершилась ошибкой.');
+        if (typeof showNotification === 'function') {
+            showNotification(
+                'Сохранение заблокировано: данные не удалось загрузить. Перезагрузите страницу, чтобы не потерять сохранённое.',
+                'error',
+            );
+        }
+        return false;
+    }
 
     if (!State.db) {
         console.error('Cannot save data: Database not initialized.');
@@ -355,9 +371,9 @@ export async function saveDataToIndexedDB() {
             let opsCompleted = 0;
             const totalOps = 2;
 
+            // Резолвим только по transaction.oncomplete (commit), а не по успеху отдельных put
             const checkCompletion = () => {
                 opsCompleted++;
-                if (opsCompleted === totalOps) resolve(true);
             };
 
             const req1 = algoStore.put(algorithmsToSave);
@@ -387,9 +403,7 @@ export async function saveDataToIndexedDB() {
 
             transaction.onabort = (e) => {
                 console.warn('Save transaction for algorithms/clientData aborted:', e.target.error);
-                if (!e.target.error) {
-                    reject(new Error('Save transaction aborted'));
-                }
+                reject(e.target.error || new Error('Save transaction aborted'));
             };
         });
     } catch (error) {

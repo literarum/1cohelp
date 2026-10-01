@@ -12,7 +12,7 @@ let deps = {
     updateVisibleTabs: null,
     initUISettingsModalHandlers: null,
     backgroundStatusHUD: null,
-    /** Optional: array of functions to run after initUISettingsModalHandlers (e.g. PDF export, FNS cert) */
+    /** Optional: array of functions to run after initUISettingsModalHandlers (e.g. PDF export) */
     afterInitCallbacks: null,
 };
 
