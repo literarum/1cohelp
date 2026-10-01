@@ -55,7 +55,7 @@ export function initBackgroundStatusHUD() {
         if (document.getElementById('bg-status-hud-styles')) return;
         const css = `
     #bg-status-hud {
-      position: fixed; right: 16px; top: 16px; z-index: 9998;
+      position: fixed; right: 16px; top: 16px; z-index: 45; /* ниже модалок (z>=50), чтобы не перекрывать диалоги */
       width: min(440px, calc(100vw - 32px));
       max-width: calc(100vw - 32px);
       font-family: inherit;
@@ -352,7 +352,10 @@ export function initBackgroundStatusHUD() {
         }
         const toast = document.getElementById('notification-container');
         if (toast && toast.children.length > 0) {
-            top = Math.max(top, 90);
+            // Реальная нижняя граница стека toast (а не фиксированные 90px): иначе при нескольких
+            // или многострочных toast HUD накладывается на них.
+            const bottom = Math.ceil(toast.getBoundingClientRect().bottom);
+            top = Math.max(top, 90, bottom + 8);
         }
         STATE.container.style.top = `${top}px`;
     }
@@ -425,10 +428,14 @@ export function initBackgroundStatusHUD() {
             clearTimeout(STATE.pendingDismissAfterActivity);
             STATE.pendingDismissAfterActivity = null;
         }
+        if (STATE.dismissFallbackTimer) {
+            clearTimeout(STATE.dismissFallbackTimer);
+            STATE.dismissFallbackTimer = null;
+        }
         document.removeEventListener('mousemove', STATE._onActivity);
         document.removeEventListener('keydown', STATE._onActivity);
         document.removeEventListener('touchstart', STATE._onActivity);
-        document.removeEventListener('scroll', STATE._onActivity, true);
+        document.removeEventListener('scroll', STATE._onActivity);
         STATE._onActivity = null;
     }
 
@@ -806,7 +813,20 @@ export function initBackgroundStatusHUD() {
         });
     }
 
+    // Резерв: если пользователь так и не взаимодействовал со страницей (фоновая вкладка, киоск),
+    // успешный HUD всё равно скрывается, чтобы не перекрывать шапку бесконечно.
+    const DISMISS_FALLBACK_MS = 15000;
+
     function scheduleDismissAfterActivity() {
+        // Новый цикл показа: прошлый removeActivityListeners() мог оставить флаг «уже снято».
+        STATE.activityListenersRemoved = false;
+        STATE.dismissFallbackTimer = setTimeout(() => {
+            STATE.dismissFallbackTimer = null;
+            if (STATE.pendingDismissAfterActivity) return;
+            if (shouldBlockHudSuccessAndAutoDismiss()) return;
+            removeActivityListeners();
+            dismissAnimated(() => {});
+        }, DISMISS_FALLBACK_MS);
         STATE._onActivity = () => {
             removeActivityListeners();
             STATE.pendingDismissAfterActivity = setTimeout(() => {

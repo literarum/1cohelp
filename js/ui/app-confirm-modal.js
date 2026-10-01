@@ -33,6 +33,9 @@ export function setAppConfirmModalDependencies(deps) {
  *   'confirm' | 'cancel' | 'dismiss' (крестик или Esc).
  * @returns {Promise<boolean|string>}
  */
+/** Закрывает предыдущий открытый confirm/alert (модалка одна на всех), чтобы его промис не завис */
+let pendingDismiss = null;
+
 export function showAppConfirm(options = {}) {
     const {
         title = 'Подтверждение',
@@ -51,6 +54,12 @@ export function showAppConfirm(options = {}) {
                 ? window.confirm(message || title)
                 : false,
         );
+    }
+
+    if (pendingDismiss) {
+        const prev = pendingDismiss;
+        pendingDismiss = null;
+        prev();
     }
 
     const titleEl = modal.querySelector('#appConfirmModalTitle');
@@ -89,6 +98,7 @@ export function showAppConfirm(options = {}) {
         const finish = (result, action) => {
             if (settled) return;
             settled = true;
+            if (pendingDismiss === dismissSelf) pendingDismiss = null;
             modal.classList.add('hidden');
             document.body.classList.remove('overflow-hidden', 'modal-open');
             if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
@@ -97,6 +107,8 @@ export function showAppConfirm(options = {}) {
             deactivateModalFocus(modal);
             resolve(returnAction ? action : result);
         };
+        const dismissSelf = () => finish(false, 'dismiss');
+        pendingDismiss = dismissSelf;
         const onEscape = (e) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -134,6 +146,12 @@ export function showAppAlert(options = {}) {
         return Promise.resolve();
     }
 
+    if (pendingDismiss) {
+        const prev = pendingDismiss;
+        pendingDismiss = null;
+        prev();
+    }
+
     const titleEl = modal.querySelector('#appConfirmModalTitle');
     const messageEl = modal.querySelector('#appConfirmModalMessage');
     const buttonsWrap = modal.querySelector('#appConfirmModalButtons');
@@ -163,6 +181,7 @@ export function showAppAlert(options = {}) {
         const finish = () => {
             if (settled) return;
             settled = true;
+            if (pendingDismiss === finish) pendingDismiss = null;
             modal.classList.add('hidden');
             document.body.classList.remove('overflow-hidden', 'modal-open');
             if (typeof removeEscapeHandler === 'function') removeEscapeHandler(modal);
@@ -177,6 +196,7 @@ export function showAppAlert(options = {}) {
                 finish();
             }
         };
+        pendingDismiss = finish;
         okBtn.addEventListener('click', finish);
         onCloseClick = () => finish();
         if (closeBtn) closeBtn.addEventListener('click', onCloseClick);
