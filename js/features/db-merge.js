@@ -13,8 +13,14 @@
 
 import { State } from '../app/state.js';
 import { CURRENT_SCHEMA_VERSION } from '../constants.js';
-import { clearIndexedDBStore, getAllFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
+import {
+    clearIndexedDBStore,
+    getAllFromIndexedDB,
+    getFromIndexedDB,
+    saveToIndexedDB,
+} from '../db/indexeddb.js';
 import { escapeHtml } from '../utils/html.js';
+import { base64ToBlob } from '../utils/helpers.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ (устанавливаются через setDbMergeDependencies)
@@ -41,6 +47,8 @@ let deps = {
     buildInitialSearchIndex: null,
     updateSearchIndex: null,
     initDraggableVerticalSplitters: null,
+    /** Перечитать algorithms/clientData из IndexedDB в память (после merge записей в БД напрямую). */
+    loadFromIndexedDB: null,
 };
 
 /**
@@ -377,6 +385,20 @@ function normalizeImportedRecordForStore(storeName, record, ctx) {
     }
 
     return normalized;
+}
+
+/** Экспорт хранит blob как {base64,type}; для записи в IndexedDB нужен настоящий Blob. */
+function restoreBlobField(record, label) {
+    if (!record || typeof record !== 'object') return record;
+    const b = record.blob;
+    if (b && typeof b === 'object' && !(b instanceof Blob) && typeof b.base64 === 'string') {
+        const converted = base64ToBlob(b.base64, typeof b.type === 'string' ? b.type : '');
+        if (!(converted instanceof Blob)) {
+            throw new Error(`Не удалось восстановить файл (${label}) из резервной копии`);
+        }
+        return { ...record, blob: converted };
+    }
+    return record;
 }
 
 function normalizeImportDataForMerge(importDataRaw, stores) {
@@ -1404,6 +1426,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
         }
     };
 
+    const touchedBookmarkIds = new Set();
     const writeAndBump = async (storeName, record, meta = {}) => {
         const res = await saveToIndexedDB(storeName, record);
         const human = mergeStoreHumanLabel(storeName);
@@ -1578,6 +1601,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
                     index: i + 1,
                     total: inserts.length,
                 });
+                if (storeName === 'bookmarks') touchedBookmarkIds.add(newId);
                 if (typeof originalId !== 'undefined') {
                     idMapping[storeName].set(originalId, newId);
                 }
@@ -1587,6 +1611,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
                 const op = updates[i];
                 const { local, incoming } = op;
                 const updated = { ...incoming, id: local.id };
+                if (storeName === 'bookmarks') touchedBookmarkIds.add(local.id);
 
                 if (storeName === 'bookmarks' && typeof updated.folder !== 'undefined') {
                     const mappedFolderId =
@@ -1710,7 +1735,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
             const inserts = storePlan.toInsert || [];
             for (let i = 0; i < inserts.length; i++) {
                 const op = inserts[i];
-                const incoming = { ...op.record };
+                const incoming = restoreBlobField({ ...op.record }, 'PDF');
                 const mappedParentId = mapParentEntityId(incoming.parentType, incoming.parentId);
                 incoming.parentId = String(mappedParentId);
                 delete incoming.id;
@@ -1725,17 +1750,39 @@ export async function applyMergePlan(mergePlan, options = {}) {
 
         if (storeName === 'screenshots') {
             const inserts = storePlan.toInsert || [];
+            const screenshotIdMap = new Map();
             for (let i = 0; i < inserts.length; i++) {
                 const op = inserts[i];
-                const incoming = { ...op.record };
+                const incoming = restoreBlobField({ ...op.record }, 'скриншот');
                 const mappedParentId = mapParentEntityId(incoming.parentType, incoming.parentId);
                 incoming.parentId = mappedParentId;
+                const originalShotId = incoming.id;
                 delete incoming.id;
-                await writeAndBump('screenshots', incoming, {
+                const newShotId = await writeAndBump('screenshots', incoming, {
                     op: 'insert',
                     index: i + 1,
                     total: inserts.length,
                 });
+                if (typeof originalShotId !== 'undefined') {
+                    screenshotIdMap.set(originalShotId, newShotId);
+                }
+            }
+            // Закладки, затронутые merge, ссылаются на скриншоты по screenshotIds — перепривязываем к новым id
+            if (screenshotIdMap.size > 0) {
+                for (const bookmarkId of touchedBookmarkIds) {
+                    const bm = await getFromIndexedDB('bookmarks', bookmarkId);
+                    if (!bm || !Array.isArray(bm.screenshotIds) || bm.screenshotIds.length === 0) {
+                        continue;
+                    }
+                    const remapped = bm.screenshotIds.map((sid) =>
+                        screenshotIdMap.has(sid) ? screenshotIdMap.get(sid) : sid,
+                    );
+                    await writeAndBump(
+                        'bookmarks',
+                        { ...bm, screenshotIds: remapped },
+                        { op: 'update', detail: 'Закладки: перепривязка screenshotIds' },
+                    );
+                }
             }
         }
     };
@@ -1776,6 +1823,8 @@ export async function applyMergePlan(mergePlan, options = {}) {
             phase: 'ui_refresh',
             detail: 'Обновление интерфейса: закладки, внешние ссылки, регламенты, напоминания; перестроение поискового индекса…',
         });
+        // Алгоритмы пишутся в БД напрямую — перечитываем в память, иначе следующее сохранение затрёт merge
+        await deps.loadFromIndexedDB?.();
         await Promise.all([
             deps.loadBookmarks?.(),
             deps.loadExtLinks?.(),

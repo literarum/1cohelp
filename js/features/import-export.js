@@ -18,6 +18,8 @@ import {
     CATEGORY_INFO_KEY,
     IMPORT_UNKNOWN_STORES_SNAPSHOT_KEY,
     RECENTLY_DELETED_STORE_NAME,
+    ENTITY_EDIT_HISTORY_STORE,
+    ENTITY_HISTORY_LOCAL_MIRROR_PREFIX,
 } from '../constants.js';
 import { base64ToBlob } from '../utils/helpers.js';
 import { appInit } from '../app/app-init.js';
@@ -112,7 +114,16 @@ const COMPATIBILITY_STORE_ALIASES = {
     regulations: 'reglaments',
 };
 
-const IMPORT_META_KEYS = new Set(['schemaVersion', 'exportDate', 'meta', 'appVersion']);
+const IMPORT_META_KEYS = new Set([
+    'schemaVersion',
+    'exportDate',
+    'meta',
+    'appVersion',
+    'integrity',
+]);
+
+export const BACKUP_INTEGRITY_ALGORITHM = 'store-counts-v1';
+export const BACKUP_HASH_ALGORITHM = 'sha256-json-v1';
 
 function normalizeText(value) {
     if (!value) return '';
@@ -134,11 +145,13 @@ export function normalizeLegacyImportData(rawData) {
 
     const normalizedData = {};
     Object.keys(rawData).forEach((storeName) => {
-        normalizedData[storeName] = Array.isArray(rawData[storeName]) ? rawData[storeName] : [];
+        // Не-массив НЕ превращаем в []: иначе импорт молча очистит хранилище пользователя.
+        // Некорректный payload доходит до проверки целостности и отменяет всю транзакцию.
+        normalizedData[storeName] = rawData[storeName];
     });
 
     const extLinkCategoryNameToId = new Map();
-    (normalizedData.extLinkCategories || []).forEach((category) => {
+    (Array.isArray(normalizedData.extLinkCategories) ? normalizedData.extLinkCategories : []).forEach((category) => {
         if (typeof category?.id === 'undefined') return;
         const name = normalizeCategoryName(category?.name);
         if (!name) return;
@@ -212,6 +225,7 @@ export function normalizeLegacyImportData(rawData) {
     };
 
     Object.keys(normalizedData).forEach((storeName) => {
+        if (!Array.isArray(normalizedData[storeName])) return;
         normalizedData[storeName] = normalizedData[storeName].map((record) =>
             normalizeRecord(storeName, record),
         );
@@ -231,9 +245,18 @@ export function normalizeCompatibilityData(rawData) {
     const normalized = {};
     Object.keys(rawData).forEach((sourceStoreName) => {
         const targetStoreName = COMPATIBILITY_STORE_ALIASES[sourceStoreName] || sourceStoreName;
-        const sourceItems = Array.isArray(rawData[sourceStoreName]) ? rawData[sourceStoreName] : [];
-        if (!Array.isArray(normalized[targetStoreName])) normalized[targetStoreName] = [];
-        normalized[targetStoreName] = normalized[targetStoreName].concat(sourceItems);
+        const rawItems = rawData[sourceStoreName];
+        if (!Array.isArray(rawItems)) {
+            // Некорректный payload сохраняем как есть (см. normalizeLegacyImportData): его отвергнет
+            // проверка целостности, а не превратит в пустой массив и стирание данных.
+            normalized[targetStoreName] = rawItems;
+            return;
+        }
+        if (!Array.isArray(normalized[targetStoreName])) {
+            if (targetStoreName in normalized) return;
+            normalized[targetStoreName] = [];
+        }
+        normalized[targetStoreName] = normalized[targetStoreName].concat(rawItems);
     });
     return normalized;
 }
@@ -282,6 +305,133 @@ export function extractImportDataEnvelope(parsedImport) {
     });
 
     return { data: legacyData, usedLegacyEnvelope: true };
+}
+
+/**
+ * Контрольные счётчики записей по хранилищам для блока `integrity` резервной копии.
+ * @param {Record<string, unknown>} data
+ * @returns {{ algorithm: string, storeCounts: Record<string, number> }}
+ */
+export function buildBackupIntegrityBlock(data) {
+    const storeCounts = {};
+    Object.keys(data || {}).forEach((storeName) => {
+        storeCounts[storeName] = Array.isArray(data[storeName]) ? data[storeName].length : 0;
+    });
+    return { algorithm: BACKUP_INTEGRITY_ALGORITHM, storeCounts };
+}
+
+/**
+ * SHA-256 (hex) канонической JSON-сериализации каждого хранилища.
+ * Возвращает null, если WebCrypto недоступен (небезопасный контекст) — тогда проверка хэшей пропускается.
+ * @param {Record<string, unknown>} data
+ * @returns {Promise<Record<string, string>|null>}
+ */
+export async function computeStoreHashes(data) {
+    const subtle = typeof crypto !== 'undefined' ? crypto.subtle : null;
+    if (!subtle || typeof subtle.digest !== 'function') return null;
+    const encoder = new TextEncoder();
+    const hashes = {};
+    for (const storeName of Object.keys(data || {})) {
+        const digest = await subtle.digest('SHA-256', encoder.encode(JSON.stringify(data[storeName])));
+        hashes[storeName] = Array.from(new Uint8Array(digest))
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+    return hashes;
+}
+
+/**
+ * Блок integrity: счётчики + SHA-256 каждого хранилища (ловит подмену содержимого при тех же счётчиках).
+ * @param {Record<string, unknown>} data
+ */
+export async function buildBackupIntegrityBlockWithHashes(data) {
+    const block = buildBackupIntegrityBlock(data);
+    const storeHashes = await computeStoreHashes(data);
+    if (storeHashes) {
+        block.hashAlgorithm = BACKUP_HASH_ALGORITHM;
+        block.storeHashes = storeHashes;
+    }
+    return block;
+}
+
+/**
+ * Проверка SHA-256 хранилищ (если они есть в файле). Вызывать ДО записи в БД.
+ * @param {Record<string, any>} parsedImport
+ * @param {Record<string, any>} data
+ * @returns {Promise<{ ok: boolean, checked: boolean, mismatches: string[] }>}
+ */
+export async function verifyBackupStoreHashes(parsedImport, data) {
+    const block = parsedImport && parsedImport.integrity;
+    if (
+        !block ||
+        typeof block !== 'object' ||
+        block.hashAlgorithm !== BACKUP_HASH_ALGORITHM ||
+        !block.storeHashes ||
+        typeof block.storeHashes !== 'object'
+    ) {
+        return { ok: true, checked: false, mismatches: [] };
+    }
+    const actual = await computeStoreHashes(data);
+    if (!actual) return { ok: true, checked: false, mismatches: [] };
+    const mismatches = [];
+    Object.keys(block.storeHashes).forEach((storeName) => {
+        if (actual[storeName] !== block.storeHashes[storeName]) {
+            mismatches.push(`${storeName}: содержимое изменено`);
+        }
+    });
+    return { ok: mismatches.length === 0, checked: true, mismatches };
+}
+
+/**
+ * Сверяет блок `integrity` (если он есть) с фактическим содержимым файла ДО любых изменений в БД.
+ * Файлы старых версий без блока проходят проверку (совместимость).
+ * @param {Record<string, any>} parsedImport
+ * @param {Record<string, any>} data — data-конверт (до нормализации алиасов)
+ * @returns {{ ok: boolean, checked: boolean, mismatches: string[] }}
+ */
+export function verifyBackupIntegrity(parsedImport, data) {
+    const block = parsedImport && parsedImport.integrity;
+    if (block !== undefined && block !== null && (typeof block !== 'object' || Array.isArray(block))) {
+        return { ok: false, checked: true, mismatches: ['блок integrity повреждён (неверный тип)'] };
+    }
+    if (!block) {
+        // Файлы старых версий без блока integrity проходят (совместимость).
+        return { ok: true, checked: false, mismatches: [] };
+    }
+    if (
+        block.algorithm !== BACKUP_INTEGRITY_ALGORITHM ||
+        !block.storeCounts ||
+        typeof block.storeCounts !== 'object' ||
+        Array.isArray(block.storeCounts) ||
+        (block.hashAlgorithm !== undefined &&
+            (block.hashAlgorithm !== BACKUP_HASH_ALGORITHM ||
+                !block.storeHashes ||
+                typeof block.storeHashes !== 'object' ||
+                Array.isArray(block.storeHashes)))
+    ) {
+        // Блок есть, но неполный/неизвестного формата: не «молча пропускаем», а считаем файл повреждённым.
+        return {
+            ok: false,
+            checked: true,
+            mismatches: ['блок integrity повреждён или имеет неизвестный формат'],
+        };
+    }
+    const mismatches = [];
+    Object.keys(block.storeCounts).forEach((storeName) => {
+        const expected = block.storeCounts[storeName];
+        const actual = Array.isArray(data?.[storeName]) ? data[storeName].length : null;
+        if (actual === null) {
+            mismatches.push(`${storeName}: ожидалось ${expected} записей, раздел отсутствует`);
+        } else if (actual !== expected) {
+            mismatches.push(`${storeName}: ожидалось ${expected}, в файле ${actual}`);
+        }
+    });
+    Object.keys(data || {}).forEach((storeName) => {
+        if (!(storeName in block.storeCounts)) {
+            mismatches.push(`${storeName}: раздел не учтён в контрольных суммах`);
+        }
+    });
+    return { ok: mismatches.length === 0, checked: true, mismatches };
 }
 
 /**
@@ -1122,6 +1272,28 @@ export async function _processActualImport(jsonString) {
         }
 
         const envelopeResolution = extractImportDataEnvelope(importData);
+        const integrityCheck = verifyBackupIntegrity(importData, envelopeResolution.data);
+        if (!integrityCheck.ok) {
+            const shown = integrityCheck.mismatches.slice(0, 5).join('; ');
+            const more =
+                integrityCheck.mismatches.length > 5
+                    ? ` … (ещё ${integrityCheck.mismatches.length - 5})`
+                    : '';
+            throw new Error(
+                `Файл резервной копии повреждён или изменён вручную (не сходятся контрольные счётчики): ${shown}${more}`,
+            );
+        }
+        const hashCheck = await verifyBackupStoreHashes(importData, envelopeResolution.data);
+        if (!hashCheck.ok) {
+            throw new Error(
+                `Файл резервной копии изменён после создания (не сходятся контрольные суммы): ${hashCheck.mismatches.slice(0, 5).join('; ')}`,
+            );
+        }
+        if (Object.keys(envelopeResolution.data || {}).length === 0) {
+            throw new Error(
+                'Файл не похож на резервную копию Copilot 1СО: в нём не найдено ни одного раздела данных.',
+            );
+        }
         importData.data = envelopeResolution.data;
         if (envelopeResolution.usedLegacyEnvelope && deps.NotificationService?.add) {
             deps.NotificationService?.add(
@@ -1150,6 +1322,11 @@ export async function _processActualImport(jsonString) {
         const appMajor = parseInt(appMajorStr, 10);
         const appMinor = parseInt(appMinorStr, 10);
 
+        if (!Number.isNaN(fileMajor) && !Number.isNaN(appMajor) && fileMajor > appMajor) {
+            throw new Error(
+                `Резервная копия создана более новой версией приложения (схема ${importData.schemaVersion}, поддерживается ${CURRENT_SCHEMA_VERSION}). Обновите приложение. Данные не были изменены.`,
+            );
+        }
         if (
             Number.isNaN(fileMajor) ||
             Number.isNaN(fileMinor) ||
@@ -1160,6 +1337,10 @@ export async function _processActualImport(jsonString) {
                 `Версия схемы файла (${importData.schemaVersion}) не распознана. Импорт продолжается в режиме максимальной совместимости.`,
                 'warning',
                 { important: true, duration: 15000 },
+            );
+        } else if (fileMajor > appMajor) {
+            throw new Error(
+                `Резервная копия создана более новой версией приложения (схема ${importData.schemaVersion}, поддерживается ${CURRENT_SCHEMA_VERSION}). Обновите приложение. Данные не были изменены.`,
             );
         } else if (
             (fileMajor < appMajor || fileMinor < appMinor) &&
@@ -1187,7 +1368,12 @@ export async function _processActualImport(jsonString) {
 
         const unknownStoresPayload = {};
         Object.keys(importData.data).forEach((storeName) => {
-            if (storeName === 'searchIndex' || storeName === RECENTLY_DELETED_STORE_NAME) return;
+            if (
+                storeName === 'searchIndex' ||
+                storeName === RECENTLY_DELETED_STORE_NAME ||
+                storeName === ENTITY_EDIT_HISTORY_STORE
+            )
+                return;
             if (!State.db.objectStoreNames.contains(storeName)) {
                 unknownStoresPayload[storeName] = importData.data[storeName];
             }
@@ -1200,7 +1386,11 @@ export async function _processActualImport(jsonString) {
                 );
                 return false;
             }
-            if (storeName === 'searchIndex' || storeName === RECENTLY_DELETED_STORE_NAME) {
+            if (
+                storeName === 'searchIndex' ||
+                storeName === RECENTLY_DELETED_STORE_NAME ||
+                storeName === ENTITY_EDIT_HISTORY_STORE
+            ) {
                 console.log(
                     `[_processActualImport V7] Хранилище '${storeName}' будет пропущено при импорте данных.`,
                 );
@@ -1728,13 +1918,34 @@ export async function _processActualImport(jsonString) {
                 '[_processActualImport V7] Ошибка на уровне транзакции импорта:',
                 transactionError,
             );
-            notificationMessageOnError = `Ошибка транзакции при импорте: ${
-                transactionError.message || transactionError
-            }. Данные не были изменены.`;
+            const transactionErrorText = String(
+                transactionError?.message || transactionError || 'Неизвестная ошибка',
+            ).replace(/[.\s]+$/, '');
+            notificationMessageOnError = `Ошибка транзакции при импорте: ${transactionErrorText}. Данные не были изменены.`;
             throw transactionError;
         }
 
         if (importTransactionSuccessful) {
+            // Корзина и история правок ссылаются на id прежних записей — после импорта они опасны (затрут импортированное)
+            for (const staleStore of [RECENTLY_DELETED_STORE_NAME, ENTITY_EDIT_HISTORY_STORE]) {
+                try {
+                    if (State.db.objectStoreNames.contains(staleStore)) {
+                        await clearIndexedDBStore(staleStore);
+                    }
+                } catch (clearStaleErr) {
+                    console.warn(`[import] не удалось очистить ${staleStore}:`, clearStaleErr);
+                }
+            }
+            try {
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith(ENTITY_HISTORY_LOCAL_MIRROR_PREFIX)) {
+                        localStorage.removeItem(k);
+                    }
+                }
+            } catch (_) {
+                /* ignore */
+            }
             const reglamentsWereImportedFromFile = storesToImport.includes('reglaments');
             const preferencesWereInFile = Object.keys(importData.data).includes('preferences');
             let categoryInfoWasInImportedPreferences = false;
@@ -2061,7 +2272,10 @@ export function getStoresToReadForExport(db) {
     if (!db || !db.objectStoreNames) return [];
     const allStoreNames = Array.from(db.objectStoreNames);
     return allStoreNames.filter(
-        (storeName) => storeName !== 'searchIndex' && storeName !== RECENTLY_DELETED_STORE_NAME,
+        (storeName) =>
+            storeName !== 'searchIndex' &&
+            storeName !== RECENTLY_DELETED_STORE_NAME &&
+            storeName !== ENTITY_EDIT_HISTORY_STORE,
     );
 }
 
@@ -2186,6 +2400,7 @@ export async function buildExportDataObjectFromDb(db, options = {}) {
     results.forEach((result) => {
         exportData.data[result.storeName] = Array.isArray(result.data) ? result.data : [];
     });
+    exportData.integrity = await buildBackupIntegrityBlockWithHashes(exportData.data);
     return exportData;
 }
 
@@ -2417,6 +2632,8 @@ export async function exportAllData(options = {}) {
                     }
                     URL.revokeObjectURL(dataUri);
                 }, 1000);
+                // Дождаться таймера: иначе функция вернёт false до установки functionResult (бэкап «не удался»)
+                await new Promise((resolve) => setTimeout(resolve, 1100));
             }
         } catch (err) {
             State.exportDialogInteractionComplete = true;

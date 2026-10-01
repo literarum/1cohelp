@@ -6,6 +6,10 @@
  */
 
 import { State } from '../app/state.js';
+import { wrapMatchesEscaped } from '../utils/html.js';
+
+/** Нижний регистр + ё→е (поиск без учёта ё/е) */
+const foldText = (v) => String(v ?? '').toLowerCase().replace(/ё/g, 'е');
 import {
     getAllFromIndexedDB,
     getFromIndexedDB,
@@ -269,12 +273,16 @@ export function sortAndRenderBlacklist() {
         .trim()
         .toLowerCase();
     if (query) {
+        const q = foldText(query);
+        const qDigits = q.replace(/\D/g, '');
         entriesToRender = entriesToRender.filter((entry) => {
-            const orgNameMatch =
-                entry.organizationNameLc && entry.organizationNameLc.includes(query);
-            const innMatch = entry.inn && entry.inn.includes(query);
-            const phoneMatch = entry.phone && entry.phone.includes(query);
-            const notesMatch = entry.notes && entry.notes.toLowerCase().includes(query);
+            const orgNameMatch = foldText(entry.organizationName || entry.organizationNameLc).includes(q);
+            const innMatch = entry.inn && String(entry.inn).includes(q);
+            const phoneMatch =
+                entry.phone &&
+                (foldText(entry.phone).includes(q) ||
+                    (qDigits.length >= 3 && String(entry.phone).replace(/\D/g, '').includes(qDigits)));
+            const notesMatch = entry.notes && foldText(entry.notes).includes(q);
             return orgNameMatch || innMatch || phoneMatch || notesMatch;
         });
     }
@@ -358,11 +366,17 @@ export function renderBlacklistTable(entries) {
         .toLowerCase();
 
     const highlight = (text) => {
-        if (!text || !lowerQuery) return deps.escapeHtml?.(text) || text;
-        const regex = new RegExp(`(${deps.escapeRegExp?.(lowerQuery) || lowerQuery})`, 'gi');
-        return (deps.escapeHtml?.(text) || text).replace(
+        if (!text) return deps.escapeHtml?.(text) || text || '';
+        if (!lowerQuery) return deps.escapeHtml?.(text) || text;
+        const esc = (deps.escapeRegExp || ((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))(
+            lowerQuery,
+        );
+        // ё/е взаимозаменяемы при подсветке — как и в фильтре
+        const regex = new RegExp(`(${esc.replace(/[её]/gi, '[еёЕЁ]')})`, 'gi');
+        return wrapMatchesEscaped(
+            String(text),
             regex,
-            '<mark class="bg-yellow-200 dark:bg-yellow-600 rounded-sm px-0.5">$1</mark>',
+            (m) => `<mark class="bg-yellow-200 dark:bg-yellow-600 rounded-sm px-0.5">${m}</mark>`,
         );
     };
 
@@ -391,7 +405,7 @@ export function renderBlacklistTable(entries) {
         levelHtml = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${levelColorClass}" title="Уровень ${level}: ${levelText}">${level}</span>`;
 
         const dateAddedStr = entry.dateAdded
-            ? new Date(entry.dateAdded).toLocaleDateString()
+            ? new Date(entry.dateAdded).toLocaleDateString('ru-RU')
             : 'N/A';
 
         const escHtml = deps.escapeHtml || ((s) => s);
@@ -506,7 +520,10 @@ export async function handleBlacklistSearchInput() {
  */
 export async function exportBlacklistToExcel() {
     try {
-        const XLSX = deps.XLSX || window.XLSX;
+        if (typeof window !== 'undefined' && window.VendorLoader?.ensureVendor) {
+            await window.VendorLoader.ensureVendor(['xlsx']);
+        }
+        const XLSX = window.XLSX || deps.XLSX;
         if (typeof XLSX === 'undefined') {
             deps.showNotification?.(
                 'Библиотека XLSX не загружена. Проверьте подключение в index.html.',
@@ -524,7 +541,7 @@ export async function exportBlacklistToExcel() {
         const sanitizeExcelText = (val) => {
             if (val === null || val === undefined) return '';
             const s = String(val);
-            return /^[=+\-@]/.test(s) ? "'" + s : s;
+            return /^[\s]*[=+\-@\t\r]/.test(s) ? "'" + s : s;
         };
         const fmtDate = (iso) => {
             if (!iso) return '';
@@ -771,7 +788,7 @@ export async function showBlacklistDetailModal(entryId) {
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Дата добавления</dt>
                     <dd class="mt-1 text-base text-gray-900 dark:text-gray-200">${new Date(
                         entry.dateAdded,
-                    ).toLocaleString()}</dd>
+                    ).toLocaleString('ru-RU')}</dd>
                 </div>
             </dl>
         `;

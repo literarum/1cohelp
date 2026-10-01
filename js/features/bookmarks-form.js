@@ -68,13 +68,14 @@ export async function handleBookmarkFormSubmit(event) {
 
     console.log('[handleBookmarkFormSubmit v6] Modal, form, and save button found. Proceeding...');
 
+    if (saveButton.disabled) return;
+    saveButton.disabled = true;
     try {
         await flushPendingPdfRenamesInContainer(modal);
     } catch (flushPdfErr) {
         console.warn('[handleBookmarkFormSubmit] flush PDF renames:', flushPdfErr);
     }
 
-    saveButton.disabled = true;
     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Сохранение...';
 
     const id = form.elements.bookmarkId.value;
@@ -131,7 +132,11 @@ export async function handleBookmarkFormSubmit(event) {
                     testUrl = 'https://' + testUrl;
                 }
             }
-            new URL(testUrl);
+            const parsedUrl = new URL(testUrl);
+            // Исполняемые схемы в закладках недопустимы (javascript:/data:/vbscript:) — хранимый XSS-вектор.
+            if (/^(javascript|data|vbscript):$/i.test(parsedUrl.protocol)) {
+                throw new Error('unsafe url scheme');
+            }
         } catch {
             if (typeof showNotification === 'function')
                 showNotification('Введите корректный URL (например, https://example.com)', 'error');
@@ -456,7 +461,16 @@ export async function handleBookmarkFormSubmit(event) {
         const draftPdfList = form.querySelector('.pdf-draft-list');
         if (draftPdfList) draftPdfList.innerHTML = '';
         const thumbsContainer = form.querySelector('#bookmarkScreenshotThumbnailsContainer');
-        if (thumbsContainer) thumbsContainer.innerHTML = '';
+        if (thumbsContainer) {
+            thumbsContainer.querySelectorAll('img[data-object-url]').forEach((im) => {
+                try {
+                    URL.revokeObjectURL(im.dataset.objectUrl);
+                } catch (_) {
+                    /* ignore */
+                }
+            });
+            thumbsContainer.innerHTML = '';
+        }
         delete form._tempPdfFiles;
         const pdfListEl = form.querySelector('#bookmarkPdfList');
         if (pdfListEl) pdfListEl.innerHTML = '<li class="text-gray-500">Нет файлов</li>';

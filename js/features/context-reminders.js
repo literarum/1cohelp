@@ -1,7 +1,7 @@
 'use strict';
 
 import { reminderModalConfig } from '../config.js';
-import { toggleModalFullscreen } from '../ui/modals-manager.js';
+import { toggleModalFullscreen, getVisibleModals, getTopmostModal } from '../ui/modals-manager.js';
 import { escapeHtml } from '../utils/html.js';
 import { saveReminderRow, getAllRemindersFromDB, deleteReminderById } from '../db/reminders.js';
 import {
@@ -546,6 +546,13 @@ export function initContextRemindersSystem() {
                     if (e.key !== 'Escape') return;
                     const m = reminderModalEl();
                     if (!m || m.classList.contains('hidden')) return;
+                    // Если поверх открыта другая модалка (подтверждение и т.п.) — Escape принадлежит ей
+                    try {
+                        const top = getTopmostModal(getVisibleModals());
+                        if (top && top !== m) return;
+                    } catch (_) {
+                        /* ignore */
+                    }
                     e.preventDefault();
                     closeReminderModal();
                 },
@@ -560,7 +567,14 @@ export function initContextRemindersSystem() {
             ?.addEventListener('click', closeReminderModal);
         modal.querySelector('#reminderFormSubmitBtn')?.addEventListener('click', (e) => {
             e.preventDefault();
-            submitReminderForm().catch(() => {});
+            const btn = e.currentTarget;
+            if (btn.disabled) return;
+            btn.disabled = true;
+            submitReminderForm()
+                .catch(() => {})
+                .finally(() => {
+                    btn.disabled = false;
+                });
         });
 
         modal.querySelectorAll('.reminder-quick-due-btn').forEach((btn) => {

@@ -97,7 +97,7 @@ export async function initExternalLinksSystem() {
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <select id="extLinkCategoryFilter" class="w-auto py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
+                <select id="extLinkCategoryFilter" aria-label="Фильтр по категории" class="w-auto py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
                     <option value="">Все категории</option>
                 </select>
             </div>

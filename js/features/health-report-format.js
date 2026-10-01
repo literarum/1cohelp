@@ -19,7 +19,6 @@ export const HEALTH_SYSTEM_ORDER = [
     'data_content',
     'data_integrity',
     'autosave',
-    'revocation',
     'ui',
     'notifications',
     'clipboard',
@@ -42,7 +41,6 @@ export const HEALTH_SYSTEM_LABELS = {
     data_content: 'Данные (алгоритмы, закладки, клиент, сторы)',
     data_integrity: 'Целостность данных (второй контур: ссылки, PDF, сироты)',
     autosave: 'Автосохранение заметок',
-    revocation: 'Проверка отзыва сертификатов',
     ui: 'Интерфейс, тема, вёрстка',
     notifications: 'Уведомления ОС',
     clipboard: 'Буфер обмена',
@@ -67,8 +65,6 @@ export function inferSystemFromTitle(title) {
     if (/Поиск|searchIndex|индекс|Индекс/i.test(t)) return 'search';
     if (/Экспорт|Импорт|File System|экспорт|резервн/i.test(t)) return 'export_import';
     if (/слиян|merge|Merge|совместимост/i.test(t)) return 'merge';
-    if (/Yandex|отзыв|API проверки|Компонента проверки|проверки отзыва/i.test(t))
-        return 'revocation';
     if (/Целостность данных/i.test(t)) return 'data_integrity';
     if (
         /IndexedDB|хранилищ|clientData|Алгоритмы|Закладки|Черн|Избранное|Заметки|Регламент|Ссылки|pdfFiles|screenshots|СЭДО|Корзина удалений|sedoTypes/i.test(

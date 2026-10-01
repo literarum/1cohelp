@@ -344,7 +344,7 @@ export async function renderFavoritesPage() {
                     </div>
                     <div class="actions-container absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">${favButtonHTML}</div>
                     <div class="mt-auto pt-2 border-t border-gray-200 dark:border-gray-600 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                        <span>Добавлено: ${new Date(fav.dateAdded).toLocaleDateString()}</span>
+                        <span>Добавлено: ${new Date(fav.dateAdded).toLocaleDateString('ru-RU')}</span>
                         <button class="go-to-original-btn inline-flex items-center p-1.5 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-blue-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Перейти к оригиналу">
                             <i class="fas fa-external-link-square-alt"></i> <span class="ml-1 hidden sm:inline">Перейти</span>
                         </button>

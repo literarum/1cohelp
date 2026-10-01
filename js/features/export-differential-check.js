@@ -10,7 +10,7 @@
 import {
     buildExportDataObjectFromDb,
     getStoresToReadForExport,
-} from './import-export.js?v=20260406health';
+} from './import-export.js';
 
 /** Хранилища, для которых сравнивается полное тело записей (обычно небольшие). */
 export const DIFF_FULL_BODY_STORES = ['preferences', 'clientData', 'algorithms'];

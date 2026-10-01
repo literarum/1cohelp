@@ -316,6 +316,31 @@ export async function runLightDataIntegrityPass(deps, opts = {}) {
         'Закладки',
         profile === 'full' ? bookmarks.length : FAST_URL_SAMPLE,
     );
+    /** Структура закладок: тип полей (повреждённые записи ломают рендер и поиск). */
+    {
+        let malformed = 0;
+        const samples = [];
+        for (const b of bookmarks) {
+            const ok =
+                b &&
+                typeof b === 'object' &&
+                typeof b.title === 'string' &&
+                b.title.trim() !== '' &&
+                (b.url === undefined || b.url === null || typeof b.url === 'string');
+            if (!ok) {
+                malformed++;
+                if (samples.length < 5) samples.push(String(b && b.id != null ? b.id : '?'));
+            }
+        }
+        if (malformed > 0) {
+            add(
+                'warn',
+                T('Закладки (структура)'),
+                `Записей с некорректными полями (пустое/нестроковое название или нестроковый URL): ${malformed}. Примеры id: ${samples.join(', ')}.`,
+            );
+        }
+    }
+
     auditHttpList(
         extLinks,
         (x) => x?.url,

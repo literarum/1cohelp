@@ -493,7 +493,10 @@ function bindUi() {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            {
+                const revokeHref = url;
+                setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
+            }
             deps.showNotification?.('Файл логов сохранён.', 'success');
         } catch (err) {
             nativeConsole.error('[engineering-cockpit] log export failed', err);
@@ -618,7 +621,10 @@ function bindUi() {
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                {
+                    const revokeHref = url;
+                    setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
+                }
                 deps.showNotification?.('Пакет диагностики сохранён в файл.', 'success');
             } catch (err) {
                 nativeConsole.error('[engineering-cockpit] diagnostic export failed', err);

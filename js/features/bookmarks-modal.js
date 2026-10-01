@@ -292,6 +292,7 @@ export async function ensureBookmarkModal() {
                 if (thumbsContainer && typeof clearTemporaryThumbnailsFromContainer === 'function')
                     clearTemporaryThumbnailsFromContainer(thumbsContainer);
                 delete form._tempScreenshotBlobs;
+                delete form._tempPdfFiles;
                 delete form.dataset.screenshotsToDelete;
                 State.initialBookmarkFormState = null;
             }
@@ -347,6 +348,7 @@ export async function ensureBookmarkModal() {
 
     if (elements.form && elements.thumbsContainer) {
         delete elements.form._tempScreenshotBlobs;
+        delete elements.form._tempPdfFiles;
         delete elements.form.dataset.screenshotsToDelete;
         delete elements.form.dataset.existingScreenshotIds;
         elements.thumbsContainer.innerHTML = '';
@@ -396,8 +398,18 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
 
     form.reset();
     idInput.value = '';
-    if (thumbsContainer) thumbsContainer.innerHTML = '';
+    if (thumbsContainer) {
+        thumbsContainer.querySelectorAll('img[data-object-url]').forEach((im) => {
+            try {
+                URL.revokeObjectURL(im.dataset.objectUrl);
+            } catch (_) {
+                /* ignore */
+            }
+        });
+        thumbsContainer.innerHTML = '';
+    }
     delete form._tempScreenshotBlobs;
+    delete form._tempPdfFiles;
     delete form.dataset.screenshotsToDelete;
     form.dataset.existingScreenshotIds = '';
     form.dataset.existingRendered = 'false';
@@ -541,8 +553,18 @@ export async function showEditBookmarkModal(id) {
         thumbsContainer,
     } = modalElements;
 
-    if (thumbsContainer) thumbsContainer.innerHTML = '';
+    if (thumbsContainer) {
+        thumbsContainer.querySelectorAll('img[data-object-url]').forEach((im) => {
+            try {
+                URL.revokeObjectURL(im.dataset.objectUrl);
+            } catch (_) {
+                /* ignore */
+            }
+        });
+        thumbsContainer.innerHTML = '';
+    }
     delete form._tempScreenshotBlobs;
+    delete form._tempPdfFiles;
     delete form.dataset.screenshotsToDelete;
     form.dataset.existingScreenshotIds = '';
     form.dataset.existingRendered = 'false';

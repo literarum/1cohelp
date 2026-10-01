@@ -6,12 +6,6 @@ import {
     RECENTLY_DELETED_STORE_NAME,
 } from '../constants.js';
 import { inferSystemFromTitle } from './health-report-format.js';
-import {
-    REVOCATION_LOCAL_HELPER_BASE_URL,
-    REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER,
-} from '../config/revocation-sources.js';
-import { REVOCATION_API_BASE_URL } from '../config.js';
-import { probeHelperAvailability } from './revocation-helper-probe.js';
 import { runSearchAndIndexHealthTests } from './search-health-tests.js';
 import {
     runUiSurfaceHealthSuite,
@@ -39,7 +33,6 @@ import {
     getApplicationHealthStateForExport,
 } from './application-health-state.js';
 import { runLocalStorageHealthProbe } from './health-localstorage-probe.js';
-import { runRevocationSubsystemHealthCrossCheck } from './revocation-subsystem-health-probe.js';
 
 let deps = {};
 /** Счётчик циклов watchdog (interval) для периодического второго контура целостности данных */
@@ -173,50 +166,6 @@ export function setBackgroundHealthTestsDependencies(nextDeps) {
 
 function nowLabel() {
     return new Date().toLocaleString('ru-RU');
-}
-
-function titleLooksLikeRevocationSubsystemFailure(title) {
-    const t = String(title || '');
-    return (
-        t === 'API проверки отзыва' ||
-        t === 'Yandex Cloud Functions' ||
-        t === 'Компонента проверки отзыва' ||
-        (t.includes('FNS') && t.includes('Revocation')) ||
-        (t.includes('отзыв') && t.includes('сертификат')) ||
-        (t.includes('Watchdog') && t.includes('отзыв'))
-    );
-}
-
-function shouldNotifyRevocationSubsystemFailure(errors) {
-    if (!Array.isArray(errors)) return false;
-    return errors.some((e) => {
-        const t = String(e?.title || '');
-        const m = String(e?.message || '');
-        if (titleLooksLikeRevocationSubsystemFailure(t)) return true;
-        return (
-            t.includes('Watchdog') &&
-            (m.includes('отзыв') || m.includes('сертификат') || m.includes('CRL-Helper'))
-        );
-    });
-}
-
-/**
- * Один канал = одно уведомление (старт / watchdog), чтобы не спамить при каждом тике.
- * @param {'startup'|'watchdog'} channel
- * @param {Array<{ title?: string, message?: string }>} errors
- */
-function notifyRevocationHealthFailureOnce(channel, errors) {
-    if (typeof window === 'undefined' || typeof window.showNotification !== 'function') return;
-    if (!shouldNotifyRevocationSubsystemFailure(errors)) return;
-    const flags = initBackgroundHealthTestsSystem;
-    if (!flags._revocationHealthNotifyChannels) flags._revocationHealthNotifyChannels = new Set();
-    if (flags._revocationHealthNotifyChannels.has(channel)) return;
-    flags._revocationHealthNotifyChannels.add(channel);
-    window.showNotification(
-        'Недоступна подсистема проверки отзыва сертификатов (облачный API или CRL-Helper). Откройте «Сводка по системам» у индикатора фоновой диагностики или отчёт о здоровье в настройках.',
-        'error',
-        28000,
-    );
 }
 
 function mergeRuntimeHubErrorsForReport(errors) {
@@ -577,84 +526,6 @@ export function initBackgroundHealthTestsSystem() {
                 addCheck('error', 'Watchdog / Автосохранение', err.message);
             }
 
-            // Watchdog 3: доступность контура проверки отзыва (облако или локальный CRL-Helper)
-            try {
-                if (REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER && REVOCATION_LOCAL_HELPER_BASE_URL) {
-                    const helperBase = String(REVOCATION_LOCAL_HELPER_BASE_URL)
-                        .trim()
-                        .replace(/\/$/, '');
-                    if (helperBase) {
-                        const ok = await runWithTimeout(
-                            probeHelperAvailability(helperBase, {
-                                path: '/health',
-                                timeoutMs: 9000,
-                            }),
-                            12000,
-                        );
-                        addCheck(
-                            ok ? 'info' : 'error',
-                            'Watchdog / CRL-Helper (проверка отзыва)',
-                            ok
-                                ? 'Локальная компонента отвечает на /health.'
-                                : 'CRL-Helper недоступен. Проверка отзыва сертификатов не будет работать до запуска компоненты.',
-                        );
-                    }
-                } else if (!REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
-                    const apiBase =
-                        typeof REVOCATION_API_BASE_URL === 'string'
-                            ? REVOCATION_API_BASE_URL.trim().replace(/\/$/, '')
-                            : '';
-                    if (apiBase) {
-                        const ok = await runWithTimeout(
-                            probeHelperAvailability(apiBase, {
-                                path: '/api/health',
-                                timeoutMs: 9000,
-                            }),
-                            12000,
-                        );
-                        addCheck(
-                            ok ? 'info' : 'error',
-                            'Watchdog / API проверки отзыва сертификатов',
-                            ok
-                                ? 'Облачный API доступен (/api/health).'
-                                : 'Облачный API недоступен или вернул неожиданный ответ. Проверка отзыва не будет работать.',
-                        );
-                    }
-                }
-            } catch (err) {
-                addCheck(
-                    'error',
-                    'Watchdog / API проверки отзыва сертификатов',
-                    err?.message || String(err),
-                );
-            }
-
-            // Watchdog 3b: перекрёстный контур отзыва (независимый зонд + инциденты ФНС в runtime)
-            try {
-                await runWithTimeout(
-                    runRevocationSubsystemHealthCrossCheck(
-                        runWithTimeout,
-                        (level, title, message, meta) => {
-                            addCheck(
-                                level,
-                                `Watchdog / ${title}`,
-                                message,
-                                meta?.system || inferSystemFromTitle(title),
-                            );
-                        },
-                        { probeTag: 'watchdog' },
-                    ),
-                    25000,
-                );
-            } catch (err) {
-                addCheck(
-                    'warn',
-                    'Watchdog / Отзыв сертификатов (перекрёстная)',
-                    err?.message || String(err),
-                    'revocation_crosscheck',
-                );
-            }
-
             // Watchdog 4: целостность полей закладок (несовместимые типы ломают список/карточки)
             try {
                 const br = await auditBookmarksUiCompatibility(
@@ -830,10 +701,6 @@ export function initBackgroundHealthTestsSystem() {
                     checks: mergedChecks,
                     updatedAt: nowLabel(),
                 });
-                notifyRevocationHealthFailureOnce(
-                    'watchdog',
-                    mergeRuntimeHubErrorsForReport(mergedErrors),
-                );
             }
             const hasErrors = cycleChecks.some((entry) => entry.level === 'error');
             const hasWarnings = cycleChecks.some((entry) => entry.level === 'warn');
@@ -1236,9 +1103,9 @@ export function initBackgroundHealthTestsSystem() {
                     const perm = Notification.permission;
                     if (perm === 'denied') {
                         report(
-                            'warn',
+                            'info',
                             'Уведомления',
-                            'Разрешение denied. Напоминания таймера не будут работать.',
+                            'Разрешение denied (выбор пользователя в браузере): системные оповещения таймера не показываются, остальное работает.',
                         );
                     } else if (perm === 'granted') {
                         report('info', 'Уведомления', 'Разрешение granted.');
@@ -1347,123 +1214,6 @@ export function initBackgroundHealthTestsSystem() {
                 } catch (err) {
                     report('warn', 'Корзина удалений', err.message, { system: 'data_content' });
                 }
-                // Тест 5.5: компонента проверки отзыва (CRL Helper / облачный API)
-                if (!REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
-                    // Облачный API: проверяем /api/health (Yandex Cloud Functions и др.)
-                    try {
-                        const apiBase =
-                            typeof REVOCATION_API_BASE_URL === 'string'
-                                ? REVOCATION_API_BASE_URL.trim().replace(/\/$/, '')
-                                : '';
-                        if (apiBase) {
-                            const ok = await runWithTimeout(
-                                probeHelperAvailability(apiBase, {
-                                    path: '/api/health',
-                                    timeoutMs: 9000,
-                                }),
-                                12000,
-                            );
-                            if (ok) {
-                                report(
-                                    'info',
-                                    'API проверки отзыва',
-                                    'Облачный API проверки сертификатов доступен.',
-                                );
-                            } else {
-                                report(
-                                    'error',
-                                    'API проверки отзыва',
-                                    'Облачный API недоступен или вернул неожиданный ответ. Проверка отзыва сертификатов не будет работать.',
-                                );
-                            }
-                            if (apiBase.includes('yandexcloud')) {
-                                report(
-                                    ok ? 'info' : 'error',
-                                    'Yandex Cloud Functions',
-                                    ok
-                                        ? 'Доступен. Проверка сертификатов по списку отзыва работает.'
-                                        : 'Недоступен. Проверка сертификатов по списку отзыва не будет работать.',
-                                );
-                            }
-                        } else {
-                            report('info', 'API проверки отзыва', 'URL API не настроен.');
-                        }
-                    } catch (err) {
-                        report('error', 'API проверки отзыва', err.message);
-                        if (
-                            typeof REVOCATION_API_BASE_URL === 'string' &&
-                            REVOCATION_API_BASE_URL.includes('yandexcloud')
-                        ) {
-                            report(
-                                'error',
-                                'Yandex Cloud Functions',
-                                `Недоступен: ${err.message}. Проверка по списку отзыва не будет работать.`,
-                            );
-                        }
-                    }
-                } else if (REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
-                    try {
-                        let avail =
-                            typeof window !== 'undefined'
-                                ? window.__revocationHelperAvailable
-                                : null;
-                        const helperBase = String(REVOCATION_LOCAL_HELPER_BASE_URL || '')
-                            .trim()
-                            .replace(/\/$/, '');
-                        if (avail !== true && helperBase) {
-                            const probed = await runWithTimeout(
-                                probeHelperAvailability(helperBase, {
-                                    path: '/health',
-                                    timeoutMs: 9000,
-                                }),
-                                12000,
-                            );
-                            if (typeof window !== 'undefined') {
-                                window.__revocationHelperAvailable = probed;
-                            }
-                            avail = probed;
-                        }
-                        if (avail === true) {
-                            report(
-                                'info',
-                                'Компонента проверки отзыва',
-                                'Локальная компонента доступна.',
-                            );
-                        } else if (avail === false) {
-                            report(
-                                'error',
-                                'Компонента проверки отзыва',
-                                'CRL-Helper не отвечает. Запустите компоненту или нажмите «Установить» в разделе проверки сертификата.',
-                            );
-                        } else {
-                            report(
-                                'warn',
-                                'Компонента проверки отзыва',
-                                'Статус локальной компоненты не подтверждён (таймаут зонда). Повторите диагностику позже.',
-                            );
-                        }
-                    } catch (err) {
-                        report('error', 'Компонента проверки отзыва', err.message);
-                    }
-                }
-
-                // Тест 5.5b: перекрёстный контур подсистемы отзыва (повторный зонд + буфер runtime)
-                try {
-                    await runWithTimeout(
-                        runRevocationSubsystemHealthCrossCheck(runWithTimeout, report, {
-                            probeTag: 'startup',
-                        }),
-                        25000,
-                    );
-                } catch (err) {
-                    report(
-                        'warn',
-                        'Отзыв сертификатов (перекрёстная)',
-                        err?.message || String(err),
-                        { system: 'revocation_crosscheck' },
-                    );
-                }
-
                 // Тест 6: надежность UI настроек
                 try {
                     const uiSettings = await runWithTimeout(
@@ -1660,10 +1410,6 @@ export function initBackgroundHealthTestsSystem() {
                             results.errors.length === 0 &&
                                 getRuntimeHubIssueCount() === 0 &&
                                 !initFailedKnown,
-                        );
-                        notifyRevocationHealthFailureOnce(
-                            'startup',
-                            mergeRuntimeHubErrorsForReport(results.errors),
                         );
 
                         recordApplicationHealthSnapshot({
@@ -1908,9 +1654,9 @@ export function initBackgroundHealthTestsSystem() {
                 const perm = Notification.permission;
                 if (perm === 'denied') {
                     report(
-                        'warn',
+                        'info',
                         'Уведомления',
-                        'Разрешение denied. Напоминания таймера не будут работать.',
+                        'Разрешение denied (выбор пользователя в браузере): системные оповещения таймера не показываются, остальное работает.',
                     );
                 } else if (perm === 'granted') {
                     report('info', 'Уведомления', 'Разрешение granted.');
@@ -2016,101 +1762,6 @@ export function initBackgroundHealthTestsSystem() {
                 }
             } catch (err) {
                 report('warn', 'Корзина удалений', err.message, { system: 'data_content' });
-            }
-
-            // Тест 5.5: API/компонента проверки отзыва
-            if (!REVOCATION_USE_LOCAL_HELPER_FROM_BROWSER) {
-                try {
-                    const apiBase =
-                        typeof REVOCATION_API_BASE_URL === 'string'
-                            ? REVOCATION_API_BASE_URL.trim().replace(/\/$/, '')
-                            : '';
-                    if (apiBase) {
-                        const ok = await runWithTimeout(
-                            probeHelperAvailability(apiBase, {
-                                path: '/api/health',
-                                timeoutMs: 9000,
-                            }),
-                            12000,
-                        );
-                        report(
-                            ok ? 'info' : 'error',
-                            'API проверки отзыва',
-                            ok
-                                ? 'Облачный API доступен.'
-                                : 'Облачный API недоступен или вернул неожиданный ответ.',
-                        );
-                        if (apiBase.includes('yandexcloud')) {
-                            report(
-                                ok ? 'info' : 'error',
-                                'Yandex Cloud Functions',
-                                ok
-                                    ? 'Доступен. Проверка сертификатов по списку отзыва работает.'
-                                    : 'Недоступен. Проверка по списку отзыва не будет работать.',
-                            );
-                        }
-                    } else {
-                        report('info', 'API проверки отзыва', 'URL API не настроен.');
-                    }
-                } catch (err) {
-                    report('error', 'API проверки отзыва', err.message);
-                    if (
-                        typeof REVOCATION_API_BASE_URL === 'string' &&
-                        REVOCATION_API_BASE_URL.includes('yandexcloud')
-                    ) {
-                        report(
-                            'error',
-                            'Yandex Cloud Functions',
-                            `Недоступен: ${err.message}. Проверка по списку отзыва не будет работать.`,
-                        );
-                    }
-                }
-            } else {
-                try {
-                    let avail =
-                        typeof window !== 'undefined' ? window.__revocationHelperAvailable : null;
-                    const helperBase = String(REVOCATION_LOCAL_HELPER_BASE_URL || '')
-                        .trim()
-                        .replace(/\/$/, '');
-                    if (avail !== true && helperBase) {
-                        const probed = await runWithTimeout(
-                            probeHelperAvailability(helperBase, {
-                                path: '/health',
-                                timeoutMs: 9000,
-                            }),
-                            12000,
-                        );
-                        if (typeof window !== 'undefined') {
-                            window.__revocationHelperAvailable = probed;
-                        }
-                        avail = probed;
-                    }
-                    report(
-                        avail === true ? 'info' : avail === false ? 'error' : 'warn',
-                        'Компонента проверки отзыва',
-                        avail === true
-                            ? 'Локальная компонента доступна.'
-                            : avail === false
-                              ? 'CRL-Helper не отвечает. Запустите компоненту.'
-                              : 'Статус локальной компоненты не подтверждён.',
-                    );
-                } catch (err) {
-                    report('error', 'Компонента проверки отзыва', err.message);
-                }
-            }
-
-            // Тест 5.5b: перекрёстный контур подсистемы отзыва
-            try {
-                await runWithTimeout(
-                    runRevocationSubsystemHealthCrossCheck(runWithTimeout, report, {
-                        probeTag: 'manual',
-                    }),
-                    25000,
-                );
-            } catch (err) {
-                report('warn', 'Отзыв сертификатов (перекрёстная)', err?.message || String(err), {
-                    system: 'revocation_crosscheck',
-                });
             }
 
             // Тест 6: UI настройки

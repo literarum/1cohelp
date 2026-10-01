@@ -450,15 +450,6 @@ const TOUR_STEP_BLUEPRINTS = [
         align: 'center',
     },
     {
-        title: 'Проверка сертификата',
-        description:
-            'Модуль проверки сертификатов: загрузка файла, анализ статуса и безопасная локальная обработка.',
-        tabId: 'fnsCert',
-        selectors: ['#fnsCertTab', '#fnsCertDropZone', '#fnsCertResetBtn'],
-        side: 'bottom',
-        align: 'center',
-    },
-    {
         title: 'XMLизатор',
         description:
             'Инструмент анализа XML/JSON: загрузка данных, парсинг, результаты и экспорт сертификатов.',

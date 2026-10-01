@@ -112,7 +112,6 @@ describe('onboarding-tour coverage', () => {
                 'training',
                 'sedoTypes',
                 'blacklistedClients',
-                'fnsCert',
                 'xmlAnalyzer',
             ]),
         );

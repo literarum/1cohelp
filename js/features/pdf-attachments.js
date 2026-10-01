@@ -214,7 +214,14 @@ export function setupPdfDragAndDrop(targetEl, onFiles, _opts = {}) {
         hideOverlay();
     };
 
-    const onGlobalDragEnd = () => resetDropUi();
+    const onGlobalDragEnd = () => {
+        // Оболочка уже удалена из DOM — снимаем глобальный слушатель, чтобы не копились замыкания
+        if (!targetEl.isConnected) {
+            window.removeEventListener('dragend', onGlobalDragEnd);
+            return;
+        }
+        resetDropUi();
+    };
     window.addEventListener('dragend', onGlobalDragEnd);
 
     targetEl.addEventListener('dragenter', (e) => {

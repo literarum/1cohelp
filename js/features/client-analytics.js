@@ -1949,9 +1949,12 @@ export function initClientAnalyticsUi() {
                 });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `client-analytics-export-${new Date().toISOString().slice(0, 10)}.json`;
+                a.download = `client-analytics-export-${new Date().toLocaleDateString('sv-SE')}.json`;
                 a.click();
-                URL.revokeObjectURL(a.href);
+                {
+                    const revokeHref = a.href;
+                    setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
+                }
                 if (deps.showNotification)
                     deps.showNotification('Экспорт раздела сохранён', 'success');
             } catch (err) {

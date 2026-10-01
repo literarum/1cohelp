@@ -5,6 +5,10 @@ import {
     extractImportDataEnvelope,
     normalizeCompatibilityData,
     normalizeLegacyImportData,
+    buildBackupIntegrityBlock,
+    verifyBackupIntegrity,
+    buildBackupIntegrityBlockWithHashes,
+    verifyBackupStoreHashes,
     resolveImportSchemaVersion,
 } from './import-export.js';
 
@@ -84,6 +88,19 @@ describe('compatibility helpers', () => {
         expect(normalized.extLinks).toHaveLength(1);
     });
 
+    it('does not coerce non-array store payloads into empty arrays (prevents silent data wipe)', () => {
+        const raw = { bookmarks: 'oops', reglaments: null, links: [{ id: 1 }] };
+        const compat = normalizeCompatibilityData(raw);
+        expect(compat.bookmarks).toBe('oops');
+        expect(compat.reglaments).toBeNull();
+        expect(compat.links).toHaveLength(1);
+
+        const legacy = normalizeLegacyImportData(compat);
+        expect(Array.isArray(legacy.bookmarks)).toBe(false);
+        expect(Array.isArray(legacy.reglaments)).toBe(false);
+        expect(legacy.links).toHaveLength(1);
+    });
+
     it('resolves schema version from file and infers fallback when missing', () => {
         const explicit = resolveImportSchemaVersion({ schemaVersion: '1.5' });
         expect(explicit).toEqual({ schemaVersion: '1.5', inferred: false });
@@ -115,5 +132,66 @@ describe('compatibility helpers', () => {
         expect(extracted.usedLegacyEnvelope).toBe(true);
         expect(extracted.data.bookmarks).toHaveLength(1);
         expect(extracted.data.extLinks).toHaveLength(1);
+    });
+});
+
+describe('backup integrity block', () => {
+    it('builds per-store counts and verifies an intact file', () => {
+        const data = { bookmarks: [{ id: 1 }, { id: 2 }], links: [] };
+        const integrity = buildBackupIntegrityBlock(data);
+        expect(integrity.storeCounts).toEqual({ bookmarks: 2, links: 0 });
+        expect(verifyBackupIntegrity({ integrity }, data)).toEqual({
+            ok: true,
+            checked: true,
+            mismatches: [],
+        });
+    });
+
+    it('detects dropped records, missing sections and unaccounted sections', () => {
+        const integrity = buildBackupIntegrityBlock({ bookmarks: [{ id: 1 }, { id: 2 }], links: [] });
+        const tampered = { bookmarks: [{ id: 1 }], extra: [] };
+        const result = verifyBackupIntegrity({ integrity }, tampered);
+        expect(result.ok).toBe(false);
+        expect(result.mismatches.join('|')).toContain('bookmarks');
+        expect(result.mismatches.join('|')).toContain('links');
+        expect(result.mismatches.join('|')).toContain('extra');
+    });
+
+    it('skips verification for legacy files without integrity block', () => {
+        expect(verifyBackupIntegrity({ schemaVersion: '1.5' }, { bookmarks: [] })).toEqual({
+            ok: true,
+            checked: false,
+            mismatches: [],
+        });
+    });
+});
+
+describe('backup content hashes (SHA-256)', () => {
+    it('passes for an intact backup and detects same-count content tampering', async () => {
+        const data = { bookmarks: [{ id: 1, title: 'A' }, { id: 2, title: 'B' }] };
+        const integrity = await buildBackupIntegrityBlockWithHashes(data);
+        expect(integrity.storeHashes.bookmarks).toMatch(/^[0-9a-f]{64}$/);
+        const roundTripped = JSON.parse(JSON.stringify({ integrity, data }));
+        expect((await verifyBackupStoreHashes(roundTripped, roundTripped.data)).ok).toBe(true);
+
+        roundTripped.data.bookmarks[1].title = 'TAMPERED';
+        const bad = await verifyBackupStoreHashes(roundTripped, roundTripped.data);
+        expect(bad.ok).toBe(false);
+        expect(bad.mismatches[0]).toContain('bookmarks');
+    });
+
+    it('skips legacy files without hashes', async () => {
+        const res = await verifyBackupStoreHashes({ integrity: { algorithm: 'store-counts-v1' } }, {});
+        expect(res).toEqual({ ok: true, checked: false, mismatches: [] });
+    });
+
+    it('rejects a malformed integrity value instead of silently skipping it', () => {
+        expect(verifyBackupIntegrity({ integrity: 'garbage' }, { a: [] }).ok).toBe(false);
+        expect(verifyBackupIntegrity({ integrity: 42 }, { a: [] }).ok).toBe(false);
+        expect(verifyBackupIntegrity({ integrity: [] }, { a: [] }).ok).toBe(false);
+        expect(verifyBackupIntegrity({ integrity: null }, { a: [] }).ok).toBe(true);
+        // объект неизвестного формата / без обязательных полей тоже считается повреждённым
+        expect(verifyBackupIntegrity({ integrity: { stores: null } }, { a: [] }).ok).toBe(false);
+        expect(verifyBackupIntegrity({ integrity: {} }, { a: [] }).ok).toBe(false);
     });
 });

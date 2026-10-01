@@ -177,7 +177,10 @@ export async function exportClientDataToTxt() {
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                URL.revokeObjectURL(link.href);
+                {
+                    const revokeHref = link.href;
+                    setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
+                }
                 if (deps.showNotification) {
                     deps.showNotification('Файл успешно сохранен (fallback)');
                 }
@@ -192,7 +195,10 @@ export async function exportClientDataToTxt() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+        {
+            const revokeHref = link.href;
+            setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
+        }
         if (deps.showNotification) {
             deps.showNotification('Файл успешно сохранен');
         }

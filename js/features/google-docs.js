@@ -99,12 +99,21 @@ function requestJsonViaXhr(requestUrl, timeoutMs) {
     });
 }
 
-async function requestGoogleDocJson(requestUrl) {
+/** После полного провала сети повторные запросы в течение окна не отправляем (иначе ~10 запросов на каждую загрузку/вкладку). */
+const GOOGLE_DOC_NEGATIVE_CACHE_MS = 30000;
+let googleDocNetworkFailedAt = 0;
+
+async function requestGoogleDocJson(requestUrl, { force = false } = {}) {
+    if (!force && googleDocNetworkFailedAt && Date.now() - googleDocNetworkFailedAt < GOOGLE_DOC_NEGATIVE_CACHE_MS) {
+        throw new Error('Сеть недоступна: повторный запрос отложен (недавний сбой). Нажмите «Повторить».');
+    }
     const errors = [];
 
     for (let attempt = 0; attempt < GOOGLE_DOC_RETRY_DELAYS_MS.length + 1; attempt++) {
         try {
-            return await requestJsonViaFetch(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+            const json = await requestJsonViaFetch(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+            googleDocNetworkFailedAt = 0;
+            return json;
         } catch (error) {
             errors.push(`fetch:${error?.message || String(error)}`);
             const hasMoreAttempts = attempt < GOOGLE_DOC_RETRY_DELAYS_MS.length;
@@ -114,8 +123,11 @@ async function requestGoogleDocJson(requestUrl) {
     }
 
     try {
-        return await requestJsonViaXhr(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+        const json = await requestJsonViaXhr(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+        googleDocNetworkFailedAt = 0;
+        return json;
     } catch (error) {
+        googleDocNetworkFailedAt = Date.now();
         errors.push(`xhr:${error?.message || String(error)}`);
         throw new Error(
             `${normalizeNetworkError(error)} [chain=${errors
@@ -244,7 +256,7 @@ export async function fetchGoogleDocs(docIds, force = false) {
     }
 
     try {
-        const results = await requestGoogleDocJson(requestUrl);
+        const results = await requestGoogleDocJson(requestUrl, { force });
         console.log(
             '[fetchGoogleDocs] Получен ответ от API:',
             results,
@@ -369,8 +381,13 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
     results.forEach((result) => {
         if (result.error) {
             const errorDiv = document.createElement('div');
-            errorDiv.className = 'p-4 bg-red-100 text-red-700 rounded';
-            errorDiv.textContent = `Ошибка загрузки: ${result.error}`;
+            errorDiv.className =
+                'p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded';
+            const rawError = String(result.error);
+            // Технический «chain=fetch:… | xhr:…» пользователю не показываем (он остаётся в консоли).
+            errorDiv.textContent = /интернет|сеть|fetch|failed|network|socket|err_|chain=/i.test(rawError)
+                ? 'Документ недоступен: нет связи с сервером. Проверьте подключение к интернету и откройте раздел ещё раз.'
+                : `Ошибка загрузки: ${rawError.replace(/\s*\[chain=.*\]\s*$/, '')}`;
             fragment.appendChild(errorDiv);
             return;
         }
@@ -784,7 +801,8 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
             } else {
                 const pElem = document.createElement('p');
                 pElem.className = 'mb-2';
-                pElem.innerHTML = highlight(trimmedP.replace(/\*(.*?)\*/g, '<strong>$1</strong>'));
+                // Сначала экранирование/подсветка, затем *жирный* (иначе <strong> экранировался бы как текст)
+                pElem.innerHTML = highlight(trimmedP).replace(/\*(.*?)\*/g, '<strong>$1</strong>');
                 pElem.style.color = 'var(--color-text-primary, #e5e7eb)';
                 currentBlockWrapper.appendChild(pElem);
             }
@@ -965,8 +983,14 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`ОШИБКА ЗАГРУЗКИ для ${targetContainerId}:`, error);
         const isNetwork = /сеть|интернет|fetch|Failed|network|ERR_/i.test(message);
+        // Сетевая недоступность внешнего сервиса — ожидаемое состояние (офлайн), не программная ошибка:
+        // console.error попадает в буфер runtime-ошибок и ложно переводит самотестирование в ERROR.
+        if (isNetwork) {
+            console.warn(`Документ ${targetContainerId} не загружен (нет сети):`, message);
+        } else {
+            console.error(`ОШИБКА ЗАГРУЗКИ для ${targetContainerId}:`, error);
+        }
         const userMessage = isNetwork
             ? 'Не удалось загрузить документ. Проверьте подключение к интернету.'
             : message;

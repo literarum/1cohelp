@@ -7,6 +7,7 @@
 
 import { escapeHtml, linkify } from '../utils/html.js';
 import { State } from '../app/state.js';
+import { SEED_FLAG, setSeedFlag, shouldSeedDefaults } from '../db/seed-flags.js';
 import {
     getAllFromIndexedDB,
     getFromIndexedDB,
@@ -293,7 +294,7 @@ export async function loadCibLinks() {
         let links = await getAllFromIndexedDB('links');
         let linksToRender = links;
 
-        if (!links || links.length === 0) {
+        if (await shouldSeedDefaults(SEED_FLAG.CIB_LINKS, links?.length || 0)) {
             console.log('База ссылок 1С пуста. Добавляем стартовый набор.');
 
             const linksToSave = [...(deps.DEFAULT_CIB_LINKS || [])];
@@ -332,6 +333,7 @@ export async function loadCibLinks() {
                 }
 
                 linksToRender = linksWithIds;
+                await setSeedFlag(SEED_FLAG.CIB_LINKS);
             }
         }
 

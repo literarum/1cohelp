@@ -113,6 +113,11 @@ function _clearDeferAlarm() {
 function _armDeferAlarm(untilMs) {
     _clearDeferAlarm();
     const delay = Math.max(0, untilMs - Date.now());
+    const MAX_TIMER_MS = 2 ** 31 - 1;
+    if (delay > MAX_TIMER_MS) {
+        _deferAlarmId = setTimeout(() => _armDeferAlarm(untilMs), MAX_TIMER_MS);
+        return;
+    }
     _deferAlarmId = setTimeout(() => {
         _deferAlarmId = null;
         const stored = readDeferUntilMs();
@@ -198,7 +203,7 @@ export function openBackupReminderDeferDialog() {
             confirmBtn.removeEventListener('click', onConfirm);
             cancelBtn.removeEventListener('click', onCancel);
             closeBtn?.removeEventListener('click', onCancel);
-            document.removeEventListener('keydown', onEscape);
+            document.removeEventListener('keydown', onEscape, true);
             resolve(v);
         };
 
