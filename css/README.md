@@ -12,7 +12,7 @@ css/
 ├── inline-styles.css     # Скроллбар и кнопки (подключается из main.css)
 ├── styles.css            # Deprecated: только @import main.css (обратная совместимость)
 ├── base/
-│   └── base.css         # Базовые стили: html, body, layout, FNS cert, focus
+│   └── base.css         # Базовые стили: html, body, layout, focus
 ├── layout/
 │   ├── responsive.css   # Адаптивность: брейкпоинты, safe area, отступы, fluid-типографика
 │   └── copyright.css   # Копирайт, header primary, кнопки хедера

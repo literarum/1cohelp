@@ -9,7 +9,7 @@
 /* 1.1. Адаптивность: брейкпоинты, safe area, адаптивные отступы */
 @import url('./layout/responsive.css');
 
-/* 2. Базовые стили: html, body, layout, FNS cert, focus */
+/* 2. Базовые стили: html, body, layout, focus */
 @import url('./base/base.css');
 
 /* 3. Компоненты */
