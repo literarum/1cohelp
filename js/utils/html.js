@@ -58,13 +58,29 @@ export function truncateText(text, maxLength) {
 }
 
 /**
+ * Делит СЫРОЙ текст по регулярке (с одной захватывающей группой), экранирует каждый кусок отдельно
+ * и оборачивает совпадения. Так поиск «amp»/«lt» не ломает HTML-сущности вроде &amp;.
+ * @param {string} text
+ * @param {RegExp} regex — с флагом g и одной захватывающей группой
+ * @param {(escapedMatch: string) => string} wrap
+ */
+export function wrapMatchesEscaped(text, regex, wrap) {
+    const parts = String(text).split(regex);
+    return parts
+        .map((part, i) => (i % 2 === 1 ? wrap(escapeHTML(part)) : escapeHTML(part)))
+        .join('');
+}
+
+/**
  * Подсвечивает токены в тексте
  */
 export function highlightText(text, tokensToHighlight) {
     if (!text) return '';
     if (!tokensToHighlight || tokensToHighlight.length === 0) return escapeHTML(text);
 
-    const escapedTokens = tokensToHighlight.map((token) =>
+    const nonEmptyTokens = tokensToHighlight.filter(Boolean);
+    if (nonEmptyTokens.length === 0) return escapeHTML(text);
+    const escapedTokens = nonEmptyTokens.map((token) =>
         token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
     );
 
@@ -72,7 +88,7 @@ export function highlightText(text, tokensToHighlight) {
 
     const regex = new RegExp(`(${escapedTokens.join('|')})`, 'gi');
 
-    return escapeHTML(text).replace(regex, '<mark>$1</mark>');
+    return wrapMatchesEscaped(String(text), regex, (m) => `<mark>${m}</mark>`);
 }
 
 /**
@@ -81,11 +97,14 @@ export function highlightText(text, tokensToHighlight) {
 export function highlightTextInString(text, searchTerm) {
     if (!text || !searchTerm) return escapeHtml(text);
 
-    const escapedText = escapeHtml(text);
     const escapedTerm = escapeRegExp(searchTerm);
     const regex = new RegExp(`(${escapedTerm})`, 'gi');
 
-    return escapedText.replace(regex, '<mark class="search-term-highlight">$1</mark>');
+    return wrapMatchesEscaped(
+        String(text),
+        regex,
+        (m) => `<mark class="search-term-highlight">${m}</mark>`,
+    );
 }
 
 /**
@@ -227,7 +246,10 @@ export function normalizeExternalHttpUrl(raw) {
         fixed = 'https://' + fixed;
     }
     try {
-        return new URL(fixed).href;
+        const url = new URL(fixed);
+        // Chromium (в отличие от Node) принимает пробелы/«%» в хосте и кодирует их — такой «URL» мусор.
+        if (!/^https?:$/.test(url.protocol) || !url.hostname || /[%\s]/.test(url.hostname)) return '';
+        return url.href;
     } catch {
         return '';
     }
