@@ -134,9 +134,17 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
     backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
 }
 
-/* Модал подтверждения: сдвиг вверх на 20% (приглашение «Начать тур» и др.) */
-#appConfirmModal > div > div {
-    transform: translateY(-20vh);
+/* Модал подтверждения должен быть выше HUD статуса (z-index 45), иначе HUD перекрывает диалог */
+#appConfirmModal {
+    z-index: 100001 !important;
+}
+
+/* Модал подтверждения: сдвиг вверх на 20% (приглашение «Начать тур» и др.) —
+   только на достаточно большом экране; на телефоне сдвиг уводит окно под шапку. */
+@media (min-width: 640px) and (min-height: 700px) {
+    #appConfirmModal > div > div {
+        transform: translateY(-20vh);
+    }
 }
 
 #algorithmModal #algorithmSteps,
@@ -293,6 +301,40 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 
 #customizeUIModal .settings-modal-footer-right {
     justify-self: end;
+}
+
+/* Телефон: кнопки футера в столбец — «Сохранить» всегда видна, без горизонтальной прокрутки */
+@media (max-width: 640px) {
+    #customizeUIModal .settings-modal-footer {
+        overflow-x: hidden;
+        margin-bottom: 0 !important;
+        flex-shrink: 0;
+    }
+
+    #customizeUIModal .settings-modal-footer-actions {
+        grid-template-columns: minmax(0, 1fr);
+        min-width: 0;
+        white-space: normal;
+    }
+
+    #customizeUIModal .settings-modal-footer-right {
+        order: -1;
+        justify-self: stretch;
+        justify-content: flex-end;
+    }
+
+    #customizeUIModal .settings-modal-footer-left {
+        justify-self: stretch;
+        flex-wrap: wrap;
+    }
+
+    /* Поле добавочного в шапке: на телефоне не раздувает заголовок и не перекрывает кнопки */
+    #customizeUIModal .employee-extension-field {
+        min-width: 0 !important;
+        width: 100%;
+        padding: 0.375rem 0.625rem;
+        font-size: 1rem;
+    }
 }
 
 #customizeUIModal .settings-modal-btn-critical {
