@@ -322,6 +322,9 @@ function dataUrlToPngIfNeeded(dataUrl) {
  * @returns {Promise<Uint8Array>}
  */
 async function buildPdfFromContent(contentBlocks, opts) {
+    if (typeof window !== 'undefined' && window.VendorLoader?.ensureVendor) {
+        await window.VendorLoader.ensureVendor(['pdf-lib', 'fontkit']);
+    }
     const PDFLib = typeof window !== 'undefined' ? window.PDFLib : null;
     const fontkit = typeof window !== 'undefined' ? window.fontkit : null;
     if (!PDFLib || !fontkit) {
@@ -661,6 +664,9 @@ export const ExportService = {
             return;
         }
 
+        if (typeof window !== 'undefined' && window.VendorLoader?.ensureVendor) {
+            await window.VendorLoader.ensureVendor(['pdf-lib', 'fontkit']);
+        }
         const PDFLib = typeof window !== 'undefined' ? window.PDFLib : null;
         const fontkit = typeof window !== 'undefined' ? window.fontkit : null;
         if (!PDFLib) {
@@ -1043,7 +1049,10 @@ export const ExportService = {
             a.href = url;
             a.download = finalFilename;
             a.click();
-            URL.revokeObjectURL(url);
+            {
+                const revokeHref = url;
+                setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
+            }
 
             if (loadingOverlayManager) loadingOverlayManager.updateProgress(90, 'Готово.');
             NotificationService.add('Документ успешно экспортирован в PDF.', 'success');

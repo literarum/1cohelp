@@ -463,7 +463,11 @@ export const NotificationService = {
                 if (el.parentElement) {
                     el.remove();
                 }
-                this.activeImportantNotifications.delete(notificationId);
+                // Не удаляем запись, если под тем же id уже зарегистрировано новое уведомление
+                const cur = this.activeImportantNotifications.get(notificationId);
+                if (!cur || cur.element === el) {
+                    this.activeImportantNotifications.delete(notificationId);
+                }
             }, this.FADE_DURATION_MS + 50);
         }
     },
