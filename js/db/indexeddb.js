@@ -355,9 +355,17 @@ export function performDBOperation(storeName, mode, operation) {
             const store = transaction.objectStore(storeName);
             const request = operation(store);
 
+            // Для записи результат отдаём только после commit транзакции (иначе QuotaExceeded теряется)
+            const txDone = new Promise((resolveTx) => {
+                transaction.addEventListener('complete', () => resolveTx());
+            });
+
             if (request != null && typeof request.then === 'function') {
                 Promise.resolve(request)
-                    .then((value) => resolve(value))
+                    .then(async (value) => {
+                        if (mode !== 'readonly') await txDone;
+                        resolve(value);
+                    })
                     .catch((err) => {
                         console.error(
                             `performDBOperation: Колбэк вернул Promise с ошибкой для ${storeName}:`,
@@ -378,9 +386,15 @@ export function performDBOperation(storeName, mode, operation) {
                 );
             }
 
+            let opResult;
             request.onsuccess = (e) => {
-                resolve(e.target.result);
+                opResult = e.target.result;
+                // Для записи ждём commit транзакции (QuotaExceeded и пр. приходят позже onsuccess запроса)
+                if (mode === 'readonly') resolve(opResult);
             };
+            if (mode !== 'readonly') {
+                txDone.then(() => resolve(opResult));
+            }
             request.onerror = (e) => {
                 const error = e.target.error;
                 const errorDetails = error
@@ -495,7 +509,7 @@ export async function deleteFromIndexedDB(storeName, key) {
                 const recentRecord = {
                     storeName,
                     entityId: String(keyToUse),
-                    payload: JSON.parse(JSON.stringify(existing)),
+                    payload: cloneKeepingBlobs(existing),
                     deletedAt: new Date().toISOString(),
                     reason: 'delete',
                     context: null,
@@ -510,6 +524,15 @@ export async function deleteFromIndexedDB(storeName, key) {
         }
     }
     return performDBOperation(storeName, 'readwrite', (store) => store.delete(keyToUse));
+}
+
+/** Клон записи для корзины: structuredClone сохраняет Blob (JSON превращал их в {}) */
+function cloneKeepingBlobs(value) {
+    try {
+        return structuredClone(value);
+    } catch {
+        return JSON.parse(JSON.stringify(value));
+    }
 }
 
 /**
