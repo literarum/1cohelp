@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20260415pwa-scope';
+const ASSET_QUERY_VERSION = '20261001pwa-sync';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20260415static-header-inset';
-const VERSION = `20260415pwa-scope2`;
+const MAIN_CSS_QUERY_VERSION = '20261001pwa-sync';
+const VERSION = `20261001-sync-v3`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
@@ -114,13 +114,36 @@ self.addEventListener('message', (event) => {
  * @param {string} cacheName
  * @returns {Promise<Response>}
  */
+const CACHE_MAX_ENTRIES = 400;
+let cachePutsSinceTrim = 0;
+/** Ограничивает рост кэша (старые ?v= варианты, пользовательские файлы): удаляем самые ранние записи. */
+async function trimCacheIfNeeded(cache) {
+    cachePutsSinceTrim += 1;
+    if (cachePutsSinceTrim < 25) return;
+    cachePutsSinceTrim = 0;
+    const keys = await cache.keys();
+    let extra = keys.length - CACHE_MAX_ENTRIES;
+    const shell = new Set(SHELL_PRECACHE.map((u) => new URL(u, self.location.href).pathname));
+    for (let i = 0; i < keys.length && extra > 0; i++) {
+        if (shell.has(new URL(keys[i].url).pathname)) continue; // оболочка приложения не вытесняется
+        await cache.delete(keys[i]);
+        extra -= 1;
+    }
+}
+
 async function staleWhileRevalidate(event, request, cacheName) {
     const cache = await caches.open(cacheName);
+    // Точное совпадение — сразу; ignoreSearch (иная ?v=) — только если сети нет, чтобы не смешивать версии файлов.
     const cached = await cache.match(request);
     const fetchPromise = fetch(request)
         .then((response) => {
             if (response && response.ok && response.type === 'basic') {
-                return cache.put(request, response.clone()).then(() => response);
+                // Ошибка записи в кэш (квота) не должна терять успешный сетевой ответ.
+                return cache
+                    .put(request, response.clone())
+                    .then(() => trimCacheIfNeeded(cache))
+                    .catch((err) => console.warn('[sw] cache.put failed', request.url, err))
+                    .then(() => response);
             }
             return response;
         })
@@ -134,6 +157,8 @@ async function staleWhileRevalidate(event, request, cacheName) {
     if (networkResponse) {
         return networkResponse;
     }
+    const loose = await cache.match(request, { ignoreSearch: true });
+    if (loose) return loose;
     return new Response('Сеть недоступна и нет копии в кэше.', {
         status: 503,
         statusText: 'Offline',

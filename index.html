@@ -4,6 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
+        <meta name="description" content="Copilot 1СО — локальный помощник оператора: алгоритмы, закладки, регламенты, анализатор XML и данные клиента. Работает офлайн." />
         <meta name="application-name" content="Copilot 1СО 2.0" />
         <meta name="theme-color" content="#12121f" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -58,8 +59,22 @@
                 window.__ENGINEERING_BOOTLOGS__ = window.__ENGINEERING_BOOTLOGS__ || [];
                 window.__ENGINEERING_BOOTERRORS__ = window.__ENGINEERING_BOOTERRORS__ || [];
 
+                // Подробный console.log/debug выводится только при localStorage.copilotDebug === '1'
+                // (сотни строк за загрузку замедляют DevTools и шумят); буфер диагностики пишется всегда.
+                var debugConsole = false;
+                try {
+                    debugConsole = window.localStorage.getItem('copilotDebug') === '1';
+                } catch (_) {}
+                var BOOTLOG_CAP = 1000;
+
                 function pushBootLog(level, argsLike) {
                     try {
+                        if (window.__ENGINEERING_BOOTLOGS__.length >= BOOTLOG_CAP) {
+                            window.__ENGINEERING_BOOTLOGS__.splice(
+                                0,
+                                window.__ENGINEERING_BOOTLOGS__.length - BOOTLOG_CAP + 1,
+                            );
+                        }
                         window.__ENGINEERING_BOOTLOGS__.push({
                             level: level,
                             ts: new Date().toISOString(),
@@ -70,7 +85,7 @@
 
                 window.console.log = function engineeringLogProxy() {
                     pushBootLog('log', arguments);
-                    nativeLog.apply(window.console, arguments);
+                    if (debugConsole) nativeLog.apply(window.console, arguments);
                 };
 
                 window.console.info = function engineeringInfoProxy() {
@@ -85,7 +100,7 @@
 
                 window.console.debug = function engineeringDebugProxy() {
                     pushBootLog('debug', arguments);
-                    nativeDebug.apply(window.console, arguments);
+                    if (debugConsole) nativeDebug.apply(window.console, arguments);
                 };
 
                 window.console.error = function engineeringErrorProxy() {
@@ -110,8 +125,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=legacy-20260420-094543-c3f8bda"></script>
-        <script src="js/vendor-loader.js?v=legacy-20260420-094543-c3f8bda"></script>
+        <script src="js/vendor-config.js?v=20261001pwa-sync"></script>
+        <script src="js/vendor-loader.js?v=20261001pwa-sync"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -177,12 +192,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=legacy-20260420-094543-c3f8bda"
+            href="css/tailwind.generated.css?v=20261001pwa-sync"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=legacy-20260420-094543-c3f8bda" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=legacy-20260420-094543-c3f8bda" />
+        <link rel="stylesheet" href="css/main.css?v=20261001pwa-sync" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261001pwa-sync" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -445,6 +460,7 @@
     <body
         class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-200"
     >
+        <noscript><div style="padding:24px;font:16px/1.5 system-ui;color:#fff;background:#7f1d1d">Для работы Copilot 1СО необходим включённый JavaScript.</div></noscript>
         <!-- Оверлей загрузки первым в body — виден с первого кадра, до загрузки скриптов -->
         <div id="custom-loading-overlay">
             <canvas id="loadingCanvas"></canvas>
@@ -736,7 +752,7 @@
                         );
                         if (mainAlpha <= 0.02) return;
                         const mainSize = this.currentDisplaySize;
-                        const useHalo = currentThemeProfile.useHalo !== false;
+                        const useHalo = currentThemeProfile.useHalo !== false && !adaptiveHaloDisabled;
                         if (useHalo) {
                             const haloLayers = [
                                 { sizeFactor: 5, alphaFactor: 0.2 },
@@ -803,7 +819,7 @@
                 }
 
                 function setupCanvas() {
-                    const dpr = window.devicePixelRatio || 1;
+                    const dpr = Math.min(window.devicePixelRatio || 1, 2);
                     width = window.innerWidth;
                     height = window.innerHeight;
                     canvas.width = width * dpr;
@@ -815,16 +831,63 @@
                     config.sphereBaseRadius = Math.min(width, height) * 0.1584;
                 }
 
+                const REDUCED_MOTION_PARTICLE_COUNT = 700;
+                const MIN_ADAPTIVE_PARTICLE_COUNT = 450;
+                const SLOW_FRAME_MS = 28;
+                const VERY_SLOW_FRAME_MS = 45;
+                const FRAME_SAMPLE_SIZE = 24;
+                let frameDeltaSamples = [];
+                let adaptiveHaloDisabled = false;
+                let adaptiveParticleCap = Infinity;
+
+                function prefersReducedMotion() {
+                    try {
+                        return Boolean(
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+                        );
+                    } catch (_) {
+                        return false;
+                    }
+                }
+
                 function init() {
                     setupCanvas();
                     particles = [];
-                    const particleCount =
+                    let particleCount =
                         Number.isFinite(currentThemeProfile.particleCount) &&
                         currentThemeProfile.particleCount > 0
                             ? currentThemeProfile.particleCount
                             : config.particleCount;
+                    if (prefersReducedMotion()) {
+                        particleCount = Math.min(particleCount, REDUCED_MOTION_PARTICLE_COUNT);
+                        adaptiveHaloDisabled = true;
+                    }
+                    particleCount = Math.min(particleCount, adaptiveParticleCap);
                     for (let i = 0; i < particleCount; i++) {
                         particles.push(new Particle());
+                    }
+                }
+
+                /**
+                 * Адаптивное качество: на слабых ПК (программный рендер canvas, батарея) заставка не должна
+                 * занимать главный поток и задерживать инициализацию IndexedDB/интерфейса.
+                 */
+                function adaptQualityToFrameTime(deltaMs) {
+                    if (!(deltaMs > 0) || deltaMs > 1000) return;
+                    frameDeltaSamples.push(deltaMs);
+                    if (frameDeltaSamples.length < FRAME_SAMPLE_SIZE) return;
+                    const avg =
+                        frameDeltaSamples.reduce((sum, v) => sum + v, 0) / frameDeltaSamples.length;
+                    frameDeltaSamples = [];
+                    if (avg > VERY_SLOW_FRAME_MS) adaptiveHaloDisabled = true;
+                    if (avg > SLOW_FRAME_MS && particles.length > MIN_ADAPTIVE_PARTICLE_COUNT) {
+                        const nextCount = Math.max(
+                            MIN_ADAPTIVE_PARTICLE_COUNT,
+                            Math.floor(particles.length * 0.7),
+                        );
+                        adaptiveParticleCap = nextCount;
+                        particles.length = nextCount;
                     }
                 }
 
@@ -834,10 +897,10 @@
                     const elapsedMs = now - rotationStartTime;
                     rotationX = elapsedMs * (config.rotationSpeedX / 16);
                     rotationY = elapsedMs * (config.rotationSpeedY / 16);
+                    if (lastFrameTime !== null) adaptQualityToFrameTime(now - lastFrameTime);
                     lastFrameTime = now;
                     globalTime++;
 
-                    ctx.fillStyle = config.backgroundColor;
                     ctx.clearRect(0, 0, width, height);
 
                     const breathPulse = Math.sin(globalTime * config.breathSpeed);
@@ -1002,7 +1065,7 @@
                                     class="header-toolbar-cluster-scroll flex flex-row flex-nowrap items-center gap-x-3"
                                 >
                                 <div class="flex items-center gap-x-2 flex-shrink-0">
-                                <button
+                                <button aria-label="Избранное"
                                     id="showFavoritesHeaderBtn"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                     title="Избранное"
@@ -1016,7 +1079,7 @@
                                     aria-hidden="true"
                                 ></div>
 
-                                <button
+                                <button aria-label="Напоминания"
                                     id="showRemindersHeaderBtn"
                                     type="button"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -1034,14 +1097,14 @@
                                     id="appTimer"
                                     class="flex items-center gap-1 text-sm flex-shrink-0"
                                 >
-                                    <button
+                                    <button aria-label="Старт/Пауза"
                                         id="timerToggleButton"
                                         title="Старт/Пауза"
                                         class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                                     >
                                         <i class="fas fa-play"></i>
                                     </button>
-                                    <button
+                                    <button aria-label="Сброс"
                                         id="timerResetButton"
                                         title="Сброс"
                                         class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -1053,14 +1116,14 @@
                                         class="font-mono px-2 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-center justify-center text-sm leading-none"
                                     >
                                     </span>
-                                    <button
+                                    <button aria-label="Уменьшить на 1 мин"
                                         id="timerDecreaseButton"
                                         title="Уменьшить на 1 мин"
                                         class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                                     >
                                         <i class="fas fa-minus"></i>
                                     </button>
-                                    <button
+                                    <button aria-label="Увеличить на 1 мин"
                                         id="timerIncreaseButton"
                                         title="Увеличить на 1 мин"
                                         class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -1073,7 +1136,7 @@
                                 class="h-5 w-px bg-gray-300 dark:bg-gray-700 self-center flex-shrink-0"
                                 aria-hidden="true"
                             ></div>
-                            <button
+                            <button aria-label="Сменить тему"
                                 id="themeToggle"
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors flex-shrink-0"
                                 title="Сменить тему"
@@ -1104,7 +1167,7 @@
                                 >
                                     <i class="fas fa-times text-sm" aria-hidden="true"></i>
                                 </button>
-                                <button
+                                <button aria-label="Параметры поиска (Расширенный поиск)"
                                     id="toggleAdvancedSearch"
                                     type="button"
                                     class="absolute top-1/2 right-2 flex items-center justify-center transform -translate-y-1/2 p-1.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
@@ -1127,7 +1190,7 @@
                                 <div
                                     class="header-toolbar-cluster-scroll flex flex-row flex-nowrap items-center gap-2"
                                 >
-                                <button
+                                <button aria-label="Палитра команд (Ctrl+K)"
                                     id="openCommandPaletteBtn"
                                     type="button"
                                     class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
@@ -1140,7 +1203,7 @@
                                     aria-hidden="true"
                                 ></div>
                                 <div id="dataTransferControls" class="flex items-center gap-2">
-                                    <button
+                                    <button aria-label="Экспорт базы данных"
                                         id="exportDataBtn"
                                         class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                                         title="Экспорт базы данных"
@@ -1353,14 +1416,6 @@
                             <span class="hidden sm:inline">Черный список жаб</span>
                         </button>
                         <button
-                            id="fnsCertTab"
-                            class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
-                            aria-controls="fnsCertContent"
-                        >
-                            <i class="fas fa-certificate mr-1"></i>
-                            <span class="hidden sm:inline">Проверка сертификата на отзыв</span>
-                        </button>
-                        <button
                             id="xmlAnalyzerTab"
                             class="tab-btn inline-block p-2.5 sm:p-3 rounded-t-lg border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap text-sm sm:text-base"
                             aria-controls="xmlAnalyzerContent"
@@ -1396,11 +1451,11 @@
                             class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md"
                         >
                             <div
-                                class="flex flex-nowrap justify-between items-center gap-2 mb-2 min-w-0"
+                                class="flex flex-wrap justify-between items-center gap-2 mb-2 min-w-0"
                             >
                                 <div
                                     id="mainAlgoToolbar"
-                                    class="flex flex-nowrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 min-w-0 shrink"
+                                    class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-600 dark:text-gray-400 min-w-0 shrink"
                                 >
                                     <label
                                         class="app-toggle app-toggle--compact flex items-center gap-1 cursor-pointer shrink-0"
@@ -1416,7 +1471,7 @@
                                             >Только заголовки</span
                                         >
                                     </label>
-                                    <span class="text-gray-400 dark:text-gray-500 shrink-0">|</span>
+                                    <span class="text-gray-400 dark:text-gray-500 shrink-0" style="margin-inline: 4px" aria-hidden="true">|</span>
                                     <span class="flex items-center gap-1 shrink-0">
                                         <span>Вид:</span>
                                         <button
@@ -1526,7 +1581,7 @@
                             class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md min-w-0"
                         >
                             <div
-                                class="flex flex-row flex-nowrap justify-between items-center gap-3 mb-content-sm"
+                                class="flex flex-row flex-wrap justify-between items-center gap-x-3 gap-y-2 mb-content-sm"
                             >
                                 <h2
                                     class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0"
@@ -1535,7 +1590,7 @@
                                 </h2>
                                 <div
                                     id="clientNotesActions"
-                                    class="flex flex-row flex-nowrap items-center justify-end gap-1.5 flex-shrink-0"
+                                    class="flex flex-row flex-wrap items-center justify-end gap-1.5 flex-shrink-0 max-w-full"
                                 >
                                     <button
                                         type="button"
@@ -1948,7 +2003,7 @@
                 <div class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md">
                     <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                         <h2 class="text-2xl font-bold">Закладки</h2>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 bookmarks-header-actions">
                             <div
                                 class="flex items-center space-x-1 border border-gray-300 dark:border-gray-600 rounded-md p-0.5"
                                 role="group"
@@ -1991,7 +2046,7 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-nowrap items-center gap-3 mb-4 h-10 overflow-x-auto">
+                    <div class="flex flex-nowrap items-center gap-3 mb-4 h-10 overflow-x-auto bookmarks-filter-row">
                         <div class="relative flex-1 min-w-0">
                             <label for="bookmarkSearchInput" class="sr-only">Поиск по закладкам</label>
                             <input
@@ -2423,7 +2478,7 @@
                             placeholder="Поиск по ресурсам..."
                             class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                         />
-                        <select
+                        <select aria-label="Фильтр по категории внешних ссылок"
                             id="extLinkCategoryFilter"
                             class="px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 md:max-w-xs"
                         >
@@ -2478,93 +2533,6 @@
                     <p class="text-gray-500 dark:text-gray-400 text-center py-4">
                         Загрузка данных...
                     </p>
-                </div>
-            </div>
-
-            <!-- Проверка сертификата на отзыв: зона загрузки, кнопка сброса, результат -->
-            <div id="fnsCertContent" class="tab-content hidden" aria-labelledby="fnsCertTab">
-                <div
-                    class="bg-gray-100 dark:bg-gray-800 p-content rounded-lg shadow-md fns-cert-shell"
-                >
-                    <h2 class="text-2xl font-bold mb-3 text-gray-900 dark:text-gray-100">
-                        Проверка сертификата (БЕТА)
-                    </h2>
-                    <div
-                        id="fnsCertProbeStatus"
-                        class="hidden mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm"
-                    >
-                        <span
-                            class="inline-block w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
-                            aria-hidden="true"
-                        ></span>
-                        <span class="text-sm text-gray-600 dark:text-gray-300"
-                            >Проверяем подключение…</span
-                        >
-                    </div>
-                    <div id="fnsCertInstallGate" class="hidden"></div>
-                    <div id="fnsCertMainBlock" class="hidden">
-                        <p
-                            id="fnsCertWelcome"
-                            class="text-gray-700 dark:text-gray-300 text-sm sm:text-base mb-2 max-w-3xl"
-                        >
-                            Перетащите файл или выберите его вручную по клику на поле ниже.
-                        </p>
-                        <p
-                            class="text-sm sm:text-base text-green-700 dark:text-green-400 mb-4 flex items-center gap-2"
-                        >
-                            <i class="fas fa-shield-alt text-base sm:text-lg"></i>
-                            <span
-                                >Сертификат остается только на вашем компьютере и не загружается на
-                                сервер.</span
-                            >
-                        </p>
-                        <div
-                            class="bg-white dark:bg-gray-700 p-6 rounded-xl border border-gray-200 dark:border-gray-600 space-y-4"
-                        >
-                            <div
-                                id="fnsCertDropZone"
-                                class="fns-drop-zone border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-gray-50/50 dark:hover:bg-gray-600/30 transition-colors duration-200"
-                            >
-                                <input
-                                    type="file"
-                                    id="fnsCertFileInput"
-                                    accept=".pem,.cer,.crt,.der"
-                                    class="hidden"
-                                />
-                                <p
-                                    id="fnsCertDropZoneHint"
-                                    class="text-gray-600 dark:text-gray-400 text-sm transition-colors duration-150"
-                                >
-                                    <i class="fas fa-certificate mr-2 text-gray-400"></i>
-                                    Перетащите сертификат сюда или нажмите для выбора
-                                </p>
-                            </div>
-                            <div
-                                id="fnsCertInfo"
-                                class="text-sm text-gray-700 dark:text-gray-200"
-                            ></div>
-                            <div
-                                id="fnsCrlDetails"
-                                class="text-sm text-gray-600 dark:text-gray-300 hidden"
-                            ></div>
-                            <div
-                                class="flex flex-col sm:flex-row sm:items-stretch gap-3 pt-3 border-t border-gray-200 dark:border-gray-600"
-                            >
-                                <button
-                                    type="button"
-                                    id="fnsCertResetBtn"
-                                    class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-secondary text-white shadow-sm transition-colors"
-                                >
-                                    <i class="fas fa-rotate-left mr-2"></i>
-                                    <span>Сброс</span>
-                                </button>
-                                <div
-                                    id="fnsCrlStatus"
-                                    class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 min-h-[2.5rem] leading-relaxed"
-                                ></div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -2804,6 +2772,9 @@
             <!-- Модальные окна -->
             <div
                 id="algorithmModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Алгоритм"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto p-4"
             >
                 <div class="flex items-center justify-center min-h-full py-6">
@@ -2930,6 +2901,9 @@
             <!-- Окно Редактирование -->
             <div
                 id="editModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Редактирование алгоритма"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
             >
                 <div class="flex items-center justify-center min-h-full py-6">
@@ -3076,6 +3050,9 @@
 
             <div
                 id="addModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Добавление шага"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
             >
                 <div class="flex items-center justify-center min-h-full">
@@ -3183,6 +3160,9 @@
             <!-- Окно Настройки UI -->
             <div
                 id="customizeUIModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Настройка интерфейса"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto flex items-center justify-center"
             >
                 <div
@@ -3195,8 +3175,8 @@
                         <div class="p-content border-b border-gray-200 dark:border-gray-700">
                             <div class="flex justify-between items-center gap-4">
                                 <h2 class="text-2xl font-bold">Настройки</h2>
-                                <div class="flex items-center gap-3">
-                                    <div class="relative">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div class="relative min-w-0 flex-1">
                                         <span
                                             id="employeeExtensionDisplay"
                                             class="employee-extension-field inline-block px-5 py-3 text-xl font-bold border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-w-[280px] text-center align-middle"
@@ -4416,6 +4396,9 @@
 
             <div
                 id="healthReportModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Отчёт о состоянии приложения"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[85] p-4 flex items-center justify-center"
             >
                 <div
@@ -4780,6 +4763,9 @@
             <!-- Окно подтверждения очистки данных -->
             <div
                 id="confirmClearDataModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Подтверждение очистки данных"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] p-4 overflow-y-auto"
             >
                 <div class="flex items-center justify-center min-h-full">
@@ -5056,6 +5042,9 @@
             <!-- Окно Ссылки 1С -->
             <div
                 id="cibLinkModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Ссылка 1С:ИТС"
                 class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 p-4 overflow-y-auto"
             >
                 <div class="flex items-center justify-center min-h-full">
@@ -5437,6 +5426,9 @@
             <!-- Окно Горячие клавиши -->
             <div
                 id="hotkeysModal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Горячие клавиши"
             class="fixed inset-0 bg-black bg-opacity-60 hidden z-[80] p-4 overflow-y-auto"
         >
             <div class="flex items-center justify-center min-h-full">
@@ -6087,7 +6079,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=legacy-20260420-094543-c3f8bda"></script>
-        <script type="module" src="./js/entry.js?v=legacy-20260420-094543-c3f8bda"></script>
+        <script type="module" src="./script.js?v=20261001pwa-sync"></script>
+        <script type="module" src="./js/entry.js?v=20261001pwa-sync"></script>
     </body>
 </html>

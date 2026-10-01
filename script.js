@@ -174,9 +174,6 @@ import {
     exportSingleBookmarkToPdf,
 } from './js/features/bookmarks-pdf-export.js';
 
-// FNS Certificate Revocation (PR11)
-import { initFNSCertificateRevocationSystem } from './js/features/fns-cert-revocation.js';
-
 // XMLизатор
 import { initXmlAnalyzer } from './js/features/xml-analyzer.js';
 
@@ -1351,15 +1348,24 @@ function initScrollNavButtons() {
     attachNestedScrollListeners();
     document.addEventListener('click', (e) => {
         if (e.target.closest('.tab-btn') || e.target.closest('[data-action]')) {
-            requestAnimationFrame(updateVisibility);
+            scheduleScrollNavUpdate();
             setTimeout(updateVisibility, 220);
         }
     });
-    const observer = new MutationObserver(() => {
-        requestAnimationFrame(updateVisibility);
-        attachMainScrollListener();
-        attachNestedScrollListeners();
-    });
+    // Один пересчёт на кадр: MutationObserver по class во всём body срабатывает десятки раз за кадр
+    // (анимации, hover, ввод в поиск), а updateVisibility читает layout и getComputedStyle.
+    let scrollNavUpdateScheduled = false;
+    const scheduleScrollNavUpdate = () => {
+        if (scrollNavUpdateScheduled) return;
+        scrollNavUpdateScheduled = true;
+        requestAnimationFrame(() => {
+            scrollNavUpdateScheduled = false;
+            updateVisibility();
+            attachMainScrollListener();
+            attachNestedScrollListeners();
+        });
+    };
+    const observer = new MutationObserver(scheduleScrollNavUpdate);
     observer.observe(document.body, {
         attributes: true,
         childList: true,
@@ -1368,7 +1374,7 @@ function initScrollNavButtons() {
     });
 
     if (typeof ResizeObserver !== 'undefined') {
-        const ro = new ResizeObserver(() => requestAnimationFrame(updateVisibility));
+        const ro = new ResizeObserver(scheduleScrollNavUpdate);
         const appContent = document.getElementById('appContent');
         if (appContent) ro.observe(appContent);
         if (document.body) ro.observe(document.body);
@@ -1447,7 +1453,6 @@ setAppInitDependencies({
     initTimerSystem,
     initSedoTypesSystem,
     initBlacklistSystem,
-    initFNSCertificateRevocationSystem,
     initAlgorithmsPdfExportSystem,
     initBackgroundHealthTestsSystem,
     initReloadButton,
@@ -1612,10 +1617,6 @@ setOnloadHandlerDependencies({
             } catch (e) {
                 console.error('[script.js] Failed to init bookmarks PDF export deps:', e);
             }
-        },
-        () => {
-            if (typeof initFNSCertificateRevocationSystem === 'function')
-                initFNSCertificateRevocationSystem();
         },
         () => {
             setTimeout(() => {
@@ -4161,6 +4162,7 @@ setDbMergeDependencies({
     updateSearchIndex,
     showAppConfirm: showAppConfirmModule,
     initDraggableVerticalSplitters: initDraggableVerticalSplittersModule,
+    loadFromIndexedDB: () => loadFromIndexedDB(),
 });
 console.log('[script.js] Зависимости модуля DbMerge установлены');
 
