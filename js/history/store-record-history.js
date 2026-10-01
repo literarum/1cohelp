@@ -105,7 +105,8 @@ export async function applyStoreRecordSnapshotToDb(snapshot) {
             const recMap = screenshotRecords || {};
             for (const k of Object.keys(recMap)) {
                 const rec = recMap[k];
-                if (rec && typeof rec === 'object') {
+                // Запись без настоящего Blob (после JSON-сериализации blob становится {}) не должна затирать валидный скриншот
+                if (rec && typeof rec === 'object' && (!('blob' in rec) || rec.blob instanceof Blob)) {
                     try {
                         screenshotsStore.put(rec);
                     } catch (e) {

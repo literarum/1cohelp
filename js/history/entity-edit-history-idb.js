@@ -43,6 +43,14 @@ function slimSnapshotForMirror(entry) {
             screenshotRecordIds: Object.keys(entry.screenshotRecords || {}).map((k) => Number(k)),
         };
     }
+    if (entry.screenshotRecords && typeof entry.screenshotRecords === 'object') {
+        // v2: полные записи скриншотов (с Blob) в localStorage не нужны — оставляем только идентификаторы
+        return {
+            ...entry,
+            screenshotRecords: undefined,
+            screenshotRecordIds: Object.keys(entry.screenshotRecords).map((k) => Number(k)),
+        };
+    }
     return entry;
 }
 

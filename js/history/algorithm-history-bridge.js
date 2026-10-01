@@ -137,7 +137,7 @@ async function persistAlgorithmSnapshotToStores(entry, section, algorithmIdStr) 
             const recMap = entry.screenshotRecords || {};
             for (const k of Object.keys(recMap)) {
                 const rec = recMap[k];
-                if (rec && typeof rec === 'object') {
+                if (rec && typeof rec === 'object' && (!('blob' in rec) || rec.blob instanceof Blob)) {
                     try {
                         screenshotsStore.put(rec);
                     } catch (e) {
