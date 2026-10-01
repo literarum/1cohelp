@@ -36,3 +36,31 @@
     /* Минимальный размер touch-цели (Apple HIG, WCAG); использовать для кнопок на тач-устройствах */
     --touch-target-min: 44px;
 }
+
+
+/* Закладки на телефоне: панель действий и фильтры переносятся, ничего не обрезается по краям */
+@media (max-width: 639px) {
+    .bookmarks-header-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 100%;
+    }
+
+    .bookmarks-filter-row {
+        flex-wrap: wrap;
+        height: auto !important;
+        overflow-x: visible;
+    }
+
+    .bookmarks-filter-row > :first-child {
+        flex: 1 1 100%;
+    }
+}
+
+/* Типы СЭДО на телефоне: таблица не сжимается в узкую полосу в сотни экранов высоты —
+   задаём минимальную ширину, лишнее прокручивается внутри обёртки (overflow-x-auto) */
+@media (max-width: 639px) {
+    #sedoTypesInfoContainer table {
+        min-width: 620px;
+    }
+}
