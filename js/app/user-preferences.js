@@ -12,6 +12,7 @@ import {
     DEFAULT_BORDER_RADIUS_PX,
 } from '../config.js';
 import { ONBOARDING_AUTO_OFFER_STORAGE_KEY, USER_PREFERENCES_KEY } from '../constants.js';
+import { sanitizeUserPreferences } from './user-preferences-sanitize.js';
 import { getFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
 
 // ============================================================================
@@ -215,6 +216,19 @@ export async function loadUserPreferences() {
                 );
                 console.log(`${LOG_PREFIX} Устаревшие ключи удалены.`);
             }
+        }
+
+        {
+            const { prefs: cleaned, fixes } = sanitizeUserPreferences(
+                finalSettings,
+                defaultPreferences,
+            );
+            if (fixes.length > 0) {
+                console.warn(
+                    `${LOG_PREFIX} Исправлены некорректные значения настроек: ${fixes.join(', ')}`,
+                );
+            }
+            finalSettings = cleaned;
         }
 
         // Вычисляем currentPanelIds с проверкой на null/undefined
