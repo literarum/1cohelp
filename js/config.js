@@ -606,6 +606,8 @@ export function getDefaultUISettings(allPanelIdsForDefault) {
         disableForcedBackupOnDbMerge: false,
         staticHeader: false,
         birthdayModeEnabled: false,
+        /** Анимации: auto (как в системе) | calm | reduce — см. js/utils/motion-pref.js */
+        motionMode: 'auto',
     };
 }
 
