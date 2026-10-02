@@ -261,6 +261,10 @@ export function initBackgroundStatusHUD() {
     </div>`;
         document.body.appendChild(root);
         STATE.container = root;
+        // Стопка тостов меняет высоту: HUD пересчитывает отступ, чтобы не накладываться на неё
+        window.addEventListener('app-toasts-layout', () => {
+            if (STATE.container && STATE.container.style.display !== 'none') computeTopOffset();
+        });
         STATE.cardEl = root.querySelector('.hud-card');
         STATE.barEl = root.querySelector('#bg-hud-bar');
         STATE.titleEl = root.querySelector('#bg-hud-title');

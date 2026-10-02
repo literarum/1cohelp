@@ -1,5 +1,7 @@
 'use strict';
 
+import { isBackdropClosable } from './modal-choreographer.js';
+
 let deps = {
     getVisibleModals: null,
     getTopmostModal: null,
@@ -28,7 +30,7 @@ export function initModalOverlayHandler() {
             return;
         }
 
-        if (event.target === topmostModal) {
+        if (event.target === topmostModal && !isBackdropClosable(topmostModal)) {
             /* Закрытие по клику на оверлей отключено: только явные кнопки, крестик или Esc. */
             const innerContainer = topmostModal.querySelector(
                 '.modal-inner-container, .engineering-cockpit-shell, .bg-white.dark\\:bg-gray-800',

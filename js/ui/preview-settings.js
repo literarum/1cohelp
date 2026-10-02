@@ -7,6 +7,7 @@ import {
     applyPrimaryPairWithVerification,
 } from './color-settings-engine.js';
 import { applyBirthdayModeFromSettings } from '../features/birthday-mode.js';
+import { applyMotionMode, sanitizeMotionMode } from '../utils/motion-pref.js';
 
 /** Множители для пары фонов светлая/тёмная тема (должны совпадать с логикой buildPalette). */
 export const UI_BG_THEME_FACTORS = Object.freeze({ darkRel: 0.75, lightRel: 0.2 });
@@ -61,6 +62,48 @@ export function setPreviewSettingsDependencies(deps) {
     if (deps.hslToHex !== undefined) hslToHex = deps.hslToHex;
     if (deps.adjustHsl !== undefined) adjustHsl = deps.adjustHsl;
     if (deps.setTheme !== undefined) setTheme = deps.setTheme;
+}
+
+/**
+ * Память последнего применённого состояния — по корневому элементу документа.
+ * Ползунки и пипетка вызывают applyPreviewSettings десятки раз в секунду; без памяти каждый вызов
+ * пересчитывал палитру, дёргал setTheme (классы, matchMedia, localStorage) и пересоздавал
+ * ResizeObserver шапки. Теперь неизменившиеся блоки пропускаются.
+ */
+const appliedMemo = new WeakMap();
+function memoFor(root) {
+    let m = appliedMemo.get(root);
+    if (!m) {
+        m = {};
+        appliedMemo.set(root, m);
+    }
+    return m;
+}
+
+let coalescedPending = null;
+let coalescedRaf = 0;
+
+/**
+ * Версия applyPreviewSettings для частых событий (drag, input): не чаще одного применения за кадр,
+ * применяется последнее значение.
+ * @param {Object} settings
+ * @returns {Promise<void>} резолвится после применения кадра
+ */
+export function applyPreviewSettingsCoalesced(settings) {
+    coalescedPending = settings;
+    if (coalescedRaf) return coalescedPending && Promise.resolve();
+    return new Promise((resolve) => {
+        const run = () => {
+            coalescedRaf = 0;
+            const next = coalescedPending;
+            coalescedPending = null;
+            Promise.resolve(applyPreviewSettings(next)).finally(resolve);
+        };
+        coalescedRaf =
+            typeof requestAnimationFrame === 'function'
+                ? requestAnimationFrame(run)
+                : setTimeout(run, 16);
+    });
 }
 
 /** Отключает ResizeObserver фиксированной шапки (перед повторным включением или выключением). */
@@ -193,7 +236,23 @@ export async function applyPreviewSettings(settings) {
         return { textP, textS, surf1, surf2, border, input, hover };
     };
 
-    if (bgHex) {
+    const memo = memoFor(root);
+    const paletteKey = [
+        bgHex || '',
+        customText || '',
+        activeTheme,
+        Number(settings?.darkTextDimPoints ?? 12),
+    ].join('|');
+    // Память верна, только пока переменные палитры реально стоят на элементе (метка в самом style):
+    // если инлайн-стили кто-то очистил (сброс оформления, тесты), палитра пересчитывается.
+    const paletteUnchanged =
+        memo.paletteKey === paletteKey && root.style.getPropertyValue('--ac-palette-key') === paletteKey;
+    memo.paletteKey = paletteKey;
+    root.style.setProperty('--ac-palette-key', paletteKey);
+
+    if (paletteUnchanged) {
+        /* палитра фона/текста не менялась — пропускаем пересчёт ~20 CSS-переменных */
+    } else if (bgHex) {
         const { light: bgLight, dark: bgDark } = deriveThemeBackgroundPairFromHex(
             bgHex,
             hexToHsl,
@@ -258,7 +317,16 @@ export async function applyPreviewSettings(settings) {
         ].forEach((v) => style.removeProperty(v));
     }
 
-    setTheme(settings?.theme || settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode);
+    const themeMode = settings?.theme || settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode;
+    const expectedDark = activeTheme === 'dark';
+    const themeInSync =
+        memo.themeMode === themeMode &&
+        root.classList.contains('dark') === expectedDark &&
+        !!root.dataset.theme;
+    if (!themeInSync) {
+        memo.themeMode = themeMode;
+        setTheme(themeMode);
+    }
 
     const fontSizePercent = Number.isFinite(settings?.fontSize) ? settings.fontSize : 80;
     root.style.setProperty('--root-font-size', `${fontSizePercent}%`);
@@ -276,7 +344,14 @@ export async function applyPreviewSettings(settings) {
 
     const appContent = document.getElementById('appContent');
     const staticWrapper = document.getElementById('staticHeaderWrapper');
-    if (appContent && staticWrapper) {
+    const staticWanted = settings?.staticHeader === true;
+    const staticInSync =
+        memo.staticHeader === staticWanted &&
+        (staticWanted
+            ? !!staticWrapper?._staticHeaderResizeObserver
+            : !staticWrapper?.classList.contains('header-sticky'));
+    if (appContent && staticWrapper && !staticInSync) {
+        memo.staticHeader = staticWanted;
         if (settings?.staticHeader === true) {
             disconnectStaticHeaderResizeObserver(staticWrapper);
             staticWrapper.classList.add('header-sticky');
@@ -310,5 +385,17 @@ export async function applyPreviewSettings(settings) {
         }
     }
 
-    applyBirthdayModeFromSettings(settings);
+    if (typeof settings?.motionMode !== 'undefined') {
+        const motionMode = sanitizeMotionMode(settings.motionMode);
+        if (memo.motionMode !== motionMode) {
+            memo.motionMode = motionMode;
+            applyMotionMode(motionMode);
+        }
+    }
+
+    const birthdayWanted = settings?.birthdayModeEnabled === true;
+    if (memo.birthday !== birthdayWanted || birthdayWanted) {
+        memo.birthday = birthdayWanted;
+        applyBirthdayModeFromSettings(settings);
+    }
 }

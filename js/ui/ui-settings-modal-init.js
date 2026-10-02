@@ -10,7 +10,6 @@ import {
     collapseModalFullscreenIfActive,
     ensureFullscreenToggleForConfig,
 } from './modals-manager.js';
-import { syncBorderRadiusSliderPercentLabel } from './ui-settings-modal.js';
 
 let deps = {
     State: null,
@@ -165,8 +164,6 @@ export function initUISettingsModalHandlers() {
         const increaseFontBtn = document.getElementById('increaseFontBtn');
         const resetFontBtn = document.getElementById('resetFontBtn');
         const fontSizeLabel = customizeUIModal.querySelector('#fontSizeLabel');
-        const borderRadiusSlider = document.getElementById('borderRadiusSlider');
-        const densitySlider = document.getElementById('densitySlider');
 
         if (saveUISettingsBtn) {
             saveUISettingsBtn.addEventListener('click', async () => {
@@ -252,18 +249,15 @@ export function initUISettingsModalHandlers() {
             });
             openAppCustomizationModalBtn.dataset.customizationListenerAttached = 'true';
         }
+        /** Студия оформления сохраняется сама: при закрытии лишь досохраняем хвост и закрываем без вопросов. */
+        const getStudio = () =>
+            typeof window !== 'undefined' ? window.__copilotCustomizationStudio : null;
         const requestCloseAppCustomization = async () => {
             if (!appCustomizationModal) return;
-            if (
-                typeof deps.shouldConfirmBeforeClose === 'function' &&
-                deps.shouldConfirmBeforeClose(appCustomizationModal) &&
-                typeof deps.showUnsavedConfirmModal === 'function'
-            ) {
-                const leave = await deps.showUnsavedConfirmModal();
-                if (!leave) return;
-                if (typeof deps.revertUISettingsOnDiscard === 'function') {
-                    await deps.revertUISettingsOnDiscard();
-                }
+            try {
+                await getStudio()?.persistNow?.();
+            } catch (e) {
+                console.warn('[UISettingsModal] досохранение оформления не удалось', e);
             }
             collapseModalFullscreenIfActive('appCustomizationModal', appCustomizationModalConfig);
             if (typeof deps.closeAnimatedModal === 'function') {
@@ -272,7 +266,6 @@ export function initUISettingsModalHandlers() {
         };
 
         const appCustomizationSaveBtn = document.getElementById('appCustomizationSaveBtn');
-        const appCustomizationCancelBtn = document.getElementById('appCustomizationCancelBtn');
 
         if (closeAppCustomizationModalBtn && appCustomizationModal) {
             closeAppCustomizationModalBtn.addEventListener(
@@ -280,46 +273,9 @@ export function initUISettingsModalHandlers() {
                 () => void requestCloseAppCustomization(),
             );
         }
-        if (appCustomizationCancelBtn && appCustomizationModal) {
-            appCustomizationCancelBtn.addEventListener(
-                'click',
-                () => void requestCloseAppCustomization(),
-            );
-        }
+        // «Готово»: досохранить и закрыть. «Отменить изменения» обрабатывает сама студия (откат без закрытия).
         if (appCustomizationSaveBtn && appCustomizationModal) {
-            appCustomizationSaveBtn.addEventListener('click', async () => {
-                if (typeof deps.updatePreviewSettingsFromModal === 'function') {
-                    deps.updatePreviewSettingsFromModal();
-                }
-                if (typeof deps.saveUISettings === 'function') {
-                    const ok = await deps.saveUISettings();
-                    if (!ok) return;
-                    collapseModalFullscreenIfActive(
-                        'appCustomizationModal',
-                        appCustomizationModalConfig,
-                    );
-                    if (typeof deps.closeAnimatedModal === 'function') {
-                        deps.closeAnimatedModal(appCustomizationModal);
-                    }
-                }
-            });
-        }
-        if (appCustomizationModal && !appCustomizationModal.dataset.customizationChangeAttached) {
-            appCustomizationModal.addEventListener('change', (e) => {
-                if (e.target.matches('input[name="themeMode"]')) {
-                    if (typeof deps.updatePreviewSettingsFromModal === 'function') {
-                        deps.updatePreviewSettingsFromModal();
-                        if (deps.State && typeof deps.applyPreviewSettings === 'function') {
-                            deps.applyPreviewSettings(deps.State.currentPreviewSettings);
-                        }
-                        deps.State.isUISettingsDirty = true;
-                        if (typeof deps.refreshCustomizationPickerAfterThemeChange === 'function') {
-                            deps.refreshCustomizationPickerAfterThemeChange();
-                        }
-                    }
-                }
-            });
-            appCustomizationModal.dataset.customizationChangeAttached = 'true';
+            appCustomizationSaveBtn.addEventListener('click', () => void requestCloseAppCustomization());
         }
 
         const FONT_MIN = 80;
@@ -358,30 +314,6 @@ export function initUISettingsModalHandlers() {
             resetFontBtn.addEventListener('click', () => {
                 fontSizeLabel.textContent = '100%';
                 updateFontLabelAndPreview();
-            });
-        }
-
-        if (borderRadiusSlider) {
-            borderRadiusSlider.addEventListener('input', () => {
-                if (typeof deps.updatePreviewSettingsFromModal === 'function') {
-                    deps.updatePreviewSettingsFromModal();
-                    syncBorderRadiusSliderPercentLabel();
-                    if (deps.State && typeof deps.applyPreviewSettings === 'function') {
-                        deps.applyPreviewSettings(deps.State.currentPreviewSettings);
-                    }
-                    deps.State.isUISettingsDirty = true;
-                }
-            });
-        }
-        if (densitySlider) {
-            densitySlider.addEventListener('input', () => {
-                if (typeof deps.updatePreviewSettingsFromModal === 'function') {
-                    deps.updatePreviewSettingsFromModal();
-                    if (deps.State && typeof deps.applyPreviewSettings === 'function') {
-                        deps.applyPreviewSettings(deps.State.currentPreviewSettings);
-                    }
-                    deps.State.isUISettingsDirty = true;
-                }
             });
         }
 
@@ -593,10 +525,10 @@ export function initUISettingsModalHandlers() {
                     '<i class="fas fa-spinner fa-spin mr-2"></i>Проверка...';
                 try {
                     const report = await runManualFullDiagnostic();
-                    showHealthReportModalFallback(report);
+                    (window.showHealthReportModal || showHealthReportModalFallback)(report);
                 } catch (err) {
                     console.error('[UISettingsModal] Ошибка ручного прогона:', err);
-                    showHealthReportModalFallback({
+                    (window.showHealthReportModal || showHealthReportModalFallback)({
                         errors: [{ title: 'Ошибка', message: err.message }],
                         warnings: [],
                         checks: [],

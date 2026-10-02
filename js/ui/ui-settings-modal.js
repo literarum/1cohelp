@@ -288,6 +288,11 @@ export function getSettingsFromModal() {
         staticHeader: staticHeaderToggle ? staticHeaderToggle.checked : false,
         backupReminderEnabled: backupReminderToggle ? backupReminderToggle.checked : true,
         birthdayModeEnabled: false,
+        motionMode:
+            customizationModal?.querySelector('input[name="motionMode"]:checked')?.value ||
+            State.currentPreviewSettings?.motionMode ||
+            State.userPreferences?.motionMode ||
+            'auto',
     };
 }
 

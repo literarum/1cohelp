@@ -1,14 +1,14 @@
 /** @vitest-environment jsdom */
 'use strict';
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getDefaultUISettings } from '../config.js';
 import {
     initUISettingsModalHandlers,
     setUISettingsModalInitDependencies,
 } from './ui-settings-modal-init.js';
 
-describe('app customization modal footer (save / cancel / close)', () => {
+describe('app customization modal footer (готово / крестик)', () => {
     let saveSpy;
     let updatePreviewSpy;
     let closeAnimatedSpy;
@@ -84,31 +84,47 @@ describe('app customization modal footer (save / cancel / close)', () => {
         initUISettingsModalHandlers();
     });
 
-    it('Сохранить: синхронизация превью, saveUISettings и анимированное закрытие', async () => {
-        document.getElementById('appCustomizationSaveBtn').click();
-        expect(updatePreviewSpy).toHaveBeenCalled();
-        await vi.waitFor(() => expect(saveSpy).toHaveBeenCalled());
-        expect(closeAnimatedSpy).toHaveBeenCalledWith(
-            document.getElementById('appCustomizationModal'),
-        );
+    const settle = () => new Promise((r) => setTimeout(r, 60));
+
+    afterEach(() => {
+        delete window.__copilotCustomizationStudio;
     });
 
-    it('Крестик при несохранённых изменениях: диалог, откат и закрытие', async () => {
+    it('«Готово»: досохраняет хвост через студию и закрывает окно без вопросов', async () => {
+        const persistNow = vi.fn().mockResolvedValue(true);
+        window.__copilotCustomizationStudio = { persistNow };
+        testState.isUISettingsDirty = true;
+        document.getElementById('appCustomizationSaveBtn').click();
+        await vi.waitFor(() => expect(persistNow).toHaveBeenCalled());
+        await vi.waitFor(() =>
+            expect(closeAnimatedSpy).toHaveBeenCalledWith(
+                document.getElementById('appCustomizationModal'),
+            ),
+        );
+        expect(showUnsavedSpy).not.toHaveBeenCalled();
+        expect(revertSpy).not.toHaveBeenCalled();
+    });
+
+    it('Крестик: автосохранённое не откатывается, диалога нет', async () => {
+        const persistNow = vi.fn().mockResolvedValue(true);
+        window.__copilotCustomizationStudio = { persistNow };
         testState.isUISettingsDirty = true;
         document.getElementById('closeAppCustomizationModalBtn').click();
-        await vi.waitFor(() => expect(showUnsavedSpy).toHaveBeenCalled());
-        await vi.waitFor(() => expect(revertSpy).toHaveBeenCalled());
-        await vi.waitFor(() => expect(closeAnimatedSpy).toHaveBeenCalled());
+        await settle();
+        expect(closeAnimatedSpy).toHaveBeenCalled();
+        expect(persistNow).toHaveBeenCalled();
+        expect(showUnsavedSpy).not.toHaveBeenCalled();
+        expect(revertSpy).not.toHaveBeenCalled();
     });
 
-    it('Отмена при несохранённых изменениях — тот же контур, что и крестик', async () => {
-        testState.isUISettingsDirty = true;
-        showUnsavedSpy.mockClear();
-        revertSpy.mockClear();
-        closeAnimatedSpy.mockClear();
-        document.getElementById('appCustomizationCancelBtn').click();
-        await vi.waitFor(() => expect(showUnsavedSpy).toHaveBeenCalled());
-        await vi.waitFor(() => expect(revertSpy).toHaveBeenCalled());
-        await vi.waitFor(() => expect(closeAnimatedSpy).toHaveBeenCalled());
+    it('Окно закрывается, даже если студия не загружена или досохранение упало', async () => {
+        window.__copilotCustomizationStudio = {
+            persistNow: vi.fn().mockRejectedValue(new Error('boom')),
+        };
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        document.getElementById('closeAppCustomizationModalBtn').click();
+        await settle();
+        expect(closeAnimatedSpy).toHaveBeenCalled();
+        warn.mockRestore();
     });
 });
