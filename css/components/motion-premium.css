@@ -1,0 +1,218 @@
+/* =================================================================== */
+/*  MOTION PREMIUM: «живой» слой анимаций + переключатель режимов      */
+/*  html[data-motion] = full | calm | reduce  (js/utils/motion-pref.js) */
+/*   full   — все эффекты (по умолчанию, если ОС не просит меньше)     */
+/*   calm   — только короткие плавные переходы, без «эффектов»         */
+/*   reduce — анимации и переходы отключены                            */
+/*  Только transform / opacity / background-position (без layout).     */
+/* =================================================================== */
+:root {
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-emph: cubic-bezier(0.2, 0.9, 0.25, 1);
+    --motion-glow: color-mix(in srgb, var(--color-primary, #9933ff) 38%, transparent);
+    --motion-glow-soft: color-mix(in srgb, var(--color-primary, #9933ff) 16%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/*  FULL: модалки — пружинное появление и плавное исчезновение         */
+/* ------------------------------------------------------------------ */
+@keyframes motion-pop-spring {
+    0% {
+        opacity: 0;
+        transform: translateY(14px) scale(0.94);
+    }
+    55% {
+        opacity: 1;
+        transform: translateY(-2px) scale(1.012);
+    }
+    100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes motion-backdrop-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+html[data-motion='full']
+    div[role='dialog'].fixed.inset-0:not(.hidden):not(.timer-return-to-client-modal):not(.modal-transition) {
+    animation: motion-backdrop-in 200ms var(--ease-out) backwards;
+}
+html[data-motion='full']
+    div[role='dialog'].fixed.inset-0:not(.hidden):not(.timer-return-to-client-modal)
+    > div
+    > div:not(.modal-transition),
+html[data-motion='full']
+    div[role='dialog'].fixed.inset-0:not(.hidden):not(.timer-return-to-client-modal)
+    > div:not(.flex):not(.modal-transition):not(.hidden) {
+    animation: motion-pop-spring 360ms var(--ease-emph) backwards;
+}
+
+/* Исчезновение: display переходит «дискретно», поэтому окно успевает растворяться.
+   Браузеры без transition-behavior просто закрывают мгновенно, как раньше. */
+html[data-motion='full'] div[role='dialog'].fixed.inset-0:not(.modal-transition) {
+    transition:
+        opacity 170ms var(--ease-in),
+        display 170ms allow-discrete;
+}
+html[data-motion='full'] div[role='dialog'].fixed.inset-0.hidden:not(.modal-transition) {
+    opacity: 0;
+    pointer-events: none;
+}
+html[data-motion='full']
+    div[role='dialog'].fixed.inset-0:not(.modal-transition)
+    > div
+    > div:not(.modal-transition) {
+    transition: transform 170ms var(--ease-in);
+}
+html[data-motion='full']
+    div[role='dialog'].fixed.inset-0.hidden:not(.modal-transition)
+    > div
+    > div:not(.modal-transition) {
+    transform: translateY(8px) scale(0.97);
+}
+
+/* ------------------------------------------------------------------ */
+/*  FULL: карточки — мягкое «парение» с цветным свечением              */
+/* ------------------------------------------------------------------ */
+html[data-motion='full'] #appContent .view-item {
+    transition:
+        transform 240ms var(--ease-emph),
+        box-shadow 240ms var(--ease-emph),
+        border-color 200ms var(--ease-standard),
+        background-color 200ms var(--ease-standard);
+}
+@media (hover: hover) and (pointer: fine) {
+    html[data-motion='full'] #appContent .view-item:hover:not(.main-algo-group) {
+        transform: translateY(-3px);
+        box-shadow:
+            0 14px 30px -16px var(--motion-glow),
+            0 3px 8px -2px rgba(0, 0, 0, 0.12);
+    }
+}
+html[data-motion='full'] #appContent .view-item:active:not(.main-algo-group) {
+    transform: translateY(-1px) scale(0.995);
+    transition-duration: 90ms;
+}
+
+/* ------------------------------------------------------------------ */
+/*  FULL: основные кнопки — «блик» при наведении, пружинное нажатие    */
+/* ------------------------------------------------------------------ */
+html[data-motion='full'] :is(button, a).bg-primary:not(:disabled):not(.motion-save-success) {
+    background-image: linear-gradient(
+        115deg,
+        transparent 36%,
+        rgba(255, 255, 255, 0.28) 50%,
+        transparent 64%
+    );
+    background-repeat: no-repeat;
+    background-size: 260% 100%;
+    background-position: 135% 0;
+    transition:
+        background-position 700ms var(--ease-emph),
+        background-color 160ms var(--ease-standard),
+        box-shadow 220ms var(--ease-standard),
+        transform 160ms var(--ease-spring);
+}
+@media (hover: hover) and (pointer: fine) {
+    html[data-motion='full'] :is(button, a).bg-primary:not(:disabled):hover {
+        background-position: -35% 0;
+        box-shadow: 0 8px 20px -8px var(--motion-glow);
+    }
+}
+html[data-motion='full'] :is(button, a).bg-primary:not(:disabled):active {
+    transform: scale(0.96);
+    transition-duration: 70ms;
+}
+
+/* ------------------------------------------------------------------ */
+/*  FULL + CALM: поля ввода — мягкое свечение фокуса                   */
+/* ------------------------------------------------------------------ */
+html:not([data-motion='reduce']) :where(input:not([type='range']):not([type='checkbox']):not([type='radio']), textarea, select) {
+    transition:
+        box-shadow 180ms var(--ease-standard),
+        border-color 180ms var(--ease-standard),
+        background-color 180ms var(--ease-standard);
+}
+:where(input:not([type='range']):not([type='checkbox']):not([type='radio']), textarea, select):focus-visible {
+    box-shadow: 0 0 0 4px var(--motion-glow-soft);
+}
+
+/* ------------------------------------------------------------------ */
+/*  FULL: переключение темы (View Transitions API)                     */
+/* ------------------------------------------------------------------ */
+html[data-motion='full']::view-transition-old(root),
+html[data-motion='full']::view-transition-new(root) {
+    animation-duration: 320ms;
+    animation-timing-function: var(--ease-standard);
+}
+
+/* ------------------------------------------------------------------ */
+/*  FULL: тосты — «выкат» с лёгким пружинным перелётом                 */
+/* ------------------------------------------------------------------ */
+html[data-motion='full'] #notification-container.app-toast-stack > .app-toast-wrap.is-entering {
+    transition-timing-function: var(--ease-spring);
+}
+
+/* ------------------------------------------------------------------ */
+/*  CALM: только плавность, без пружин, бликов и каскадов               */
+/* ------------------------------------------------------------------ */
+html[data-motion='calm']
+    div[role='dialog'].fixed.inset-0:not(.hidden):not(.timer-return-to-client-modal)
+    > div
+    > div:not(.modal-transition),
+html[data-motion='calm']
+    div[role='dialog'].fixed.inset-0:not(.hidden):not(.timer-return-to-client-modal)
+    > div:not(.flex):not(.modal-transition):not(.hidden) {
+    animation-name: motion-fade-in;
+    animation-duration: 140ms;
+}
+html[data-motion='calm'] body.motion-entering .tab-content:not(.hidden) .view-item {
+    animation: none;
+}
+html[data-motion='calm'] #appContent .view-item:hover:not(.main-algo-group) {
+    transform: none;
+}
+html[data-motion='calm'] div[role='dialog'] button:not(:disabled):active,
+html[data-motion='calm'] #appContent button:not(:disabled):active {
+    transform: none;
+}
+
+/* ------------------------------------------------------------------ */
+/*  REDUCE: полное «уменьшение движения» (WCAG 2.3.3)                  */
+/* ------------------------------------------------------------------ */
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+}
+/* Индикаторы загрузки несут смысл: оставляем медленное вращение, без прочих эффектов. */
+html[data-motion='reduce'] .fa-spin,
+html[data-motion='reduce'] .animate-spin,
+html[data-motion='reduce'] [data-essential-motion] {
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
+}
+html[data-motion='reduce'] #appContent .view-item:hover:not(.main-algo-group),
+html[data-motion='reduce'] div[role='dialog'] button:not(:disabled):active,
+html[data-motion='reduce'] #appContent button:not(:disabled):active {
+    transform: none !important;
+}
+html[data-motion='reduce'] .motion-skeleton::after {
+    display: none;
+}
+html[data-motion='reduce']::view-transition-group(*),
+html[data-motion='reduce']::view-transition-old(*),
+html[data-motion='reduce']::view-transition-new(*) {
+    animation: none !important;
+}

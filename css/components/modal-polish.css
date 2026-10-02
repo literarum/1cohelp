@@ -1,0 +1,53 @@
+/* =================================================================== */
+/*  MODAL POLISH: единый UX-слой для всех модальных окон               */
+/*  (js/ui/modal-choreographer.js добавляет классы/атрибуты)           */
+/* =================================================================== */
+
+/* Прокрутка внутри окна не «протекает» на страницу */
+div[role='dialog'].fixed.inset-0 {
+    overscroll-behavior: contain;
+}
+div[role='dialog'].fixed.inset-0 .overflow-y-auto {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable both-edges;
+}
+
+/* Тень у края прокручиваемой области: подсказка, что есть ещё контент
+   (классы переключает js/ui/modal-choreographer.js) */
+.modal-scroll-cue {
+    transition: box-shadow 160ms ease;
+}
+.modal-scroll-cue.has-more-above {
+    box-shadow: inset 0 10px 8px -10px rgba(0, 0, 0, 0.35);
+}
+.modal-scroll-cue.has-more-below {
+    box-shadow: inset 0 -10px 8px -10px rgba(0, 0, 0, 0.35);
+}
+.modal-scroll-cue.has-more-above.has-more-below {
+    box-shadow:
+        inset 0 10px 8px -10px rgba(0, 0, 0, 0.35),
+        inset 0 -10px 8px -10px rgba(0, 0, 0, 0.35);
+}
+
+/* Крупные цели нажатия для кнопок закрытия на сенсорных экранах */
+@media (pointer: coarse) {
+    div[role='dialog'].fixed.inset-0 button[id*='close' i],
+    div[role='dialog'].fixed.inset-0 button[aria-label*='акры' i] {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+/* Видимый фокус для элементов окна */
+div[role='dialog'] :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-primary, #3b82f6);
+    outline-offset: 2px;
+}
+
+/* Подсказка про Esc для read-only окон не нужна; зато курсор «закрыть по клику вне» */
+div[role='dialog'].modal-backdrop-closable {
+    cursor: pointer;
+}
+div[role='dialog'].modal-backdrop-closable > * {
+    cursor: auto;
+}
