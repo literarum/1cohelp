@@ -60,4 +60,5 @@
 /* 7. Слой движения и студия оформления (последними: переопределяют остальное) */
 @import url('./components/customization-studio.css');
 @import url('./components/modal-polish.css');
+@import url('./components/mobile.css');
 @import url('./components/motion-premium.css');
