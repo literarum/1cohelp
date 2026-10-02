@@ -334,6 +334,45 @@
                 justify-content: center;
                 align-items: center;
             }
+
+            /* Деликатный фон-туманность: мягкие цветные облака дрейфуют позади сферы, виньетка собирает взгляд к центру */
+            #custom-loading-overlay::before,
+            #custom-loading-overlay::after {
+                content: '';
+                position: absolute;
+                inset: -10%;
+                pointer-events: none;
+                z-index: 0;
+            }
+            #custom-loading-overlay::before {
+                background:
+                    radial-gradient(42% 38% at 50% 48%, rgba(124, 58, 237, 0.20), transparent 70%),
+                    radial-gradient(34% 30% at 22% 28%, rgba(99, 102, 241, 0.13), transparent 72%),
+                    radial-gradient(38% 34% at 80% 74%, rgba(192, 38, 211, 0.11), transparent 72%),
+                    radial-gradient(28% 26% at 70% 18%, rgba(56, 189, 248, 0.07), transparent 70%);
+                animation: loading-nebula-drift 26s ease-in-out infinite alternate;
+                will-change: transform;
+            }
+            #custom-loading-overlay::after {
+                inset: 0;
+                background: radial-gradient(ellipse at center, transparent 45%, rgba(2, 0, 12, 0.55) 100%);
+            }
+            html[data-loading-overlay-theme='light'] #custom-loading-overlay::before {
+                background:
+                    radial-gradient(42% 38% at 50% 48%, rgba(124, 58, 237, 0.10), transparent 70%),
+                    radial-gradient(34% 30% at 22% 28%, rgba(99, 102, 241, 0.08), transparent 72%),
+                    radial-gradient(38% 34% at 80% 74%, rgba(192, 38, 211, 0.06), transparent 72%);
+            }
+            html[data-loading-overlay-theme='light'] #custom-loading-overlay::after {
+                background: radial-gradient(ellipse at center, transparent 55%, rgba(76, 29, 149, 0.10) 100%);
+            }
+            @keyframes loading-nebula-drift {
+                0% { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+                100% { transform: translate3d(1.5%, 1.2%, 0) scale(1.06); }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #custom-loading-overlay::before { animation: none; }
+            }
             #custom-loading-overlay #loadingCanvas {
                 position: absolute;
                 top: 0;
@@ -652,6 +691,44 @@
                     backgroundColor: 'rgba(0, 0, 0, 0)',
                 };
 
+                // Предрендеренные спрайты свечения: визуально идентичны радиальным градиентам,
+                // но без createRadialGradient на каждую частицу и каждый кадр (в разы быстрее).
+                const SPRITE_PX = 128;
+                const haloSprites = new Map();
+                const coreSprites = new Map();
+                function makeSprite(r, g, b, kind) {
+                    const c = document.createElement('canvas');
+                    c.width = c.height = SPRITE_PX;
+                    const x = c.getContext('2d');
+                    const R = SPRITE_PX / 2;
+                    const grad =
+                        kind === 'halo'
+                            ? x.createRadialGradient(R, R, R * 0.1, R, R, R)
+                            : x.createRadialGradient(R, R, 0, R, R, R);
+                    if (kind === 'halo') {
+                        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
+                        grad.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.4)`);
+                        grad.addColorStop(1, 'rgba(0,0,0,0)');
+                    } else {
+                        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
+                        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+                    }
+                    x.fillStyle = grad;
+                    x.beginPath();
+                    x.arc(R, R, R, 0, Math.PI * 2);
+                    x.fill();
+                    return c;
+                }
+                function getSprite(map, r, g, b, kind) {
+                    const key = r + ',' + g + ',' + b;
+                    let sp = map.get(key);
+                    if (!sp) {
+                        sp = makeSprite(r, g, b, kind);
+                        map.set(key, sp);
+                    }
+                    return sp;
+                }
+
                 class Particle {
                     constructor() {
                         const u = Math.random();
@@ -752,14 +829,14 @@
                         );
                         if (mainAlpha <= 0.02) return;
                         const mainSize = this.currentDisplaySize;
-                        const useHalo = currentThemeProfile.useHalo !== false && !adaptiveHaloDisabled;
+                        const useHalo = currentThemeProfile.useHalo !== false && !haloDisabledByPerf;
                         if (useHalo) {
                             const haloLayers = [
                                 { sizeFactor: 5, alphaFactor: 0.2 },
                                 { sizeFactor: 3.5, alphaFactor: 0.28 },
                                 { sizeFactor: 2.2, alphaFactor: 0.4 },
                             ];
-                            for (const layer of haloLayers) {
+                            for (const layer of haloLayers.slice(haloLayersSkipped)) {
                                 const haloSize =
                                     mainSize * layer.sizeFactor * (currentThemeProfile.haloSizeScale || 1);
                                 const haloAlpha = Math.min(
@@ -767,59 +844,37 @@
                                     mainAlpha * layer.alphaFactor * (currentThemeProfile.haloAlphaScale || 1),
                                 );
                                 if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
-                                const gradient = ctx.createRadialGradient(
-                                    this.screenX,
-                                    this.screenY,
-                                    haloSize * 0.1,
-                                    this.screenX,
-                                    this.screenY,
-                                    haloSize,
+                                ctx.globalAlpha = haloAlpha;
+                                ctx.drawImage(
+                                    getSprite(haloSprites, this.color_r, this.color_g, this.color_b, 'halo'),
+                                    this.screenX - haloSize,
+                                    this.screenY - haloSize,
+                                    haloSize * 2,
+                                    haloSize * 2,
                                 );
-                                gradient.addColorStop(
-                                    0,
-                                    `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`,
-                                );
-                                gradient.addColorStop(
-                                    0.6,
-                                    `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.4})`,
-                                );
-                                gradient.addColorStop(1, 'rgba(0,0,0,0)');
-                                ctx.fillStyle = gradient;
-                                ctx.beginPath();
-                                ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
-                                ctx.fill();
                             }
                         }
                         if (useHalo) {
-                            const coreGradient = ctx.createRadialGradient(
-                                this.screenX,
-                                this.screenY,
-                                0,
-                                this.screenX,
-                                this.screenY,
-                                mainSize,
+                            ctx.globalAlpha = mainAlpha;
+                            ctx.drawImage(
+                                getSprite(coreSprites, this.color_r, this.color_g, this.color_b, 'core'),
+                                this.screenX - mainSize,
+                                this.screenY - mainSize,
+                                mainSize * 2,
+                                mainSize * 2,
                             );
-                            coreGradient.addColorStop(
-                                0,
-                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`,
-                            );
-                            coreGradient.addColorStop(
-                                1,
-                                `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
-                            );
-                            ctx.fillStyle = coreGradient;
                         } else {
                             ctx.fillStyle = `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`;
+                            ctx.beginPath();
+                            ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
+                            ctx.fill();
                         }
-                        ctx.beginPath();
-                        ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
-                        ctx.fill();
                         ctx.globalAlpha = 1.0;
                     }
                 }
 
                 function setupCanvas() {
-                    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                    const dpr = Math.min(window.devicePixelRatio || 1, 3);
                     width = window.innerWidth;
                     height = window.innerHeight;
                     canvas.width = width * dpr;
@@ -831,14 +886,7 @@
                     config.sphereBaseRadius = Math.min(width, height) * 0.1584;
                 }
 
-                const REDUCED_MOTION_PARTICLE_COUNT = 700;
-                const MIN_ADAPTIVE_PARTICLE_COUNT = 450;
-                const SLOW_FRAME_MS = 28;
-                const VERY_SLOW_FRAME_MS = 45;
-                const FRAME_SAMPLE_SIZE = 24;
-                let frameDeltaSamples = [];
-                let adaptiveHaloDisabled = false;
-                let adaptiveParticleCap = Infinity;
+                const REDUCED_MOTION_PARTICLE_COUNT = 1400;
 
                 function prefersReducedMotion() {
                     try {
@@ -861,43 +909,40 @@
                             : config.particleCount;
                     if (prefersReducedMotion()) {
                         particleCount = Math.min(particleCount, REDUCED_MOTION_PARTICLE_COUNT);
-                        adaptiveHaloDisabled = true;
                     }
-                    particleCount = Math.min(particleCount, adaptiveParticleCap);
                     for (let i = 0; i < particleCount; i++) {
                         particles.push(new Particle());
                     }
                 }
 
-                /**
-                 * Адаптивное качество: на слабых ПК (программный рендер canvas, батарея) заставка не должна
-                 * занимать главный поток и задерживать инициализацию IndexedDB/интерфейса.
-                 */
-                function adaptQualityToFrameTime(deltaMs) {
-                    if (!(deltaMs > 0) || deltaMs > 1000) return;
-                    frameDeltaSamples.push(deltaMs);
-                    if (frameDeltaSamples.length < FRAME_SAMPLE_SIZE) return;
-                    const avg =
-                        frameDeltaSamples.reduce((sum, v) => sum + v, 0) / frameDeltaSamples.length;
-                    frameDeltaSamples = [];
-                    if (avg > VERY_SLOW_FRAME_MS) adaptiveHaloDisabled = true;
-                    if (avg > SLOW_FRAME_MS && particles.length > MIN_ADAPTIVE_PARTICLE_COUNT) {
-                        const nextCount = Math.max(
-                            MIN_ADAPTIVE_PARTICLE_COUNT,
-                            Math.floor(particles.length * 0.7),
-                        );
-                        adaptiveParticleCap = nextCount;
-                        particles.length = nextCount;
-                    }
+                // Мягкая адаптация: на очень слабом рендере (программный canvas) отбрасываем САМЫЕ БОЛЬШИЕ,
+                // едва заметные слои свечения (они дороже всего по площади заливки). Частицы, ядро и
+                // ближнее гало остаются — сфера выглядит так же богато, а главный поток не голодает.
+                let haloLayersSkipped = 0;
+                let haloDisabledByPerf = false;
+                let frameSamples = [];
+                function adaptHaloCost(deltaMs) {
+                    if (!(deltaMs > 0) || deltaMs > 2000) return;
+                    frameSamples.push(deltaMs);
+                    if (frameSamples.length < 8) return;
+                    const avg = frameSamples.reduce((a, b) => a + b, 0) / frameSamples.length;
+                    frameSamples = [];
+                    if (avg > 120) {
+                        // < 8 кадров/с: заставка голодит загрузку приложения — аварийное облегчение
+                        haloDisabledByPerf = true;
+                        const keep = Math.max(500, Math.floor(particles.length * 0.5));
+                        if (particles.length > keep) particles.length = keep;
+                    } else if (avg > 60 && haloLayersSkipped < 2) haloLayersSkipped = 2;
+                    else if (avg > 33 && haloLayersSkipped < 1) haloLayersSkipped = 1;
                 }
 
                 function animate(now) {
                     now = now || performance.now();
                     if (!rotationStartTime) rotationStartTime = now;
+                    if (lastFrameTime !== null && !exitScaleStartTime) adaptHaloCost(now - lastFrameTime);
                     const elapsedMs = now - rotationStartTime;
                     rotationX = elapsedMs * (config.rotationSpeedX / 16);
                     rotationY = elapsedMs * (config.rotationSpeedY / 16);
-                    if (lastFrameTime !== null) adaptQualityToFrameTime(now - lastFrameTime);
                     lastFrameTime = now;
                     globalTime++;
 
@@ -1116,16 +1161,16 @@
                                         class="font-mono px-2 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 tabular-nums inline-flex items-center justify-center text-sm leading-none"
                                     >
                                     </span>
-                                    <button aria-label="Уменьшить на 1 мин"
+                                    <button aria-label="Уменьшить на 5 секунд"
                                         id="timerDecreaseButton"
-                                        title="Уменьшить на 1 мин"
+                                        title="−5 с (Ctrl: −10 с, Ctrl+Shift: −30 с)"
                                         class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                                     >
                                         <i class="fas fa-minus"></i>
                                     </button>
-                                    <button aria-label="Увеличить на 1 мин"
+                                    <button aria-label="Увеличить на 5 секунд"
                                         id="timerIncreaseButton"
-                                        title="Увеличить на 1 мин"
+                                        title="+5 с (Ctrl: +10 с, Ctrl+Shift: +30 с)"
                                         class="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors"
                                     >
                                         <i class="fas fa-plus"></i>
@@ -2579,7 +2624,7 @@
                                     <textarea
                                         id="xmlAnalyzerDataInput"
                                         class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none"
-                                        placeholder="Вставьте XML рег.файла, JSON СЭДО, XML ЕФС из 1С или перетащите файл (.xml, .zip, .txt, .json)... (Ctrl/Cmd+Enter для анализа)"
+                                        placeholder="Вставьте любой XML (отчёт, рег. файл, ЕФС, СЭДО), JSON, base64 сертификата — или перетащите сюда несколько файлов (.xml, .zip, .json, .txt). Ctrl/Cmd+Enter — анализ"
                                     ></textarea>
                                 </div>
                                 <div class="flex gap-2 mt-4">
@@ -2704,15 +2749,8 @@
                     </details>
                 </template>
                 <template id="xmlAnalyzerInfoRowTemplate">
-                    <div
-                        class="flex justify-between items-start border-b border-dashed border-gray-200 dark:border-gray-700 py-2"
-                    >
-                        <span
-                            class="info-key font-bold text-gray-600 dark:text-gray-400 pr-4"
-                        ></span
-                        ><span
-                            class="info-value text-right text-gray-800 dark:text-gray-200"
-                        ></span>
+                    <div class="xa-info-row">
+                        <span class="info-key"></span><span class="info-value"></span>
                     </div>
                 </template>
                 <template id="xmlAnalyzerSedoRowTemplate">
@@ -4617,14 +4655,14 @@
                                 </div>
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="logs">
-                                <div class="engineering-cockpit-panel">
+                                <div class="engineering-cockpit-panel engineering-cockpit-panel--logs">
                                     <div class="engineering-cockpit-panel-toolbar engineering-cockpit-panel-toolbar--logs">
                                         <label class="engineering-cockpit-sr-only" for="engineeringCockpitLogLevelFilter"
                                             >Уровень логов</label
                                         >
                                         <select
                                             id="engineeringCockpitLogLevelFilter"
-                                            class="engineering-cockpit-log-filter"
+                                            class="engineering-cockpit-log-filter engineering-cockpit-log-filter--select"
                                             title="Показать только выбранный уровень"
                                             aria-label="Фильтр уровня логов"
                                         >
@@ -4636,11 +4674,33 @@
                                             <option value="debug">debug</option>
                                             <option value="boot">boot</option>
                                         </select>
+                                        <div
+                                            id="engineeringCockpitLogChips"
+                                            class="cockpit-chips"
+                                            role="group"
+                                            aria-label="Уровни логов (можно выбрать несколько)"
+                                        ></div>
+                                        <label class="cockpit-search">
+                                            <i class="fas fa-search" aria-hidden="true"></i>
+                                            <input
+                                                id="engineeringCockpitLogSearch"
+                                                type="search"
+                                                placeholder="Поиск по логам (или #номер)…"
+                                                aria-label="Поиск по тексту логов"
+                                                autocomplete="off"
+                                            />
+                                        </label>
+                                    </div>
+                                    <div class="engineering-cockpit-panel-toolbar engineering-cockpit-panel-toolbar--logs2">
                                         <span
                                             id="engineeringCockpitLogMeta"
                                             class="engineering-cockpit-log-meta"
                                             aria-live="polite"
                                         ></span>
+                                        <label class="cockpit-follow" title="Автоматически прокручивать к новым записям">
+                                            <input id="engineeringCockpitLogFollow" type="checkbox" checked />
+                                            <span>Следить</span>
+                                        </label>
                                         <button
                                             type="button"
                                             id="engineeringCockpitLogsScrollEndBtn"
@@ -4651,27 +4711,43 @@
                                         </button>
                                         <button
                                             type="button"
+                                            id="engineeringCockpitCopyLogsBtn"
+                                            class="engineering-cockpit-toolbar-btn engineering-cockpit-toolbar-btn--compact"
+                                            title="Скопировать все отфильтрованные записи (не только видимые)"
+                                        >
+                                            <i class="far fa-copy" aria-hidden="true"></i> Копировать
+                                        </button>
+                                        <button
+                                            type="button"
                                             id="engineeringCockpitExportLogsBtn"
                                             class="engineering-cockpit-toolbar-btn engineering-cockpit-toolbar-btn--compact"
                                             title="Сохранить отфильтрованные логи в текстовый файл"
                                         >
-                                            Скачать .txt
+                                            .txt
                                         </button>
                                         <button
                                             type="button"
-                                            class="engineering-cockpit-icon-btn"
-                                            data-cockpit-copy="engineeringCockpitLogs"
-                                            title="Копировать отфильтрованные логи"
-                                            aria-label="Копировать логи в буфер обмена"
+                                            id="engineeringCockpitExportLogsJsonBtn"
+                                            class="engineering-cockpit-toolbar-btn engineering-cockpit-toolbar-btn--compact"
+                                            title="Сохранить отфильтрованные логи как NDJSON (одна запись JSON на строку)"
                                         >
-                                            <i class="far fa-copy" aria-hidden="true"></i>
+                                            .ndjson
                                         </button>
                                     </div>
-                                    <pre
-                                        id="engineeringCockpitLogs"
-                                        class="engineering-cockpit-pre"
-                                        tabindex="0"
-                                    ></pre>
+                                    <div id="engineeringCockpitLogs"></div>
+                                    <div id="engineeringCockpitLogDetail" class="cockpit-logdetail" hidden>
+                                        <div class="cockpit-logdetail__bar">
+                                            <strong>Подробности записи</strong>
+                                            <button
+                                                type="button"
+                                                id="engineeringCockpitLogDetailCopy"
+                                                class="engineering-cockpit-toolbar-btn engineering-cockpit-toolbar-btn--compact"
+                                            >
+                                                Копировать запись
+                                            </button>
+                                        </div>
+                                        <pre id="engineeringCockpitLogDetailText" class="engineering-cockpit-pre"></pre>
+                                    </div>
                                 </div>
                             </section>
                             <section class="engineering-cockpit-tab" data-cockpit-tab="errors">

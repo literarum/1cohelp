@@ -2,6 +2,47 @@
 
 // Ранняя регистрация SW (до тяжёлой инициализации) — критерии installable / контроль страницы.
 import './js/app/pwa-early-init.js';
+import './js/ui/motion.js';
+import { initCustomSelects } from './js/ui/custom-select.js';
+import { initFontSettings } from './js/ui/font-settings.js';
+import { initAppearanceProfile } from './js/ui/appearance-profile.js';
+import { initFormModalAutoEnhance } from './js/ui/form-modal-autoenhance.js';
+// Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
+window.openRequisitesCheck = (text) =>
+    import('./js/features/requisites-check.js').then((m) => m.openRequisitesCheck(text));
+window.openVatCalc = () => import('./js/features/vat-calc-ui.js').then((m) => m.openVatCalc());
+try {
+    initFontSettings();
+} catch (e) {
+    console.warn('[font-settings] init failed', e);
+}
+(function bootCustomSelects() {
+    const run = () => {
+        try {
+            initCustomSelects();
+        } catch (e) {
+            console.warn('[custom-select] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
+try {
+    initAppearanceProfile();
+} catch (e) {
+    console.warn('[appearance-profile] init failed', e);
+}
+(function bootFormModalKit() {
+    const run = () => {
+        try {
+            initFormModalAutoEnhance();
+        } catch (e) {
+            console.warn('[form-modal-autoenhance] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 
 // ============================================================================
 // ИМПОРТЫ ИЗ МОДУЛЕЙ
@@ -275,6 +316,8 @@ import {
     setSearchDependencies,
     ensureSearchIndexIsBuilt,
     getGlobalSearchResults,
+    removeManyFromSearchIndex,
+    bulkAddToSearchIndex,
 } from './js/features/search.js';
 
 // Algorithm Components
@@ -1242,7 +1285,11 @@ function initScrollNavButtons() {
             const scrollables = visibleTab.querySelectorAll(
                 '[id^="doc-content-"], #extLinksContainer, .view-section.overflow-y-auto, [class*="overflow-y-auto"]',
             );
+            // Потолок на число проверяемых узлов: в больших списках их тысячи, а прокручиваемый контейнер всегда среди первых
+            const SCAN_LIMIT = 80;
+            let scanned = 0;
             for (const el of scrollables) {
+                if (++scanned > SCAN_LIMIT) break;
                 const style = window.getComputedStyle(el);
                 const overflowY = style.overflowY || style.overflow;
                 if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
@@ -1354,16 +1401,24 @@ function initScrollNavButtons() {
     });
     // Один пересчёт на кадр: MutationObserver по class во всём body срабатывает десятки раз за кадр
     // (анимации, hover, ввод в поиск), а updateVisibility читает layout и getComputedStyle.
+    // Серия мутаций (рендер тысяч карточек, поиск) сворачивается в один пересчёт не чаще раза в ~120 мс:
+    // updateVisibility читает layout и getComputedStyle, и на больших списках это давало до 0,8 с подвисаний.
     let scrollNavUpdateScheduled = false;
+    let scrollNavLastRun = 0;
+    const SCROLL_NAV_MIN_GAP_MS = 120;
     const scheduleScrollNavUpdate = () => {
         if (scrollNavUpdateScheduled) return;
         scrollNavUpdateScheduled = true;
-        requestAnimationFrame(() => {
-            scrollNavUpdateScheduled = false;
-            updateVisibility();
-            attachMainScrollListener();
-            attachNestedScrollListeners();
-        });
+        const wait = Math.max(0, SCROLL_NAV_MIN_GAP_MS - (performance.now() - scrollNavLastRun));
+        setTimeout(() => {
+            requestAnimationFrame(() => {
+                scrollNavUpdateScheduled = false;
+                scrollNavLastRun = performance.now();
+                updateVisibility();
+                attachMainScrollListener();
+                attachNestedScrollListeners();
+            });
+        }, wait);
     };
     const observer = new MutationObserver(scheduleScrollNavUpdate);
     observer.observe(document.body, {
@@ -4220,6 +4275,8 @@ console.log('[script.js] Зависимости модуля Tabs UI устан�
 setClientAnalyticsDependencies({
     showNotification,
     updateSearchIndex,
+    removeManyFromSearchIndex,
+    bulkAddToSearchIndex,
     applyCurrentView: applyCurrentViewModule,
 });
 console.log('[script.js] Зависимости модуля Client Analytics установлены');
