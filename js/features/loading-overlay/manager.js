@@ -167,6 +167,46 @@ export const loadingOverlayManager = {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             position: relative;
         }
+
+        /* Деликатный фон-туманность: мягкие цветные облака дрейфуют позади сферы, виньетка собирает взгляд к центру */
+        #custom-loading-overlay::before,
+        #custom-loading-overlay::after {
+        content: '';
+        position: absolute;
+        inset: -10%;
+        pointer-events: none;
+        z-index: 0;
+        }
+        #custom-loading-overlay::before {
+        background:
+            radial-gradient(42% 38% at 50% 48%, rgba(124, 58, 237, 0.20), transparent 70%),
+            radial-gradient(34% 30% at 22% 28%, rgba(99, 102, 241, 0.13), transparent 72%),
+            radial-gradient(38% 34% at 80% 74%, rgba(192, 38, 211, 0.11), transparent 72%),
+            radial-gradient(28% 26% at 70% 18%, rgba(56, 189, 248, 0.07), transparent 70%);
+        animation: loading-nebula-drift 26s ease-in-out infinite alternate;
+        will-change: transform;
+        }
+        #custom-loading-overlay::after {
+        inset: 0;
+        background: radial-gradient(ellipse at center, transparent 45%, rgba(2, 0, 12, 0.55) 100%);
+        }
+        html[data-loading-overlay-theme='light'] #custom-loading-overlay::before {
+        background:
+            radial-gradient(42% 38% at 50% 48%, rgba(124, 58, 237, 0.10), transparent 70%),
+            radial-gradient(34% 30% at 22% 28%, rgba(99, 102, 241, 0.08), transparent 72%),
+            radial-gradient(38% 34% at 80% 74%, rgba(192, 38, 211, 0.06), transparent 72%);
+        }
+        html[data-loading-overlay-theme='light'] #custom-loading-overlay::after {
+        background: radial-gradient(ellipse at center, transparent 55%, rgba(76, 29, 149, 0.10) 100%);
+        }
+        @keyframes loading-nebula-drift {
+        0% { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+        100% { transform: translate3d(1.5%, 1.2%, 0) scale(1.06); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+        #custom-loading-overlay::before { animation: none; }
+        }
+        html[data-motion='reduce'] #custom-loading-overlay::before { animation: none; }
         #loadingCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         .loading-text {
             position: absolute; bottom: 12%; left: 50%; transform: translateX(-50%);
