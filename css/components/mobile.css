@@ -1,0 +1,618 @@
+/* =================================================================== */
+/*  MOBILE / TOUCH: адаптивный слой для телефонов и планшетов          */
+/*  От iPhone X (375×812) до планшетов 13", портрет и ландшафт.        */
+/*  Нижняя навигация и шторки: js/ui/mobile-shell.js                   */
+/*  Жесты: js/ui/touch-gestures.js                                     */
+/* =================================================================== */
+
+:root {
+    --mnav-h: 58px;
+    --mnav-total: 0px; /* высота нижней панели вместе с safe-area; ставит mobile-shell */
+    --kb-inset: 0px; /* высота экранной клавиатуры (visualViewport) */
+    --tap-min: 44px;
+}
+
+/* ------------------------------------------------------------------ */
+/*  1. Основы для сенсорных экранов                                    */
+/* ------------------------------------------------------------------ */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+@media (pointer: coarse) {
+    html {
+        /* Не тянуть страницу «резинкой» и не запускать pull-to-refresh браузера поверх рабочего экрана */
+        overscroll-behavior-y: contain;
+    }
+    body {
+        -webkit-tap-highlight-color: transparent;
+    }
+    /* Без задержки и двойного тапа-зума на элементах управления */
+    button,
+    a,
+    [role='button'],
+    [role='tab'],
+    summary,
+    label,
+    select,
+    input,
+    textarea,
+    .tab-btn,
+    .view-item {
+        touch-action: manipulation;
+    }
+    /* Поля ввода ≥16px: iOS не приближает страницу при фокусе */
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+    textarea,
+    select {
+        font-size: max(16px, 1em);
+    }
+    /* Цели нажатия */
+    div[role='dialog'] button:not(.ac-swatch):not(.ac-look):not(.ac-tab):not([data-tap-small]),
+    .tab-btn,
+    #appContent .view-item > button,
+    #appContent .view-item .flex > button,
+    select {
+        min-height: 40px;
+    }
+    #appContent header button.rounded-full,
+    #appContent header .header-toolbar-row button {
+        min-width: 40px;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    /* Нет «залипшего» hover после тапа */
+    .view-item:hover:not(.main-algo-group) {
+        transform: none;
+    }
+    /* Длинное нажатие вызывает меню приложения, а не системное «копировать/поделиться» на карточках */
+    .view-item,
+    .bookmark-item,
+    .client-analytics-card {
+        -webkit-touch-callout: none;
+    }
+}
+
+/* Видимый шаг «нажато» вместо hover */
+@media (hover: none) {
+    button:not(:disabled):active,
+    [role='button']:active,
+    .tab-btn:active,
+    .mobile-nav-item:active {
+        opacity: 0.82;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  2. Телефоны: до 767px                                              */
+/* ------------------------------------------------------------------ */
+@media (max-width: 767px) {
+    #appContent {
+        padding-left: max(0.75rem, env(safe-area-inset-left));
+        padding-right: max(0.75rem, env(safe-area-inset-right));
+        padding-top: max(0.75rem, env(safe-area-inset-top));
+        padding-bottom: calc(1rem + var(--mnav-total));
+    }
+
+    /* Шапка компактнее: слоган прячем, заголовок меньше */
+    #appContent header .app-brand-title {
+        font-size: 1.375rem;
+        line-height: 1.2;
+    }
+    #appSlogan {
+        display: none;
+    }
+    #appContent header > div:not(#contextualBackNav) {
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    #appContent header .header-toolbar-row {
+        gap: 0.5rem;
+    }
+    /* Ряды иконок прокручиваются по горизонтали, а не переносятся и не раздувают шапку */
+    .header-toolbar-cluster,
+    .header-toolbar-cluster-scroll {
+        max-width: 100%;
+    }
+    .header-toolbar-cluster-scroll {
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+        padding-bottom: 2px;
+    }
+    .header-toolbar-cluster-scroll::-webkit-scrollbar {
+        display: none;
+    }
+    .header-toolbar-cluster-scroll > * {
+        scroll-snap-align: start;
+    }
+
+    /* Верхняя полоса вкладок заменена нижней навигацией (body.has-mobile-nav ставит mobile-shell) */
+    body.has-mobile-nav #staticHeaderWrapper > div.mb-3.border-b {
+        display: none;
+    }
+
+    /* Кнопки «вверх/вниз» — над нижней панелью */
+    #scrollNavButtons {
+        right: max(0.75rem, env(safe-area-inset-right)) !important;
+        bottom: calc(var(--mnav-total) + 0.75rem) !important;
+    }
+    #scrollNavButtons button {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Карточки на всю ширину, без «рамки в рамке» */
+    #appContent .view-item {
+        border-radius: calc(var(--border-radius, 8px) * 1.25);
+    }
+    #appContent .tab-content > .p-4,
+    #appContent .tab-content > div > .p-4 {
+        padding: 0.75rem;
+    }
+    .container.mx-auto {
+        max-width: 100%;
+    }
+
+    /* Таблицы не ломают страницу: прокрутка внутри */
+    #appContent table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* HUD статуса компактнее и ниже выреза */
+    #bg-status-hud {
+        left: 0.5rem !important;
+        right: 0.5rem !important;
+        top: max(0.5rem, env(safe-area-inset-top)) !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+
+    /* Подсказки/поиск: на всю ширину, выше клавиатуры */
+    #searchResults {
+        max-height: min(24rem, calc(var(--vvh, 100dvh) - 9rem));
+    }
+}
+
+/* Совсем узкие (iPhone SE/mini, 320–374) */
+@media (max-width: 374px) {
+    #appContent {
+        padding-left: max(0.5rem, env(safe-area-inset-left));
+        padding-right: max(0.5rem, env(safe-area-inset-right));
+    }
+    #appContent header .app-brand-title {
+        font-size: 1.2rem;
+    }
+    .mobile-nav-item span {
+        font-size: 0.625rem;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  3. Нижняя навигация                                                */
+/* ------------------------------------------------------------------ */
+.mobile-nav {
+    display: none;
+}
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+    body.has-mobile-nav {
+        --mnav-total: calc(var(--mnav-h) + env(safe-area-inset-bottom, 0px));
+    }
+    .mobile-nav {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 44; /* ниже модалок (50+), выше обычного контента */
+        display: flex;
+        align-items: stretch;
+        justify-content: space-around;
+        gap: 2px;
+        height: var(--mnav-total);
+        padding: 4px max(6px, env(safe-area-inset-right)) env(safe-area-inset-bottom, 0px)
+            max(6px, env(safe-area-inset-left));
+        background: color-mix(in srgb, var(--color-surface-1, #1c1c2e) 88%, transparent);
+        -webkit-backdrop-filter: saturate(160%) blur(18px);
+        backdrop-filter: saturate(160%) blur(18px);
+        border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+        box-shadow: 0 -8px 24px -16px rgba(0, 0, 0, 0.45);
+        transition:
+            transform 220ms var(--ease-emph, ease),
+            opacity 180ms ease;
+    }
+    body:not(.has-mobile-nav) .mobile-nav {
+        display: none;
+    }
+    body.mobile-nav-hidden .mobile-nav {
+        transform: translateY(110%);
+        opacity: 0;
+        pointer-events: none;
+    }
+    html.kb-open .mobile-nav {
+        transform: translateY(110%);
+        opacity: 0;
+        pointer-events: none;
+    }
+    html.kb-open body.has-mobile-nav {
+        --mnav-total: 0px;
+    }
+    .mobile-nav-item {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 2px;
+        border: 0;
+        background: transparent;
+        color: var(--color-text-secondary, #9ca3af);
+        font: inherit;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        line-height: 1.1;
+        border-radius: 14px;
+        cursor: pointer;
+        -webkit-user-select: none;
+        user-select: none;
+        transition:
+            color 160ms ease,
+            background-color 160ms ease,
+            transform 160ms var(--ease-spring, ease);
+    }
+    .mobile-nav-item i {
+        font-size: 1.15rem;
+        line-height: 1;
+        transition: transform 220ms var(--ease-spring, ease);
+    }
+    .mobile-nav-item span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .mobile-nav-item.is-active {
+        color: var(--color-primary, #9933ff);
+        background: color-mix(in srgb, var(--color-primary, #9933ff) 14%, transparent);
+    }
+    .mobile-nav-item.is-active i {
+        transform: translateY(-1px) scale(1.12);
+    }
+    .mobile-nav-item:active {
+        transform: scale(0.94);
+    }
+    .mobile-nav-item:focus-visible {
+        outline: 2px solid var(--color-primary, #9933ff);
+        outline-offset: -2px;
+    }
+}
+
+/* Ландшафт телефона: низкая панель только с иконками */
+@media (pointer: coarse) and (max-height: 500px) {
+    body.has-mobile-nav {
+        --mnav-h: 44px;
+    }
+    .mobile-nav-item {
+        flex-direction: row;
+        gap: 6px;
+        font-size: 0.75rem;
+    }
+    .mobile-nav-item i {
+        font-size: 1rem;
+    }
+    #appContent {
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+        padding-top: max(0.5rem, env(safe-area-inset-top));
+        padding-bottom: calc(0.75rem + var(--mnav-total));
+    }
+    #appContent header .app-brand-title {
+        font-size: 1.15rem;
+    }
+    #appSlogan {
+        display: none;
+    }
+    body.has-mobile-nav #staticHeaderWrapper > div.mb-3.border-b {
+        display: none;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  4. Шторка «Ещё»                                                    */
+/* ------------------------------------------------------------------ */
+.mobile-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+}
+.mobile-sheet-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.mobile-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 71;
+    max-height: min(82dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 1rem));
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface-2, #232338);
+    color: var(--color-text-primary, #f3f4f6);
+    border-radius: 22px 22px 0 0;
+    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+    border-bottom: 0;
+    box-shadow: 0 -18px 50px -20px rgba(0, 0, 0, 0.6);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translateY(105%);
+    transition: transform 280ms var(--ease-emph, cubic-bezier(0.2, 0.9, 0.25, 1));
+    will-change: transform;
+    overscroll-behavior: contain;
+}
+.mobile-sheet.is-open {
+    transform: translateY(0);
+}
+.mobile-sheet.is-dragging {
+    transition: none;
+}
+.mobile-sheet-handle {
+    flex: none;
+    width: 100%;
+    padding: 10px 0 6px;
+    display: flex;
+    justify-content: center;
+    touch-action: none;
+    cursor: grab;
+}
+.mobile-sheet-handle::before {
+    content: '';
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-border, rgba(255, 255, 255, 0.28));
+    opacity: 0.9;
+}
+.mobile-sheet-title {
+    flex: none;
+    margin: 0;
+    padding: 2px 20px 10px;
+    font-size: 1rem;
+    font-weight: 700;
+}
+.mobile-sheet-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 14px 16px;
+}
+.mobile-sheet-section {
+    margin: 10px 6px 6px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #9ca3af);
+}
+.mobile-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 8px;
+}
+.mobile-sheet-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 82px;
+    padding: 12px 6px;
+    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+    border-radius: 16px;
+    background: var(--color-surface-1, rgba(255, 255, 255, 0.04));
+    color: inherit;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+    cursor: pointer;
+    transition:
+        transform 160ms var(--ease-spring, ease),
+        background-color 160ms ease,
+        border-color 160ms ease;
+}
+.mobile-sheet-tile i {
+    font-size: 1.3rem;
+    color: var(--color-primary, #9933ff);
+}
+.mobile-sheet-tile:active {
+    transform: scale(0.95);
+}
+.mobile-sheet-tile.is-active {
+    border-color: var(--color-primary, #9933ff);
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 14%, transparent);
+}
+body.mobile-sheet-open {
+    overflow: hidden;
+}
+@media (min-width: 768px) and (pointer: fine) {
+    .mobile-sheet,
+    .mobile-sheet-backdrop {
+        display: none;
+    }
+}
+/* Планшет: шторка по центру, не на всю ширину */
+@media (min-width: 600px) {
+    .mobile-sheet {
+        left: 50%;
+        right: auto;
+        width: min(560px, 100%);
+        margin-left: calc(min(560px, 100%) / -2);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  5. Модальные окна на телефонах                                     */
+/* ------------------------------------------------------------------ */
+@media (max-width: 640px) {
+    div[role='dialog'].fixed.inset-0 {
+        padding: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
+            max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+    }
+    div[role='dialog'].fixed.inset-0 .modal-inner-container {
+        max-height: calc(var(--vvh, 100dvh) - 1rem - env(safe-area-inset-top, 0px));
+        border-radius: calc(var(--border-radius, 8px) * 2);
+    }
+    div[role='dialog'].fixed.inset-0 .p-content,
+    div[role='dialog'].fixed.inset-0 .p-6 {
+        padding: 0.875rem;
+    }
+    /* Кнопки действий в подвале окна — на всю ширину столбцом, главная первой */
+    div[role='dialog'].fixed.inset-0 .modal-actions,
+    div[role='dialog'].fixed.inset-0 footer {
+        flex-wrap: wrap;
+    }
+}
+.modal-sheet-handle {
+    display: none;
+}
+@media (max-width: 640px) {
+    .modal-sheet-handle {
+        display: block;
+        flex: none;
+        width: 100%;
+        height: 18px;
+        position: relative;
+        touch-action: none;
+    }
+    .modal-sheet-handle::before {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 7px;
+        width: 40px;
+        height: 4px;
+        margin-left: -20px;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: 0.22;
+    }
+}
+div[role='dialog'].fixed.inset-0 .is-sheet-dragging {
+    transition: none !important;
+}
+div[role='dialog'].fixed.inset-0 .is-sheet-settling {
+    transition: transform 240ms var(--ease-emph, cubic-bezier(0.2, 0.9, 0.25, 1)) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/*  6. Жесты: подсказка смены вкладки                                  */
+/* ------------------------------------------------------------------ */
+@keyframes swipe-nudge-next {
+    0% { transform: translateX(0); }
+    35% { transform: translateX(-14px); }
+    100% { transform: translateX(0); }
+}
+@keyframes swipe-nudge-prev {
+    0% { transform: translateX(0); }
+    35% { transform: translateX(14px); }
+    100% { transform: translateX(0); }
+}
+html:not([data-motion='reduce']) .tab-content.swipe-nudge-next {
+    animation: swipe-nudge-next 260ms var(--ease-emph, ease);
+}
+html:not([data-motion='reduce']) .tab-content.swipe-nudge-prev {
+    animation: swipe-nudge-prev 260ms var(--ease-emph, ease);
+}
+.swipe-edge-hint {
+    position: fixed;
+    top: 50%;
+    z-index: 43;
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: var(--color-primary, #9933ff);
+    box-shadow: 0 8px 22px -8px var(--color-primary, #9933ff);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+.swipe-edge-hint.is-left {
+    left: 8px;
+}
+.swipe-edge-hint.is-right {
+    right: 8px;
+}
+.swipe-edge-hint.is-visible {
+    opacity: 0.92;
+}
+
+/* ------------------------------------------------------------------ */
+/*  7. Планшеты и сложные случаи                                       */
+/* ------------------------------------------------------------------ */
+@media (min-width: 768px) and (max-width: 1100px) and (pointer: coarse) {
+    #appContent {
+        padding-left: max(1.25rem, env(safe-area-inset-left));
+        padding-right: max(1.25rem, env(safe-area-inset-right));
+    }
+    /* Вкладки сверху остаются, но удобные для пальца */
+    .tab-btn {
+        min-height: 44px;
+    }
+}
+
+/* Режим установленного приложения (PWA): учесть вырез/статус-бар */
+@media (display-mode: standalone) {
+    #appContent {
+        padding-top: max(0.75rem, env(safe-area-inset-top));
+    }
+}
+
+/* Уменьшение движения */
+html[data-motion='reduce'] .mobile-nav,
+html[data-motion='reduce'] .mobile-sheet,
+html[data-motion='reduce'] .mobile-sheet-backdrop,
+html[data-motion='reduce'] .mobile-nav-item i {
+    transition: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Тач-цели: мелкие кнопки интерфейса доводим до удобного размера      */
+/* ------------------------------------------------------------------ */
+@media (pointer: coarse) {
+    #mainAlgoDensityNormal,
+    #mainAlgoDensityCompact,
+    #editMainBtn,
+    #clientDataUndoBtn,
+    #clientDataRedoBtn,
+    #openClientNotesWindowBtn,
+    #openClientNotesPopupBtn,
+    #clearClientDataBtn {
+        min-height: 40px;
+        min-width: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #noInnLink {
+        display: inline-block;
+        padding-block: 10px;
+    }
+}
