@@ -752,8 +752,26 @@ div:has(> #clearClientDataBtn) {
         border-color: #f87171;
     }
 }
+@keyframes timer-return-to-client-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.94) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+/* Появление + 6 мягких пульсов (не бесконечно — меньше нагрузка и раздражение) */
 .timer-return-to-client-modal-box {
-    animation: timer-return-to-client-neon-pulse 1.5s ease-in-out infinite;
+    animation:
+        timer-return-to-client-pop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both,
+        timer-return-to-client-neon-pulse 2s ease-in-out 0.28s 6;
+}
+@media (prefers-reduced-motion: reduce) {
+    .timer-return-to-client-modal-box {
+        animation: none;
+    }
 }
 
 /* Рамка по периметру приложения при предупреждении о бэкапе перед импортом (пульс 1 раз в секунду) */
@@ -928,6 +946,16 @@ body.app-backup-warning-perimeter-pulse::before {
     overflow: hidden !important;
 }
 
+/* Общее правило .modal-inner-container (max-width 920px / max-height 90vh) сильнее Tailwind max-w-none/max-h-none,
+   из-за чего закладки, регламенты и др. не разворачивались: классы менялись, а размер — нет. */
+.is-fullscreen > .modal-inner-container {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+}
+
 .is-fullscreen > :is(.bg-white, .dark\:bg-gray-800) {
     border-radius: 0 !important;
     height: 100% !important;
@@ -946,8 +974,10 @@ body.app-backup-warning-perimeter-pulse::before {
 .is-fullscreen .mb-4:has(.modal-description-field) {
     display: flex !important;
     flex-direction: column !important;
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
+    /* Не сжимать ниже высоты поля: иначе при длинной форме контейнер схлопывался,
+       а textarea (min-height 16rem) вылезал и налезал на блок шагов. */
+    flex: 1 0 auto !important;
+    min-height: 16rem !important;
 }
 .is-fullscreen #algorithmDescriptionContainer .modal-description-field,
 .is-fullscreen .mb-4:has(.modal-description-field) .modal-description-field {
@@ -1052,4 +1082,153 @@ html.dark #algorithmModal .pdf-attachments-section .pdf-list-shell > p.text-sm.l
     font-size: 1rem;
     line-height: 1;
     vertical-align: middle;
+}
+
+/* =================================================================== */
+/*  Единый UX форм добавления/редактирования записей                   */
+/* =================================================================== */
+.form-modal-subtitle {
+    margin: 0.35rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+    color: var(--color-text-secondary, #6b7280);
+}
+.form-modal-subtitle kbd {
+    padding: 0 0.3rem;
+    border: 1px solid var(--color-border, #d1d5db);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 0.7rem;
+    background: var(--color-hover-subtle, transparent);
+}
+.form-field-error {
+    margin: 0.3rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.1rem;
+    color: #b91c1c;
+    animation: motion-rise-in var(--motion-fast, 140ms) var(--ease-out, ease-out) backwards;
+}
+html.dark .form-field-error {
+    color: #fca5a5;
+}
+.form-field-invalid,
+.form-field-invalid:focus {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25);
+}
+.form-char-counter {
+    margin-top: 0.2rem;
+    text-align: right;
+    font-size: 0.7rem;
+    color: var(--color-text-secondary, #6b7280);
+    font-variant-numeric: tabular-nums;
+}
+.form-char-counter.is-near-limit {
+    color: #d97706;
+}
+
+/* Мобильные: окна форм на всю ширину, прижаты к низу (bottom-sheet) */
+@media (max-width: 640px) {
+    div[role='dialog'].fixed.inset-0.p-4:has(.modal-content-area) {
+        padding: 0;
+        align-items: flex-end;
+    }
+    div[role='dialog'].fixed.inset-0.p-4:has(.modal-content-area) .modal-inner-container,
+    div[role='dialog'].fixed.inset-0.p-4:has(.modal-content-area) > div > div {
+        max-width: 100%;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+}
+
+/* Шапка форм: иконка + заголовок + подсказка, пометки полей (form-modal-kit) */
+.form-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.form-modal-head-text {
+    min-width: 0;
+}
+.form-modal-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.75rem;
+    color: var(--color-primary, #2563eb);
+    background: color-mix(in srgb, var(--color-primary, #2563eb) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #2563eb) 22%, transparent);
+}
+html.dark .form-modal-icon {
+    background: color-mix(in srgb, var(--color-primary, #60a5fa) 18%, transparent);
+}
+.form-required-mark {
+    color: #dc2626;
+    font-weight: 600;
+}
+html.dark .form-required-mark {
+    color: #f87171;
+}
+.form-optional-mark {
+    margin-left: 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary, #6b7280);
+}
+@media (prefers-reduced-motion: no-preference) {
+    .form-modal-icon {
+        animation: motion-rise-in var(--motion-base, 220ms) var(--ease-out, ease-out) backwards;
+    }
+}
+
+/* Мобильные: подсказка про горячие клавиши в шапке формы не нужна (нет клавиатуры) */
+@media (max-width: 640px) {
+    .form-modal-head .form-modal-subtitle {
+        display: none;
+    }
+}
+
+/* Выбор цвета папки/категории: скрытые радио, видимое кольцо выбора */
+#foldersModal input[type='radio'][name='folderColor'],
+#extLinkCategoriesModal input[type='radio'][name='categoryColor'] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+#foldersModal input[name='folderColor'] + span,
+#extLinkCategoriesModal input[name='categoryColor'] + span {
+    margin-left: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    cursor: pointer;
+    transition: transform 0.15s var(--ease-standard, ease), box-shadow 0.15s;
+}
+#foldersModal input[name='folderColor'] + span:hover,
+#extLinkCategoriesModal input[name='categoryColor'] + span:hover {
+    transform: scale(1.12);
+}
+#foldersModal input[name='folderColor']:checked + span,
+#extLinkCategoriesModal input[name='categoryColor']:checked + span {
+    box-shadow:
+        0 0 0 2px var(--color-surface, #fff),
+        0 0 0 4px currentColor;
+    transform: scale(1.08);
+}
+#foldersModal input[name='folderColor']:focus-visible + span,
+#extLinkCategoriesModal input[name='categoryColor']:focus-visible + span {
+    outline: 2px solid #8b5cf6;
+    outline-offset: 3px;
+}
+#foldersModal input[name='folderColor']:checked + span,
+#extLinkCategoriesModal input[name='categoryColor']:checked + span { color: #8b5cf6; }
+.dark #foldersModal input[name='folderColor']:checked + span,
+.dark #extLinkCategoriesModal input[name='categoryColor']:checked + span {
+    box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #c4b5fd;
 }

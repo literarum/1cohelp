@@ -1,0 +1,328 @@
+/* Виртуализированные списки (закладки, база клиентов): плавное появление, индикаторы, скелетоны */
+
+.vg-container {
+    /* высоту строк задаёт содержимое: выравнивание «auto-rows-fr» мешало бы виртуализации */
+    grid-auto-rows: auto !important;
+}
+
+.vg-container > .vg-enter {
+    animation: vg-enter-kf 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: var(--vg-delay, 0ms);
+}
+
+@keyframes vg-enter-kf {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 8px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Строка статуса «Показано N из M» */
+.vg-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--vg-muted, #6b7280);
+    min-height: 1.5rem;
+}
+.dark .vg-status {
+    --vg-muted: #9ca3af;
+}
+.vg-status[hidden] {
+    display: none;
+}
+.vg-status button {
+    font-size: 0.8125rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    color: inherit;
+    border-radius: 0.25rem;
+}
+.vg-status button:hover {
+    color: var(--color-primary, #2563eb);
+}
+.vg-status button:focus-visible {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+}
+
+/* Скелетоны загрузки */
+.vg-skeleton {
+    border-radius: 0.5rem;
+    min-height: 9.5rem;
+    background: linear-gradient(
+        100deg,
+        rgba(148, 163, 184, 0.14) 30%,
+        rgba(148, 163, 184, 0.28) 50%,
+        rgba(148, 163, 184, 0.14) 70%
+    );
+    background-size: 200% 100%;
+    animation: vg-shimmer 1.4s linear infinite;
+}
+@keyframes vg-shimmer {
+    from {
+        background-position: 200% 0;
+    }
+    to {
+        background-position: -200% 0;
+    }
+}
+
+.vg-progress {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 0.5rem 0 1rem;
+    font-size: 0.875rem;
+    color: var(--vg-muted, #6b7280);
+}
+.dark .vg-progress {
+    --vg-muted: #9ca3af;
+}
+
+/* Массовые операции: панель выделения и отметка карточки */
+.vg-bulkbar {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+    font-size: 0.875rem;
+}
+.dark .vg-bulkbar {
+    background: rgba(31, 41, 55, 0.92);
+    color: #e5e7eb;
+}
+.vg-bulkbar[hidden] {
+    display: none;
+}
+.vg-bulkbar button {
+    padding: 0.3rem 0.7rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    font-weight: 500;
+}
+.vg-bulkbar button:focus-visible {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+}
+.vg-bulkbar .vg-danger {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+}
+.vg-bulkbar .vg-danger:hover {
+    background: #b91c1c;
+}
+.bookmark-item.vg-selected {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: -2px;
+}
+.vg-select-box {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 11;
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+    accent-color: var(--color-primary, #2563eb);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vg-container > .vg-enter,
+    .vg-skeleton {
+        animation: none !important;
+    }
+}
+
+/* Панель инструментов закладок */
+.bm-tools-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+}
+.bm-tools-sep {
+    width: 1px;
+    height: 1.5rem;
+    background: rgba(148, 163, 184, 0.45);
+    margin: 0 0.25rem;
+}
+.bm-tools-btn,
+.bm-tools-input {
+    min-height: 2.25rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.55);
+    background: #fff;
+    color: #1f2937;
+    transition: background-color 160ms ease, border-color 160ms ease;
+}
+.dark .bm-tools-btn,
+.dark .bm-tools-input {
+    background: #374151;
+    color: #f3f4f6;
+    border-color: #4b5563;
+}
+.bm-tools-btn:hover {
+    background: #f3f4f6;
+}
+.dark .bm-tools-btn:hover {
+    background: #4b5563;
+}
+.bm-tools-btn[aria-pressed='true'] {
+    border-color: var(--color-primary, #2563eb);
+    background: rgba(37, 99, 235, 0.12);
+}
+.bm-tools-btn--primary {
+    background: var(--color-primary, #2563eb);
+    border-color: transparent;
+    color: #fff;
+}
+.bm-tools-btn--primary:hover {
+    background: var(--color-secondary, #1d4ed8);
+}
+.bm-tools-btn:focus-visible,
+.bm-tools-input:focus-visible {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+}
+.bm-tools-btn[hidden] {
+    display: none;
+}
+.bm-tools-inline {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+}
+
+/* Модалка дубликатов */
+.bm-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.55);
+    animation: vg-fade 180ms ease-out;
+}
+.bm-modal {
+    width: min(720px, 100%);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0.9rem;
+    background: #fff;
+    color: #111827;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+    animation: vg-pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark .bm-modal {
+    background: #1f2937;
+    color: #f3f4f6;
+}
+.bm-modal-head,
+.bm-modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1.1rem;
+}
+.bm-modal-head h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+.bm-modal-foot {
+    justify-content: flex-end;
+    border-top: 1px solid rgba(148, 163, 184, 0.3);
+}
+.bm-modal-sub {
+    padding: 0 1.1rem 0.5rem;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+.dark .bm-modal-sub {
+    color: #9ca3af;
+}
+.bm-modal-body {
+    padding: 0 1.1rem 1rem;
+    overflow: auto;
+    flex: 1;
+}
+.bm-empty {
+    padding: 1.25rem 0;
+    text-align: center;
+    color: #6b7280;
+}
+.bm-dup-group {
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.6rem;
+}
+.bm-dup-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    word-break: break-all;
+    font-size: 0.85rem;
+}
+.bm-dup-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.6rem;
+    padding: 0.25rem 0;
+    cursor: pointer;
+}
+.bm-dup-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.bm-dup-meta {
+    grid-column: 2;
+    font-size: 0.75rem;
+    color: #6b7280;
+    word-break: break-all;
+}
+@keyframes vg-fade {
+    from {
+        opacity: 0;
+    }
+}
+@keyframes vg-pop {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 10px, 0) scale(0.98);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bm-modal-backdrop,
+    .bm-modal {
+        animation: none;
+    }
+}

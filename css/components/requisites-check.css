@@ -1,0 +1,92 @@
+/* «Проверка реквизитов» */
+.rq-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: rq-fade 0.18s ease both;
+}
+.rq-modal.is-leaving { animation: rq-fade-out 0.16s ease both; }
+.rq-backdrop { position: absolute; inset: 0; background: rgba(8, 6, 20, 0.55); backdrop-filter: blur(4px); }
+.rq-card {
+    position: relative;
+    width: min(40rem, 100%);
+    max-height: min(46rem, 92vh);
+    display: flex;
+    flex-direction: column;
+    border-radius: 1.1rem;
+    background: var(--color-surface, #fff);
+    color: var(--color-text-primary, #111827);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    box-shadow: 0 24px 60px rgba(30, 10, 80, 0.35);
+    animation: rq-pop 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.dark .rq-card { background: #1f1b33; color: #f3f4f6; }
+.rq-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; border-bottom: 1px solid rgba(127, 127, 127, 0.2); }
+.rq-head h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.rq-head p { margin: 0.1rem 0 0; font-size: 0.74rem; opacity: 0.7; }
+.rq-head__icon { flex: 0 0 auto; width: 2.2rem; height: 2.2rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 0.7rem; color: #fff; background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+.rq-close { margin-left: auto; }
+.rq-body { padding: 0.9rem 1rem 1rem; overflow: auto; display: flex; flex-direction: column; gap: 0.7rem; }
+.rq-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.rq-input {
+    width: 100%; resize: vertical; min-height: 5rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem;
+    border: 1px solid rgba(127, 127, 127, 0.35); background: rgba(127, 127, 127, 0.07); color: inherit;
+    font: inherit; font-size: 0.85rem; line-height: 1.45;
+}
+.rq-input:focus { outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25); }
+.rq-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.rq-bar__btns { display: inline-flex; gap: 0.4rem; }
+.rq-summary { font-size: 0.8rem; opacity: 0.85; }
+.rq-summary.has-error { color: #dc2626; opacity: 1; }
+.dark .rq-summary.has-error { color: #f87171; }
+.rq-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; font-size: 0.8rem; font-weight: 600; border-radius: 0.65rem; border: 1px solid rgba(139, 92, 246, 0.45); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s, transform 0.15s; }
+.rq-btn:hover:not(:disabled) { background: rgba(139, 92, 246, 0.14); }
+.rq-btn:active:not(:disabled) { transform: scale(0.97); }
+.rq-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.rq-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 0.6rem; border: 1px solid transparent; background: transparent; color: inherit; cursor: pointer; opacity: 0.75; }
+.rq-icon-btn:hover { opacity: 1; background: rgba(139, 92, 246, 0.14); }
+.rq-btn:focus-visible, .rq-icon-btn:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+.rq-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.rq-item { display: flex; align-items: center; gap: 0.65rem; padding: 0.5rem 0.65rem; border-radius: 0.75rem; border: 1px solid rgba(127, 127, 127, 0.25); animation: rq-item-in 0.22s ease both; }
+.rq-item > i { flex: 0 0 auto; font-size: 1.05rem; }
+.rq-item--ok { border-color: rgba(34, 197, 94, 0.4); } .rq-item--ok > i { color: #16a34a; }
+.rq-item--error { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.07); } .rq-item--error > i { color: #dc2626; }
+.rq-item--info > i { color: #d97706; }
+.dark .rq-item--ok > i { color: #4ade80; } .dark .rq-item--error > i { color: #f87171; } .dark .rq-item--info > i { color: #fbbf24; }
+.rq-item__main { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.6rem; }
+.rq-item__label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; min-width: 6.5rem; }
+.rq-item__value { font-size: 0.88rem; font-weight: 600; word-break: break-all; background: none; padding: 0; color: inherit; }
+.rq-item__note { flex-basis: 100%; font-size: 0.75rem; opacity: 0.75; }
+.rq-empty { margin: 0; font-size: 0.82rem; opacity: 0.7; }
+@keyframes rq-fade { from { opacity: 0; } }
+@keyframes rq-fade-out { to { opacity: 0; } }
+@keyframes rq-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes rq-item-in { from { opacity: 0; transform: translateY(3px); } }
+@media (max-width: 520px) {
+    .rq-modal { align-items: flex-end; padding: 0; }
+    .rq-card { width: 100%; max-height: 92vh; border-radius: 1.1rem 1.1rem 0 0; }
+    .rq-head p { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rq-modal, .rq-card, .rq-item { animation: none; }
+}
+
+/* Калькулятор НДС (vc-*) */
+.vc-card { width: min(28rem, 100%); }
+.vc-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.vc-chip { padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.4); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.vc-chip:hover { background: rgba(139, 92, 246, 0.14); }
+.vc-chip.is-active { background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: transparent; color: #fff; }
+.vc-chip:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+.vc-amount { font-size: 1.15rem; font-weight: 600; min-height: 0; resize: none; }
+.vc-note { margin: 0; font-size: 0.72rem; opacity: 0.65; }
+.vc-result { display: flex; flex-direction: column; gap: 0.35rem; }
+.vc-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 0.75rem; border: 1px solid rgba(127, 127, 127, 0.25); animation: rq-item-in 0.2s ease both; }
+.vc-row span { flex: 1 1 auto; font-size: 0.8rem; opacity: 0.75; }
+.vc-row strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.vc-row--total { border-color: rgba(139, 92, 246, 0.5); background: rgba(139, 92, 246, 0.08); }
+.vc-row .is-copied { color: #16a34a; opacity: 1; }

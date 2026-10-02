@@ -1,0 +1,30 @@
+/* Применение пользовательских шрифтов: только когда выбраны (класс app-font-custom), иначе — исходный вид */
+html.app-font-custom { font-size: calc(16px * var(--app-font-scale, 1)); }
+html.app-font-custom body { line-height: calc(1.5 * var(--app-line-scale, 1)); }
+html.app-font-custom body,
+html.app-font-custom button,
+html.app-font-custom input,
+html.app-font-custom select,
+html.app-font-custom textarea { font-family: var(--app-font-ui, inherit); }
+html.app-font-custom code, html.app-font-custom pre, html.app-font-custom kbd, html.app-font-custom samp,
+html.app-font-custom .font-mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
+.font-settings-section .fs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; margin-top: 8px; }
+.font-settings-section .fs-field { display: flex; flex-direction: column; gap: 6px; font-size: 0.875rem; }
+.font-settings-section .fs-field input[type='range'] { width: 100%; accent-color: #8b5cf6; }
+.font-settings-section .fs-preview { margin-top: 12px; padding: 12px 14px; border-radius: 12px; border: 1px dashed rgba(139, 92, 246, 0.45); background: rgba(139, 92, 246, 0.06); font-family: var(--app-font-ui, inherit); font-size: calc(1rem * var(--app-font-scale, 1)); line-height: calc(1.5 * var(--app-line-scale, 1)); }
+.font-settings-section .fs-preview-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; margin-bottom: 4px; }
+.font-settings-section .fs-preview code { display: block; margin-top: 6px; font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 0.85em; opacity: 0.85; }
+.font-settings-section .fs-reset { margin-top: 10px; padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.5); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s ease; }
+.font-settings-section .fs-reset:hover { background: rgba(139, 92, 246, 0.12); }
+
+/* Профили и пресеты оформления */
+.appearance-profile-section .ap-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.appearance-profile-section .ap-chip { padding: 6px 12px; font-size: 0.8rem; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.45); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s ease, transform 0.15s ease; }
+.appearance-profile-section .ap-chip:hover { background: rgba(139, 92, 246, 0.14); transform: translateY(-1px); }
+.appearance-profile-section .ap-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.appearance-profile-section .ap-btn { padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: 1px solid rgba(128, 128, 128, 0.45); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s ease; }
+.appearance-profile-section .ap-btn:hover { background: rgba(128, 128, 128, 0.14); }
+.appearance-profile-section .ap-btn--danger { border-color: rgba(220, 38, 38, 0.55); color: #dc2626; }
+html.dark .appearance-profile-section .ap-btn--danger { color: #f87171; }
+.appearance-profile-section .ap-note { margin-top: 10px; font-size: 0.75rem; opacity: 0.7; }
+@media (prefers-reduced-motion: reduce) { .appearance-profile-section .ap-chip { transition: none; } .appearance-profile-section .ap-chip:hover { transform: none; } }

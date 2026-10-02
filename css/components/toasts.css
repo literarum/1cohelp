@@ -1,0 +1,461 @@
+/* =================================================================== */
+/*    ЕДИНАЯ СИСТЕМА ТОСТ-УВЕДОМЛЕНИЙ (js/services/notification.js)     */
+/*    Типы: success / info / warning / error / progress / hyper-alert  */
+/* =================================================================== */
+
+/* ---------- Стек (единый контейнер #notification-container) ---------- */
+#notification-container.app-toast-stack {
+    position: fixed !important;
+    top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
+    right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
+    left: auto !important;
+    width: min(412px, calc(100vw - 16px)) !important;
+    max-width: none !important;
+    max-height: calc(100vh - 16px - env(safe-area-inset-top, 0px));
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px));
+    padding: 6px 8px 14px;
+    margin: 0;
+    box-sizing: border-box;
+    z-index: 200000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    pointer-events: none !important;
+}
+#notification-container.app-toast-stack:empty {
+    display: none !important;
+}
+#notification-container.app-toast-stack > .app-toast-wrap {
+    pointer-events: auto;
+    flex: 0 0 auto;
+    max-height: none;
+    transition:
+        max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.22s ease,
+        transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+        margin 0.26s ease;
+}
+#notification-container.app-toast-stack > .app-toast-wrap.is-entering {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0) scale(0.98);
+}
+#notification-container.app-toast-stack > .app-toast-wrap.is-leaving {
+    opacity: 0;
+    transform: translate3d(32px, 0, 0) scale(0.98);
+    margin-top: -10px;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* ---------- Карточка ---------- */
+.app-toast {
+    --toast-accent: var(--color-primary, #9933ff);
+    --toast-bg: color-mix(in srgb, var(--toast-accent) 6%, var(--color-surface-2, #ffffff));
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 14px 13px 12px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--toast-accent) 30%, var(--color-border, #d1d5db));
+    background: var(--toast-bg);
+    color: var(--color-text-primary, #111827);
+    font-size: 14px;
+    line-height: 1.42;
+    box-shadow:
+        0 12px 32px -10px rgba(24, 12, 56, 0.32),
+        0 2px 6px rgba(24, 12, 56, 0.08);
+    overflow: hidden;
+    outline: none;
+}
+.app-toast.has-close {
+    padding-right: 40px;
+}
+.app-toast:focus-visible {
+    box-shadow:
+        0 0 0 2px var(--toast-accent),
+        0 12px 32px -10px rgba(24, 12, 56, 0.32);
+}
+.app-toast.is-clickable {
+    cursor: pointer;
+}
+.app-toast--success {
+    --toast-accent: #16a34a;
+}
+.app-toast--info {
+    --toast-accent: var(--color-primary, #9933ff);
+}
+.app-toast--warning {
+    --toast-accent: #d97706;
+}
+.app-toast--error {
+    --toast-accent: #dc2626;
+}
+.app-toast--progress {
+    --toast-accent: var(--color-primary, #9933ff);
+}
+.app-toast--hyper-alert {
+    --toast-accent: #b91c1c;
+    --toast-bg: color-mix(in srgb, #dc2626 12%, var(--color-surface-2, #ffffff));
+    border: 2px solid #eab308;
+    animation: app-toast-alert-pulse 1.8s ease-in-out infinite;
+}
+.dark .app-toast--success {
+    --toast-accent: #4ade80;
+}
+.dark .app-toast--warning {
+    --toast-accent: #fbbf24;
+}
+.dark .app-toast--error {
+    --toast-accent: #f87171;
+}
+.dark .app-toast--info,
+.dark .app-toast--progress {
+    --toast-accent: color-mix(in srgb, var(--color-primary, #9933ff) 55%, #ffffff);
+}
+.dark .app-toast {
+    --toast-bg: color-mix(in srgb, var(--toast-accent) 10%, var(--color-surface-2, #363653));
+    box-shadow:
+        0 14px 34px -10px rgba(0, 0, 0, 0.6),
+        0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.dark .app-toast--hyper-alert {
+    --toast-bg: color-mix(in srgb, #dc2626 22%, var(--color-surface-2, #363653));
+    --toast-accent: #fca5a5;
+    border-color: #facc15;
+}
+
+/* Иконка */
+.app-toast__icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin-top: 1px;
+    border-radius: 50%;
+    font-size: 15px;
+    color: var(--toast-accent);
+    background: color-mix(in srgb, var(--toast-accent) 15%, transparent);
+}
+
+/* Тело */
+.app-toast__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-top: 4px;
+}
+.app-toast__title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 1px;
+    overflow-wrap: anywhere;
+}
+.app-toast__message {
+    font-size: 13.5px;
+    color: color-mix(in srgb, var(--color-text-primary, #111827) 88%, transparent);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.app-toast__title[hidden],
+.app-toast__message[hidden],
+.app-toast__actions[hidden],
+.app-toast__count[hidden],
+.app-toast__close[hidden] {
+    display: none !important;
+}
+
+/* Действия */
+.app-toast__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.app-toast__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 4px 12px;
+    border-radius: 9px;
+    border: 1px solid color-mix(in srgb, var(--toast-accent) 38%, var(--color-border, #d1d5db));
+    background: color-mix(in srgb, var(--toast-accent) 8%, var(--color-surface-2, #ffffff));
+    color: var(--color-text-primary, #111827);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.12s ease;
+}
+.app-toast__btn:hover {
+    background: color-mix(in srgb, var(--toast-accent) 18%, var(--color-surface-2, #ffffff));
+    border-color: var(--toast-accent);
+}
+.app-toast__btn:active {
+    transform: translateY(1px);
+}
+.app-toast__btn:focus-visible {
+    outline: 2px solid var(--toast-accent);
+    outline-offset: 2px;
+}
+.app-toast__btn--primary {
+    background: var(--color-primary, #9933ff);
+    border-color: var(--color-primary, #9933ff);
+    color: var(--color-text-on-primary, #ffffff);
+}
+.app-toast__btn--primary:hover {
+    background: var(--color-secondary, #7b2fdf);
+    border-color: var(--color-secondary, #7b2fdf);
+}
+.app-toast__btn i {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+/* Закрытие */
+.app-toast__close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: color-mix(in srgb, var(--color-text-primary, #111827) 55%, transparent);
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+.app-toast__close:hover {
+    background: color-mix(in srgb, var(--color-text-primary, #111827) 10%, transparent);
+    color: var(--color-text-primary, #111827);
+}
+.app-toast__close:focus-visible {
+    outline: 2px solid var(--toast-accent);
+    outline-offset: 1px;
+}
+
+/* Счётчик дубликатов */
+.app-toast__count {
+    position: absolute;
+    top: 9px;
+    right: 38px;
+    min-width: 24px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--toast-accent);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.dark .app-toast__count {
+    color: #1b1030;
+}
+.app-toast:not(.has-close) .app-toast__count {
+    right: 10px;
+}
+.app-toast.has-count .app-toast__body {
+    padding-right: 34px;
+}
+
+/* Полоска оставшегося времени / прогресс */
+.app-toast__bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: transparent;
+    pointer-events: none;
+}
+.app-toast__bar > span {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: color-mix(in srgb, var(--toast-accent) 70%, transparent);
+    transform-origin: left center;
+    opacity: 0;
+}
+.app-toast.is-timed .app-toast__bar > span {
+    opacity: 1;
+    animation: app-toast-countdown var(--toast-duration, 4s) linear forwards;
+}
+.app-toast.is-timed.is-paused .app-toast__bar > span {
+    animation-play-state: paused;
+}
+.app-toast.is-progress .app-toast__bar {
+    height: 4px;
+    background: color-mix(in srgb, var(--toast-accent) 16%, transparent);
+}
+.app-toast.is-progress .app-toast__bar > span {
+    opacity: 1;
+    animation: none;
+    background: var(--toast-accent);
+    transition: width 0.3s ease;
+}
+.app-toast.is-progress.is-indeterminate .app-toast__bar > span {
+    width: 38%;
+    animation: app-toast-indeterminate 1.3s ease-in-out infinite;
+}
+
+/* «Подпрыгивание» при обновлении / дубликате */
+.app-toast.is-bumped {
+    animation: app-toast-bump 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes app-toast-countdown {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+@keyframes app-toast-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(270%);
+    }
+}
+@keyframes app-toast-bump {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(1.025);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+@keyframes app-toast-alert-pulse {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 0 rgba(234, 179, 8, 0.45),
+            0 12px 32px -10px rgba(185, 28, 28, 0.5);
+    }
+    50% {
+        box-shadow:
+            0 0 0 6px rgba(234, 179, 8, 0),
+            0 12px 32px -10px rgba(185, 28, 28, 0.5);
+    }
+}
+
+/* ---------- Мобильная ширина ---------- */
+@media (max-width: 640px) {
+    #notification-container.app-toast-stack {
+        left: calc(env(safe-area-inset-left, 0px) + 4px) !important;
+        right: calc(env(safe-area-inset-right, 0px) + 4px) !important;
+        width: auto !important;
+        top: calc(env(safe-area-inset-top, 0px) + 6px) !important;
+    }
+    .app-toast {
+        padding: 11px 12px 12px 10px;
+        gap: 10px;
+    }
+    .app-toast__btn {
+        min-height: 34px;
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
+
+/* ---------- Уменьшение анимации ---------- */
+@media (prefers-reduced-motion: reduce) {
+    #notification-container.app-toast-stack > .app-toast-wrap,
+    #notification-container.app-toast-stack > .app-toast-wrap.is-entering,
+    #notification-container.app-toast-stack > .app-toast-wrap.is-leaving {
+        transform: none !important;
+        transition: opacity 0.12s linear !important;
+    }
+    .app-toast.is-bumped,
+    .app-toast--hyper-alert {
+        animation: none !important;
+    }
+    .app-toast.is-timed .app-toast__bar > span {
+        animation-duration: 0.001s;
+        opacity: 0;
+    }
+    .app-toast.is-progress.is-indeterminate .app-toast__bar > span {
+        animation: none;
+        width: 100%;
+        opacity: 0.55;
+    }
+}
+
+/* Пока открыто модальное окно, стек переезжает вниз: уведомления остаются видны,
+   но не перекрывают кнопки в шапке и тулбарах диалогов (кокпит, настройки).
+   «Открыта модалка» = класс body.modal-open (его ставят не все окна) ИЛИ любой
+   видимый оверлей-диалог с id …Modal (закладки, регламенты и др.). */
+body.modal-open #notification-container.app-toast-stack,
+body:has(.fixed.inset-0[id$='Modal']:not(.hidden):not([style*='display: none'])) #notification-container.app-toast-stack {
+    top: auto !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    flex-direction: column-reverse !important;
+    max-height: 60vh;
+}
+
+/* Десктоп: кнопки сохранения стоят справа внизу формы — стек уходит в левый нижний угол. */
+@media (min-width: 641px) {
+    body.modal-open #notification-container.app-toast-stack,
+    body:has(.fixed.inset-0[id$='Modal']:not(.hidden):not([style*='display: none'])) #notification-container.app-toast-stack {
+        right: auto !important;
+        left: calc(env(safe-area-inset-left, 0px) + 8px) !important;
+    }
+}
+
+/* Мобильные: пока открыта модалка, уведомления сжимаются до строки заголовка —
+   иначе постоянная карточка (например, «Нет связи с Google Docs») закрывает кнопки формы. */
+@media (max-width: 640px) {
+    body.modal-open #notification-container.app-toast-stack,
+    body:has(.fixed.inset-0[id$='Modal']:not(.hidden):not([style*='display: none'])) #notification-container.app-toast-stack {
+        /* Вверх, в свободную полосу над шторкой: внизу кнопки сохранения. */
+        top: calc(env(safe-area-inset-top, 0px) + 6px) !important;
+        bottom: auto !important;
+        flex-direction: column !important;
+        max-height: none;
+        gap: 6px !important;
+    }
+    body.modal-open #notification-container.app-toast-stack {
+        top: calc(env(safe-area-inset-top, 0px) + 6px) !important;
+        bottom: auto !important;
+        flex-direction: column !important;
+        max-height: none;
+        gap: 6px !important;
+    }
+    body.modal-open #notification-container .app-toast .app-toast__message,
+    body.modal-open #notification-container .app-toast .app-toast__actions,
+    body:has(.fixed.inset-0[id$='Modal']:not(.hidden):not([style*='display: none'])) #notification-container .app-toast .app-toast__message,
+    body:has(.fixed.inset-0[id$='Modal']:not(.hidden):not([style*='display: none'])) #notification-container .app-toast .app-toast__actions {
+        display: none !important;
+    }
+    body.modal-open #notification-container .app-toast,
+    body:has(.fixed.inset-0[id$='Modal']:not(.hidden):not([style*='display: none'])) #notification-container .app-toast {
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+}

@@ -81,37 +81,158 @@ input.timer-input-active {
     color: var(--color-text-primary);
 }
 
-/* Осталось ≤10 сек: сильная пульсация, ярче, неоновое свечение */
-#timerDisplay.timer-urgent,
-#timerDisplay.timer-urgent .timer-segment,
-#timerDisplay.timer-urgent .timer-colon {
-    color: var(--color-red-border) !important;
-    background-color: var(--color-red-bg-medium) !important;
-    box-shadow:
-        0 0 12px color-mix(in srgb, var(--color-red-text) 60%, transparent),
-        0 0 24px color-mix(in srgb, var(--color-red-text) 35%, transparent);
-    animation: timer-urgent-pulse 0.8s ease-in-out infinite;
+/* =================================================================== */
+/*  Стадии таймера: normal → warn → urgent → expired                   */
+/*  Классы выставляет timer.js (applyTimerStageClasses). Анимация —    */
+/*  только opacity/transform на псевдоэлементах (без перерисовок).      */
+/* =================================================================== */
+#appTimer {
+    --timer-warn-c: #d97706;
+    --timer-warn-fg: #92400e;
+    --timer-warn-bg: rgba(217, 119, 6, 0.14);
+    --timer-alert-c: #dc2626;
+    --timer-alert-fg: #b91c1c;
+    --timer-alert-bg: rgba(220, 38, 38, 0.14);
 }
-@keyframes timer-urgent-pulse {
+.dark #appTimer {
+    --timer-warn-c: #fbbf24;
+    --timer-warn-fg: #fcd34d;
+    --timer-warn-bg: rgba(251, 191, 36, 0.16);
+    --timer-alert-c: #f87171;
+    --timer-alert-fg: #fecaca;
+    --timer-alert-bg: rgba(248, 113, 113, 0.2);
+}
+
+#appTimer #timerDisplay {
+    position: relative;
+    isolation: isolate;
+    transition:
+        color 0.6s var(--ease-standard, ease),
+        background-color 0.6s var(--ease-standard, ease);
+}
+#appTimer #timerDisplay::before,
+#appTimer #timerDisplay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    z-index: -1;
+}
+/* ::after — мягкое свечение (меняется только opacity) */
+#appTimer #timerDisplay::after {
+    box-shadow:
+        0 0 0 1px var(--timer-glow-c, transparent),
+        0 0 14px 1px var(--timer-glow-c, transparent);
+}
+/* ::before — расходящееся кольцо при истечении */
+#appTimer #timerDisplay::before {
+    border: 2px solid var(--timer-alert-c);
+    transform-origin: center;
+}
+
+/* 1. Скоро конец: тёплый янтарный, медленное «дыхание», к концу чаще */
+#appTimer #timerDisplay.timer-warn,
+#appTimer #timerDisplay.timer-warn .timer-segment,
+#appTimer #timerDisplay.timer-warn .timer-colon {
+    color: var(--timer-warn-fg) !important;
+}
+#appTimer #timerDisplay.timer-warn {
+    --timer-glow-c: var(--timer-warn-c);
+    background-color: var(--timer-warn-bg) !important;
+}
+#appTimer #timerDisplay.timer-warn::after {
+    animation: timer-breathe 2.6s ease-in-out infinite;
+}
+#appTimer #timerDisplay.timer-warn-late::after {
+    animation-duration: 1.7s;
+}
+
+/* 2. Последние 10 секунд: красный, заметнее и быстрее */
+#appTimer #timerDisplay.timer-urgent,
+#appTimer #timerDisplay.timer-urgent .timer-segment,
+#appTimer #timerDisplay.timer-urgent .timer-colon {
+    color: var(--timer-alert-fg) !important;
+}
+#appTimer #timerDisplay.timer-urgent {
+    --timer-glow-c: var(--timer-alert-c);
+    background-color: var(--timer-alert-bg) !important;
+}
+#appTimer #timerDisplay.timer-urgent::after {
+    animation: timer-breathe 0.9s ease-in-out infinite;
+}
+
+/* 3. Время истекло: статичный красный + кольцо (3 раза) + пульс до клика */
+#appTimer #timerDisplay.timer-zero,
+#appTimer #timerDisplay.timer-zero .timer-segment,
+#appTimer #timerDisplay.timer-zero .timer-colon {
+    color: var(--timer-alert-fg) !important;
+}
+#appTimer #timerDisplay.timer-zero {
+    --timer-glow-c: var(--timer-alert-c);
+    background-color: var(--timer-alert-bg) !important;
+}
+#appTimer #timerDisplay.timer-zero::after {
+    opacity: 0.85;
+    animation: timer-breathe-strong 1.8s ease-in-out infinite;
+}
+#appTimer #timerDisplay.timer-zero::before {
+    animation: timer-ring 1.5s cubic-bezier(0.2, 0.6, 0.3, 1) 3;
+}
+/* Пользователь «погасил» пульс кликом: остаётся статичное заметное состояние */
+#appTimer #timerDisplay.timer-zero.timer-acked::after {
+    animation: none;
+    opacity: 0.7;
+}
+
+@keyframes timer-breathe {
     0%,
     100% {
-        opacity: 1;
-        box-shadow:
-            0 0 12px color-mix(in srgb, var(--color-red-text) 60%, transparent),
-            0 0 24px color-mix(in srgb, var(--color-red-text) 35%, transparent);
+        opacity: 0.1;
+    }
+    50% {
+        opacity: 0.75;
+    }
+}
+@keyframes timer-breathe-strong {
+    0%,
+    100% {
+        opacity: 0.55;
     }
     50% {
         opacity: 1;
-        box-shadow:
-            0 0 20px color-mix(in srgb, var(--color-red-text) 90%, transparent),
-            0 0 40px color-mix(in srgb, var(--color-red-text) 50%, transparent);
     }
 }
-/* Таймер на нуле: красное свечение и красные цифры остаются */
-#timerDisplay.timer-zero,
-#timerDisplay.timer-zero .timer-segment,
-#timerDisplay.timer-zero .timer-colon {
-    color: var(--color-red-text) !important;
-    background-color: var(--color-red-bg-urgent) !important;
-    box-shadow: 0 0 16px color-mix(in srgb, var(--color-red-text) 70%, transparent);
+/* Кольцо не выходит за границы: родитель .header-toolbar-cluster-scroll обрезает (overflow:auto),
+   поэтому «вспышка» сходится изнутри и лишь слегка расширяется по горизонтали. */
+@keyframes timer-ring {
+    0% {
+        opacity: 0;
+        transform: scale(0.88, 0.78);
+    }
+    35% {
+        opacity: 0.95;
+        transform: scale(1, 1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.1, 1);
+    }
+}
+
+/* Уменьшение движения: только смена цвета, без пульсаций и колец */
+@media (prefers-reduced-motion: reduce) {
+    #appTimer #timerDisplay::before {
+        display: none;
+    }
+    #appTimer #timerDisplay.timer-warn::after,
+    #appTimer #timerDisplay.timer-urgent::after,
+    #appTimer #timerDisplay.timer-zero::after {
+        animation: none !important;
+        opacity: 0.45;
+    }
+    #appTimer #timerDisplay {
+        transition: none;
+    }
 }

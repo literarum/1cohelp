@@ -1236,3 +1236,44 @@ html.dark #dbMergeModal .db-merge-history-item {
         flex-direction: column;
     }
 }
+
+/* Массовый выбор по разделу и прогресс решений */
+#dbMergeModal .db-merge-bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+#dbMergeModal .db-merge-bulk-btn {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+#dbMergeModal .db-merge-bulk-btn:hover {
+    background: rgba(139, 92, 246, 0.14);
+}
+#dbMergeModal .db-merge-conflict-progress {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+    border-radius: 0.6rem;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    backdrop-filter: blur(6px);
+}
+#dbMergeModal .db-merge-conflict-progress.is-done {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.4);
+}

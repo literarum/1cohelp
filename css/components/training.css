@@ -785,3 +785,127 @@
     user-select: none;
     pointer-events: none;
 }
+
+/* Повторения (SRS): сводка, прогноз, кнопки оценки с подсказкой интервала */
+.training-srs-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.training-srs-stat { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.28); background: rgba(128, 128, 128, 0.06); }
+.training-srs-stat__value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.training-srs-stat__label { font-size: 0.72rem; opacity: 0.7; }
+.training-srs-stat--due .training-srs-stat__value { color: #dc2626; }
+.training-srs-stat--new .training-srs-stat__value { color: #2563eb; }
+.training-srs-stat--mature .training-srs-stat__value { color: #059669; }
+html.dark .training-srs-stat--due .training-srs-stat__value { color: #f87171; }
+html.dark .training-srs-stat--new .training-srs-stat__value { color: #60a5fa; }
+html.dark .training-srs-stat--mature .training-srs-stat__value { color: #34d399; }
+.training-srs-forecast { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 84px; margin-bottom: 14px; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2); }
+.training-srs-forecast__col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; height: 100%; font-size: 0.65rem; }
+.training-srs-forecast__bar { width: 100%; max-width: 28px; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, #8b5cf6, #6366f1); transition: height 0.4s ease; }
+.training-srs-forecast__n { font-variant-numeric: tabular-nums; opacity: 0.8; }
+.training-srs-forecast__d { opacity: 0.6; white-space: nowrap; }
+.training-srs-grade { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; transition: transform 0.12s ease, filter 0.12s ease; }
+.training-srs-grade:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.training-srs-grade:active { transform: translateY(0); }
+.training-srs-grade__hint { font-size: 0.68rem; opacity: 0.85; }
+.training-srs-grade__key { position: absolute; top: 3px; right: 6px; font: inherit; font-size: 0.6rem; opacity: 0.6; }
+@media (max-width: 640px) { .training-srs-grade__key { display: none; } }
+@media (prefers-reduced-motion: reduce) { .training-srs-grade, .training-srs-forecast__bar { transition: none; } .training-srs-grade:hover { transform: none; } }
+
+/* Учебник: сводка, фильтры, сворачиваемые модули */
+.training-overview { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(128, 128, 128, 0.28); background: rgba(139, 92, 246, 0.06); }
+.training-overview__main { flex: 1 1 260px; min-width: 0; }
+.training-overview__title { font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
+.training-overview__bar { height: 8px; border-radius: 999px; background: rgba(128, 128, 128, 0.25); overflow: hidden; }
+.training-overview__bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8b5cf6, #22c55e); transition: width 0.5s ease; }
+.training-overview__continue { padding: 8px 16px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; color: #fff; background: #7c3aed; border: 0; cursor: pointer; transition: filter 0.15s ease, transform 0.15s ease; }
+.training-overview__continue:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+.training-overview__continue:disabled { opacity: 0.4; cursor: default; }
+.training-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.training-filter-chip { padding: 5px 12px; font-size: 0.8rem; border-radius: 999px; border: 1px solid rgba(128, 128, 128, 0.4); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; }
+.training-filter-chip:hover { background: rgba(139, 92, 246, 0.12); }
+.training-filter-chip.is-active { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.2); font-weight: 600; }
+.training-filter-count { opacity: 0.6; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.training-track-details > summary { list-style: none; cursor: pointer; }
+.training-track-details > summary::-webkit-details-marker { display: none; }
+.training-track-chevron { font-size: 0.75rem; opacity: 0.6; transition: transform 0.2s ease; }
+.training-track-details[open] .training-track-chevron { transform: rotate(90deg); }
+.training-track-badge { padding: 1px 8px; font-size: 0.7rem; border-radius: 999px; font-weight: 600; }
+.training-track-badge--new { background: rgba(128, 128, 128, 0.2); }
+.training-track-badge--progress { background: rgba(245, 158, 11, 0.22); color: #b45309; }
+.training-track-badge--done { background: rgba(34, 197, 94, 0.22); color: #15803d; }
+html.dark .training-track-badge--progress { color: #fbbf24; }
+html.dark .training-track-badge--done { color: #4ade80; }
+.training-step--flash { animation: training-step-flash 1.5s ease; }
+@keyframes training-step-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); } 30% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.45); } }
+@media (prefers-reduced-motion: reduce) { .training-overview__bar > span, .training-track-chevron, .training-overview__continue { transition: none; } .training-step--flash { animation: none; } }
+
+/* Наставник: шаги и итоги */
+.training-mentor-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 0.6rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+.training-mentor-steps li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.8rem;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    background: rgba(127, 127, 127, 0.08);
+    border: 1px solid rgba(127, 127, 127, 0.2);
+}
+.training-mentor-steps li b {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    color: #fff;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+}
+.training-mentor-totals {
+    margin: 0.8rem 0 0;
+    font-size: 0.78rem;
+    opacity: 0.75;
+}
+
+/* Пустое состояние и счётчик «Слабых мест» */
+.training-weak-count {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    vertical-align: middle;
+    color: #fff;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+}
+.training-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 1.6rem 1rem;
+    text-align: center;
+    border-radius: 1rem;
+    border: 1px dashed rgba(139, 92, 246, 0.4);
+    background: rgba(139, 92, 246, 0.05);
+}
+.training-empty i {
+    font-size: 1.6rem;
+    color: #8b5cf6;
+}
+.training-empty span {
+    max-width: 34rem;
+    font-size: 0.82rem;
+    opacity: 0.75;
+    line-height: 1.45;
+}

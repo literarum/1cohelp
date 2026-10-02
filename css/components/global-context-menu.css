@@ -34,10 +34,13 @@
     line-height: 1.25rem;
     outline: none;
     opacity: 0;
-    transform: translateY(4px) scale(0.98);
+    transform: translateY(4px) scale(0.97);
+    transform-origin: top left;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     transition:
-        opacity 0.14s ease-out,
-        transform 0.14s ease-out;
+        opacity var(--motion-fast, 0.14s) var(--ease-out, ease-out),
+        transform var(--motion-fast, 0.14s) var(--ease-out, ease-out);
     -webkit-font-smoothing: antialiased;
 }
 
@@ -73,6 +76,28 @@ html.dark .global-context-menu {
     cursor: pointer;
     font: inherit;
     letter-spacing: 0.01em;
+    gap: 16px;
+    justify-content: space-between;
+}
+.global-context-menu__hint {
+    margin-left: auto;
+    font: inherit;
+    font-size: 0.75rem;
+    opacity: 0.55;
+    white-space: nowrap;
+}
+.global-context-menu__item--danger {
+    color: var(--color-red-text, #dc2626);
+}
+html.dark .global-context-menu__item--danger {
+    color: #f87171;
+}
+@media (prefers-reduced-motion: reduce) {
+    .global-context-menu,
+    .global-context-menu-backdrop {
+        transition: none;
+        transform: none;
+    }
 }
 
 /* Ховер только у устройств с реальным hover (меньше «залипаний» после тапа / гибридных сценариев). */

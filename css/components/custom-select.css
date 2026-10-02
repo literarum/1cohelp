@@ -1,0 +1,47 @@
+/* Кастомные select: единый стиль приложения (обе темы), мобильный bottom-sheet */
+.cs-wrap { position: relative; display: inline-block; max-width: 100%; vertical-align: middle; }
+.cs-wrap--block { display: block; width: 100%; }
+.cs-native { position: absolute !important; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; z-index: -1; }
+.cs-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-width: 0;
+    padding: 0.5rem 0.75rem; font: inherit; color: inherit; text-align: left; cursor: pointer;
+    background: var(--cs-bg, #fff); border: 1px solid var(--cs-border, #d1d5db); border-radius: var(--cs-radius, 0.5rem);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.cs-trigger:hover:not(:disabled) { border-color: var(--cs-border-hover, #a78bfa); }
+.cs-trigger:focus-visible, .cs-wrap.cs-open .cs-trigger { outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25); }
+.cs-trigger:disabled { opacity: 0.55; cursor: not-allowed; }
+.cs-trigger.cs-invalid { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18); }
+.cs-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.cs-value.cs-placeholder { opacity: 0.6; }
+.cs-caret { width: 16px; height: 16px; flex: none; opacity: 0.7; transition: transform 0.2s ease; }
+.cs-wrap.cs-open .cs-caret { transform: rotate(180deg); }
+.cs-panel {
+    position: fixed; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
+    background: var(--cs-panel-bg, #fff); color: var(--cs-panel-fg, #1f2937);
+    border: 1px solid var(--cs-border, #e5e7eb); border-radius: 0.75rem;
+    box-shadow: 0 18px 40px -12px rgba(76, 29, 149, 0.28), 0 4px 12px rgba(0, 0, 0, 0.12);
+    opacity: 0; transform: translateY(-4px) scale(0.98); transform-origin: top center;
+    transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.cs-panel[hidden] { display: none; }
+.cs-panel--up { transform-origin: bottom center; transform: translateY(4px) scale(0.98); }
+.cs-panel--in { opacity: 1; transform: none; }
+.cs-search-wrap { padding: 8px; border-bottom: 1px solid var(--cs-border, #e5e7eb); }
+.cs-search { width: 100%; box-sizing: border-box; padding: 0.4rem 0.6rem; font: inherit; color: inherit; background: transparent; border: 1px solid var(--cs-border, #d1d5db); border-radius: 0.5rem; }
+.cs-search:focus { outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2); }
+.cs-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; overscroll-behavior: contain; }
+.cs-option { padding: 0.45rem 0.65rem; border-radius: 0.5rem; cursor: pointer; line-height: 1.35; position: relative; }
+.cs-option.cs-active { background: rgba(139, 92, 246, 0.14); }
+.cs-option[aria-selected='true'] { font-weight: 600; color: #6d28d9; }
+.cs-option[aria-selected='true']::after { content: '✓'; position: absolute; right: 0.65rem; }
+.cs-option[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
+.cs-group { padding: 0.5rem 0.65rem 0.2rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.6; }
+.cs-empty { padding: 0.7rem; text-align: center; opacity: 0.6; }
+.cs-panel--sheet { left: 8px !important; right: 8px; bottom: 8px !important; top: auto !important; width: auto !important; min-width: 0 !important; max-height: 70vh !important; border-radius: 1rem; transform: translateY(16px); }
+.cs-panel--sheet.cs-panel--in { transform: none; }
+.dark .cs-trigger, html.dark .cs-trigger { --cs-bg: #374151; --cs-border: #4b5563; --cs-border-hover: #8b5cf6; color: #f3f4f6; }
+.dark .cs-panel { --cs-panel-bg: #1f2937; --cs-panel-fg: #f3f4f6; --cs-border: #4b5563; }
+.dark .cs-option[aria-selected='true'] { color: #c4b5fd; }
+.dark .cs-option.cs-active { background: rgba(167, 139, 250, 0.2); }
+@media (prefers-reduced-motion: reduce) { .cs-panel, .cs-caret, .cs-trigger { transition: none; } }
