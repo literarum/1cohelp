@@ -56,6 +56,35 @@ try {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
     else run();
 })();
+(function bootMobileShell() {
+    const run = async () => {
+        try {
+            const [shell, gestures, mm] = await Promise.all([
+                import('./js/ui/mobile-shell.js'),
+                import('./js/ui/touch-gestures.js'),
+                import('./js/ui/modal-choreographer.js'),
+            ]);
+            shell.initMobileShell();
+            gestures.initTouchGestures({
+                isMobile: shell.isMobileLayout,
+                getTabIds: shell.getMobileTabIds,
+                getActiveTabId: shell.getActiveTabId,
+                activateTab: (id) => shell.activateTabById(id),
+                hasOpenOverlay: () =>
+                    document.body.classList.contains('mobile-sheet-open') ||
+                    document.body.classList.contains('mobile-nav-hidden'),
+                closeModal: (modal) => {
+                    const btn = mm.findCloseButton(modal);
+                    if (btn) btn.click();
+                },
+            });
+        } catch (e) {
+            console.warn('[mobile-shell] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 (function bootFormModalKit() {
     const run = () => {
         try {
