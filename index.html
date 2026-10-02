@@ -13,6 +13,22 @@
         <meta name="apple-mobile-web-app-title" content="1СО Copilot" />
         <link rel="manifest" href="manifest.webmanifest" />
         <link rel="apple-touch-icon" href="icons/icon-180.png" />
+        <!-- Режим движения (auto/calm/reduce) выставляется до первой отрисовки: см. js/utils/motion-pref.js -->
+        <script>
+            (function earlyMotionMode() {
+                try {
+                    var m = localStorage.getItem('copilot.motion.v1');
+                    var sys =
+                        window.matchMedia &&
+                        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                    var level = m === 'reduce' || sys ? 'reduce' : m === 'calm' ? 'calm' : 'full';
+                    document.documentElement.setAttribute('data-motion', level);
+                    document.documentElement.setAttribute('data-motion-mode', m || 'auto');
+                } catch (_) {
+                    document.documentElement.setAttribute('data-motion', 'full');
+                }
+            })();
+        </script>
         <!-- Ранняя регистрация SW: критерий installable (controller до конца загрузки) для Chromium/Yandex. -->
         <script>
             (function earlyPwaServiceWorker() {
@@ -625,6 +641,9 @@
                             [245, 185, 255, 0.95],
                             [195, 115, 255, 1],
                             [165, 95, 242, 0.98],
+                            [96, 190, 255, 0.95],
+                            [255, 140, 215, 0.95],
+                            [120, 220, 235, 0.9],
                         ],
                         particleCount: 2600,
                         haloSizeScale: 1.35,
@@ -691,39 +710,54 @@
                     backgroundColor: 'rgba(0, 0, 0, 0)',
                 };
 
-                // Предрендеренные спрайты свечения: визуально идентичны радиальным градиентам,
-                // но без createRadialGradient на каждую частицу и каждый кадр (в разы быстрее).
+                // Предрендеренные спрайты свечения: ядро и слои гало запечены в ОДИН спрайт на цвет и уровень
+                // качества — на частицу приходится один drawImage вместо четырёх, без createRadialGradient
+                // на каждую частицу и каждый кадр. Внешний вид тот же: те же слои, размеры и прозрачности.
                 const SPRITE_PX = 128;
-                const haloSprites = new Map();
-                const coreSprites = new Map();
-                function makeSprite(r, g, b, kind) {
+                const HALO_LAYERS = [
+                    { sizeFactor: 5, alphaFactor: 0.2 },
+                    { sizeFactor: 3.5, alphaFactor: 0.28 },
+                    { sizeFactor: 2.2, alphaFactor: 0.4 },
+                ];
+                const glowSprites = [new Map(), new Map(), new Map()];
+                function makeGlowSprite(r, g, b, variant) {
                     const c = document.createElement('canvas');
                     c.width = c.height = SPRITE_PX;
                     const x = c.getContext('2d');
                     const R = SPRITE_PX / 2;
-                    const grad =
-                        kind === 'halo'
-                            ? x.createRadialGradient(R, R, R * 0.1, R, R, R)
-                            : x.createRadialGradient(R, R, 0, R, R, R);
-                    if (kind === 'halo') {
+                    const layers = HALO_LAYERS.slice(variant);
+                    const outer = layers[0].sizeFactor;
+                    const hs = currentThemeProfile.haloSizeScale || 1;
+                    const ha = currentThemeProfile.haloAlphaScale || 1;
+                    for (const layer of layers) {
+                        const rad = (R * layer.sizeFactor) / outer;
+                        const grad = x.createRadialGradient(R, R, rad * 0.1, R, R, rad);
                         grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
                         grad.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.4)`);
                         grad.addColorStop(1, 'rgba(0,0,0,0)');
-                    } else {
-                        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
-                        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+                        x.globalAlpha = Math.min(1, layer.alphaFactor * ha);
+                        x.fillStyle = grad;
+                        x.beginPath();
+                        x.arc(R, R, rad, 0, Math.PI * 2);
+                        x.fill();
                     }
-                    x.fillStyle = grad;
+                    const coreRad = R / (outer * hs);
+                    const core = x.createRadialGradient(R, R, 0, R, R, coreRad);
+                    core.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
+                    core.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+                    x.globalAlpha = 1;
+                    x.fillStyle = core;
                     x.beginPath();
-                    x.arc(R, R, R, 0, Math.PI * 2);
+                    x.arc(R, R, coreRad, 0, Math.PI * 2);
                     x.fill();
                     return c;
                 }
-                function getSprite(map, r, g, b, kind) {
-                    const key = r + ',' + g + ',' + b;
+                function getGlowSprite(variant, r, g, b) {
+                    const map = glowSprites[variant];
+                    const key = (r << 16) | (g << 8) | b;
                     let sp = map.get(key);
                     if (!sp) {
-                        sp = makeSprite(r, g, b, kind);
+                        sp = makeGlowSprite(r, g, b, variant);
                         map.set(key, sp);
                     }
                     return sp;
@@ -829,39 +863,23 @@
                         );
                         if (mainAlpha <= 0.02) return;
                         const mainSize = this.currentDisplaySize;
-                        const useHalo = currentThemeProfile.useHalo !== false && !haloDisabledByPerf;
+                        const useHalo =
+                            currentThemeProfile.useHalo !== false &&
+                            !haloDisabledByPerf &&
+                            haloLayersSkipped < HALO_LAYERS.length;
                         if (useHalo) {
-                            const haloLayers = [
-                                { sizeFactor: 5, alphaFactor: 0.2 },
-                                { sizeFactor: 3.5, alphaFactor: 0.28 },
-                                { sizeFactor: 2.2, alphaFactor: 0.4 },
-                            ];
-                            for (const layer of haloLayers.slice(haloLayersSkipped)) {
-                                const haloSize =
-                                    mainSize * layer.sizeFactor * (currentThemeProfile.haloSizeScale || 1);
-                                const haloAlpha = Math.min(
-                                    1,
-                                    mainAlpha * layer.alphaFactor * (currentThemeProfile.haloAlphaScale || 1),
-                                );
-                                if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
-                                ctx.globalAlpha = haloAlpha;
-                                ctx.drawImage(
-                                    getSprite(haloSprites, this.color_r, this.color_g, this.color_b, 'halo'),
-                                    this.screenX - haloSize,
-                                    this.screenY - haloSize,
-                                    haloSize * 2,
-                                    haloSize * 2,
-                                );
-                            }
-                        }
-                        if (useHalo) {
+                            const variant = haloLayersSkipped;
+                            const size =
+                                mainSize *
+                                HALO_LAYERS[variant].sizeFactor *
+                                (currentThemeProfile.haloSizeScale || 1);
                             ctx.globalAlpha = mainAlpha;
                             ctx.drawImage(
-                                getSprite(coreSprites, this.color_r, this.color_g, this.color_b, 'core'),
-                                this.screenX - mainSize,
-                                this.screenY - mainSize,
-                                mainSize * 2,
-                                mainSize * 2,
+                                getGlowSprite(variant, this.color_r, this.color_g, this.color_b),
+                                this.screenX - size,
+                                this.screenY - size,
+                                size * 2,
+                                size * 2,
                             );
                         } else {
                             ctx.fillStyle = `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`;
@@ -890,6 +908,7 @@
 
                 function prefersReducedMotion() {
                     try {
+                        if (document.documentElement.dataset.motion === 'reduce') return true;
                         return Boolean(
                             window.matchMedia &&
                             window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -915,25 +934,39 @@
                     }
                 }
 
-                // Мягкая адаптация: на очень слабом рендере (программный canvas) отбрасываем САМЫЕ БОЛЬШИЕ,
-                // едва заметные слои свечения (они дороже всего по площади заливки). Частицы, ядро и
-                // ближнее гало остаются — сфера выглядит так же богато, а главный поток не голодает.
+                // Адаптивное качество (ступенчатое, только вниз): заставка не должна занимать главный поток
+                // и задерживать инициализацию IndexedDB/интерфейса на слабых ПК (программный canvas, батарея).
+                //   уровень 1 — без самого большого слоя свечения;  2 — без двух внешних слоёв;
+                //   3 — свечение выключено, частиц на 30 % меньше за каждое новое ухудшение (но не меньше 500).
+                const ADAPT_WINDOW = 6;
+                const MIN_ADAPTIVE_PARTICLES = 500;
                 let haloLayersSkipped = 0;
                 let haloDisabledByPerf = false;
                 let frameSamples = [];
+                function degradeQuality(avg) {
+                    if (avg > 100) {
+                        haloDisabledByPerf = true;
+                        haloLayersSkipped = 3;
+                    } else if (haloLayersSkipped < 2) {
+                        haloLayersSkipped += 1;
+                    } else {
+                        haloDisabledByPerf = true;
+                    }
+                    if (haloDisabledByPerf || avg > 60) {
+                        const keep = Math.max(MIN_ADAPTIVE_PARTICLES, Math.floor(particles.length * 0.7));
+                        if (particles.length > keep) particles.length = keep;
+                    }
+                }
                 function adaptHaloCost(deltaMs) {
-                    if (!(deltaMs > 0) || deltaMs > 2000) return;
+                    if (!(deltaMs > 0) || document.hidden) return;
+                    deltaMs = Math.min(deltaMs, 2000);
                     frameSamples.push(deltaMs);
-                    if (frameSamples.length < 8) return;
+                    // Очень медленный кадр (> 250 мс) — не ждём полного окна.
+                    const windowSize = deltaMs > 250 ? 2 : ADAPT_WINDOW;
+                    if (frameSamples.length < windowSize) return;
                     const avg = frameSamples.reduce((a, b) => a + b, 0) / frameSamples.length;
                     frameSamples = [];
-                    if (avg > 120) {
-                        // < 8 кадров/с: заставка голодит загрузку приложения — аварийное облегчение
-                        haloDisabledByPerf = true;
-                        const keep = Math.max(500, Math.floor(particles.length * 0.5));
-                        if (particles.length > keep) particles.length = keep;
-                    } else if (avg > 60 && haloLayersSkipped < 2) haloLayersSkipped = 2;
-                    else if (avg > 33 && haloLayersSkipped < 1) haloLayersSkipped = 1;
+                    if (avg > 34) degradeQuality(avg);
                 }
 
                 function animate(now) {
@@ -3543,7 +3576,7 @@
                 </div>
             </div>
 
-            <!-- Окно Кастомизация (тема, цвета, скругление, отступы, фон) -->
+            <!-- Окно «Оформление» — студия кастомизации: живой предпросмотр, автосохранение (js/ui/customization-studio.js) -->
             <div
                 id="appCustomizationModal"
                 class="app-customization-overlay fixed inset-0 bg-black bg-opacity-50 hidden z-[100] p-2 sm:p-4 overflow-y-auto flex items-center justify-center"
@@ -3557,147 +3590,114 @@
                     class="flex items-center justify-center min-h-full w-full max-w-[min(56rem,calc(100vw-1rem))]"
                 >
                     <div
-                        class="app-customization-panel bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 max-w-4xl w-full flex flex-col overflow-hidden modal-inner-container"
+                        class="app-customization-panel ac-studio bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 max-w-4xl w-full flex flex-col overflow-hidden modal-inner-container"
+                        data-ac-studio
                     >
-                        <div
-                            class="app-customization-header p-content flex-shrink-0 border-b border-gray-200/90 dark:border-gray-700/90 bg-gray-50/80 dark:bg-gray-900/40"
-                        >
-                            <div class="flex justify-between items-start gap-4">
-                                <div class="flex gap-3 min-w-0 flex-1">
-                                    <div
-                                        class="app-customization-header-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/20"
-                                        aria-hidden="true"
-                                    >
-                                        <i class="fas fa-palette text-lg"></i>
-                                    </div>
-                                    <div class="min-w-0">
-                                        <h2
-                                            id="appCustomizationModalTitle"
-                                            class="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-50"
-                                        >
-                                            Кастомизация
-                                        </h2>
-                                        <p
-                                            id="appCustomizationModalDesc"
-                                            class="mt-0.5 text-sm text-gray-500 dark:text-gray-400 leading-snug"
-                                        >
-                                            Тема оформления, акцентные цвета, плотность интерфейса и фон
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-1 shrink-0">
-                                    <button
-                                        type="button"
-                                        id="toggleFullscreenAppCustomizationBtn"
-                                        class="app-customization-icon-btn p-2.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-                                        title="Развернуть на весь экран"
-                                        aria-label="Развернуть на весь экран"
-                                        aria-expanded="false"
-                                    >
-                                        <i class="fas fa-expand text-lg leading-none" aria-hidden="true"></i>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        id="closeAppCustomizationModalBtn"
-                                        class="app-customization-icon-btn p-2.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-                                        title="Закрыть"
-                                        aria-label="Закрыть"
-                                    >
-                                        <i class="fas fa-times text-lg leading-none"></i>
-                                    </button>
-                                </div>
+                        <div class="app-customization-header ac-head flex-shrink-0">
+                            <span class="ac-head-icon" aria-hidden="true"><i class="fas fa-palette"></i></span>
+                            <div class="ac-head-text">
+                                <h2 id="appCustomizationModalTitle" class="ac-head-title">Оформление</h2>
+                                <p id="appCustomizationModalDesc" class="ac-head-desc">Всё применяется сразу и сохраняется автоматически</p>
+                            </div>
+                            <span id="acStatus" class="ac-status" data-state="saved" role="status" aria-live="polite"><i class="fas fa-circle-check" aria-hidden="true"></i><span class="ac-status-text">Сохранено</span></span>
+                            <div class="ac-head-actions">
+                                <button
+                                    type="button"
+                                    id="toggleFullscreenAppCustomizationBtn"
+                                    class="app-customization-icon-btn ac-icon-btn"
+                                    title="Развернуть на весь экран"
+                                    aria-label="Развернуть на весь экран"
+                                    aria-expanded="false"
+                                >
+                                    <i class="fas fa-expand" aria-hidden="true"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    id="closeAppCustomizationModalBtn"
+                                    class="app-customization-icon-btn ac-icon-btn"
+                                    title="Закрыть"
+                                    aria-label="Закрыть"
+                                >
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                </button>
                             </div>
                         </div>
-                        <div class="p-content overflow-y-auto flex-1 app-customization-scroll">
-                            <div class="space-y-content-lg app-customization-stack">
-                                <section
-                                    class="app-customization-section"
-                                    aria-labelledby="acm-theme-heading"
-                                >
-                                    <h3
-                                        id="acm-theme-heading"
-                                        class="app-customization-section-title"
-                                    >
-                                        Режим темы
-                                    </h3>
-                                    <div
-                                        class="app-customization-segmented app-customization-segmented--equal"
-                                        role="radiogroup"
-                                        aria-labelledby="acm-theme-heading"
-                                    >
-                                        <label class="app-customization-segment">
-                                            <input
-                                                type="radio"
-                                                name="themeMode"
-                                                value="light"
-                                                class="app-customization-segment-input sr-only"
-                                            />
-                                            <span class="app-customization-segment-label">
-                                                <i class="fas fa-sun app-customization-segment-icon" aria-hidden="true"></i>
-                                                Светлая
-                                            </span>
-                                        </label>
-                                        <label class="app-customization-segment">
-                                            <input
-                                                type="radio"
-                                                name="themeMode"
-                                                value="dark"
-                                                class="app-customization-segment-input sr-only"
-                                            />
-                                            <span class="app-customization-segment-label">
-                                                <i class="fas fa-moon app-customization-segment-icon" aria-hidden="true"></i>
-                                                Тёмная
-                                            </span>
-                                        </label>
+                        <div class="ac-body">
+                            <nav class="ac-nav" role="tablist" aria-label="Разделы оформления">
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-look" data-pane="look" aria-controls="ac-pane-look" aria-selected="true" tabindex="0">
+                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Оформление</span>
+                        </button>
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-colors" data-pane="colors" aria-controls="ac-pane-colors" aria-selected="false" tabindex="-1">
+                            <i class="fas fa-droplet" aria-hidden="true"></i><span>Цвета</span>
+                        </button>
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-fonts" data-pane="fonts" aria-controls="ac-pane-fonts" aria-selected="false" tabindex="-1">
+                            <i class="fas fa-font" aria-hidden="true"></i><span>Шрифты</span>
+                        </button>
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-shape" data-pane="shape" aria-controls="ac-pane-shape" aria-selected="false" tabindex="-1">
+                            <i class="fas fa-shapes" aria-hidden="true"></i><span>Форма</span>
+                        </button>
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-bg" data-pane="bg" aria-controls="ac-pane-bg" aria-selected="false" tabindex="-1">
+                            <i class="fas fa-image" aria-hidden="true"></i><span>Фон</span>
+                        </button>
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-motion" data-pane="motion" aria-controls="ac-pane-motion" aria-selected="false" tabindex="-1">
+                            <i class="fas fa-wind" aria-hidden="true"></i><span>Движение</span>
+                        </button>
+                        <button type="button" role="tab" class="ac-tab" id="ac-tab-profiles" data-pane="profiles" aria-controls="ac-pane-profiles" aria-selected="false" tabindex="-1">
+                            <i class="fas fa-box-archive" aria-hidden="true"></i><span>Профили</span>
+                        </button>
+                            </nav>
+                            <div class="ac-panes app-customization-scroll overflow-y-auto flex-1" id="acPanes">
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-look" aria-labelledby="ac-tab-look" data-pane="look">
+                                    <div class="ac-group">
+                                        <h3 class="ac-title" id="acm-theme-heading">Тема</h3>
+                                        <div class="ac-theme-cards" role="radiogroup" aria-labelledby="acm-theme-heading">
+                                    <label class="ac-theme-card" data-theme-card="light">
+                                        <input type="radio" name="themeMode" value="light" class="ac-theme-input sr-only" />
+                                        <span class="ac-theme-thumb ac-theme-thumb--light" aria-hidden="true"><b></b><i></i><i></i><u></u></span>
+                                        <span class="ac-theme-name">Светлая</span>
+                                        <span class="ac-theme-hint">Дневной режим</span>
+                                    </label>
+                                    <label class="ac-theme-card" data-theme-card="dark">
+                                        <input type="radio" name="themeMode" value="dark" class="ac-theme-input sr-only" />
+                                        <span class="ac-theme-thumb ac-theme-thumb--dark" aria-hidden="true"><b></b><i></i><i></i><u></u></span>
+                                        <span class="ac-theme-name">Тёмная</span>
+                                        <span class="ac-theme-hint">Меньше нагрузки на глаза</span>
+                                    </label>
+                                    <label class="ac-theme-card" data-theme-card="auto">
+                                        <input type="radio" name="themeMode" value="auto" class="ac-theme-input sr-only" />
+                                        <span class="ac-theme-thumb ac-theme-thumb--auto" aria-hidden="true"><b></b><i></i><i></i><u></u></span>
+                                        <span class="ac-theme-name">Авто</span>
+                                        <span class="ac-theme-hint">Как в системе</span>
+                                    </label>
+                                        </div>
+                                    </div>
+                                    <div class="ac-group">
+                                        <h3 class="ac-title" id="acm-accent-heading">Акцентный цвет</h3>
+                                        <p class="ac-hint">Цвет кнопок, ссылок и выделения. Нужен свой оттенок — откройте «Цвета».</p>
+                                        <div class="ac-swatches" id="acSwatches" role="radiogroup" aria-labelledby="acm-accent-heading"></div>
+                                    </div>
+                                    <div class="ac-group">
+                                        <h3 class="ac-title" id="acm-looks-heading">Готовые образы</h3>
+                                        <p class="ac-hint">Одним нажатием: тема, цвета, шрифты и форма. Можно вернуть кнопкой «Отменить изменения».</p>
+                                        <div class="ac-looks" id="acLooks" role="group" aria-labelledby="acm-looks-heading"></div>
                                     </div>
                                 </section>
-                                <section
-                                    class="app-customization-section app-customization-section--tight"
-                                    aria-labelledby="acm-colors-heading"
-                                >
-                                    <h3 id="acm-colors-heading" class="app-customization-section-title">
-                                        Цвета интерфейса
-                                    </h3>
-                                    <p class="app-customization-section-hint">
-                                        Выберите, какой слой окрашивается, затем настройте оттенок ниже.
-                                    </p>
-                                    <div
-                                        class="app-customization-segmented app-customization-segmented--triple"
-                                        id="colorTargetSelector"
-                                        role="radiogroup"
-                                        aria-labelledby="acm-colors-heading"
-                                    >
-                                        <label class="app-customization-segment app-customization-segment--compact">
-                                            <input
-                                                type="radio"
-                                                name="colorTarget"
-                                                value="elements"
-                                                class="app-customization-segment-input sr-only"
-                                                checked
-                                            />
-                                            <span class="app-customization-segment-label">Элементы</span>
-                                        </label>
-                                        <label class="app-customization-segment app-customization-segment--compact">
-                                            <input
-                                                type="radio"
-                                                name="colorTarget"
-                                                value="background"
-                                                class="app-customization-segment-input sr-only"
-                                            />
-                                            <span class="app-customization-segment-label">Фон</span>
-                                        </label>
-                                        <label class="app-customization-segment app-customization-segment--compact">
-                                            <input
-                                                type="radio"
-                                                name="colorTarget"
-                                                value="text"
-                                                class="app-customization-segment-input sr-only"
-                                            />
-                                            <span class="app-customization-segment-label">Текст</span>
-                                        </label>
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-colors" aria-labelledby="ac-tab-colors" data-pane="colors" hidden>
+                                    <div class="ac-group">
+                                        <h3 class="ac-title" id="acm-colors-heading">Что окрашиваем</h3>
+                                        <div
+                                            class="app-customization-segmented app-customization-segmented--triple ac-segmented"
+                                            id="colorTargetSelector"
+                                            role="radiogroup"
+                                            aria-labelledby="acm-colors-heading"
+                                        >
+                                            <label class="app-customization-segment ac-segment"><input type="radio" name="colorTarget" value="elements" class="app-customization-segment-input sr-only" checked /><span class="app-customization-segment-label">Элементы</span></label>
+                                            <label class="app-customization-segment ac-segment"><input type="radio" name="colorTarget" value="background" class="app-customization-segment-input sr-only" /><span class="app-customization-segment-label">Фон</span></label>
+                                            <label class="app-customization-segment ac-segment"><input type="radio" name="colorTarget" value="text" class="app-customization-segment-input sr-only" /><span class="app-customization-segment-label">Текст</span></label>
+                                        </div>
                                     </div>
                                     <div
-                                        class="app-customization-card mb-content mt-4"
+                                        class="app-customization-card ac-picker-card"
                                         id="advancedColorPicker"
                                     >
                                         <div class="app-customization-swatch-wrap">
@@ -3887,81 +3887,36 @@
                                             </div>
                                         </div>
                                     </div>
-                                </section>
-                                <section
-                                    class="app-customization-section"
-                                    aria-labelledby="acm-radius-heading"
-                                >
-                                    <h3 id="acm-radius-heading" class="app-customization-section-title">
-                                        Скругление углов
-                                    </h3>
-                                    <p class="app-customization-section-hint app-customization-section-hint--tight">
-                                        От острых углов до мягких карточек.
-                                    </p>
-                                    <div class="mb-content">
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="20"
-                                            value="5"
-                                            class="app-customization-range w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
-                                            id="borderRadiusSlider"
-                                            aria-valuemin="0"
-                                            aria-valuemax="20"
-                                            aria-valuetext="25%"
-                                            aria-labelledby="acm-radius-heading borderRadiusPercentLabel"
-                                        />
-                                        <div
-                                            class="flex justify-end text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium tabular-nums"
-                                        >
-                                            <span id="borderRadiusPercentLabel" aria-live="polite">25%</span>
-                                        </div>
-                                        <div
-                                            class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2 font-medium tabular-nums"
-                                        >
-                                            <span>Квадратные</span>
-                                            <span>Скруглённые</span>
-                                        </div>
+                                    <div class="ac-group ac-group--inline">
+                                        <button type="button" class="ac-btn ac-btn--ghost" id="acResetColorsBtn"><i class="fas fa-rotate-left" aria-hidden="true"></i> Вернуть стандартные цвета</button>
                                     </div>
                                 </section>
-                                <section
-                                    class="app-customization-section"
-                                    aria-labelledby="acm-density-heading"
-                                >
-                                    <h3 id="acm-density-heading" class="app-customization-section-title">
-                                        Плотность интерфейса
-                                    </h3>
-                                    <p class="app-customization-section-hint app-customization-section-hint--tight">
-                                        Отступы между блоками: компактнее или просторнее.
-                                    </p>
-                                    <div class="mb-content">
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="6"
-                                            value="3"
-                                            class="app-customization-range w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
-                                            id="densitySlider"
-                                        />
-                                        <div
-                                            class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2 font-medium tabular-nums"
-                                        >
-                                            <span>Меньше</span>
-                                            <span>Больше</span>
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-fonts" aria-labelledby="ac-tab-fonts" data-pane="fonts" hidden>
+                                    <div data-ac-mount="fonts"></div>
+                                </section>
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-shape" aria-labelledby="ac-tab-shape" data-pane="shape" hidden>
+                                    <div class="ac-group">
+                                        <div class="ac-row"><h3 class="ac-title" id="acm-radius-heading">Скругление углов</h3><output class="ac-value" id="borderRadiusPercentLabel" for="borderRadiusSlider" aria-live="polite">25%</output></div>
+                                        <input type="range" min="0" max="20" value="5" class="ac-range" id="borderRadiusSlider" aria-valuemin="0" aria-valuemax="20" aria-valuetext="25%" aria-labelledby="acm-radius-heading borderRadiusPercentLabel" />
+                                        <div class="ac-range-legend"><span>Острые</span><span>Мягкие</span></div>
+                                        <div class="ac-sample ac-sample--radius" aria-hidden="true">
+                                            <div class="ac-sample-card"><b>Карточка</b><span>Пример блока</span></div>
+                                            <button type="button" class="ac-sample-btn" tabindex="-1">Кнопка</button>
+                                            <span class="ac-sample-input">Поле ввода</span>
                                         </div>
                                     </div>
+                                    <div class="ac-group">
+                                        <div class="ac-row"><h3 class="ac-title" id="acm-density-heading">Плотность интерфейса</h3><output class="ac-value" id="acDensityLabel" for="densitySlider" aria-live="polite">3</output></div>
+                                        <input type="range" min="0" max="6" value="3" class="ac-range" id="densitySlider" aria-labelledby="acm-density-heading acDensityLabel" />
+                                        <div class="ac-range-legend"><span>Компактно</span><span>Просторно</span></div>
+                                        <div class="ac-sample ac-sample--density" aria-hidden="true"><i></i><i></i><i></i></div>
+                                    </div>
                                 </section>
-                                <section
-                                    class="app-customization-section app-customization-section--last"
-                                    aria-labelledby="acm-bg-heading"
-                                >
-                                    <h3 id="acm-bg-heading" class="app-customization-section-title">
-                                        Фоновое изображение
-                                    </h3>
-                                    <p class="app-customization-section-hint app-customization-section-hint--tight">
-                                        Необязательный снимок на весь экран за содержимым.
-                                    </p>
-                                    <div
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-bg" aria-labelledby="ac-tab-bg" data-pane="bg" hidden>
+                                    <div class="ac-group">
+                                        <h3 class="ac-title" id="acm-bg-heading">Фоновое изображение</h3>
+                                        <p class="ac-hint">Необязательный снимок на весь экран за содержимым. Хранится только в этом браузере.</p>
+                                        <div
                                         class="app-customization-bg-row flex flex-col sm:flex-row sm:items-center gap-4 mt-3"
                                     >
                                         <div
@@ -3997,28 +3952,52 @@
                                             />
                                         </div>
                                     </div>
+                                    </div>
+                                </section>
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-motion" aria-labelledby="ac-tab-motion" data-pane="motion" hidden>
+                                    <div class="ac-group">
+                                        <h3 class="ac-title" id="acm-motion-heading">Анимации и движение</h3>
+                                        <p class="ac-hint">Выберите, сколько движения вам комфортно. Действует во всём приложении, включая окна и уведомления.</p>
+                                        <div class="ac-choice-list" role="radiogroup" aria-labelledby="acm-motion-heading">
+                                    <label class="ac-choice-card" data-motion-card="auto">
+                                        <input type="radio" name="motionMode" value="auto" class="ac-choice-input sr-only" />
+                                        <span class="ac-choice-icon" aria-hidden="true"><i class="fas fa-wand-magic-sparkles"></i></span>
+                                        <span class="ac-choice-text"><b>Как в системе</b><small>Полные плавные анимации. Если в ОС включено «уменьшение движения» — отключаются сами.</small></span>
+                                        <span class="ac-choice-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                                    </label>
+                                    <label class="ac-choice-card" data-motion-card="calm">
+                                        <input type="radio" name="motionMode" value="calm" class="ac-choice-input sr-only" />
+                                        <span class="ac-choice-icon" aria-hidden="true"><i class="fas fa-feather"></i></span>
+                                        <span class="ac-choice-text"><b>Спокойные</b><small>Только короткие появления и затухания, без бликов, подпрыгиваний и каскадов.</small></span>
+                                        <span class="ac-choice-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                                    </label>
+                                    <label class="ac-choice-card" data-motion-card="reduce">
+                                        <input type="radio" name="motionMode" value="reduce" class="ac-choice-input sr-only" />
+                                        <span class="ac-choice-icon" aria-hidden="true"><i class="fas fa-ban"></i></span>
+                                        <span class="ac-choice-text"><b>Уменьшить движение</b><small>Анимации и переходы выключены. Лучший вариант при укачивании и на слабых устройствах.</small></span>
+                                        <span class="ac-choice-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                                    </label>
+                                        </div>
+                                        <p class="ac-note" id="acMotionState" role="status" aria-live="polite"></p>
+                                    </div>
+                                    <div class="ac-group">
+                                        <h3 class="ac-title">Проверка</h3>
+                                        <div class="ac-motion-demo">
+                                            <button type="button" class="ac-btn ac-btn--primary" id="acMotionDemoBtn"><i class="fas fa-play" aria-hidden="true"></i> Показать пример</button>
+                                            <span class="ac-motion-chip" id="acMotionDemoChip" aria-hidden="true">Так двигаются элементы</span>
+                                        </div>
+                                    </div>
+                                </section>
+                                <section class="ac-pane" role="tabpanel" id="ac-pane-profiles" aria-labelledby="ac-tab-profiles" data-pane="profiles" hidden>
+                                    <div data-ac-mount="profiles"></div>
                                 </section>
                             </div>
                         </div>
-                        <div
-                            class="app-customization-footer p-content flex-shrink-0 border-t border-gray-200/90 dark:border-gray-700/90 bg-gray-50/80 dark:bg-gray-900/40"
-                        >
-                            <div class="flex justify-end gap-3 flex-wrap">
-                                <button
-                                    type="button"
-                                    id="appCustomizationCancelBtn"
-                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition"
-                                >
-                                    Отмена
-                                </button>
-                                <button
-                                    type="button"
-                                    id="appCustomizationSaveBtn"
-                                    class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition"
-                                >
-                                    Сохранить
-                                </button>
-                            </div>
+                        <div class="app-customization-footer ac-foot flex-shrink-0">
+                            <button type="button" id="acResetPaneBtn" class="ac-btn ac-btn--ghost"><i class="fas fa-rotate-left" aria-hidden="true"></i><span>Сбросить раздел</span></button>
+                            <span class="ac-foot-spacer"></span>
+                            <button type="button" id="appCustomizationCancelBtn" class="ac-btn"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><span>Отменить изменения</span></button>
+                            <button type="button" id="appCustomizationSaveBtn" class="ac-btn ac-btn--primary"><span>Готово</span></button>
                         </div>
                     </div>
                 </div>

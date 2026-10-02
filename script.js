@@ -6,6 +6,8 @@ import './js/ui/motion.js';
 import { initCustomSelects } from './js/ui/custom-select.js';
 import { initFontSettings } from './js/ui/font-settings.js';
 import { initAppearanceProfile } from './js/ui/appearance-profile.js';
+import { initCustomizationStudio } from './js/ui/customization-studio.js';
+import { initModalChoreographer } from './js/ui/modal-choreographer.js';
 import { initFormModalAutoEnhance } from './js/ui/form-modal-autoenhance.js';
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
 window.openRequisitesCheck = (text) =>
@@ -32,6 +34,28 @@ try {
 } catch (e) {
     console.warn('[appearance-profile] init failed', e);
 }
+(function bootCustomizationStudio() {
+    const run = () => {
+        try {
+            initCustomizationStudio();
+        } catch (e) {
+            console.warn('[customization-studio] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
+(function bootModalChoreographer() {
+    const run = () => {
+        try {
+            initModalChoreographer();
+        } catch (e) {
+            console.warn('[modal-choreographer] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 (function bootFormModalKit() {
     const run = () => {
         try {
@@ -744,6 +768,7 @@ import {
 import {
     setPreviewSettingsDependencies,
     applyPreviewSettings as applyPreviewSettingsModule,
+    applyPreviewSettingsCoalesced as applyPreviewSettingsCoalescedModule,
 } from './js/ui/preview-settings.js';
 
 // Color Picker (настройка цветов в модалке UI)
@@ -1371,7 +1396,9 @@ function initScrollNavButtons() {
     scrollUpBtn.addEventListener('click', scrollToTop);
     scrollDownBtn.addEventListener('click', scrollToBottom);
 
-    const onScroll = () => requestAnimationFrame(updateVisibility);
+    // Прокрутка: не чаще раза в ~120 мс. Раньше пересчёт шёл в каждом кадре и читал layout сразу после того,
+    // как виртуальный список изменил DOM, — второй принудительный layout на каждый кадр прокрутки.
+    const onScroll = () => scheduleScrollNavUpdate();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', updateVisibility);
     const attachMainScrollListener = () => {
@@ -2423,7 +2450,8 @@ function hslToHex(h, s, l) {
 // Color Picker Dependencies (после hexToHsl/hslToHex)
 setColorPickerDependencies({
     State,
-    applyPreviewSettings: applyPreviewSettingsModule,
+    /* пипетка вызывает применение на каждое движение указателя — не чаще раза за кадр */
+    applyPreviewSettings: applyPreviewSettingsCoalescedModule,
     updatePreviewSettingsFromModal: updatePreviewSettingsFromModalModule,
     hexToHsl,
     hslToHex,
@@ -3441,9 +3469,8 @@ function initUnsavedChangesRegistry() {
         typeof hasChanges === 'function' ? hasChanges('add') : false,
     );
     registerModalDirtyCheck('customizeUIModal', () => Boolean(State && State.isUISettingsDirty));
-    registerModalDirtyCheck('appCustomizationModal', () =>
-        Boolean(State && State.isUISettingsDirty),
-    );
+    // Студия оформления сохраняется автоматически — «несохранённых изменений» у неё не бывает.
+    registerModalDirtyCheck('appCustomizationModal', () => false);
     registerModalDirtyCheck('bookmarkModal', (modal) => {
         try {
             const form = modal.querySelector('#bookmarkForm');
