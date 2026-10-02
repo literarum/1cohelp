@@ -305,6 +305,20 @@ export function initDB() {
 // БАЗОВЫЕ ОПЕРАЦИИ С БАЗОЙ ДАННЫХ
 // ============================================================================
 
+/** Счётчики записи по хранилищам: кэши списков (закладки, аналитика) сверяют версию вместо перечитывания. */
+const storeWriteVersions = new Map();
+function bumpStoreVersion(storeName) {
+    storeWriteVersions.set(storeName, (storeWriteVersions.get(storeName) || 0) + 1);
+}
+/** Версия хранилища: растёт после каждой завершённой записи через performDBOperation. */
+export function getStoreVersion(storeName) {
+    return storeWriteVersions.get(storeName) || 0;
+}
+/** Явно отметить изменение хранилища (для записей в обход performDBOperation). */
+export function markStoreChanged(storeName) {
+    bumpStoreVersion(storeName);
+}
+
 /**
  * Выполняет операцию с базой данных
  */
@@ -357,7 +371,10 @@ export function performDBOperation(storeName, mode, operation) {
 
             // Для записи результат отдаём только после commit транзакции (иначе QuotaExceeded теряется)
             const txDone = new Promise((resolveTx) => {
-                transaction.addEventListener('complete', () => resolveTx());
+                transaction.addEventListener('complete', () => {
+                    if (mode !== 'readonly') bumpStoreVersion(storeName);
+                    resolveTx();
+                });
             });
 
             if (request != null && typeof request.then === 'function') {
@@ -600,4 +617,164 @@ export async function getAllFromIndexWithKeyVariants(storeName, indexName, index
     }
 
     return out;
+}
+
+// ============================================================================
+// ПАКЕТНЫЕ ОПЕРАЦИИ ДЛЯ БОЛЬШИХ ХРАНИЛИЩ (только добавление, семантика performDBOperation не меняется)
+// ============================================================================
+
+/** Уступает управление циклу событий (UI не «замерзает» на тяжёлых циклах). */
+export function yieldToMain() {
+    if (typeof scheduler !== 'undefined' && typeof scheduler.yield === 'function') {
+        return scheduler.yield();
+    }
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Читает хранилище курсором порциями: onBatch(rows) вызывается на каждые batchSize записей,
+ * между порциями управление отдаётся главному потоку. Не держит весь результат в памяти.
+ * @param {string} storeName
+ * @param {(rows: any[]) => (void|Promise<void>)} onBatch
+ * @param {{ batchSize?: number, indexName?: string, range?: IDBKeyRange|null, direction?: IDBCursorDirection, signal?: { aborted: boolean } }} [opts]
+ * @returns {Promise<number>} число прочитанных записей
+ */
+export async function forEachBatchInStore(storeName, onBatch, opts = {}) {
+    const batchSize = opts.batchSize || 2000;
+    let total = 0;
+    let lastKey = null;
+    for (;;) {
+        if (opts.signal && opts.signal.aborted) return total;
+        // Каждая порция — отдельная короткая readonly-транзакция, продолжение через getAll(range, count)
+        const rows = await performDBOperation(storeName, 'readonly', (store) => {
+            const src = opts.indexName ? store.index(opts.indexName) : store;
+            let range = opts.range || null;
+            if (lastKey !== null && !opts.indexName) {
+                range = IDBKeyRange.lowerBound(lastKey, true);
+                if (opts.range && opts.range.upper !== undefined) {
+                    range = IDBKeyRange.bound(lastKey, opts.range.upper, true, !!opts.range.upperOpen);
+                }
+            }
+            return src.getAll(range, batchSize);
+        });
+        if (!rows || rows.length === 0) break;
+        total += rows.length;
+        const keyPath = (storeConfigs.find((s) => s.name === storeName) || {}).options?.keyPath;
+        if (opts.indexName || typeof keyPath !== 'string') {
+            // Для индексов/составных ключей порционность по ключу недоступна — отдаём как есть
+            await onBatch(rows);
+            break;
+        }
+        lastKey = rows[rows.length - 1][keyPath];
+        await onBatch(rows);
+        if (rows.length < batchSize) break;
+        await yieldToMain();
+    }
+    return total;
+}
+
+/**
+ * Пакетная запись: put нескольких записей в одной транзакции (ожидает complete).
+ * @param {string} storeName
+ * @param {any[]} rows
+ * @returns {Promise<any[]>} ключи
+ */
+export function bulkPutToIndexedDB(storeName, rows) {
+    return performDBOperation(storeName, 'readwrite', (store) => {
+        const keys = [];
+        return new Promise((resolve, reject) => {
+            if (!rows.length) return resolve(keys);
+            let pending = rows.length;
+            for (const row of rows) {
+                const req = store.put(row);
+                req.onsuccess = () => {
+                    keys.push(req.result);
+                    if (--pending === 0) resolve(keys);
+                };
+                req.onerror = () => reject(req.error);
+            }
+        });
+    });
+}
+
+/**
+ * Пакетное удаление по ключам в одной транзакции (без записи в recentlyDeleted —
+ * для отслеживаемых хранилищ используйте deleteFromIndexedDB).
+ * @param {string} storeName
+ * @param {any[]} keys
+ */
+export function bulkDeleteFromIndexedDB(storeName, keys) {
+    if (RECENTLY_DELETED_TRACKED_STORES.includes(storeName)) {
+        return Promise.reject(
+            new Error(`bulkDelete не поддерживается для отслеживаемого хранилища ${storeName}`),
+        );
+    }
+    return performDBOperation(storeName, 'readwrite', (store) => {
+        for (const k of keys) store.delete(k);
+        return new Promise((resolve) => {
+            const r = store.count();
+            r.onsuccess = () => resolve(keys.length);
+            r.onerror = () => resolve(keys.length);
+        });
+    });
+}
+
+/** Количество записей без чтения данных (опционально — по значению индекса). */
+export function countInIndexedDB(storeName, indexName = null, indexValue = undefined) {
+    return performDBOperation(storeName, 'readonly', (store) => {
+        if (indexName) {
+            const idx = store.index(indexName);
+            return indexValue === undefined ? idx.count() : idx.count(indexValue);
+        }
+        return store.count();
+    });
+}
+
+/** Все первичные ключи хранилища (без чтения значений). */
+export function getAllKeysFromIndexedDB(storeName) {
+    return performDBOperation(storeName, 'readonly', (store) => store.getAllKeys());
+}
+
+/** Первичные ключи записей по значению индекса (без чтения значений). */
+export function getAllKeysFromIndex(storeName, indexName, indexValue) {
+    return performDBOperation(storeName, 'readonly', (store) =>
+        store.index(indexName).getAllKeys(indexValue),
+    );
+}
+
+/** Максимальный числовой ключ (быстрая проверка «данные изменились?» вместе с count). */
+export function maxKeyInIndexedDB(storeName) {
+    return performDBOperation(storeName, 'readonly', (store) => {
+        return new Promise((resolve, reject) => {
+            const req = store.openKeyCursor(null, 'prev');
+            req.onsuccess = () => resolve(req.result ? req.result.key : null);
+            req.onerror = () => reject(req.error);
+        });
+    });
+}
+
+/**
+ * Читает хранилище курсором, применяя mapFn к каждой записи (проекция «на лету»):
+ * в память попадает только результат mapFn, а не тяжёлые поля (например rawText файлов).
+ * @param {string} storeName
+ * @param {(row: any) => any} mapFn  вернуть undefined, чтобы пропустить запись
+ */
+export function getAllProjected(storeName, mapFn) {
+    return performDBOperation(
+        storeName,
+        'readonly',
+        (store) =>
+            new Promise((resolve, reject) => {
+                const out = [];
+                const req = store.openCursor();
+                req.onsuccess = () => {
+                    const cursor = req.result;
+                    if (!cursor) return resolve(out);
+                    const v = mapFn(cursor.value);
+                    if (v !== undefined) out.push(v);
+                    cursor.continue();
+                };
+                req.onerror = () => reject(req.error);
+            }),
+    );
 }
