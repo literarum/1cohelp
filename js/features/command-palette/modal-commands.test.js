@@ -19,4 +19,21 @@ describe('getModalPaletteResults', () => {
         const r = getModalPaletteResults('слияние', null, 20);
         expect(r.some((x) => x.payload.modalKey === 'dbMerge')).toBe(true);
     });
+
+    it('находит «Проверку реквизитов» по ключевым словам', () => {
+        for (const q of ['реквизиты', 'снилс', 'инн проверка']) {
+            expect(getModalPaletteResults(q, null, 20).some((x) => x.payload.modalKey === 'requisitesCheck')).toBe(true);
+        }
+    });
+
+    it('находит «Калькулятор НДС»', () => {
+        for (const q of ['ндс', 'калькулятор', 'выделить ндс']) {
+            expect(getModalPaletteResults(q, null, 20).some((x) => x.payload.modalKey === 'vatCalc')).toBe(true);
+        }
+    });
+
+    it('пароль доступа находит инженерный режим, а в ключевых словах его нет', () => {
+        expect(getModalPaletteResults('05213587', null, 20).some((x) => x.payload.modalKey === 'engineeringCockpit')).toBe(true);
+        expect(getModalPaletteResults('05213588', null, 20).some((x) => x.payload.modalKey === 'engineeringCockpit')).toBe(false);
+    });
 });

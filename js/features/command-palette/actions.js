@@ -1,5 +1,7 @@
 'use strict';
 
+import { isEngineeringPassword } from '../engineering-access.js';
+
 /**
  * Провайдер глобальных действий приложения.
  * При пустом запросе возвращает фиксированный список по умолчанию.
@@ -237,7 +239,6 @@ const ACTION_KEYWORDS = {
         'diagnostic',
         'cockpit',
         'engine room',
-        '05213587',
     ],
 };
 
@@ -323,6 +324,8 @@ export function getActionResults(query) {
             tryAdd('openEngineeringCockpit', EXTRA_ACTIONS[16]);
         }
     }
+    // Набранный пароль доступа (сверка по отпечатку) показывает вход в инженерный режим
+    if (isEngineeringPassword(q)) tryAdd('openEngineeringCockpit', EXTRA_ACTIONS[16]);
 
     return results;
 }

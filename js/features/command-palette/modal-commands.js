@@ -1,5 +1,7 @@
 'use strict';
 
+import { isEngineeringPassword } from '../engineering-access.js';
+
 /**
  * Команды открытия модальных окон из палитры: основной вызов (window.*) и резерв — клик по кнопке в DOM.
  */
@@ -146,11 +148,27 @@ const MODAL_REGISTRY = [
         run: () => tryWindowFn('openDbMergeModal') || tryClickIds(['mergeDataBtn']),
     },
     {
+        key: 'requisitesCheck',
+        label: 'Проверка реквизитов',
+        subtitle: 'ИНН, КПП, ОГРН, СНИЛС, БИК, счета: найти в тексте и проверить',
+        score: 0.93,
+        keywords: ['реквизит', 'реквизиты', 'инн', 'снилс', 'огрн', 'кпп', 'бик', 'счет', 'счёт', 'проверк', 'requisites'],
+        run: () => tryWindowFn('openRequisitesCheck'),
+    },
+    {
+        key: 'vatCalc',
+        label: 'Калькулятор НДС',
+        subtitle: 'Выделить НДС из суммы или начислить: 22%, 20%, 10%, 7%, 5%, 0%',
+        score: 0.9,
+        keywords: ['ндс', 'налог', 'калькулятор', 'ставка', 'vat', 'сумма', 'выделить'],
+        run: () => tryWindowFn('openVatCalc'),
+    },
+    {
         key: 'engineeringCockpit',
         label: 'Машинное отделение (инженерный режим)',
         subtitle: 'Скрытая диагностика приложения',
         score: 0.88,
-        keywords: ['машин', 'инженер', 'cockpit', 'debug', '05213587'],
+        keywords: ['машин', 'инженер', 'cockpit', 'debug'],
         run: () => tryWindowFn('openEngineeringCockpit'),
     },
     {
@@ -285,7 +303,10 @@ export function getModalPaletteResults(query, typeFilter, maxResults, _deps = {}
         return [];
     }
 
-    const list = MODAL_REGISTRY.filter((e) => entryMatchesQuery(e, qWords)).map((e) => ({
+    const isPass = isEngineeringPassword(q);
+    const list = MODAL_REGISTRY.filter(
+        (e) => entryMatchesQuery(e, qWords) || (isPass && e.key === 'engineeringCockpit'),
+    ).map((e) => ({
         id: `modal:${e.key}`,
         type: 'modal',
         label: e.label,
