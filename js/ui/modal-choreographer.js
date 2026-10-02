@@ -101,7 +101,88 @@ export function findPreferredField(modal) {
     return null;
 }
 
+function announceVisibility(modal, shown) {
+    try {
+        document.dispatchEvent(new CustomEvent('app:modal-visibility', { detail: { modal, shown } }));
+    } catch {
+        /* ignore */
+    }
+}
+
+const MOBILE_MQ = '(max-width: 767px), (pointer: coarse) and (max-height: 500px)';
+const isMobileNow = () => {
+    try {
+        return !!window.matchMedia && window.matchMedia(MOBILE_MQ).matches;
+    } catch {
+        return false;
+    }
+};
+
+/** Ручка «шторки» вверху панели: за неё окно тянется вниз на телефонах (CSS показывает её только <=640px). */
+function ensureSheetHandle(modal) {
+    const panel = modal.querySelector(
+        '.modal-inner-container, .engineering-cockpit-shell, .app-customization-panel, .db-merge-shell, .bg-white.dark\\:bg-gray-800.rounded-lg',
+    );
+    if (!panel || panel.querySelector(':scope > .modal-sheet-handle')) return;
+    const h = document.createElement('div');
+    h.className = 'modal-sheet-handle';
+    h.setAttribute('aria-hidden', 'true');
+    panel.insertBefore(h, panel.firstChild);
+}
+
+// Жест/кнопка «Назад» на телефоне закрывает верхнее окно, а не уходит со страницы.
+const backStack = [];
+let backBound = false;
+let ignorePop = 0;
+
+function bindBackGesture() {
+    if (backBound || typeof window === 'undefined') return;
+    backBound = true;
+    window.addEventListener('popstate', () => {
+        if (ignorePop > 0) {
+            ignorePop -= 1;
+            return;
+        }
+        const modal = backStack.pop();
+        if (!modal || modal.classList.contains('hidden')) return;
+        modal._closedByBack = true;
+        const btn = findCloseButton(modal);
+        if (btn) btn.click();
+    });
+}
+
+function pushBackEntry(modal) {
+    if (!isMobileNow() || backStack.includes(modal)) return;
+    bindBackGesture();
+    try {
+        history.pushState({ appModal: modal.id || true }, '');
+        backStack.push(modal);
+    } catch {
+        /* ignore */
+    }
+}
+
+function popBackEntry(modal) {
+    const i = backStack.indexOf(modal);
+    if (i < 0) return;
+    backStack.splice(i, 1);
+    if (modal._closedByBack) {
+        modal._closedByBack = false;
+        return;
+    }
+    // закрыто крестиком: убираем лишнюю запись истории
+    ignorePop += 1;
+    try {
+        history.back();
+    } catch {
+        ignorePop -= 1;
+    }
+}
+
 function onShown(modal) {
+    announceVisibility(modal, true);
+    ensureSheetHandle(modal);
+    pushBackEntry(modal);
     if (modal.id === 'appCustomizationModal') return; // у студии свой режим (док справа)
     if (!modal._focusTrapActive) {
         modal._autoFocusTrap = true;
@@ -122,6 +203,8 @@ function onShown(modal) {
 }
 
 function onHidden(modal) {
+    popBackEntry(modal);
+    announceVisibility(modal, false);
     if (modal._autoFocusTrap) {
         modal._autoFocusTrap = false;
         if (modal._focusTrapActive) deactivateModalFocus(modal);
