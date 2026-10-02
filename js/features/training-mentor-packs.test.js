@@ -8,6 +8,7 @@ import {
     assignMentorPackIdForImport,
     mentorPackToUserTrack,
     validateMentorPackStrict,
+    duplicateMentorPack,
     MENTOR_QUIZ_EXPORT_KIND,
     MENTOR_QUIZ_SCHEMA_VERSION,
 } from './training-mentor-packs.js';
@@ -91,5 +92,17 @@ describe('training-mentor-packs', () => {
         const n = normalizeMentorQuizPack(validPack);
         const v = validateMentorPackStrict(/** @type {any} */ (n));
         expect(v?.id).toBe('mentor-test-1');
+    });
+
+    it('duplicateMentorPack: новый id, пометка «копия», глубокая копия вопросов', () => {
+        const d = duplicateMentorPack(validPack);
+        expect(d.id).not.toBe(validPack.id);
+        expect(d.id.startsWith('mentor-')).toBe(true);
+        expect(d.title).toBe('Тестовый пакет (копия)');
+        expect(d.questions).toEqual(normalizeMentorQuizPack(validPack).questions);
+        expect(d.questions[0]).not.toBe(normalizeMentorQuizPack(validPack).questions[0]);
+        expect(duplicateMentorPack(d).title).toBe('Тестовый пакет (копия)');
+        expect(normalizeMentorQuizPack(d)).not.toBeNull();
+        expect(duplicateMentorPack(null)).toBeNull();
     });
 });

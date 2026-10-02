@@ -19,18 +19,33 @@ import {
     buildManualDiagnosticFailureReport,
 } from './engineering-cockpit-manual-health.js';
 import { getPwaCockpitBlock } from '../app/pwa-register.js';
+import { isEngineeringPassword } from './engineering-access.js';
+import {
+    buildOverviewCardsHtml,
+    buildDbTableHtml,
+    buildErrorGroupsHtml,
+    buildStateCardsHtml,
+} from './engineering-cockpit-dashboard.js';
 import {
     buildCockpitLoggingCrosscheck,
-    filterCockpitLogEntries,
+    countCockpitLogLevels,
+    formatCockpitLogDetail,
+    formatCockpitLogNdjson,
     formatCockpitLogText,
     isValidCockpitLogFilterLevel,
+    COCKPIT_LOG_FILTER_LEVELS,
+    queryCockpitLogEntries,
 } from './engineering-cockpit-logging.js';
+import { createVirtualLogView } from './engineering-cockpit-logview.js';
 import { bindEngineeringCockpitScrollNav } from './engineering-cockpit-scroll-nav.js';
 import { getRuntimeTelemetrySupportSnapshot } from './runtime-telemetry-observers.js';
 import { getRuntimeFetchInterceptMeta } from './runtime-fetch-intercept.js';
 
-const ENGINEERING_PASSWORD = '05213587';
-const LOG_BUFFER_LIMIT = 1500;
+/** Буфер можно держать большим: список логов виртуализирован и не рисует всё сразу. */
+const LOG_BUFFER_LIMIT = 3000;
+const UNLOCK_MAX_ATTEMPTS = 5;
+const UNLOCK_LOCK_MS = 30000;
+const LIVE_RENDER_THROTTLE_MS = 300;
 const MANUAL_DIAGNOSTIC_BTN_DEFAULT_HTML =
     '<i class="fas fa-stethoscope mr-1" aria-hidden="true"></i>Ручной прогон';
 
@@ -59,6 +74,11 @@ const state = {
     currentTab: 'overview',
     /** @type {string} */
     logFilter: 'all',
+    /** Выбранные уровни (пусто = все). */
+    logLevels: new Set(),
+    logQuery: '',
+    unlockFailures: 0,
+    unlockLockedUntil: 0,
     /** Монотонный номер записи в буфере (устойчивый к обрезке хвоста при переполнении). */
     nextLogSeq: 0,
 };
@@ -133,6 +153,20 @@ function allocateLogSeq() {
     return state.nextLogSeq;
 }
 
+let liveRenderTimer = null;
+
+/** Живое обновление вкладки «Логи» (с троттлингом), пока кокпит открыт. */
+function scheduleLiveLogRender() {
+    if (liveRenderTimer || !refs || !state.unlocked || state.currentTab !== 'logs') return;
+    if (refs.modal.classList.contains('hidden')) return;
+    liveRenderTimer = setTimeout(() => {
+        liveRenderTimer = null;
+        if (refs && state.currentTab === 'logs' && !refs.modal.classList.contains('hidden')) {
+            renderLogsPanel();
+        }
+    }, LIVE_RENDER_THROTTLE_MS);
+}
+
 function addLog(level, args) {
     pushBounded(state.logs, {
         seq: allocateLogSeq(),
@@ -140,6 +174,7 @@ function addLog(level, args) {
         level,
         args: Array.from(args).map((arg) => cockpitSerialize(arg, 2400)),
     });
+    scheduleLiveLogRender();
 }
 
 function buildRuntimeErrorMessage(errorLike) {
@@ -314,47 +349,117 @@ function buildMergedErrorsText() {
     return mergeHubAndCockpitFaultRows(getRuntimeHubFaultEntries(2000), state.errors);
 }
 
+function currentLogEntries() {
+    return queryCockpitLogEntries(state.logs, { levels: state.logLevels, query: state.logQuery });
+}
+
+function describeLogFilter() {
+    const lv = state.logLevels.size ? [...state.logLevels].join('+') : 'all';
+    return state.logQuery ? `${lv}, «${state.logQuery}»` : lv;
+}
+
+function renderLogChips(counts) {
+    if (!refs?.logChips) return;
+    const mk = (id, label) => {
+        const active = id === 'all' ? state.logLevels.size === 0 : state.logLevels.has(id);
+        return `<button type="button" class="cockpit-chip cockpit-chip--${id}${active ? ' is-active' : ''}" data-cockpit-level="${id}" aria-pressed="${active}"><span>${label}</span><b>${counts[id] ?? 0}</b></button>`;
+    };
+    refs.logChips.innerHTML = COCKPIT_LOG_FILTER_LEVELS.map((id) =>
+        mk(id, id === 'all' ? 'Все' : id),
+    ).join('');
+}
+
+/** Отрисовка только вкладки «Логи»: счётчики, фильтры, виртуализированный список. */
+function renderLogsPanel() {
+    if (!refs) return;
+    const counts = countCockpitLogLevels(state.logs);
+    renderLogChips(counts);
+    if (refs.logLevelFilter) {
+        refs.logLevelFilter.value = state.logLevels.size === 1 ? [...state.logLevels][0] : 'all';
+    }
+    const filtered = currentLogEntries();
+    if (refs.logMeta) {
+        refs.logMeta.textContent = !state.logs.length
+            ? 'Буфер пуст'
+            : `Показано ${filtered.length} из ${state.logs.length} · буфер до ${LOG_BUFFER_LIMIT}`;
+    }
+    const emptyText = !state.logs.length
+        ? 'Логи пока отсутствуют.'
+        : 'Нет записей по выбранным условиям. Смените уровни или очистите поиск.';
+    if (!logView && refs.logs) {
+        logView = createVirtualLogView({
+            viewport: refs.logs,
+            onSelect: (entry) => {
+                if (!refs.logDetail) return;
+                refs.logDetail.hidden = !entry;
+                if (refs.logDetailText) refs.logDetailText.textContent = formatCockpitLogDetail(entry);
+            },
+            onFollowChange: (v) => {
+                if (refs.logFollow) refs.logFollow.checked = v;
+            },
+        });
+        if (refs.logFollow) logView.setFollow(refs.logFollow.checked);
+    }
+    logView?.setEntries(filtered, { emptyText });
+}
+
+/** @type {ReturnType<typeof createVirtualLogView> | null} */
+let logView = null;
+
+/** Вставляет наглядный блок прямо перед <pre>; создаёт контейнер один раз. */
+function setDashboardHtml(preEl, html, cls) {
+    if (!preEl || !preEl.parentElement) return;
+    let box = preEl.previousElementSibling;
+    if (!box || !box.classList.contains('ec-dash')) {
+        box = document.createElement('div');
+        box.className = `ec-dash ${cls}`;
+        preEl.parentElement.insertBefore(box, preEl);
+    }
+    box.hidden = !html;
+    box.innerHTML = html;
+}
+
 async function renderActiveTab() {
     if (!refs) return;
+    const tab = state.currentTab;
 
-    const overviewData = getSystemOverview();
-    try {
-        overviewData.pwa = await getPwaCockpitBlock();
-    } catch (err) {
-        overviewData.pwa = { error: err?.message || String(err) };
+    // Рисуем только активную вкладку: остальные не тратят время, особенно «Сводка» с async PWA-блоком
+    if (tab === 'overview') {
+        const overviewData = getSystemOverview();
+        try {
+            overviewData.pwa = await getPwaCockpitBlock();
+        } catch (err) {
+            overviewData.pwa = { error: err?.message || String(err) };
+        }
+        if (state.currentTab === 'overview') {
+            refs.overview.textContent = safeSerialize(overviewData, 200000);
+            setDashboardHtml(refs.overview, buildOverviewCardsHtml(overviewData, state.dbSummary), 'ec-cards');
+        }
+    } else if (tab === 'logs') {
+        renderLogsPanel();
+    } else if (tab === 'errors') {
+        setDashboardHtml(
+            refs.errors,
+            buildErrorGroupsHtml(getRuntimeHubFaultEntries(2000), state.errors),
+            'ec-errors',
+        );
+        refs.errors.textContent = buildMergedErrorsText() || 'Ошибок не зафиксировано.';
+    } else if (tab === 'db') {
+        setDashboardHtml(refs.db, buildDbTableHtml(state.dbSummary), 'ec-table-wrap');
+        refs.db.textContent = state.dbSummary.length
+            ? state.dbSummary
+                  .map((row) =>
+                      row.status === 'ok'
+                          ? `${row.store}: count=${row.count}`
+                          : `${row.store}: ${row.status}${row.error ? ` (${row.error})` : ''}`,
+                  )
+                  .join('\n')
+            : 'Сводка БД пока не собрана.';
+    } else if (tab === 'state') {
+        const snap = getStateSnapshot();
+        setDashboardHtml(refs.state, buildStateCardsHtml(snap), 'ec-state');
+        refs.state.textContent = safeSerialize(snap, 200000);
     }
-    refs.overview.textContent = safeSerialize(overviewData, 200000);
-
-    const filterLevel = isValidCockpitLogFilterLevel(state.logFilter) ? state.logFilter : 'all';
-    const filteredLogs = filterCockpitLogEntries(state.logs, filterLevel);
-    if (refs.logMeta) {
-        refs.logMeta.textContent =
-            state.logs.length === 0
-                ? 'Буфер пуст'
-                : `Показано: ${filteredLogs.length} из ${state.logs.length} · фильтр: ${filterLevel}`;
-    }
-    if (!state.logs.length) {
-        refs.logs.textContent = 'Логи пока отсутствуют.';
-    } else if (!filteredLogs.length) {
-        refs.logs.textContent =
-            'Нет записей для выбранного уровня. Смените фильтр или выберите «Все уровни».';
-    } else {
-        refs.logs.textContent = formatCockpitLogText(filteredLogs);
-    }
-
-    refs.errors.textContent = buildMergedErrorsText();
-
-    refs.db.textContent = state.dbSummary.length
-        ? state.dbSummary
-              .map((row) =>
-                  row.status === 'ok'
-                      ? `${row.store}: count=${row.count}`
-                      : `${row.store}: ${row.status}${row.error ? ` (${row.error})` : ''}`,
-              )
-              .join('\n')
-        : 'Сводка БД пока не собрана.';
-
-    refs.state.textContent = safeSerialize(getStateSnapshot(), 200000);
     cockpitScrollNavUi?.requestUpdate?.();
 }
 
@@ -369,9 +474,20 @@ function activateTab(tabId) {
     void renderActiveTab();
 }
 
+let refreshInFlight = null;
+
 async function refreshCockpitData() {
-    await refreshDbSummary();
-    await renderActiveTab();
+    // Один обход IndexedDB за раз: повторные клики присоединяются к текущему
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
+        try {
+            await refreshDbSummary();
+            await renderActiveTab();
+        } finally {
+            refreshInFlight = null;
+        }
+    })();
+    return refreshInFlight;
 }
 
 function closeEngineeringCockpit() {
@@ -382,12 +498,26 @@ function closeEngineeringCockpit() {
 
 async function tryUnlock() {
     if (!refs) return;
+    const now = Date.now();
+    if (state.unlockLockedUntil > now) {
+        const sec = Math.ceil((state.unlockLockedUntil - now) / 1000);
+        refs.authMessage.textContent = `Слишком много попыток. Повторите через ${sec} с.`;
+        return;
+    }
     const password = refs.passwordInput.value.trim();
-    if (password !== ENGINEERING_PASSWORD) {
-        refs.authMessage.textContent = 'Неверный пароль доступа.';
+    if (!isEngineeringPassword(password)) {
+        state.unlockFailures += 1;
+        if (state.unlockFailures >= UNLOCK_MAX_ATTEMPTS) {
+            state.unlockFailures = 0;
+            state.unlockLockedUntil = now + UNLOCK_LOCK_MS;
+            refs.authMessage.textContent = 'Слишком много попыток. Доступ заблокирован на 30 с.';
+        } else {
+            refs.authMessage.textContent = `Неверный пароль доступа (${state.unlockFailures}/${UNLOCK_MAX_ATTEMPTS}).`;
+        }
         addRuntimeError('engineering.auth', 'invalid password');
         return;
     }
+    state.unlockFailures = 0;
 
     state.unlocked = true;
     refs.auth.classList.add('hidden');
@@ -423,6 +553,14 @@ function bindUi() {
         overview: document.getElementById('engineeringCockpitOverview'),
         logs: document.getElementById('engineeringCockpitLogs'),
         logLevelFilter: document.getElementById('engineeringCockpitLogLevelFilter'),
+        logChips: document.getElementById('engineeringCockpitLogChips'),
+        logSearch: document.getElementById('engineeringCockpitLogSearch'),
+        logFollow: document.getElementById('engineeringCockpitLogFollow'),
+        copyLogsBtn: document.getElementById('engineeringCockpitCopyLogsBtn'),
+        exportLogsJsonBtn: document.getElementById('engineeringCockpitExportLogsJsonBtn'),
+        logDetail: document.getElementById('engineeringCockpitLogDetail'),
+        logDetailText: document.getElementById('engineeringCockpitLogDetailText'),
+        logDetailCopy: document.getElementById('engineeringCockpitLogDetailCopy'),
         logMeta: document.getElementById('engineeringCockpitLogMeta'),
         logsScrollEndBtn: document.getElementById('engineeringCockpitLogsScrollEndBtn'),
         exportLogsBtn: document.getElementById('engineeringCockpitExportLogsBtn'),
@@ -461,46 +599,109 @@ function bindUi() {
         }
     });
 
+    const rerenderLogs = () => {
+        if (state.currentTab === 'logs') renderLogsPanel();
+    };
+
     if (refs.logLevelFilter) {
-        refs.logLevelFilter.value = state.logFilter;
         refs.logLevelFilter.addEventListener('change', () => {
             const v = refs.logLevelFilter.value;
-            state.logFilter = isValidCockpitLogFilterLevel(v) ? v : 'all';
-            void renderActiveTab();
+            state.logLevels = new Set(v !== 'all' && isValidCockpitLogFilterLevel(v) ? [v] : []);
+            state.logFilter = v;
+            rerenderLogs();
         });
     }
 
+    refs.logChips?.addEventListener('click', (event) => {
+        const btn = event.target instanceof Element ? event.target.closest('[data-cockpit-level]') : null;
+        if (!btn) return;
+        const id = btn.getAttribute('data-cockpit-level');
+        if (id === 'all') state.logLevels.clear();
+        else if (state.logLevels.has(id)) state.logLevels.delete(id);
+        else state.logLevels.add(id);
+        state.logFilter = state.logLevels.size === 1 ? [...state.logLevels][0] : 'all';
+        rerenderLogs();
+    });
+
+    let searchTimer = null;
+    refs.logSearch?.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            state.logQuery = refs.logSearch.value.trim();
+            rerenderLogs();
+        }, 150);
+    });
+
+    refs.logFollow?.addEventListener('change', () => {
+        logView?.setFollow(refs.logFollow.checked);
+    });
+
     refs.logsScrollEndBtn?.addEventListener('click', () => {
-        const wrap = refs.modal?.querySelector('.engineering-cockpit-content');
-        if (wrap) {
-            wrap.scrollTo({ top: wrap.scrollHeight, behavior: 'smooth' });
+        logView?.scrollToEnd();
+    });
+
+    const saveBlob = (text, mime, filename) => {
+        const blob = new Blob([text], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    const copyText = async (text, okMsg) => {
+        if (!text.trim()) {
+            deps.showNotification?.('Нечего копировать.', 'info');
+            return;
         }
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+            await navigator.clipboard.writeText(text);
+            deps.showNotification?.(okMsg, 'success');
+        } catch {
+            deps.showNotification?.('Не удалось скопировать.', 'error');
+        }
+    };
+
+    refs.copyLogsBtn?.addEventListener('click', () => {
+        const list = currentLogEntries();
+        void copyText(formatCockpitLogText(list), `Скопировано записей: ${list.length}.`);
+    });
+
+    refs.logDetailCopy?.addEventListener('click', () => {
+        void copyText(refs.logDetailText?.textContent || '', 'Запись скопирована.');
     });
 
     refs.exportLogsBtn?.addEventListener('click', () => {
-        const filterLevel = isValidCockpitLogFilterLevel(state.logFilter) ? state.logFilter : 'all';
-        const filteredLogs = filterCockpitLogEntries(state.logs, filterLevel);
-        const body = formatCockpitLogText(filteredLogs);
-        const header = `Copilot 1СО — машинное отделение · логи\nфильтр: ${filterLevel}\nсформировано: ${nowIso()}\n---\n`;
-        const text = filteredLogs.length ? header + body : header + '(пусто)';
+        const filtered = currentLogEntries();
+        const label = describeLogFilter();
+        const header = `Copilot 1СО — машинное отделение · логи\nфильтр: ${label}\nзаписей: ${filtered.length}\nсформировано: ${nowIso()}\n---\n`;
+        const text = filtered.length ? header + formatCockpitLogText(filtered) : header + '(пусто)';
         try {
-            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `copilot-cockpit-logs-${filterLevel}-${Date.now()}.txt`;
-            a.rel = 'noopener';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            {
-                const revokeHref = url;
-                setTimeout(() => URL.revokeObjectURL(revokeHref), 1000);
-            }
-            deps.showNotification?.('Файл логов сохранён.', 'success');
+            saveBlob(text, 'text/plain;charset=utf-8', `copilot-cockpit-logs-${Date.now()}.txt`);
+            deps.showNotification?.(`Файл логов сохранён (${filtered.length}).`, 'success');
         } catch (err) {
             nativeConsole.error('[engineering-cockpit] log export failed', err);
             deps.showNotification?.('Не удалось сохранить логи.', 'error');
+        }
+    });
+
+    refs.exportLogsJsonBtn?.addEventListener('click', () => {
+        const filtered = currentLogEntries();
+        try {
+            saveBlob(
+                formatCockpitLogNdjson(filtered) + '\n',
+                'application/x-ndjson;charset=utf-8',
+                `copilot-cockpit-logs-${Date.now()}.ndjson`,
+            );
+            deps.showNotification?.(`NDJSON сохранён (${filtered.length}).`, 'success');
+        } catch (err) {
+            nativeConsole.error('[engineering-cockpit] ndjson export failed', err);
+            deps.showNotification?.('Не удалось сохранить NDJSON.', 'error');
         }
     });
 
@@ -548,6 +749,7 @@ function bindUi() {
     refs.clearLogsBtn?.addEventListener('click', () => {
         state.logs = [];
         state.errors = [];
+        if (refs.logDetail) refs.logDetail.hidden = true;
         clearRuntimeHubBuffer();
         if (typeof window !== 'undefined' && window.BackgroundStatusHUD?.touchRuntimeIssues) {
             try {

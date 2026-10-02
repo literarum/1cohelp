@@ -11,7 +11,7 @@ import { NotificationService } from '../services/notification.js';
 // Timer state variables
 let notificationPermissionState = null;
 let timerInterval = null;
-let timerRafId = null;
+let timerRafId = null; // зарезервировано: rAF-цикл убран (лишняя нагрузка CPU), поле оставлено для совместимости
 let lastTimerTickAt = 0;
 let timerWatchdogId = null;
 const TIMER_WATCHDOG_INTERVAL_MS = 3000;
@@ -22,6 +22,26 @@ let targetEndTime = 0;
 let timeLeftVisual = timerDefaultDuration;
 let isTimerRunning = false;
 let originalDocumentTitle = '';
+/** Точный остаток (мс) на момент паузы: возобновление идёт без округления до секунд (нет дрейфа). */
+let pausedRemainingMs = null;
+/** Таймер истёк и пользователь ещё не начал новый отсчёт (держит статичное красное состояние). */
+let timerExpired = false;
+/** Пользователь «погасил» пульсацию истёкшего таймера (клик/закрытие модалки). */
+let timerExpiredAcked = false;
+
+/** Подробный лог только при localStorage.copilotDebug === '1'. */
+function dlog(...args) {
+    try {
+        if (localStorage.getItem('copilotDebug') === '1') console.log(...args);
+    } catch {
+        /* localStorage недоступен */
+    }
+}
+
+/** Секунды для отображения: округление ВВЕРХ (00:00 показывается только в момент окончания). */
+function secondsLeftFromMs(ms) {
+    return Math.max(0, Math.ceil(ms / 1000));
+}
 
 // Aggressive notification: title/favicon flash when tab is in background
 const TIMER_END_FLASH_TITLE = '⏰ ВЕРНИСЬ К КЛИЕНТУ!';
@@ -47,7 +67,7 @@ function showNotification(message, type = 'success', duration = 5000) {
     } else if (typeof window.showNotification === 'function') {
         window.showNotification(message, type, duration);
     } else {
-        console.log(`[Notification] ${type}: ${message}`);
+        dlog(`[Notification] ${type}: ${message}`);
     }
 }
 
@@ -174,6 +194,7 @@ function showReturnToClientModal() {
     const closeBtn = document.getElementById('timerReturnToClientModalCloseBtn');
 
     const close = () => {
+        acknowledgeTimerExpired();
         modal.classList.add('hidden');
         document.body.classList.remove('overflow-hidden', 'modal-open');
         document.removeEventListener('keydown', onEscape);
@@ -287,12 +308,12 @@ export async function requestAppNotificationPermission() {
     }
 
     const currentBrowserPermission = Notification.permission;
-    console.log(
+    dlog(
         `requestAppNotificationPermission: Текущее Notification.permission = '${currentBrowserPermission}'`,
     );
 
     if (currentBrowserPermission === 'granted') {
-        console.log(
+        dlog(
             'requestAppNotificationPermission: Разрешение на уведомления уже предоставлено.',
         );
         if (notificationPermissionState !== 'granted') {
@@ -302,7 +323,7 @@ export async function requestAppNotificationPermission() {
     }
 
     if (currentBrowserPermission === 'denied') {
-        console.log(
+        dlog(
             'requestAppNotificationPermission: Разрешение на уведомления было ранее отклонено браузером.',
         );
         if (notificationPermissionState !== 'denied') {
@@ -311,24 +332,24 @@ export async function requestAppNotificationPermission() {
         return false;
     }
 
-    console.log(
+    dlog(
         'requestAppNotificationPermission: Запрашиваем разрешение у пользователя (Notification.requestPermission)...',
     );
     try {
         const permissionResult = await Notification.requestPermission();
-        console.log(
+        dlog(
             `requestAppNotificationPermission: Результат Notification.requestPermission() = '${permissionResult}'`,
         );
         notificationPermissionState = permissionResult;
 
         if (permissionResult === 'granted') {
-            console.log('requestAppNotificationPermission: Пользователь предоставил разрешение.');
+            dlog('requestAppNotificationPermission: Пользователь предоставил разрешение.');
             return true;
         } else if (permissionResult === 'denied') {
-            console.log('requestAppNotificationPermission: Пользователь отклонил запрос.');
+            dlog('requestAppNotificationPermission: Пользователь отклонил запрос.');
             return false;
         } else {
-            console.log(
+            dlog(
                 "requestAppNotificationPermission: Пользователь закрыл диалог запроса или статус остался 'default'.",
             );
             return false;
@@ -358,7 +379,7 @@ export function showAppNotification(title, body) {
 
     const currentBrowserPermission = Notification.permission;
     if (notificationPermissionState !== currentBrowserPermission) {
-        console.log(
+        dlog(
             `showAppNotification: Синхронизация notificationPermissionState. Старое: '${notificationPermissionState}', Новое (из Notification.permission): '${currentBrowserPermission}'.`,
         );
         notificationPermissionState = currentBrowserPermission;
@@ -381,7 +402,7 @@ export function showAppNotification(title, body) {
                     const fullIconUrl = new URL(iconLink.href, window.location.origin).href;
                     notificationOptions.icon = fullIconUrl;
                     iconUsedInThisAttempt = true;
-                    console.log('Иконка для уведомления установлена:', fullIconUrl);
+                    dlog('Иконка для уведомления установлена:', fullIconUrl);
                 } catch (e) {
                     console.warn(
                         'Некорректный URL иконки, уведомление будет без иконки:',
@@ -390,12 +411,12 @@ export function showAppNotification(title, body) {
                     );
                 }
             } else {
-                console.log(
+                dlog(
                     'Иконка для уведомлений не найдена или не указана, уведомление будет без иконки.',
                 );
             }
 
-            console.log(
+            dlog(
                 'showAppNotification: Попытка создать и показать уведомление с опциями:',
                 JSON.stringify(notificationOptions),
             );
@@ -404,11 +425,11 @@ export function showAppNotification(title, body) {
             notification.onclick = () => {
                 window.focus();
                 notification.close();
-                console.log('Уведомление нажато и закрыто, фокус на окне.');
+                dlog('Уведомление нажато и закрыто, фокус на окне.');
             };
 
             notification.onshow = () => {
-                console.log('Уведомление успешно ПОКАЗАНО системой:', title);
+                dlog('Уведомление успешно ПОКАЗАНО системой:', title);
             };
 
             notification.onerror = (err) => {
@@ -420,7 +441,7 @@ export function showAppNotification(title, body) {
                     console.error('Сообщение об ошибке (первичная попытка): ', err.message);
                 if (err && typeof err.name !== 'undefined')
                     console.error('Имя ошибки (первичная попытка): ', err.name);
-                console.log('Полный объект ошибки (первичная попытка):');
+                dlog('Полный объект ошибки (первичная попытка):');
                 console.dir(err);
 
                 if (iconUsedInThisAttempt) {
@@ -429,7 +450,7 @@ export function showAppNotification(title, body) {
                     );
                     const fallbackOptions = { ...notificationOptions };
                     delete fallbackOptions.icon;
-                    console.log(
+                    dlog(
                         'showAppNotification: Попытка создать и показать резервное уведомление (без иконки) с опциями:',
                         JSON.stringify(fallbackOptions),
                     );
@@ -439,10 +460,10 @@ export function showAppNotification(title, body) {
                         fallbackNotification.onclick = () => {
                             window.focus();
                             fallbackNotification.close();
-                            console.log('Резервное уведомление (без иконки) нажато и закрыто.');
+                            dlog('Резервное уведомление (без иконки) нажато и закрыто.');
                         };
                         fallbackNotification.onshow = () => {
-                            console.log(
+                            dlog(
                                 'Резервное уведомление (без иконки) успешно ПОКАЗАНО системой:',
                                 title,
                             );
@@ -456,7 +477,7 @@ export function showAppNotification(title, body) {
                                 console.error('Сообщение об ошибке (резервное): ', e2.message);
                             if (e2 && typeof e2.name !== 'undefined')
                                 console.error('Имя ошибки (резервное): ', e2.name);
-                            console.log('Полный объект ошибки (резервное уведомление):');
+                            dlog('Полный объект ошибки (резервное уведомление):');
                             console.dir(e2);
 
                             showNotification(
@@ -469,7 +490,7 @@ export function showAppNotification(title, body) {
                                 : `${title}\n(Ошибка системного уведомления)`;
                             alert(alertMessageError);
                         };
-                        console.log(
+                        dlog(
                             'Резервное уведомление (без иконки) создано. Ожидание onshow/onerror...',
                         );
                         return;
@@ -495,7 +516,7 @@ export function showAppNotification(title, body) {
                 alert(alertMessageError);
             };
 
-            console.log('Объект Notification успешно создан (основная попытка):', title);
+            dlog('Объект Notification успешно создан (основная попытка):', title);
         } catch (e_create) {
             console.error(
                 'Критическая ошибка при СОЗДАНИИ объекта Notification (основная попытка):',
@@ -544,9 +565,10 @@ export function saveTimerState() {
             isTimerRunning,
             targetEndTime: isTimerRunning ? targetEndTime : null,
             timeLeftVisualOnPause: !isTimerRunning ? timeLeftVisual : null,
+            timeLeftMsOnPause: !isTimerRunning && pausedRemainingMs != null ? pausedRemainingMs : null,
         };
         localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(timerState));
-        console.log('Timer state saved:', timerState);
+        dlog('Timer state saved:', timerState);
     } catch (error) {
         console.error('Ошибка сохранения состояния таймера в localStorage:', error);
     }
@@ -560,7 +582,7 @@ export function loadTimerState() {
         const savedStateJSON = localStorage.getItem(TIMER_STATE_KEY);
         if (savedStateJSON) {
             const savedState = JSON.parse(savedStateJSON);
-            console.log('Loaded timer state from localStorage:', savedState);
+            dlog('Loaded timer state from localStorage:', savedState);
 
             timerCurrentSetDuration =
                 typeof savedState.timerCurrentSetDuration === 'number' &&
@@ -578,8 +600,8 @@ export function loadTimerState() {
             ) {
                 targetEndTime = savedState.targetEndTime;
                 const now = Date.now();
-                timeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
-                if (timeLeftVisual === 0) {
+                timeLeftVisual = secondsLeftFromMs(targetEndTime - now);
+                if (targetEndTime - now <= 0) {
                     isTimerRunning = false;
                     handleTimerEnd();
                     return;
@@ -592,12 +614,18 @@ export function loadTimerState() {
                     savedState.timeLeftVisualOnPause >= 0
                         ? savedState.timeLeftVisualOnPause
                         : timerCurrentSetDuration;
+                pausedRemainingMs =
+                    typeof savedState.timeLeftMsOnPause === 'number' &&
+                    savedState.timeLeftMsOnPause > 0 &&
+                    secondsLeftFromMs(savedState.timeLeftMsOnPause) === timeLeftVisual
+                        ? savedState.timeLeftMsOnPause
+                        : null;
             }
             if (timeLeftVisual <= 0 && !isTimerRunning) {
                 timeLeftVisual = timerCurrentSetDuration;
             }
         } else {
-            console.log(
+            dlog(
                 'Сохраненное состояние таймера не найдено, установка значений по умолчанию.',
             );
             timerCurrentSetDuration = timerDefaultDuration;
@@ -619,15 +647,15 @@ export function loadTimerState() {
  * Handle timer end
  */
 export function handleTimerEnd() {
+    // Защита от повторного срабатывания (tick + visibilitychange + watchdog): модалка и уведомление — один раз.
+    if (timerExpired && !isTimerRunning) return;
     isTimerRunning = false;
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-    if (timerRafId) {
-        cancelAnimationFrame(timerRafId);
-        timerRafId = null;
-    }
-
+    clearTick();
+    pausedRemainingMs = null;
+    targetEndTime = 0;
     timeLeftVisual = 0;
+    timerExpired = true;
+    timerExpiredAcked = false;
 
     showReturnToClientModal();
     showAppNotification(TIMER_RETURN_TO_CLIENT_TITLE, TIMER_RETURN_TO_CLIENT_SUBTITLE);
@@ -647,77 +675,95 @@ export function handleTimerEnd() {
     }
     updateTimerDisplay();
     saveTimerState();
-    console.log('Таймер завершен.');
+    dlog('Таймер завершен.');
+}
+
+/** Сбросить состояние «истёк» (начат новый отсчёт, сброс, ручная правка). */
+function clearExpiredState() {
+    timerExpired = false;
+    timerExpiredAcked = false;
 }
 
 /**
- * Redundant display update driven by rAF when tab is visible.
- * Ensures the timer display keeps updating even if setInterval is throttled.
+ * «Погасить» пульсацию истёкшего таймера: статичный красный остаётся, движение прекращается.
  */
-function scheduleTimerDisplayRaf() {
-    timerRafId = null;
-    if (document.hidden || !isTimerRunning) return;
-    const now = Date.now();
-    const remaining = Math.max(0, Math.round((targetEndTime - now) / 1000));
-    if (remaining <= 0) return;
-    if (remaining !== timeLeftVisual) {
-        timeLeftVisual = remaining;
-        updateTimerDisplay();
+export function acknowledgeTimerExpired() {
+    if (!timerExpired || timerExpiredAcked) return;
+    timerExpiredAcked = true;
+    updateTimerDisplay();
+}
+
+function clearTick() {
+    if (timerInterval) clearTimeout(timerInterval);
+    timerInterval = null;
+    if (timerRafId) {
+        cancelAnimationFrame(timerRafId);
+        timerRafId = null;
     }
-    timerRafId = requestAnimationFrame(scheduleTimerDisplayRaf);
 }
 
 /**
- * Start timer internal
+ * Самокорректирующийся тик: следующий вызов планируется ровно на момент смены отображаемой секунды
+ * (по targetEndTime), поэтому нет накопления дрейфа setInterval, а 00:00 наступает точно в срок.
  */
-export function startTimerInternal() {
-    if (timerInterval) clearInterval(timerInterval);
-
-    if (timeLeftVisual <= 0) {
-        console.log('Попытка запуска таймера с нулевым временем. Вызов handleTimerEnd.');
+function timerTick() {
+    timerInterval = null;
+    if (!isTimerRunning) return;
+    const now = Date.now();
+    lastTimerTickAt = now;
+    const remainingMs = targetEndTime - now;
+    if (remainingMs <= 0) {
+        timeLeftVisual = 0;
         handleTimerEnd();
         return;
     }
-    // Всегда привязываем targetEndTime к текущему timeLeftVisual при старте/возобновлении,
-    // чтобы после паузы таймер продолжал с той же секунды, а не терял прошедшее время.
-    targetEndTime = Date.now() + timeLeftVisual * 1000;
-    console.log(
-        `Таймер запускается/возобновляется. Новое targetEndTime: ${new Date(
-            targetEndTime,
-        ).toLocaleTimeString('ru-RU')}`,
-    );
-
-    isTimerRunning = true;
-    lastTimerTickAt = Date.now();
-
-    timerInterval = setInterval(() => {
-        const now = Date.now();
-        lastTimerTickAt = now;
-        const newTimeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
-
-        if (newTimeLeftVisual !== timeLeftVisual) {
-            timeLeftVisual = newTimeLeftVisual;
-            updateTimerDisplay();
-        }
-
-        if (timeLeftVisual <= 0) {
-            handleTimerEnd();
-        }
-        saveTimerState();
-    }, 1000);
-
-    const initialTimeLeft = Math.max(0, Math.round((targetEndTime - Date.now()) / 1000));
-    if (initialTimeLeft !== timeLeftVisual) {
-        timeLeftVisual = initialTimeLeft;
+    const secs = secondsLeftFromMs(remainingMs);
+    if (secs !== timeLeftVisual) {
+        timeLeftVisual = secs;
+        updateTimerDisplay();
     }
+    scheduleNextTick(remainingMs);
+}
+
+/** Следующий тик — когда ceil(remaining/1000) уменьшится на 1 (но не реже раза в секунду). */
+function scheduleNextTick(remainingMs) {
+    const secs = secondsLeftFromMs(remainingMs);
+    const untilNextChange = remainingMs - (secs - 1) * 1000;
+    timerInterval = setTimeout(timerTick, Math.min(1000, Math.max(16, untilNextChange)));
+}
+
+/**
+ * Start timer internal.
+ * Если таймер уже идёт и targetEndTime в будущем — только перезапускает тик (targetEndTime не трогаем:
+ * иначе округлённое отображаемое значение давало бы дрейф и «продление» при простое).
+ */
+export function startTimerInternal() {
+    clearTick();
+    const now = Date.now();
+
+    if (isTimerRunning && targetEndTime > 0) {
+        if (targetEndTime <= now) {
+            handleTimerEnd();
+            return;
+        }
+    } else {
+        const baseMs = pausedRemainingMs != null ? pausedRemainingMs : timeLeftVisual * 1000;
+        if (baseMs <= 0) {
+            dlog('Попытка запуска таймера с нулевым временем. Вызов handleTimerEnd.');
+            handleTimerEnd();
+            return;
+        }
+        targetEndTime = now + baseMs;
+    }
+    pausedRemainingMs = null;
+    clearExpiredState();
+    isTimerRunning = true;
+    lastTimerTickAt = now;
+    timeLeftVisual = secondsLeftFromMs(targetEndTime - now);
     updateTimerDisplay();
     saveTimerState();
-    if (timerRafId) cancelAnimationFrame(timerRafId);
-    timerRafId = requestAnimationFrame(scheduleTimerDisplayRaf);
-    console.log(
-        'Таймер запущен (внутренний интервал). targetEndTime:',
-        new Date(targetEndTime).toLocaleTimeString('ru-RU'),
-    );
+    scheduleNextTick(targetEndTime - now);
+    dlog('Таймер запущен. targetEndTime:', new Date(targetEndTime).toLocaleTimeString('ru-RU'));
 }
 
 /**
@@ -725,22 +771,18 @@ export function startTimerInternal() {
  */
 export function pauseTimer() {
     if (!isTimerRunning) return;
+    const remainingMs = Math.max(0, targetEndTime - Date.now());
     isTimerRunning = false;
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-    if (timerRafId) {
-        cancelAnimationFrame(timerRafId);
-        timerRafId = null;
-    }
+    clearTick();
+    pausedRemainingMs = remainingMs > 0 ? remainingMs : null;
+    timeLeftVisual = secondsLeftFromMs(remainingMs);
+    targetEndTime = 0;
 
     updateTimerDisplay();
     saveTimerState();
-    console.log('Таймер на паузе. Оставшееся время для отображения:', timeLeftVisual);
+    dlog('Таймер на паузе. Оставшееся время для отображения:', timeLeftVisual);
 }
 
-/**
- * Toggle timer (start/pause)
- */
 /** Состояние «таймер запущен» для UI (глобальное меню, палитра). */
 export function getTimerRunning() {
     return isTimerRunning;
@@ -748,35 +790,27 @@ export function getTimerRunning() {
 
 export async function toggleTimer() {
     if (isTimerRunning) {
-        console.log('toggleTimer: Пауза таймера.');
         pauseTimer();
     } else {
-        console.log('toggleTimer: Попытка запуска таймера.');
         stopTimerEndEffects();
 
         if (timeLeftVisual <= 0 && timerCurrentSetDuration > 0) {
             timeLeftVisual = timerCurrentSetDuration;
+            pausedRemainingMs = null;
             targetEndTime = 0;
-            console.log(
-                `toggleTimer: Время было <= 0, сброшено на ${timeLeftVisual}с из timerCurrentSetDuration.`,
-            );
         } else if (timeLeftVisual <= 0 && timerCurrentSetDuration <= 0) {
             timerCurrentSetDuration = timerDefaultDuration;
             timeLeftVisual = timerCurrentSetDuration;
+            pausedRemainingMs = null;
             targetEndTime = 0;
-            console.log(
-                `toggleTimer: Время и установленная длительность были <=0. Сброшено на ${timerDefaultDuration}с.`,
-            );
         }
 
         if (originalDocumentTitle && document.title.startsWith('⏰')) {
             document.title = originalDocumentTitle;
         }
-        stopTimerEndEffects();
         // Основной контур: отсчёт запускается сразу, без ожидания Notification.requestPermission()
         // (иначе при «зависшем» диалоге или медленном WebView таймер не стартует вообще).
         startTimerInternal();
-        console.log('toggleTimer: Таймер запущен.');
         kickOffTimerNotificationPermissionFromUserGesture();
     }
 }
@@ -787,15 +821,16 @@ export async function toggleTimer() {
 export function resetTimer(event) {
     pauseTimer();
     stopTimerEndEffects();
+    clearExpiredState();
+    pausedRemainingMs = null;
 
     if (event && (event.ctrlKey || event.metaKey)) {
         timerCurrentSetDuration = 0;
         timeLeftVisual = 0;
-        console.log('Таймер сброшен в 00:00 (Ctrl/Cmd+Click).');
+        dlog('Таймер сброшен в 00:00 (Ctrl/Cmd+Click).');
     } else {
         timerCurrentSetDuration = timerDefaultDuration;
         timeLeftVisual = timerCurrentSetDuration;
-        console.log(`Таймер сброшен на значение по умолчанию: ${timerDefaultDuration} сек.`);
     }
 
     targetEndTime = 0;
@@ -808,35 +843,61 @@ export function resetTimer(event) {
 }
 
 /**
- * Adjust timer duration
+ * Adjust timer duration (кнопки +/-: 5 с, Ctrl — 10 с, Ctrl+Shift — 30 с)
  */
 export function adjustTimerDuration(secondsToAdd) {
     const minDuration = 10;
     const maxDuration = 3600;
 
-    timerCurrentSetDuration = Math.max(
-        minDuration,
-        Math.min(maxDuration, timerCurrentSetDuration + secondsToAdd),
-    );
+    if (timerExpired) {
+        stopTimerEndEffects();
+        clearExpiredState();
+        if (originalDocumentTitle && document.title.startsWith('⏰')) {
+            document.title = originalDocumentTitle;
+        }
+    }
 
     if (isTimerRunning) {
-        const newEffectiveTimeLeft = Math.max(0, timeLeftVisual + secondsToAdd);
-        targetEndTime = Date.now() + newEffectiveTimeLeft * 1000;
-        timeLeftVisual = newEffectiveTimeLeft;
-
-        if (timeLeftVisual <= 0) {
+        // Сдвигаем сам момент окончания: без округления и без потери долей секунды.
+        const newTarget = targetEndTime + secondsToAdd * 1000;
+        const maxTarget = Date.now() + maxDuration * 1000;
+        targetEndTime = Math.min(newTarget, maxTarget);
+        timerCurrentSetDuration = Math.max(
+            minDuration,
+            Math.min(maxDuration, timerCurrentSetDuration + secondsToAdd),
+        );
+        if (targetEndTime <= Date.now()) {
+            timeLeftVisual = 0;
             handleTimerEnd();
             return;
         }
-    } else {
-        timeLeftVisual = timerCurrentSetDuration;
-        targetEndTime = 0;
+        timeLeftVisual = secondsLeftFromMs(targetEndTime - Date.now());
+        startTimerInternal(); // перепланировать тик под новый targetEndTime
+        return;
     }
+
+    const untouched = pausedRemainingMs == null && timeLeftVisual === timerCurrentSetDuration;
+    if (untouched || timeLeftVisual <= 0) {
+        timerCurrentSetDuration = Math.max(
+            minDuration,
+            Math.min(maxDuration, timerCurrentSetDuration + secondsToAdd),
+        );
+        timeLeftVisual = timerCurrentSetDuration;
+        pausedRemainingMs = null;
+    } else {
+        // Пауза посреди отсчёта: правим остаток, а не сбрасываем прогресс на полную длительность.
+        const base = pausedRemainingMs != null ? pausedRemainingMs : timeLeftVisual * 1000;
+        const next = Math.max(1000, Math.min(maxDuration * 1000, base + secondsToAdd * 1000));
+        pausedRemainingMs = next;
+        timeLeftVisual = secondsLeftFromMs(next);
+        timerCurrentSetDuration = Math.max(
+            timerCurrentSetDuration,
+            Math.min(maxDuration, timeLeftVisual),
+        );
+    }
+    targetEndTime = 0;
     updateTimerDisplay();
     saveTimerState();
-    console.log(
-        `Длительность таймера изменена. Новая установленная: ${timerCurrentSetDuration} сек. Текущее отображаемое время: ${timeLeftVisual} сек.`,
-    );
 }
 
 /**
@@ -946,6 +1007,15 @@ export function commitTimerEdit(triggerButtonAction = false) {
 
     timeLeftVisual = currentMinutes * 60 + currentSeconds;
     timerCurrentSetDuration = timeLeftVisual;
+    pausedRemainingMs = null;
+    targetEndTime = 0;
+    if (timerExpired) {
+        stopTimerEndEffects();
+        if (originalDocumentTitle && document.title.startsWith('⏰')) {
+            document.title = originalDocumentTitle;
+        }
+    }
+    clearExpiredState();
 
     inputElement.remove();
     State.activeEditingUnitElement.style.display = 'inline-block';
@@ -965,13 +1035,10 @@ export function commitTimerEdit(triggerButtonAction = false) {
         } else if (timeLeftVisual === 0 && wasTimerRunning) {
             handleTimerEnd();
         }
+    } else if (timeLeftVisual === 0 && wasTimerRunning) {
+        handleTimerEnd();
     } else {
-        if (wasTimerRunning && timeLeftVisual > 0) {
-            isTimerRunning = false;
-            updateTimerDisplay();
-        } else if (timeLeftVisual === 0) {
-            handleTimerEnd();
-        }
+        updateTimerDisplay();
     }
 }
 
@@ -1057,14 +1124,7 @@ export function updateTimerDisplay() {
                 timerToggleIcon.classList.add('fa-play');
             }
         }
-        if (timerDisplayElement) {
-            timerDisplayElement.classList.toggle('timer-zero', timeLeftVisual === 0);
-            if (isTimerRunning && timeLeftVisual <= 10) {
-                timerDisplayElement.classList.add('timer-urgent');
-            } else {
-                timerDisplayElement.classList.remove('timer-urgent');
-            }
-        }
+        applyTimerStageClasses();
         return;
     }
 
@@ -1086,14 +1146,36 @@ export function updateTimerDisplay() {
         timerToggleIcon.classList.add('fa-play');
     }
 
-    if (timerDisplayElement) {
-        timerDisplayElement.classList.toggle('timer-zero', timeLeftVisual === 0);
-        if (isTimerRunning && timeLeftVisual <= 10) {
-            timerDisplayElement.classList.add('timer-urgent');
-        } else {
-            timerDisplayElement.classList.remove('timer-urgent');
-        }
-    }
+    applyTimerStageClasses();
+}
+
+/** Порог стадии «скоро конец»: 20% длительности, но не меньше 15 и не больше 60 секунд. */
+export function getTimerWarnThreshold(duration) {
+    const d = Number(duration) || 0;
+    return Math.min(60, Math.max(15, Math.round(d * 0.2)));
+}
+
+/**
+ * Стадии: normal → warn (последние ~20%/≤60 с) → urgent (≤10 с) → expired (00:00).
+ * Только классы на #timerDisplay: вся анимация в CSS (transform/opacity), JS не рисует кадры.
+ */
+function applyTimerStageClasses() {
+    if (!timerDisplayElement) return;
+    const cl = timerDisplayElement.classList;
+    const running = isTimerRunning;
+    const expired = timerExpired && !running && timeLeftVisual <= 0;
+    const urgent = running && timeLeftVisual <= 10;
+    const warnLate = running && !urgent && timeLeftVisual <= Math.ceil(getTimerWarnThreshold(timerCurrentSetDuration) / 2);
+    const warn = running && !urgent && timeLeftVisual <= getTimerWarnThreshold(timerCurrentSetDuration);
+    cl.toggle('timer-zero', expired);
+    cl.toggle('timer-urgent', urgent);
+    cl.toggle('timer-warn', warn);
+    cl.toggle('timer-warn-late', warnLate);
+    cl.toggle('timer-acked', expired && timerExpiredAcked);
+    const stage = expired ? 'expired' : urgent ? 'urgent' : warn ? 'warn' : 'normal';
+    if (timerDisplayElement.dataset.stage !== stage) timerDisplayElement.dataset.stage = stage;
+    const wrap = timerDisplayElement.parentElement;
+    if (wrap && wrap.id === 'appTimer' && wrap.dataset.stage !== stage) wrap.dataset.stage = stage;
 }
 
 /**
@@ -1153,37 +1235,21 @@ export function initTimerSystem() {
     loadTimerState();
 
     if (isTimerRunning) {
-        const now = Date.now();
-        if (targetEndTime > now) {
-            timeLeftVisual = Math.max(0, Math.round((targetEndTime - now) / 1000));
-            if (timeLeftVisual > 0) {
-                startTimerInternal();
-                console.log('Таймер был активен, перезапущен после загрузки страницы.');
-            } else {
-                isTimerRunning = false;
-                handleTimerEnd();
-                console.log('Таймер истек во время закрытия вкладки/браузера.');
-            }
+        // Таймер шёл до перезагрузки: продолжаем строго от сохранённого targetEndTime.
+        if (targetEndTime > Date.now()) {
+            startTimerInternal();
+            dlog('Таймер был активен, перезапущен после загрузки страницы.');
         } else {
             isTimerRunning = false;
-            if (timeLeftVisual > 0 && targetEndTime > 0) {
-                timeLeftVisual = 0;
-            }
-            if (timeLeftVisual <= 0) {
-                handleTimerEnd();
-            }
-            console.log('Сохраненное targetEndTime уже в прошлом. Таймер завершен.');
+            handleTimerEnd();
         }
-    } else {
+    } else if (!timerExpired) {
         if (timeLeftVisual <= 0 && timerCurrentSetDuration > 0) {
             timeLeftVisual = timerCurrentSetDuration;
         } else if (timeLeftVisual <= 0 && timerCurrentSetDuration <= 0) {
             timeLeftVisual = timerDefaultDuration;
             timerCurrentSetDuration = timerDefaultDuration;
         }
-        console.log(
-            'Таймер не был активен при загрузке. Отображается сохраненное/установленное время.',
-        );
     }
 
     updateTimerDisplay();
@@ -1195,6 +1261,8 @@ export function initTimerSystem() {
             toggleTimer();
         }
     });
+    // Клик по цифрам или кнопкам таймера «гасит» пульсацию истёкшего таймера (захват: до режима правки).
+    timerDisplayElement.addEventListener('pointerdown', () => acknowledgeTimerExpired(), true);
     timerResetButton.addEventListener('click', (event) => {
         if (State.activeEditingUnitElement) {
             cancelTimerEdit();
@@ -1239,35 +1307,9 @@ export function initTimerSystem() {
             stopTimerEndEffects();
         }
         if (document.visibilityState === 'visible' && isTimerRunning) {
-            console.log('Вкладка стала видимой, таймер запущен. Проверка и синхронизация времени.');
-            const now = Date.now();
-            const expectedTimeLeft = Math.max(0, Math.round((targetEndTime - now) / 1000));
-            if (Math.abs(expectedTimeLeft - timeLeftVisual) > 2 && timeLeftVisual > 0) {
-                console.warn(
-                    `Обнаружено расхождение времени при активации вкладки. Ожидалось: ${expectedTimeLeft}, Отображалось: ${timeLeftVisual}. Синхронизация.`,
-                );
-                timeLeftVisual = expectedTimeLeft;
-                if (timeLeftVisual <= 0) {
-                    handleTimerEnd();
-                } else {
-                    updateTimerDisplay();
-                    pauseTimer();
-                    startTimerInternal();
-                }
-            } else if (timeLeftVisual <= 0 && targetEndTime > now) {
-                timeLeftVisual = expectedTimeLeft;
-                console.log(
-                    "Таймер 'восстановлен' после неактивности, так как targetEndTime еще не достигнут.",
-                );
-                updateTimerDisplay();
-                if (!timerInterval) {
-                    startTimerInternal();
-                }
-            } else if (timeLeftVisual <= 0 && targetEndTime <= now) {
-                handleTimerEnd();
-            } else if (!timerInterval) {
-                startTimerInternal();
-            }
+            // Фоновые вкладки троттлят таймеры браузера: пересчитываем остаток от targetEndTime
+            // (не от отображаемого значения) и перепланируем тик.
+            startTimerInternal();
         }
     });
 
@@ -1279,7 +1321,6 @@ export function initTimerSystem() {
         if (
             document.hidden ||
             !isTimerRunning ||
-            timerInterval == null ||
             Date.now() - lastTimerTickAt <= TIMER_STALL_THRESHOLD_MS
         ) {
             return;
@@ -1287,12 +1328,10 @@ export function initTimerSystem() {
         console.warn(
             'Таймер: интервал не срабатывал >2.5с при видимой вкладке. Перезапуск интервала.',
         );
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = null;
         startTimerInternal();
     }, TIMER_WATCHDOG_INTERVAL_MS);
 
-    console.log('Система таймера инициализирована (v_editable_compact_css_driven).');
+    dlog('Система таймера инициализирована (v_editable_compact_css_driven).');
 }
 
 // Export for window access (backward compatibility)

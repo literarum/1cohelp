@@ -1,4 +1,9 @@
 /* eslint-disable no-dupe-keys, no-dupe-class-members, no-control-regex, no-case-declarations -- ported from external XML analyzer app */
+import { jsonToXmlString, parseXml, yieldToUi } from './xml-analyzer-model.js';
+import { buildFindings, collectRequisites } from './xml-analyzer-insights.js';
+import { analyzeBlob, base64ToBytes, findSignatures } from './xml-analyzer-crypto.js';
+import { createExplorerView, fmtSize, h } from './xml-analyzer-explorer.js';
+
 const XML_ANALYZER_ID_MAP = {
     'data-input': 'xmlAnalyzerDataInput',
     output: 'xmlAnalyzerOutput',
@@ -37,6 +42,11 @@ class ReportAnalyzerApp {
 
         this.certificates = new Map();
         this.isAnalysisDone = false;
+        this.docs = [];
+        this.activeRecord = null;
+        this._busy = false;
+        this._docSeq = 0;
+        this._pickMode = null;
 
         this.controllingAuthorityMap = {
             FNS: 'Федеральная налоговая служба (ФНС)',
@@ -128,10 +138,6 @@ class ReportAnalyzerApp {
     }
 
     init() {
-        if (this.themeToggle) {
-            this.initTheme();
-        }
-
         if (this.analyzeBtn) {
             this.analyzeBtn.addEventListener('click', () => this.handleAnalyzeButtonClick());
         } else {
@@ -148,37 +154,11 @@ class ReportAnalyzerApp {
             this.reloadBtn.addEventListener('click', () => this.clearAnalysis());
         }
 
-        if (this.dropZone) {
-            this.dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                this.dropZone.classList.add('drag-over');
-            });
-            this.dropZone.addEventListener('dragleave', (e) => {
-                if (!this.dropZone.contains(e.relatedTarget)) {
-                    this.dropZone.classList.remove('drag-over');
-                }
-            });
-            this.dropZone.addEventListener('drop', (e) => this.handleFileDrop(e));
-        }
+        this._initDragAndDrop();
+        this._initRecent();
 
-        // Постоянный скрытый input внутри корня вкладки: отсоединённый от DOM input
-        // в части браузеров (iOS Safari) не доставляет событие change.
-        const openFilePicker = () => {
-            if (!this._fileInput) {
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.accept = '.xml,.zip,.txt,.json';
-                fileInput.hidden = true;
-                fileInput.setAttribute('aria-hidden', 'true');
-                fileInput.tabIndex = -1;
-                fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-                this.root.appendChild(fileInput);
-                this._fileInput = fileInput;
-            }
-            this._fileInput.click();
-        };
         if (this.loadFileBtn) {
-            this.loadFileBtn.addEventListener('click', openFilePicker);
+            this.loadFileBtn.addEventListener('click', () => this.openFilePicker());
         }
 
         if (this.dataInputTextarea) {
@@ -210,21 +190,57 @@ class ReportAnalyzerApp {
 
         this.root.addEventListener('click', (e) => this.handleAppClicks(e));
 
-        if (window.electronAPI) {
-            if (this.minimizeBtn) {
-                this.minimizeBtn.addEventListener('click', () =>
-                    window.electronAPI.minimizeWindow(),
-                );
-            }
-            if (this.maximizeBtn) {
-                this.maximizeBtn.addEventListener('click', () =>
-                    window.electronAPI.maximizeWindow(),
-                );
-            }
-            if (this.closeBtn) {
-                this.closeBtn.addEventListener('click', () => window.electronAPI.closeWindow());
-            }
+        if (this.modalOverlay) {
+            this.modalOverlay.addEventListener('click', (e) => {
+                if (e.target === this.modalOverlay) this.hideCertificateDetails();
+            });
+            this.modalOverlay.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') this.hideCertificateDetails();
+            });
         }
+    }
+
+    /** Перетаскивание нескольких файлов на всю вкладку анализатора. */
+    _initDragAndDrop() {
+        const shell = this.root.querySelector('.xml-analyzer-shell');
+        if (!shell) return;
+        if (!shell.querySelector('.xa-drop-overlay')) {
+            shell.appendChild(
+                h('div', { class: 'xa-drop-overlay', 'aria-hidden': 'true' }, 'Отпустите файлы XML, JSON или ZIP для анализа'),
+            );
+        }
+        let depth = 0;
+        const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+        this.root.addEventListener('dragenter', (e) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            depth++;
+            shell.classList.add('xa-dragging');
+        });
+        this.root.addEventListener('dragover', (e) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        this.root.addEventListener('dragleave', (e) => {
+            if (!hasFiles(e)) return;
+            depth = Math.max(0, depth - 1);
+            if (!depth) shell.classList.remove('xa-dragging');
+        });
+        this.root.addEventListener('drop', (e) => {
+            if (!hasFiles(e)) return;
+            depth = 0;
+            shell.classList.remove('xa-dragging');
+            this.handleFileDrop(e);
+        });
+    }
+
+    _initRecent() {
+        const view = this.root.querySelector('#xmlAnalyzerInitialView');
+        if (!view) return;
+        this._recentEl = h('div', { class: 'xa-recent', hidden: true });
+        view.appendChild(this._recentEl);
+        this._renderRecent();
     }
 
     debounce(func, delay) {
@@ -247,13 +263,6 @@ class ReportAnalyzerApp {
             return;
         }
         this.analyzeBtn.disabled = !hasContent;
-    }
-
-    clearInput() {
-        if (this.dataInputTextarea) {
-            this.dataInputTextarea.value = '';
-        }
-        this.updateAnalyzeButtonState();
     }
 
     _fixBrokenUriEncoding(xmlString) {
@@ -415,36 +424,13 @@ class ReportAnalyzerApp {
             .replace(/^_|_$/g, '');
     }
 
-    initTheme() {
-        const applyTheme = (theme) => {
-            if (theme === 'dark') {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-        };
-
-        const toggleTheme = () => {
-            const newTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
-            localStorage.setItem('theme', newTheme);
-            applyTheme(newTheme);
-        };
-
-        if (this.themeToggle) {
-            this.themeToggle.addEventListener('click', toggleTheme);
-        }
-
-        const savedTheme =
-            localStorage.getItem('theme') ||
-            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        applyTheme(savedTheme);
-    }
-
     handleFileSelect(event) {
         const input = event.target;
-        const file = input.files && input.files[0];
-        if (file) {
-            this.readFileAndAnalyze(file);
+        const files = input.files ? Array.from(input.files) : [];
+        const compare = this._pickMode === 'compare';
+        this._pickMode = null;
+        if (files.length) {
+            this.ingestFiles(files, { compare });
         }
         // Сброс: повторный выбор того же файла (после «Очистить») должен снова вызывать change.
         try {
@@ -456,45 +442,656 @@ class ReportAnalyzerApp {
 
     handleFileDrop(event) {
         event.preventDefault();
-        this.dropZone.classList.remove('drag-over');
-        const file = event.dataTransfer.files[0];
-        if (file) {
-            this.readFileAndAnalyze(file);
+        const files = event.dataTransfer && event.dataTransfer.files ? Array.from(event.dataTransfer.files) : [];
+        if (files.length) {
+            this.ingestFiles(files, { compare: false });
         }
     }
 
+    /** Совместимость: чтение одного файла. */
     async readFileAndAnalyze(file) {
-        if (this.isAnalysisDone) {
+        return this.ingestFiles([file]);
+    }
+
+    openFilePicker(mode = null) {
+        this._pickMode = mode;
+        if (!this._fileInput) {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.multiple = true;
+            fileInput.accept =
+                '.xml,.zip,.txt,.json,.p7s,.sig,.cer,.crt,.pem,application/xml,text/xml,application/zip,application/json,text/plain';
+            fileInput.hidden = true;
+            fileInput.setAttribute('aria-hidden', 'true');
+            fileInput.tabIndex = -1;
+            fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+            this.root.appendChild(fileInput);
+            this._fileInput = fileInput;
+        }
+        this._fileInput.click();
+    }
+
+    // ---------- Загрузка, прогресс и список документов ----------
+
+    _ensureProgressEl() {
+        if (!this._progressEl) {
+            this._progressText = h('div', { class: 'xa-progress-text' });
+            this._progressFill = h('i');
+            this._progressEl = h(
+                'div',
+                { class: 'xa-progress', role: 'status', 'aria-live': 'polite' },
+                this._progressText,
+                h('div', { class: 'xa-progress-bar' }, this._progressFill),
+            );
+        }
+        return this._progressEl;
+    }
+
+    _setProgress(text, ratio) {
+        const el = this._ensureProgressEl();
+        const host = this.isAnalysisDone
+            ? this.outputArea
+            : this.root.querySelector('#xmlAnalyzerInitialView');
+        if (host && el.parentNode !== host) host.prepend(el);
+        this._progressText.textContent = text;
+        this._progressFill.style.width = `${Math.max(0, Math.min(1, ratio || 0)) * 100}%`;
+    }
+
+    _hideProgress() {
+        if (this._progressEl) this._progressEl.remove();
+    }
+
+    _setBusyUi(on) {
+        const content = this.getEl('analyze-btn-content');
+        if (this.loadFileBtn) this.loadFileBtn.disabled = on;
+        if (!content) return;
+        if (on) {
+            content.replaceChildren();
+            const spin = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            spin.setAttribute('class', 'animate-spin -ml-1 mr-2 h-5 w-5 text-white');
+            spin.setAttribute('fill', 'none');
+            spin.setAttribute('viewBox', '0 0 24 24');
+            spin.innerHTML =
+                '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
+            content.append(spin, h('span', { text: ' Анализ…' }));
+            if (this.analyzeBtn) this.analyzeBtn.disabled = true;
+        } else {
+            content.replaceChildren(h('span', { text: 'Анализировать' }));
+            this.updateAnalyzeButtonState();
+        }
+    }
+
+    /** Читает файлы (в т.ч. все XML внутри ZIP), разбирает их и показывает результат. */
+    async ingestFiles(files, { compare = false } = {}) {
+        if (!files || !files.length) return;
+        if (this._busy) {
+            this.showNotification('Дождитесь окончания текущей загрузки.', 'error');
+            return;
+        }
+        this._busy = true;
+        this._setBusyUi(true);
+        const added = [];
+        try {
+            for (let fi = 0; fi < files.length; fi++) {
+                const file = files[fi];
+                const prefix = files.length > 1 ? `Файл ${fi + 1} из ${files.length}: ` : '';
+                this._setProgress(`${prefix}чтение «${file.name}»…`, 0.02);
+                let r;
+                try {
+                    r = await window.electronAPI.readFileEntries(file, {
+                        onProgress: (p) =>
+                            this._setProgress(`${prefix}чтение «${file.name}»…`, p * 0.25),
+                    });
+                } catch (e) {
+                    r = { error: e.message };
+                }
+                if (r.error) {
+                    this.showNotification(`«${file.name}»: ${r.error}`, 'error');
+                    continue;
+                }
+                for (const entry of r.entries) {
+                    try {
+                        const d = await entry.read();
+                        if (!d.text || !d.text.trim()) {
+                            this.showNotification(`«${entry.name}»: файл пуст.`, 'error');
+                            continue;
+                        }
+                        const display =
+                            entry.name === file.name ? file.name : `${file.name} → ${entry.name}`;
+                        const rec = await this._createRecord(
+                            {
+                                name: display,
+                                size: entry.size || d.text.length,
+                                text: d.text,
+                                encoding: d.encoding,
+                                note: d.note,
+                            },
+                            (p) =>
+                                this._setProgress(`${prefix}разбор «${entry.name}»…`, 0.25 + p * 0.65),
+                        );
+                        added.push(rec);
+                    } catch (e) {
+                        console.error('[xml-analyzer] ошибка обработки файла', e);
+                        this.showNotification(`«${entry.name}»: ${e.message}`, 'error');
+                    }
+                }
+            }
+            if (added.length) await this._adoptRecords(added, compare);
+        } finally {
+            this._busy = false;
+            this._hideProgress();
+            this._setBusyUi(false);
+        }
+    }
+
+    async _adoptRecords(added, compare) {
+        const hadActive = this.isAnalysisDone && this.activeRecord;
+        this.docs.push(...added);
+        this._trimDocs();
+        this._rememberRecent(added);
+        if (compare && hadActive) {
+            this._presentRecord(this.activeRecord);
+            this.showNotification(
+                `Добавлено для сравнения: ${added.map((r) => r.name).join(', ')}`,
+                'success',
+            );
+            return;
+        }
+        await this._activateRecord(added[0]);
+        if (added.length > 1) {
+            this.showNotification(
+                `Загружено документов: ${added.length}. Переключайтесь между ними сверху, различия — на вкладке «Сравнение».`,
+                'success',
+            );
+        }
+    }
+
+    _trimDocs() {
+        const MAX_DOCS = 10;
+        let total = this.docs.reduce((s, r) => s + (r.doc ? r.doc.src.length : 0), 0);
+        while (this.docs.length > 1 && (this.docs.length > MAX_DOCS || total > 400_000_000)) {
+            const idx = this.docs.findIndex((r) => r !== this.activeRecord);
+            if (idx < 0) break;
+            const [gone] = this.docs.splice(idx, 1);
+            total -= gone.doc ? gone.doc.src.length : 0;
+            this._disposeRecord(gone);
+        }
+    }
+
+    _disposeRecord(rec) {
+        try {
+            if (rec.view && rec.view.destroy) rec.view.destroy();
+        } catch {
+            // ignore
+        }
+        rec.view = null;
+        rec.doc = null;
+        rec.json = null;
+    }
+
+    _buildDocBar() {
+        if (this.docs.length < 2) return null;
+        const bar = h('div', {
+            class: 'xa-docbar',
+            role: 'group',
+            'aria-label': 'Загруженные документы',
+        });
+        for (const rec of this.docs) {
+            const on = rec === this.activeRecord;
+            bar.appendChild(
+                h(
+                    'span',
+                    {
+                        class: 'xa-doc-chip' + (on ? ' xa-doc-chip-on' : ''),
+                        title: `${rec.name} (${fmtSize(rec.size)})`,
+                    },
+                    h('button', {
+                        type: 'button',
+                        class: 'xa-doc-name',
+                        style: { background: 'none', border: '0', cursor: 'pointer', color: 'inherit', padding: '0' },
+                        'aria-pressed': on ? 'true' : 'false',
+                        onclick: () => this._activateRecord(rec),
+                        text: rec.name,
+                    }),
+                    h('button', {
+                        type: 'button',
+                        class: 'xa-doc-x',
+                        'aria-label': `Закрыть «${rec.name}»`,
+                        title: 'Закрыть документ',
+                        onclick: () => this._closeRecord(rec),
+                        text: '×',
+                    }),
+                ),
+            );
+        }
+        bar.appendChild(
+            h(
+                'button',
+                { type: 'button', class: 'xa-btn', onclick: () => this.openFilePicker('compare') },
+                h('i', { class: 'fas fa-plus', 'aria-hidden': 'true' }),
+                h('span', { text: 'Добавить файл' }),
+            ),
+        );
+        return bar;
+    }
+
+    _closeRecord(rec) {
+        const idx = this.docs.indexOf(rec);
+        if (idx < 0) return;
+        this.docs.splice(idx, 1);
+        const wasActive = rec === this.activeRecord;
+        this._disposeRecord(rec);
+        if (!this.docs.length) {
             this.clearAnalysis();
+            return;
         }
+        if (wasActive) this._activateRecord(this.docs[Math.min(idx, this.docs.length - 1)]);
+        else this._presentRecord(this.activeRecord);
+    }
 
-        const analyzeBtnContent = this.getEl('analyze-btn-content');
-        const spinnerIcon = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
-
-        if (analyzeBtnContent) {
-            analyzeBtnContent.innerHTML = `${spinnerIcon} <span>Чтение файла...</span>`;
+    async _activateRecord(rec) {
+        this.activeRecord = rec;
+        if (!rec.view) {
+            const wasBusy = this._busy;
+            this._busy = true;
+            try {
+                await this._renderRecord(rec);
+            } finally {
+                this._busy = wasBusy;
+                this._hideProgress();
+            }
         }
+        this._presentRecord(rec);
+    }
+
+    _presentRecord(rec) {
+        if (!rec.view) return;
+        this.certificates = rec.certs || new Map();
+        const wrapper = h('div', { class: 'xa-session' }, this._buildDocBar(), rec.view.element);
+        this.outputArea.replaceChildren(wrapper);
+        if (this.placeholder) this.placeholder.style.display = 'none';
+        const mainElement = this.root.querySelector('.xml-analyzer-shell');
+        if (mainElement) {
+            mainElement.classList.add('analysis-done');
+            mainElement.classList.toggle('show-cert-manager', this.certificates.size > 0);
+        }
+        if (this.certList) this.certList.replaceChildren();
+        this.renderCertificateManager();
+        this.isAnalysisDone = true;
+        if (this.inputArea) this.inputArea.readOnly = true;
+        const content = this.getEl('analyze-btn-content');
+        if (content) content.replaceChildren(h('span', { text: 'Анализировать' }));
+        this.updateAnalyzeButtonState();
+        if (rec.view.refreshCompare) rec.view.refreshCompare();
+    }
+
+    _loadRecent() {
+        try {
+            const v = JSON.parse(localStorage.getItem('xmlAnalyzerRecent') || '[]');
+            return Array.isArray(v)
+                ? v.filter((x) => x && typeof x.name === 'string').slice(0, 8)
+                : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /** Запоминает только имена, размеры и тип — содержимое файлов не сохраняется. */
+    _rememberRecent(recs) {
+        try {
+            let list = this._loadRecent();
+            for (const r of recs) {
+                list = list.filter((x) => !(x.name === r.name && x.size === r.size));
+                list.unshift({ name: r.name, size: r.size, type: r.typeLabel || '', at: Date.now() });
+            }
+            localStorage.setItem('xmlAnalyzerRecent', JSON.stringify(list.slice(0, 8)));
+        } catch {
+            // хранилище недоступно
+        }
+        this._renderRecent();
+    }
+
+    _renderRecent() {
+        const host = this._recentEl;
+        if (!host) return;
+        const list = this._loadRecent();
+        if (!list.length) {
+            host.hidden = true;
+            host.replaceChildren();
+            return;
+        }
+        host.hidden = false;
+        host.replaceChildren(
+            h(
+                'div',
+                { class: 'xa-recent-title' },
+                h('span', { text: 'Недавно открывали' }),
+                h('button', {
+                    type: 'button',
+                    class: 'xa-link-btn',
+                    onclick: () => {
+                        try {
+                            localStorage.removeItem('xmlAnalyzerRecent');
+                        } catch {
+                            // ignore
+                        }
+                        this._renderRecent();
+                    },
+                    text: 'очистить',
+                }),
+            ),
+            h(
+                'div',
+                { class: 'xa-recent-list' },
+                list.map((x) =>
+                    h('button', {
+                        type: 'button',
+                        class: 'xa-recent-item',
+                        title: `${x.name}${x.type ? ' · ' + x.type : ''} · ${fmtSize(x.size || 0)} · ${new Date(x.at).toLocaleString('ru-RU')}\nСодержимое файлов не хранится: выберите файл снова.`,
+                        onclick: () => {
+                            this.showNotification(
+                                `Выберите файл «${x.name}» — содержимое не хранится в приложении.`,
+                                'success',
+                            );
+                            this.openFilePicker();
+                        },
+                        text: x.name,
+                    }),
+                ),
+            ),
+        );
+    }
+
+    // ---------- Разбор документа ----------
+
+    /** Подготавливает запись документа: определяет формат (XML/JSON/сертификат) и разбирает структуру. */
+    async _createRecord({ name, size, text, encoding, note }, onProgress) {
+        const rec = {
+            id: `d${++this._docSeq}`,
+            name,
+            size,
+            encoding: encoding || '',
+            note: note || '',
+            kind: 'xml',
+            typeLabel: '',
+            doc: null,
+            json: null,
+            blob: null,
+            preview: '',
+            view: null,
+            certs: new Map(),
+        };
+        const t = text;
+        const lead = t.search(/\S/);
+        const head = lead >= 0 ? t.slice(lead, lead + 80) : '';
+        let xmlText = null;
+
+        if ((head.startsWith('{') || head.startsWith('[')) && t.length < 60_000_000) {
+            try {
+                const json = JSON.parse(t);
+                if (json && typeof json === 'object') {
+                    rec.json = json;
+                    rec.kind = !Array.isArray(json) && Array.isArray(json.messages) ? 'sedo' : 'json';
+                    xmlText = jsonToXmlString(json, Array.isArray(json) ? 'array' : 'json');
+                }
+            } catch {
+                // не JSON — пробуем как XML/текст
+            }
+        }
+        if (xmlText === null && head && !head.includes('<') && t.length < 20_000_000) {
+            const bytes = base64ToBytes(t.slice(lead));
+            if (bytes && bytes.length > 100) {
+                const r = await analyzeBlob(bytes);
+                if (r.type !== 'unknown') {
+                    rec.kind = 'blob';
+                    rec.blob = r;
+                    rec.typeLabel = r.type === 'cms' ? 'Подпись CMS' : 'Сертификат X.509';
+                    return rec;
+                }
+            }
+        }
+        if (xmlText === null) {
+            const xi = t.indexOf('<');
+            if (xi < 0) {
+                rec.kind = 'text';
+                rec.preview = t.slice(0, 800);
+                return rec;
+            }
+            xmlText = xi > 0 ? t.slice(xi) : t;
+        }
+        const doc = await parseXml(xmlText, { onProgress });
+        if (doc.rootElement < 0) {
+            rec.kind = 'text';
+            rec.preview = xmlText.slice(0, 800);
+            return rec;
+        }
+        rec.doc = doc;
+        return rec;
+    }
+
+    _knownReportTitle(rootLocal) {
+        const map = {
+            ТипОтчет: 'Диагностический отчёт 1С',
+            РегистрационныйФайл: 'Регистрационный файл абонента',
+            Заявление: 'Заявление на подключение',
+            ЭДПФР: 'Документ ЭДПФР/СФР',
+        };
+        return map[rootLocal] || '';
+    }
+
+    /** Строит подробный отчёт по известным типам (DOM-разбор небольших документов). */
+    async _buildKnownReport(xmlDoc, signatureCertData) {
+        const warnings = [];
+        let node = null;
+        const rootTag = xmlDoc.documentElement.localName;
+        switch (rootTag) {
+            case 'ТипОтчет':
+                node = this._renderDiagnosticReport(this._parseDiagnosticReportData(xmlDoc));
+                break;
+            case 'РегистрационныйФайл':
+                node = this._renderRegistrationFileReport(await this._parseRegistrationFile(xmlDoc));
+                break;
+            case 'Заявление': {
+                const { data, cert } = await this._parseStatement(xmlDoc);
+                node = this._renderStatementReport(data, cert);
+                break;
+            }
+            case 'ЭДПФР':
+                if (xmlDoc.querySelector('ЕФС-1')) {
+                    node = this._renderEfs1Report(await this._parseEfs1(xmlDoc));
+                } else if (xmlDoc.querySelector('СЗВ-ТД')) {
+                    node = this._renderSzvTdReport(await this._parseSzvTd(xmlDoc));
+                } else if (xmlDoc.querySelector('ЗПЭД')) {
+                    node = this._renderZpedReport(this._parseZped(xmlDoc), signatureCertData);
+                } else {
+                    const knownTags = Array.from(xmlDoc.documentElement.children)
+                        .map((n) => n.tagName)
+                        .join(', ');
+                    warnings.push(
+                        `Тип отчёта ЭДПФР не поддерживается для детального разбора (теги: ${knownTags}) — используйте разделы «Обзор» и «Дерево».`,
+                    );
+                }
+                break;
+            default:
+                break;
+        }
+        return { node, warnings };
+    }
+
+    /** Полный анализ записи: отчёт известного типа, реквизиты, подписи, быстрые выводы, представление. */
+    async _renderRecord(rec) {
+        const DOM_LIMIT = 8_000_000;
+        this._setProgress(`Анализ «${rec.name}»…`, 0.92);
+        await yieldToUi();
+        this.certificates = rec.certs;
+        const warnings = [];
+        let reportNode = null;
+        let reportType = '';
+        const doc = rec.doc;
+        const fatal = [];
 
         try {
-            const content = await window.electronAPI.readFileContent(file.path || file);
-
-            if (content.error) {
-                throw new Error(content.error);
+            if (rec.kind === 'sedo') {
+                reportNode = this.renderSedoLog(rec.json);
+                reportType = 'Лог СЭДО (JSON)';
+            } else if (rec.kind === 'json') {
+                reportType = 'JSON-документ';
+            } else if (doc) {
+                const rootLocal = doc.localName(doc.rootElement);
+                const title = this._knownReportTitle(rootLocal);
+                if (title) {
+                    reportType = title;
+                    if (rec.size <= DOM_LIMIT) {
+                        let xmlString = doc.src;
+                        if (doc.doctype) {
+                            xmlString =
+                                xmlString.slice(0, doc.doctype.start) + xmlString.slice(doc.doctype.end);
+                        }
+                        const { fixedXml } = this._fixBrokenUriEncoding(xmlString);
+                        const safe = fixedXml.replace(
+                            /<!ENTITY\s+[^>]*?\b(?:SYSTEM|PUBLIC)\b[^>]*>/gi,
+                            '',
+                        );
+                        const xmlDom = new DOMParser().parseFromString(safe, 'application/xml');
+                        const perr = xmlDom.getElementsByTagName('parsererror')[0];
+                        if (perr) {
+                            warnings.push(
+                                `Детальный разбор типового отчёта недоступен: ${this._describeXmlParseError(perr.textContent)}`,
+                            );
+                        } else {
+                            try {
+                                const sig = await this._tryParseSignatureCertificate(xmlDom);
+                                const built = await this._buildKnownReport(xmlDom, sig);
+                                reportNode = built.node;
+                                warnings.push(...built.warnings);
+                            } catch (e) {
+                                console.warn('Ошибка детального анализа:', e);
+                                warnings.push(
+                                    `При углублённом анализе отчёта произошла ошибка: ${e.message}`,
+                                );
+                            }
+                        }
+                    } else {
+                        warnings.push(
+                            'Документ крупный: детальный разбор типового отчёта пропущен, доступны обзор, дерево и таблицы.',
+                        );
+                    }
+                    if (reportNode && warnings.length) {
+                        reportNode.prepend(this._createWarningsNode(warnings));
+                    }
+                } else {
+                    reportType = 'Произвольный XML';
+                }
             }
+        } catch (e) {
+            console.error('Критическая ошибка анализа:', e);
+            fatal.push(`Ошибка при построении отчёта: ${e.message}`);
+        }
 
-            if (!content.data || !String(content.data).trim()) {
-                throw new Error('Файл пуст.');
-            }
-            this.dataInputTextarea.value = content.data;
-            this.updateAnalyzeButtonState();
-            this.analyzeData();
-        } catch (error) {
-            this.showNotification(`Ошибка чтения файла: ${error.message}`, 'error');
-            console.error('Ошибка при чтении файла через основной процесс:', error);
-            if (analyzeBtnContent) {
-                analyzeBtnContent.innerHTML = '<span>Анализировать</span>';
+        if (rec.kind === 'text') {
+            rec.view = this._buildProblemView(rec);
+            rec.typeLabel = 'не XML';
+            return;
+        }
+
+        let requisites = {
+            items: [],
+            empty: [],
+            hiddenCount: 0,
+            bik: null,
+            amountTotal: null,
+            amountCount: 0,
+        };
+        let sign = { signatures: [], certificates: [], cms: [], blobs: 0, issues: [] };
+        if (doc) {
+            requisites = collectRequisites(doc);
+            sign = await findSignatures(doc);
+        } else if (rec.blob) {
+            if (rec.blob.type === 'certificate') {
+                sign.certificates.push({ ...rec.blob.cert, source: 'вставленные данные' });
+            } else if (rec.blob.type === 'cms') {
+                sign.cms.push({ ...rec.blob.cms, source: 'вставленные данные' });
+                rec.blob.cms.certs
+                    .filter((c) => !c.error)
+                    .forEach((c) => sign.certificates.push({ ...c, source: 'подпись CMS' }));
             }
         }
+        for (const c of sign.certificates) {
+            if (c.base64) {
+                this.addOrUpdateCertificate({ ...c, source: c.source || 'Подпись документа' });
+            }
+        }
+        const named = reportType && reportType !== 'Произвольный XML';
+        const meta = {
+            fileName: rec.name,
+            size: rec.size,
+            encodingUsed: rec.encoding,
+            encodingNote: rec.note,
+            reportType,
+            title: named ? reportType : rec.name,
+            subtitle: named ? rec.name : reportType,
+        };
+        rec.typeLabel =
+            reportType || (rec.blob ? (rec.blob.type === 'cms' ? 'Подпись CMS' : 'Сертификат X.509') : '');
+        if (rec.blob) {
+            meta.title = rec.typeLabel;
+            meta.subtitle = 'Данные распознаны как base64 (DER)';
+        }
+        const findings = buildFindings({ doc, requisites, sign, meta });
+        const extra = [...fatal, ...(reportNode ? [] : warnings)].map((text) => ({
+            level: 'warn',
+            text,
+        }));
+        if (extra.length) findings.unshift(...extra);
+
+        rec.view = createExplorerView({
+            doc,
+            meta,
+            requisites,
+            sign,
+            findings,
+            reportNode,
+            notify: (m, type) => this.showNotification(m, type || 'success'),
+            getOtherDocs: () =>
+                this.docs
+                    .filter((r) => r.doc && r !== rec)
+                    .map((r) => ({ id: r.id, name: r.name, doc: r.doc })),
+            requestSecondFile: () => this.openFilePicker('compare'),
+            showCertificate: (cert) => {
+                this.addOrUpdateCertificate(cert);
+                this.showCertificateDetails(cert.thumbprint);
+            },
+        });
+    }
+
+    _buildProblemView(rec) {
+        const prev = rec.preview || '';
+        const reasons = [];
+        if (/^\s*<!doctype html|<html[\s>]/i.test(prev)) {
+            reasons.push(
+                'Это HTML-страница, а не XML — возможно, сохранена страница ошибки или авторизации вместо выгрузки.',
+            );
+        }
+        if (/^\s*[[{]/.test(prev)) {
+            reasons.push('Похоже на JSON, но он повреждён или оборван — проверьте, что файл скопирован целиком.');
+        }
+        if (!prev.includes('<')) {
+            reasons.push(
+                'В тексте нет ни одного XML-тега. Если это base64 подписи или сертификата — вставьте его без лишних символов.',
+            );
+        }
+        if (!reasons.length) reasons.push('В тексте не найден корневой элемент XML.');
+        const card = h(
+            'div',
+            { class: 'xa-error-card', role: 'alert' },
+            h('h3', { text: 'Не удалось распознать XML или JSON' }),
+            h('p', {
+                text: 'Анализатор принимает XML любого отчёта, JSON из СЭДО, ZIP с такими файлами, а также base64 сертификата или подписи.',
+            }),
+            h('ul', null, reasons.map((r) => h('li', { text: r }))),
+            prev ? h('pre', { text: prev }) : null,
+        );
+        return { element: card, destroy() {}, refreshCompare() {} };
     }
 
     handleAnalyzeButtonClick() {
@@ -518,6 +1115,8 @@ class ReportAnalyzerApp {
         const colorClass = type === 'error' ? 'bg-red-500' : 'bg-green-500';
         notificationElement.className = `p-4 text-white rounded-lg shadow-lg transition-all duration-300 transform-gpu animate-fade-in-out ${colorClass}`;
         notificationElement.textContent = message;
+        notificationElement.style.pointerEvents = 'auto';
+        notificationElement.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '×';
@@ -546,8 +1145,12 @@ class ReportAnalyzerApp {
             mainElement.classList.remove('analysis-done', 'show-cert-manager');
         }
 
-        this.certificates.clear();
+        this.docs.forEach((r) => this._disposeRecord(r));
+        this.docs = [];
+        this.activeRecord = null;
+        this.certificates = new Map();
         this.isAnalysisDone = false;
+        this._hideProgress();
 
         if (this.inputArea) {
             this.inputArea.value = '';
@@ -559,7 +1162,7 @@ class ReportAnalyzerApp {
         }
 
         if (this.outputArea) {
-            this.outputArea.innerHTML = '';
+            this.outputArea.replaceChildren();
         }
         if (this.placeholder) {
             this.placeholder.style.display = 'flex';
@@ -618,9 +1221,7 @@ class ReportAnalyzerApp {
             statusType = 'warning';
         }
 
-        const valueHtml = `<div class="font-mono text-xs break-all">${this.sanitizeText(thumbprint)}<span class="font-sans">${this.sanitizeText(statusText)}</span></div>`;
-
-        return this.createField('Отпечаток:', valueHtml, statusType, { html: true });
+        return this.createField('Отпечаток:', `${thumbprint}${statusText}`, statusType, { mono: true });
     }
 
     async handleAppClicks(event) {
@@ -701,7 +1302,7 @@ class ReportAnalyzerApp {
         const contentEl = clone.querySelector('.accordion-content');
 
         details.open = isOpen;
-        titleEl.textContent = this._raw(title);
+        titleEl.textContent = this._raw(title).replace(/\s*:\s*$/, '');
 
         if (typeof content === 'string') {
             contentEl.textContent = content;
@@ -720,8 +1321,8 @@ class ReportAnalyzerApp {
     /** Экранированный HTML — ТОЛЬКО для подстановки в innerHTML */
     sanitizeText(text) {
         const element = document.createElement('div');
-        element.innerText = text;
-        return element.innerHTML;
+        element.textContent = text === null || text === undefined ? '' : String(text);
+        return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     /**
@@ -778,7 +1379,7 @@ class ReportAnalyzerApp {
         return isNaN(d) ? String(value) : d.toLocaleDateString('ru-RU');
     }
 
-    createField(label, value, type = 'default', { html = false } = {}) {
+    createField(label, value, type = 'default', { html = false, mono = false } = {}) {
         if (value === null || value === undefined || String(value).trim() === '') {
             return document.createDocumentFragment();
         }
@@ -793,7 +1394,8 @@ class ReportAnalyzerApp {
         const keyEl = clone.querySelector('.info-key');
         const valueEl = clone.querySelector('.info-value');
 
-        keyEl.textContent = this._raw(label);
+        keyEl.textContent = this._raw(label).replace(/\s*:\s*$/, '');
+        if (mono) valueEl.classList.add('xa-mono-val');
 
         if (html) {
             valueEl.innerHTML = String(value);
@@ -811,18 +1413,17 @@ class ReportAnalyzerApp {
 
     async downloadFileFromBase64(base64Data, fileName, mimeType = 'application/octet-stream') {
         try {
-            const cleanBase64 = base64Data.replace(/\s/g, '');
-            const dataUrl = `data:${mimeType};base64,${cleanBase64}`;
-            const response = await fetch(dataUrl);
-            if (!response.ok) throw new Error(`Fetch failed with status ${response.status}`);
-            const blob = await response.blob();
+            const bytes = base64ToBytes(String(base64Data));
+            if (!bytes) throw new Error('данные не являются корректным base64');
+            const blob = new Blob([bytes], { type: mimeType });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
+            link.href = url;
             link.download = fileName;
             document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (e) {
             console.error('Ошибка при скачивании файла:', e);
             this.showNotification(
@@ -843,65 +1444,6 @@ class ReportAnalyzerApp {
         const updatedCert = { ...existingCert, ...certData };
 
         this.certificates.set(thumbprint, updatedCert);
-    }
-
-    parseRegistrationFileData(xmlDoc) {
-        const root = xmlDoc.documentElement;
-        const владелец = root.querySelector('ВладелецЭЦП');
-        const фио = владелец?.querySelector('ФИО');
-
-        const certData = {
-            thumbprint: this.getText(владелец, 'Отпечаток'),
-            orgName: this.getText(root, 'ПолноеНаименование'),
-            inn: this.getText(root, 'ИНН'),
-            kpp: this.getText(root, 'КПП'),
-            ownerFio: фио
-                ? `${фио.getAttribute('Фамилия')} ${фио.getAttribute('Имя')} ${фио.getAttribute('Отчество')}`.trim()
-                : '',
-            base64: null,
-        };
-
-        if (certData.thumbprint) {
-            this.addOrUpdateCertificate(certData);
-            return certData.thumbprint;
-        }
-        return null;
-    }
-
-    async parseStatementData(xmlDoc) {
-        const root = xmlDoc.documentElement;
-        const base64Cert = this.getText(
-            root.querySelector('ВладельцыЭЦП ВладелецЭЦП'),
-            'СертификатСУЦ',
-        );
-
-        if (!base64Cert) {
-            console.error('В файле Заявления не найдено тело сертификата (тег СертификатСУЦ).');
-            return null;
-        }
-
-        const parsed = await window.electronAPI.parseCertificate(base64Cert);
-
-        if (parsed.error) {
-            console.error('Ошибка парсинга сертификата:', parsed.error);
-        }
-
-        const subject = (parsed.certObject && parsed.certObject.subject) || parsed.subject || {};
-        const issuer = (parsed.certObject && parsed.certObject.issuer) || parsed.issuer || {};
-
-        const certData = {
-            thumbprint: parsed.thumbprint,
-            base64: base64Cert,
-            source: parsed.isParsed ? 'Заявление' : 'Заявление (неполный парсинг)',
-            subject,
-            issuer,
-            ownerFio: subject.CN || subject.SN || 'Не найден',
-            orgName: subject.O || 'Не найдена',
-            inn: subject.INN || this.getText(root, 'ИНН'),
-        };
-
-        this.addOrUpdateCertificate(certData);
-        return certData.thumbprint;
     }
 
     showCertificateDetails(thumbprint) {
@@ -1023,63 +1565,6 @@ class ReportAnalyzerApp {
         this.modalContentTarget.innerHTML = '';
     }
 
-    buildCertificateChain(targetCert) {
-        let chain = [targetCert];
-        let currentCert = targetCert;
-        const MAX_DEPTH = 10;
-        let depth = 0;
-
-        while (depth < MAX_DEPTH) {
-            if (currentCert.issuer.hash === currentCert.subject.hash) {
-                break;
-            }
-
-            const authorityKeyIdExt = currentCert.extensions.find(
-                (e) => e.name === 'authorityKeyIdentifier',
-            );
-            const authorityKeyId = authorityKeyIdExt ? authorityKeyIdExt.keyIdentifier : null;
-
-            let issuerCert = null;
-            if (authorityKeyId) {
-                for (const [, certData] of this.certificates.entries()) {
-                    if (certData.certObject) {
-                        const subjectKeyIdExt = certData.certObject.extensions.find(
-                            (e) => e.name === 'subjectKeyIdentifier',
-                        );
-                        if (
-                            subjectKeyIdExt &&
-                            subjectKeyIdExt.subjectKeyIdentifier === authorityKeyId
-                        ) {
-                            issuerCert = certData.certObject;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (!issuerCert) {
-                for (const [, certData] of this.certificates.entries()) {
-                    if (
-                        certData.certObject &&
-                        certData.certObject.subject.hash === currentCert.issuer.hash
-                    ) {
-                        issuerCert = certData.certObject;
-                        break;
-                    }
-                }
-            }
-
-            if (issuerCert) {
-                chain.push(issuerCert);
-                currentCert = issuerCert;
-            } else {
-                break;
-            }
-            depth++;
-        }
-        return chain;
-    }
-
     async handleExportAllCerts() {
         this.exportZipBtn.disabled = true;
         this.exportZipBtn.textContent = 'Экспорт...';
@@ -1137,136 +1622,30 @@ class ReportAnalyzerApp {
         }
     }
 
+    /** Анализ текста из поля ввода (вставка из буфера). */
     async analyzeData() {
-        let rawData = this.dataInputTextarea.value.trim();
-        if (!rawData) {
+        const raw = this.dataInputTextarea.value;
+        if (!raw.trim()) {
             this.clearAnalysis();
             return;
         }
-
-        const analyzeBtn = this.getEl('analyze-btn');
-        const analyzeBtnContent = this.getEl('analyze-btn-content');
-        if (analyzeBtn) {
-            analyzeBtn.disabled = true;
-            if (analyzeBtnContent) {
-                analyzeBtnContent.innerHTML = '<span>Анализировать</span>';
-            }
-        }
-        if (this.placeholder) this.placeholder.style.display = 'none';
-        this.outputArea.innerHTML = '';
-
-        let analysisResultNode = null;
-        const warnings = [];
-
+        if (this._busy) return;
+        this._busy = true;
+        this._setBusyUi(true);
         try {
-            try {
-                const jsonData = JSON.parse(rawData);
-                if (jsonData && typeof jsonData === 'object' && 'messages' in jsonData) {
-                    // Отрисовку завершает блок finally (единственный вызов finalizeAnalysis).
-                    analysisResultNode = this.renderSedoLog(jsonData);
-                    return;
-                }
-            } catch {
-                // not JSON with messages — fall through to XML path
-            }
-
-            let xmlStartIndex = rawData.indexOf('<?xml');
-            if (xmlStartIndex === -1) xmlStartIndex = rawData.indexOf('<');
-            if (xmlStartIndex > 0) {
-                rawData = rawData.substring(xmlStartIndex);
-                this.dataInputTextarea.value = rawData;
-            }
-
-            const { fixedXml: fixedXmlRaw } = this._fixBrokenUriEncoding(rawData);
-            // Внешние сущности (SYSTEM/PUBLIC) не нужны для анализа: вырезаем объявления,
-            // чтобы парсер даже не пытался обратиться к file:// или сети (защита от XXE).
-            const fixedXml = fixedXmlRaw.replace(/<!ENTITY\s+[^>]*?\b(?:SYSTEM|PUBLIC)\b[^>]*>/gi, '');
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(fixedXml, 'application/xml');
-
-            if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-                const errorNode = xmlDoc.getElementsByTagName('parsererror')[0];
-                const parseError = new Error(
-                    this._describeXmlParseError(errorNode ? errorNode.textContent : ''),
-                );
-                parseError.isXmlParseError = true;
-                throw parseError;
-            }
-
-            const signatureCertData = await this._tryParseSignatureCertificate(xmlDoc);
-            const basicInfo = this._tryParseBasicInfo(xmlDoc);
-
-            try {
-                // localName: корень с префиксом пространства имён (ns:ТипОтчет) тоже распознаётся.
-                const rootTag = xmlDoc.documentElement.localName;
-                switch (rootTag) {
-                    case 'ТипОтчет':
-                        const diagnosticData = this._parseDiagnosticReportData(xmlDoc);
-                        analysisResultNode = this._renderDiagnosticReport(diagnosticData);
-                        break;
-                    case 'РегистрационныйФайл':
-                        const regFileData = await this._parseRegistrationFile(xmlDoc);
-                        analysisResultNode = this._renderRegistrationFileReport(regFileData);
-                        break;
-                    case 'Заявление':
-                        const { data: statementData, cert: certObject } =
-                            await this._parseStatement(xmlDoc);
-                        analysisResultNode = this._renderStatementReport(statementData, certObject);
-                        break;
-                    case 'ЭДПФР':
-                        if (xmlDoc.querySelector('ЕФС-1')) {
-                            const efs1Data = await this._parseEfs1(xmlDoc);
-                            analysisResultNode = this._renderEfs1Report(efs1Data);
-                        } else if (xmlDoc.querySelector('СЗВ-ТД')) {
-                            const szvTdData = await this._parseSzvTd(xmlDoc);
-                            analysisResultNode = this._renderSzvTdReport(szvTdData);
-                        } else if (xmlDoc.querySelector('ЗПЭД')) {
-                            const zpedData = this._parseZped(xmlDoc);
-                            analysisResultNode = this._renderZpedReport(
-                                zpedData,
-                                signatureCertData,
-                            );
-                        } else {
-                            const knownTags = Array.from(xmlDoc.documentElement.children)
-                                .map((node) => node.tagName)
-                                .join(', ');
-                            warnings.push(
-                                `Этот файл формата ЭДПФР содержит тип отчета, который пока не поддерживается для детального анализа (найдены теги: ${knownTags}). Отображена только базовая информация и сертификат подписи.`,
-                            );
-                        }
-                        break;
-                    default:
-                        warnings.push(
-                            `Обнаружен неизвестный или неподдерживаемый тип отчета с корневым элементом <${rootTag}>. Отображена только базовая информация и сертификат подписи.`,
-                        );
-                        break;
-                }
-            } catch (deepParseException) {
-                console.warn('Ошибка детального анализа:', deepParseException);
-                warnings.push(
-                    `При углубленном анализе отчета произошла ошибка: ${deepParseException.message}`,
-                );
-            }
-
-            if (!analysisResultNode) {
-                analysisResultNode = this._renderGenericReport(
-                    basicInfo,
-                    signatureCertData,
-                    warnings,
-                );
-            } else if (warnings.length > 0) {
-                const warningsNode = this._createWarningsNode(warnings);
-                analysisResultNode.prepend(warningsNode);
-            }
+            this._setProgress('Разбор вставленного текста…', 0.05);
+            const rec = await this._createRecord(
+                { name: 'Вставленный текст', size: new Blob([raw]).size, text: raw },
+                (p) => this._setProgress('Разбор вставленного текста…', 0.05 + p * 0.85),
+            );
+            await this._adoptRecords([rec], false);
         } catch (e) {
             console.error('Критическая ошибка анализа:', e);
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'content-card text-red-700 dark:text-red-300 border-red-400';
-            const errorTitle = e && e.isXmlParseError ? 'Не удалось разобрать XML' : 'Критическая ошибка анализа';
-            errorDiv.innerHTML = `<h3 class="text-h3 text-red-800 dark:text-red-200">${errorTitle}</h3><p>${this.sanitizeText(e.message)}</p><p>Пожалуйста, проверьте, что данные являются корректным XML или JSON файлом.</p>`;
-            analysisResultNode = errorDiv;
+            this.showNotification(`Не удалось выполнить анализ: ${e.message}`, 'error');
         } finally {
-            this.finalizeAnalysis(analysisResultNode);
+            this._busy = false;
+            this._hideProgress();
+            this._setBusyUi(false);
         }
     }
 
@@ -1345,7 +1724,7 @@ class ReportAnalyzerApp {
         titleElement.className = 'text-2xl font-bold text-slate-900 dark:text-white';
         let reportDate = '';
         if (data.serviceInfo.dateTime) {
-            reportDate = ` от ${new Date(data.serviceInfo.dateTime).toLocaleDateString('ru-RU')}`;
+            reportDate = ` от ${this._fmtDateOnly(data.serviceInfo.dateTime)}`;
         }
         titleElement.textContent = `Анализ заявления на подключение к ЭДО (ЗПЭД)${reportDate}`;
         wrapper.appendChild(titleElement);
@@ -1406,263 +1785,6 @@ class ReportAnalyzerApp {
         );
 
         return wrapper;
-    }
-
-    _tryParseBasicInfo(xmlDoc) {
-        const root = xmlDoc.documentElement;
-        const info = {};
-
-        const selectors = {
-            inn: ['ИНН', 'ИННЮЛ', 'ИННФЛ'],
-            kpp: ['КПП'],
-            regNumPFR: ['РегНомер', 'РегНомерПФР', 'РегНомерСтрахователя'],
-            orgName: ['Наименование', 'НаименованиеОрганизации', 'КраткоеНаименование'],
-            fillDate: ['ДатаЗаполнения', 'ДатаВремяФормирования'],
-        };
-
-        for (const key in selectors) {
-            for (const tagName of selectors[key]) {
-                const element = root.getElementsByTagName(tagName)[0];
-                if (element && element.textContent) {
-                    const value = element.textContent.trim();
-                    if (value) {
-                        info[key] = value;
-                        break;
-                    }
-                }
-            }
-        }
-        return info;
-    }
-
-    _renderGenericReport(basicInfo, signatureCert, warnings) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'analysis-container space-y-4';
-        wrapper.id = 'generic-report';
-
-        if (warnings && warnings.length > 0) {
-            wrapper.appendChild(this._createWarningsNode(warnings));
-        }
-
-        const titleElement = document.createElement('h2');
-        titleElement.className = 'text-2xl font-bold text-slate-900 dark:text-white';
-        titleElement.textContent = 'Общая информация из документа';
-        wrapper.appendChild(titleElement);
-
-        const content = document.createDocumentFragment();
-
-        let hasBasicInfo = false;
-        if (basicInfo.orgName) {
-            content.appendChild(this.createField('Наименование:', basicInfo.orgName));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.inn) {
-            content.appendChild(this.createField('ИНН:', basicInfo.inn));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.kpp) {
-            content.appendChild(this.createField('КПП:', basicInfo.kpp));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.regNumPFR) {
-            content.appendChild(this.createField('Рег. номер в СФР/ПФР:', basicInfo.regNumPFR));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.fillDate) {
-            const date = new Date(basicInfo.fillDate);
-            if (!isNaN(date)) {
-                content.appendChild(
-                    this.createField('Дата документа:', date.toLocaleDateString('ru-RU')),
-                );
-                hasBasicInfo = true;
-            }
-        }
-
-        if (!hasBasicInfo) {
-            const p = document.createElement('p');
-            p.className = 'text-sm text-slate-500 p-4 text-center';
-            p.textContent =
-                'Не удалось извлечь базовую информацию (ИНН, Наименование) из документа.';
-            content.appendChild(p);
-        }
-
-        wrapper.appendChild(this._createAccordion('Основные реквизиты', content, true));
-
-        const certContent = document.createDocumentFragment();
-        if (signatureCert) {
-            if (signatureCert.parseFailed) {
-                certContent.appendChild(
-                    this.createField('Ошибка сертификата:', signatureCert.error, 'error'),
-                );
-            } else {
-                certContent.appendChild(this._createCertificateStatusField(signatureCert));
-
-                const buttonContainer = document.createElement('div');
-                buttonContainer.className = 'text-left mt-2';
-                buttonContainer.appendChild(
-                    this._createDownloadButtonForThumbprint(
-                        signatureCert.thumbprint,
-                        'Скачать сертификат подписи',
-                    ),
-                );
-                certContent.appendChild(buttonContainer);
-            }
-        } else {
-            certContent.appendChild(
-                this.createField('Сертификат подписи:', 'Не найден в файле', 'warning'),
-            );
-        }
-
-        wrapper.appendChild(
-            this._createAccordion('Сертификат электронной подписи', certContent, true),
-        );
-
-        return wrapper;
-    }
-
-    _tryParseBasicInfo(xmlDoc) {
-        const root = xmlDoc.documentElement;
-        const info = {};
-
-        const selectors = {
-            inn: ['ИНН', 'ИННЮЛ', 'ИННФЛ'],
-            kpp: ['КПП'],
-            regNumPFR: ['РегНомер', 'РегНомерПФР', 'РегНомерСтрахователя'],
-            orgName: ['Наименование', 'НаименованиеОрганизации', 'КраткоеНаименование'],
-            fillDate: ['ДатаЗаполнения', 'ДатаВремяФормирования'],
-        };
-
-        for (const key in selectors) {
-            for (const tagName of selectors[key]) {
-                const element = root.getElementsByTagName(tagName)[0];
-                if (element && element.textContent) {
-                    const value = element.textContent.trim();
-                    if (value) {
-                        info[key] = value;
-                        break;
-                    }
-                }
-            }
-        }
-        return info;
-    }
-
-    _renderGenericReport(basicInfo, signatureCert, warnings) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'analysis-container space-y-4';
-        wrapper.id = 'generic-report';
-
-        if (warnings && warnings.length > 0) {
-            wrapper.appendChild(this._createWarningsNode(warnings));
-        }
-
-        const titleElement = document.createElement('h2');
-        titleElement.className = 'text-2xl font-bold text-slate-900 dark:text-white';
-        titleElement.textContent = 'Общая информация из документа';
-        wrapper.appendChild(titleElement);
-
-        const content = document.createDocumentFragment();
-
-        let hasBasicInfo = false;
-        if (basicInfo.orgName) {
-            content.appendChild(this.createField('Наименование:', basicInfo.orgName));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.inn) {
-            content.appendChild(this.createField('ИНН:', basicInfo.inn));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.kpp) {
-            content.appendChild(this.createField('КПП:', basicInfo.kpp));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.regNumPFR) {
-            content.appendChild(this.createField('Рег. номер в СФР/ПФР:', basicInfo.regNumPFR));
-            hasBasicInfo = true;
-        }
-        if (basicInfo.fillDate) {
-            const date = new Date(basicInfo.fillDate);
-            if (!isNaN(date)) {
-                content.appendChild(
-                    this.createField('Дата документа:', date.toLocaleDateString('ru-RU')),
-                );
-                hasBasicInfo = true;
-            }
-        }
-
-        if (!hasBasicInfo) {
-            const p = document.createElement('p');
-            p.className = 'text-sm text-slate-500 p-4 text-center';
-            p.textContent =
-                'Не удалось извлечь базовую информацию (ИНН, Наименование) из документа.';
-            content.appendChild(p);
-        }
-
-        wrapper.appendChild(this._createAccordion('Основные реквизиты', content, true));
-
-        const certContent = document.createDocumentFragment();
-        if (signatureCert) {
-            if (signatureCert.parseFailed) {
-                certContent.appendChild(
-                    this.createField('Ошибка сертификата:', signatureCert.error, 'error'),
-                );
-            } else {
-                certContent.appendChild(this._createCertificateStatusField(signatureCert));
-
-                const buttonContainer = document.createElement('div');
-                buttonContainer.className = 'text-left mt-2';
-                buttonContainer.appendChild(
-                    this._createDownloadButtonForThumbprint(
-                        signatureCert.thumbprint,
-                        'Скачать сертификат подписи',
-                    ),
-                );
-                certContent.appendChild(buttonContainer);
-            }
-        } else {
-            certContent.appendChild(
-                this.createField('Сертификат подписи:', 'Не найден в файле', 'warning'),
-            );
-        }
-
-        wrapper.appendChild(
-            this._createAccordion('Сертификат электронной подписи', certContent, true),
-        );
-
-        return wrapper;
-    }
-
-    finalizeAnalysis(analysisResultNode) {
-        const mainElement = this.root.querySelector('.xml-analyzer-shell');
-
-        if (analysisResultNode) {
-            this.outputArea.appendChild(analysisResultNode);
-        } else {
-            throw new Error('Не удалось сформировать узел для отображения результата.');
-        }
-
-        if (mainElement) {
-            mainElement.classList.add('analysis-done');
-            if (this.certificates.size > 0) {
-                mainElement.classList.add('show-cert-manager');
-            }
-        }
-
-        this.renderCertificateManager();
-        this.isAnalysisDone = true;
-        this.inputArea.readOnly = true;
-
-        const analyzeBtn = this.getEl('analyze-btn');
-        const analyzeBtnContent = this.getEl('analyze-btn-content');
-        if (analyzeBtn) {
-            analyzeBtn.disabled = true;
-        }
-        if (analyzeBtnContent) {
-            analyzeBtnContent.innerHTML = '<span>Анализировать</span>';
-        } else if (analyzeBtn) {
-            analyzeBtn.textContent = 'Анализировать';
-        }
-        this.updateAnalyzeButtonState();
     }
 
     _createWarningsNode(warnings) {
@@ -1931,7 +2053,7 @@ class ReportAnalyzerApp {
 
         const titleElement = document.createElement('h2');
         titleElement.className = 'text-2xl font-bold text-slate-900 dark:text-white';
-        titleElement.textContent = `Анализ отчета ЕФС-1${data.fillDate ? ' от ' + new Date(data.fillDate).toLocaleDateString('ru-RU') : ''}`;
+        titleElement.textContent = `Анализ отчета ЕФС-1${data.fillDate ? ' от ' + this._fmtDateOnly(data.fillDate) : ''}`;
         wrapper.appendChild(titleElement);
 
         // --- СТРАХОВАТЕЛЬ ---
@@ -2018,7 +2140,9 @@ class ReportAnalyzerApp {
     _getTextNs(parent, tagName, namespace) {
         if (!parent) return '';
         const elements = parent.getElementsByTagNameNS(namespace, tagName);
-        return elements[0] ? elements[0].textContent.trim() : '';
+        if (elements[0]) return elements[0].textContent.trim();
+        // версия схемы могла сменить пространство имён — ищем по локальному имени
+        return this.getText(parent, tagName);
     }
 
     async _parseSzvTd(xmlDoc) {
@@ -2072,38 +2196,38 @@ class ReportAnalyzerApp {
         eventNodes.forEach((eventNode) => {
             const baseNode = eventNode.querySelector('Основание');
             data.events.push({
-                uuid: this.getText(eventNode, 'UUID: '),
-                date: this.getText(eventNode, 'Дата: '),
+                uuid: this.getText(eventNode, 'UUID'),
+                date: this.getText(eventNode, 'Дата'),
                 type:
-                    eventTypeMap[this.getText(eventNode, 'Вид: ')] ||
-                    `Вид ${this.getText(eventNode, 'Вид: ')}`,
+                    eventTypeMap[this.getText(eventNode, 'Вид')] ||
+                    `Вид ${this.getText(eventNode, 'Вид')}`,
                 position: this.getText(eventNode, 'Должность'),
-                isPartTime: this.getText(eventNode, 'ЯвляетсяСовместителем: ') === '1',
-                department: this.getText(eventNode, 'СтруктурноеПодразделение: '),
-                okzCode: this.getText(eventNode, 'КодВФпоОКЗ: '),
+                isPartTime: this.getText(eventNode, 'ЯвляетсяСовместителем') === '1',
+                department: this.getText(eventNode, 'СтруктурноеПодразделение'),
+                okzCode: this.getText(eventNode, 'КодВФпоОКЗ'),
                 baseDocument: baseNode
                     ? {
-                          name: this.getText(baseNode, 'Наименование: '),
-                          date: this.getText(baseNode, 'Дата: '),
-                          number: this.getText(baseNode, 'Номер: '),
+                          name: this.getText(baseNode, 'Наименование'),
+                          date: this.getText(baseNode, 'Дата'),
+                          number: this.getText(baseNode, 'Номер'),
                       }
                     : null,
             });
         });
 
         // Руководитель
-        const managerNode = szvTdNode.querySelector('Руководитель: ');
+        const managerNode = szvTdNode.querySelector('Руководитель');
         if (managerNode) {
-            const fioNode = managerNode.querySelector('ФИО: ');
+            const fioNode = managerNode.querySelector('ФИО');
             data.manager = {
                 fio: fioNode
                     ? {
-                          lastName: this._getTextNs(fioNode, 'Фамилия: ', nsUt2),
-                          firstName: this._getTextNs(fioNode, 'Имя: ', nsUt2),
-                          middleName: this._getTextNs(fioNode, 'Отчество: ', nsUt2),
+                          lastName: this._getTextNs(fioNode, 'Фамилия', nsUt2),
+                          firstName: this._getTextNs(fioNode, 'Имя', nsUt2),
+                          middleName: this._getTextNs(fioNode, 'Отчество', nsUt2),
                       }
                     : {},
-                position: this._getTextNs(managerNode, 'Должность: ', nsUt2),
+                position: this._getTextNs(managerNode, 'Должность', nsUt2),
             };
         }
 
@@ -2136,7 +2260,7 @@ class ReportAnalyzerApp {
 
         const titleElement = document.createElement('h2');
         titleElement.className = 'text-2xl font-bold text-slate-900 dark:text-white';
-        titleElement.textContent = `Анализ отчета СЗВ-ТД от ${new Date(data.fillDate).toLocaleDateString('ru-RU')}`;
+        titleElement.textContent = `Анализ отчета СЗВ-ТД${data.fillDate ? ' от ' + this._fmtDateOnly(data.fillDate) : ''}`;
         wrapper.appendChild(titleElement);
 
         // --- РАБОТОДАТЕЛЬ ---
@@ -2287,7 +2411,7 @@ class ReportAnalyzerApp {
             subscriberContent.appendChild(
                 this.createField(
                     'Срок действия:',
-                    `${new Date(data.subscriber.account.licenseStart).toLocaleDateString('ru-RU')} - ${new Date(data.subscriber.account.licenseEnd).toLocaleDateString('ru-RU')}`,
+                    `${this._fmtDateOnly(data.subscriber.account.licenseStart)} — ${this._fmtDateOnly(data.subscriber.account.licenseEnd)}`,
                 ),
             );
             subscriberContent.appendChild(
@@ -2399,18 +2523,19 @@ class ReportAnalyzerApp {
             certsCard.appendChild(h4);
 
             data.checks.certificates.forEach((cert) => {
-                const isExpired = new Date(cert.validUntil) < new Date();
-                let status = `Годен до: ${new Date(cert.validUntil).toLocaleDateString('ru-RU')}`;
+                const validUntil = new Date(cert.validUntil);
+                const hasDate = !Number.isNaN(validUntil.getTime());
+                const isExpired = hasDate && validUntil < new Date();
+                let status = hasDate
+                    ? `Годен до: ${validUntil.toLocaleDateString('ru-RU')}`
+                    : 'Срок действия не указан';
                 if (isExpired) status += ' (ИСТЁК)';
 
                 const certItem = document.createElement('div');
                 certItem.className = 'p-2 rounded-md bg-slate-100 dark:bg-slate-800';
                 certItem.appendChild(this.createField('Субъект', cert.subjectName));
                 certItem.appendChild(
-                    this.createField(
-                        'Отпечаток',
-                        `<div class="font-mono text-xs">${cert.thumbprint}</div>`,
-                    ),
+                    this.createField('Отпечаток', cert.thumbprint, 'default', { mono: true }),
                 );
                 certItem.appendChild(
                     this.createField('Статус', status, isExpired ? 'error' : 'success'),
@@ -2511,159 +2636,6 @@ class ReportAnalyzerApp {
         return wrapper;
     }
 
-    prepareUIForAnalysis() {
-        this.placeholder.style.display = 'none';
-        this.outputArea.innerHTML = '<div class="text-center py-10">Анализ данных...</div>';
-        this.analyzeBtn.textContent = 'Анализ...';
-    }
-
-    resetUI() {
-        this.clearAnalysis();
-    }
-
-    resetAnalysisButton() {
-        this.analyzeBtn.textContent = 'Анализировать';
-        this.analyzeBtn.classList.remove('bg-amber-500', 'hover:bg-amber-600');
-    }
-
-    renderRegistrationFile(cert, xmlDoc) {
-        const root = xmlDoc.documentElement;
-        const владелец = root.querySelector('ВладелецЭЦП');
-        const фио = владелец?.querySelector('ФИО');
-
-        let html = `<div class="content-card space-y-4"><h2 class="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Регистрационный файл абонента</h2>`;
-
-        html +=
-            '<h3 class="text-lg font-semibold text-sky-700 dark:text-sky-400 mt-4 mb-2">Информация об организации</h3>';
-        html += this.createField('Полное наименование', this.getText(root, 'ПолноеНаименование'));
-        html += this.createField(
-            'ИНН/КПП',
-            `${this.getText(root, 'ИНН')} / ${this.getText(root, 'КПП')}`,
-        );
-
-        if (владелец && фио) {
-            html +=
-                '<h3 class="text-lg font-semibold text-sky-700 dark:text-sky-400 mt-6 mb-2">Владелец ЭЦП</h3>';
-            html += this.createField(
-                'ФИО',
-                `${фио.getAttribute('Фамилия')} ${фио.getAttribute('Имя')} ${фио.getAttribute('Отчество')}`,
-            );
-            html += this.createField('Должность', this.getText(владелец, 'Должность'));
-            html += this.createField('E-mail', this.getText(владелец, 'Email'));
-        }
-
-        html += this.renderControllingAuthorities(xmlDoc);
-
-        html +=
-            '<h3 class="text-lg font-semibold text-sky-700 dark:text-sky-400 mt-6 mb-2">Статус сертификата</h3>';
-        html += this.createField('Отпечаток сертификата', cert.thumbprint, 'success');
-
-        if (cert.base64) {
-            html += this.createField(
-                'Тело сертификата',
-                'Найдено (готово к скачиванию)',
-                'success',
-            );
-            html += `
-            <div class="mt-6 text-center">
-                <button
-                    class="download-cert-btn w-full md:w-auto px-6 py-2 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
-                    data-cert-thumbprint="${this.sanitizeText(cert.thumbprint)}"
-                    title="Скачать сертификат (${cert.inn || cert.thumbprint}.cer)">
-                    Скачать сертификат
-                </button>
-            </div>`;
-        } else {
-            html += this.createField(
-                'Тело сертификата',
-                'Не найдено. Для скачивания проанализируйте файл Заявления.',
-                'warning',
-            );
-        }
-        html += '</div>';
-        return html;
-    }
-
-    renderControllingAuthorities(xmlDoc) {
-        const directions = xmlDoc.querySelectorAll('НапрПрин');
-        if (directions.length === 0) return '';
-
-        const authorityMap = this.controllingAuthorityMap;
-
-        let directionsHtml =
-            '<h3 class="text-lg font-semibold text-sky-700 dark:text-sky-400 mt-6 mb-2">Подключения к контролирующим органам</h3><div class="space-y-3">';
-
-        directions.forEach((dir) => {
-            const code = dir.getAttribute('Код');
-            const name = authorityMap[code] || `Неизвестный орган(${code})`;
-            const subCode =
-                dir.querySelector('КодНО')?.textContent ||
-                dir.querySelector('КодТОГС')?.textContent ||
-                dir.querySelector('КодПФР')?.textContent ||
-                'Н/Д';
-            const subName =
-                dir.querySelector('НаименованиеНО')?.textContent ||
-                dir.querySelector('НаименованиеТОГС')?.textContent ||
-                dir.querySelector('НаименованиеПФР')?.textContent ||
-                'Детали не указаны';
-
-            directionsHtml += `
-            <div class="p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 bg-slate-50 dark:bg-slate-800/50">
-                <p class="font-semibold text-slate-800 dark:text-slate-200">${this.sanitizeText(name)}</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Код: ${this.sanitizeText(subCode)}</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Наименование: ${this.sanitizeText(subName)}</p>
-            </div>`;
-        });
-
-        directionsHtml += '</div>';
-        return directionsHtml;
-    }
-
-    renderStatement(cert) {
-        if (!cert) {
-            return `<div class="content-card text-red-700 dark:text-red-400"><h2 class="text-xl font-bold mb-2 text-slate-900 dark:text-white">Ошибка</h2><p>Не удалось найти данные для отображения отчета по Заявлению.</p></div>`;
-        }
-
-        let html = `<div class="content-card"><h2 class="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Анализ файла выгрузки заявления</h2>`;
-        html +=
-            '<h3 class="text-lg font-semibold text-sky-700 dark:text-sky-400 mt-4 mb-2">Общая информация из файла</h3>';
-        html += this.createField('ИНН организации', cert.inn);
-        html +=
-            '<h3 class="text-lg font-semibold text-sky-700 dark:text-sky-400 mt-6 mb-2">Данные из сертификата</h3>';
-
-        if (cert.thumbprint && !cert.thumbprint.startsWith('unknown_')) {
-            html += this.createField('Отпечаток (вычислен)', cert.thumbprint, 'success');
-        } else {
-            html += this.createField('Отпечаток', 'Не удалось вычислить', 'error');
-        }
-
-        html += this.createField('Владелец (из поля CN)', cert.ownerFio);
-        html += this.createField('Организация (из поля O)', cert.orgName);
-
-        if (cert.base64) {
-            html += this.createField(
-                'Тело сертификата',
-                'Найдено и готово к скачиванию',
-                'success',
-            );
-            html += `
-        <div class="mt-6 text-center">
-            ${this._createDownloadButtonForThumbprint(cert.thumbprint, 'Скачать сертификат', 'w-full md:w-auto px-6 py-2')}
-        </div>`;
-        } else {
-            html += this.createField('Тело сертификата', 'Отсутствует', 'error');
-        }
-        if (!cert.orgName || !cert.ownerFio) {
-            html += `<p class="mt-4 p-3 text-sm rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300"><b>Примечание:</b> Для получения полной информации (например, должность, подключения к КО) проанализируйте соответствующий <b>Регистрационный файл</b>.</p>`;
-        }
-        html += '</div>';
-        return html;
-    }
-
-    renderDiagnosticReport(_xmlDoc, _namespace) {
-        return `<div class="content-card text-slate-900 dark:text-white">Отчет 1С пока не парсится на сертификаты.</div>`;
-    }
-
     renderSedoLog(data) {
         const wrapper = document.createElement('div');
         wrapper.className = 'space-y-4';
@@ -2691,6 +2663,7 @@ class ReportAnalyzerApp {
         };
 
         // --- Карточка 1: Общая информация ---
+        const messages = data.messages.filter((m) => m && typeof m === 'object');
         const infoGrid = document.createElement('div');
         infoGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm';
         infoGrid.appendChild(this.createField('ID документооборота', data.id));
@@ -2732,10 +2705,13 @@ class ReportAnalyzerApp {
         const rowTemplate = this.getEl('sedo-row-template');
 
         if (tableBody && rowTemplate) {
-            const sortedMessages = [...data.messages].sort(
-                (a, b) => new Date(a.date) - new Date(b.date),
-            );
-            sortedMessages.forEach((msg) => {
+            const ts = (m) => {
+                const t = new Date(m.date).getTime();
+                return Number.isNaN(t) ? 0 : t;
+            };
+            const MAX_ROWS = 500;
+            const sortedMessages = [...messages].sort((a, b) => ts(a) - ts(b));
+            sortedMessages.slice(0, MAX_ROWS).forEach((msg) => {
                 const clone = rowTemplate.content.cloneNode(true);
                 const row = clone.querySelector('.sedo-message-row');
 
@@ -2752,7 +2728,7 @@ class ReportAnalyzerApp {
                 const statusEl = clone.querySelector('.sedo-status');
                 if (msg.status) {
                     statusEl.textContent = this._raw(msg.status);
-                    if (msg.status.toLowerCase().includes('ошибк')) {
+                    if (String(msg.status).toLowerCase().includes('ошибк')) {
                         statusEl.classList.add('text-red-600', 'dark:text-red-400');
                     } else {
                         statusEl.classList.add('text-slate-500', 'dark:text-slate-400');
@@ -2774,7 +2750,7 @@ class ReportAnalyzerApp {
 
         wrapper.appendChild(
             this._createAccordion(
-                `Сообщения документооборота (${data.messages.length} шт.)`,
+                `Сообщения документооборота (${messages.length} шт.${messages.length > 500 ? ', показаны первые 500' : ''})`,
                 messagesCardContent,
                 true,
             ),
@@ -3157,60 +3133,6 @@ class ReportAnalyzerApp {
         return { data, cert };
     }
 
-    _renderSection(title, contentElement, isOpen = false) {
-        const template = this.getEl('accordion-section-template');
-        if (!template) {
-            console.error('Критическая ошибка: шаблон #accordion-section-template не найден!');
-            return document.createDocumentFragment();
-        }
-
-        const clone = template.content.cloneNode(true);
-        const details = clone.querySelector('details');
-        const titleEl = clone.querySelector('.accordion-title');
-        const contentEl = clone.querySelector('.accordion-content');
-
-        details.open = isOpen;
-        titleEl.textContent = this._raw(title);
-
-        if (contentElement && contentElement.nodeType) {
-            contentEl.appendChild(contentElement);
-        }
-
-        const iconContainer = clone.querySelector('.accordion-toggle-container');
-        if (iconContainer) {
-            const updateIconState = () =>
-                iconContainer.classList.toggle('rotate-180', details.open);
-            details.addEventListener('toggle', updateIconState);
-            if (isOpen) {
-                setTimeout(updateIconState, 0);
-            }
-        }
-
-        return clone;
-    }
-
-    _formatBytes(bytes, decimals = 2) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    }
-
-    _formatPlatform(platform, arch, release) {
-        let osName = 'Неизвестная ОС';
-        if (platform === 'win32') {
-            const majorVersion = parseInt(release.split('.')[0], 10);
-            osName = majorVersion >= 10 ? 'Windows 10/11' : 'Windows';
-        } else if (platform === 'darwin') {
-            osName = 'macOS';
-        } else if (platform === 'linux') {
-            osName = 'Linux';
-        }
-        return `${osName} (${arch})`;
-    }
-
     _renderLogEntries(entries) {
         if (!Array.isArray(entries) || entries.length === 0) {
             const p = document.createElement('p');
@@ -3232,9 +3154,7 @@ class ReportAnalyzerApp {
             const clone = template.content.cloneNode(true);
 
             clone.querySelector('.log-event').textContent = this._raw(log.event);
-            clone.querySelector('.log-date').textContent = new Date(log.date).toLocaleString(
-                'ru-RU',
-            );
+            clone.querySelector('.log-date').textContent = this._fmtDateTime(log.date) || '—';
 
             const levelEl = clone.querySelector('.log-level');
             levelEl.textContent = this._raw(log.level);
@@ -3281,7 +3201,7 @@ class ReportAnalyzerApp {
             directions
                 .map(
                     (dir) =>
-                        `<li><span class="font-semibold">${authorityMap[dir.recipientType] || dir.recipientType}</span> (Код: ${this.sanitizeText(dir.recipientCode)}, КПП: ${this.sanitizeText(dir.kpp)})</li>`,
+                        `<li><span class="font-semibold">${this.sanitizeText(authorityMap[dir.recipientType] || dir.recipientType)}</span> (Код: ${this.sanitizeText(dir.recipientCode)}, КПП: ${this.sanitizeText(dir.kpp)})</li>`,
                 )
                 .join('') +
             `</ul>`
@@ -3462,11 +3382,6 @@ class ReportAnalyzerApp {
         );
 
         return wrapper;
-    }
-
-    async _processRegistrationFile(xmlDoc) {
-        const data = await this._parseRegistrationFile(xmlDoc);
-        return this._renderRegistrationFileReport(data);
     }
 
     _renderRegistrationFileReport(data) {
@@ -3727,10 +3642,9 @@ class ReportAnalyzerApp {
                 'p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 space-y-1';
             edoCard.appendChild(this.createField('Сервер ЭДО', data.servers.edo.name));
             edoCard.appendChild(
-                this.createField(
-                    'Отпечаток серт. ЭДО',
-                    `<div class="font-mono text-xs break-all">${data.servers.edo.thumbprint}</div>`,
-                ),
+                this.createField('Отпечаток серт. ЭДО', data.servers.edo.thumbprint, 'default', {
+                    mono: true,
+                }),
             );
 
             if (data.servers.edo.emails) {
@@ -3750,16 +3664,14 @@ class ReportAnalyzerApp {
                 this.createField('Сервер онлайн-проверки', data.servers.onlineCheck.name),
             );
             onlineCard.appendChild(
-                this.createField(
-                    'Отпечаток серт.',
-                    `<div class="font-mono text-xs break-all">${data.servers.onlineCheck.thumbprint}</div>`,
-                ),
+                this.createField('Отпечаток серт.', data.servers.onlineCheck.thumbprint, 'default', {
+                    mono: true,
+                }),
             );
             onlineCard.appendChild(
-                this.createField(
-                    'WSDL',
-                    `<div class="text-xs break-all">${data.servers.onlineCheck.resource.definition}</div>`,
-                ),
+                this.createField('WSDL', data.servers.onlineCheck.resource?.definition, 'default', {
+                    mono: true,
+                }),
             );
             serversList.appendChild(onlineCard);
         }
@@ -3773,13 +3685,19 @@ class ReportAnalyzerApp {
             signatureContent.appendChild(
                 this.createField(
                     'Отпечаток сертификата подписи',
-                    `<div class="font-mono text-xs break-all">${data.signature.thumbprint}</div>`,
+                    data.signature.thumbprint,
+                    'default',
+                    { mono: true },
                 ),
             );
             signatureContent.appendChild(
                 this.createField(
                     'Значение подписи (Base64)',
-                    `<div class="text-xs break-all text-slate-500">${data.signature.value.substring(0, 100)}...</div>`,
+                    data.signature.value.length > 100
+                        ? `${data.signature.value.substring(0, 100)}…`
+                        : data.signature.value,
+                    'default',
+                    { mono: true },
                 ),
             );
             wrapper.appendChild(this._createAccordion('Подпись файла', signatureContent));

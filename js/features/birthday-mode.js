@@ -1,5 +1,7 @@
 'use strict';
 
+import { isReducedMotion } from '../utils/motion-pref.js';
+
 /**
  * Праздничный «режим дня рождения»: оформление, конфетти, доступность (prefers-reduced-motion).
  * Дублирование состояния: userPreferences (IndexedDB) + зеркало localStorage с проверкой записи.
@@ -38,14 +40,7 @@ export function getBirthdayModeEnabled(settings) {
  * @returns {boolean}
  */
 export function prefersReducedMotion() {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-        return false;
-    }
-    try {
-        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    } catch {
-        return false;
-    }
+    return isReducedMotion();
 }
 
 /**

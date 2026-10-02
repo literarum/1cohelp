@@ -255,3 +255,17 @@ describe('training-curriculum', () => {
         expect(trainingStepKey('a', 'b')).toBe('a::b');
     });
 });
+
+import { computeTrackStats } from './training.js';
+
+describe('computeTrackStats', () => {
+    it('считает состояние модуля', () => {
+        const track = { id: 'tx', steps: [{ id: 's1' }, { id: 's2' }] };
+        const none = computeTrackStats({ trackProgress: {} }, track);
+        expect(none.status).toBe('new');
+        expect(none.total).toBe(2);
+        const empty = computeTrackStats({ trackProgress: {} }, { id: 'ty', steps: [] });
+        expect(empty.status).not.toBe('progress');
+        expect(empty.pct).toBe(100);
+    });
+});

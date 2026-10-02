@@ -1172,6 +1172,62 @@ export function summarizeMergePlanForHistory(mergePlan) {
 }
 
 /**
+ * Построчная сводка плана слияния по разделам (для подтверждения и отчёта).
+ * @param {object|null|undefined} mergePlan
+ * @returns {Array<{ store: string, label: string, inserts: number, updates: number }>}
+ */
+export function summarizeMergePlanByStore(mergePlan) {
+    const rows = [];
+    if (!mergePlan || typeof mergePlan !== 'object') return rows;
+    for (const storeName of MERGE_APPLICATION_ORDER) {
+        const p = mergePlan.perStore?.[storeName];
+        if (!p) continue;
+        let inserts = Array.isArray(p.toInsert) ? p.toInsert.length : 0;
+        let updates = Array.isArray(p.toUpdate) ? p.toUpdate.length : 0;
+        if (storeName === 'algorithms') {
+            const lc = extractAlgorithmsContainerRecord(p.localContainer);
+            const ic = extractAlgorithmsContainerRecord(p.importContainer);
+            if (ic && !lc) inserts += 1;
+            else if (ic && lc) updates += 1;
+        }
+        if (inserts > 0 || updates > 0) {
+            rows.push({ store: storeName, label: mergeStoreHumanLabel(storeName), inserts, updates });
+        }
+    }
+    return rows;
+}
+
+/**
+ * Текстовый отчёт о слиянии (сохраняется пользователем в файл).
+ * @param {{ sourceFileName?: string, analysis?: object, mergePlan?: object, completedAt?: string, backupOutcome?: string }} args
+ * @returns {string}
+ */
+export function buildMergeReportText(args) {
+    const a = args || {};
+    const stats = summarizeMergeAnalysisStats(a.analysis);
+    const rows = summarizeMergePlanByStore(a.mergePlan);
+    const when = a.completedAt || new Date().toISOString();
+    const lines = [
+        'ОТЧЁТ О СЛИЯНИИ БАЗЫ ДАННЫХ — Copilot 1СО',
+        `Дата: ${when}`,
+        `Файл: ${a.sourceFileName || 'Файл без имени'}`,
+        `Версия схемы файла: ${a.analysis?.schemaVersion ?? '—'}`,
+        `Резервная копия перед слиянием: ${
+            a.backupOutcome === 'skipped_by_user' ? 'пропущена пользователем' : 'создана или не требовалась по настройкам'
+        }`,
+        '',
+        `Анализ: новых в файле ${stats.newInFile}, конфликтов ${stats.conflicts}, одинаковых ${stats.identical}, только локальных ${stats.localOnly}`,
+        '',
+        'Применено по разделам (добавлено / обновлено):',
+    ];
+    if (rows.length === 0) lines.push('  изменений нет');
+    rows.forEach((r) => lines.push(`  ${r.label}: +${r.inserts} / ~${r.updates}`));
+    const total = rows.reduce((acc, r) => ({ i: acc.i + r.inserts, u: acc.u + r.updates }), { i: 0, u: 0 });
+    lines.push('', `Итого: добавлено ${total.i}, обновлено ${total.u}. Удалений слияние не выполняет.`);
+    return lines.join('\n');
+}
+
+/**
  * @param {{ sourceFileName?: string, analysis: object, mergePlan: object, completedAt?: string }} args
  * @returns {DbMergeHistoryEntry}
  */
@@ -1971,6 +2027,192 @@ function getConflictRecordLabel(storeName, localRecord, incomingRecord) {
     return `${storeName}: ${localId} / ${incomingId}`;
 }
 
+/** Максимум миниатюр в превью слияния: большие базы не должны подвешивать окно. */
+const MERGE_PREVIEW_MAX_THUMBS = 24;
+const MERGE_PREVIEW_MAX_PDFS = 30;
+
+function mergePreviewBlobOf(record) {
+    const b = record && record.blob;
+    if (b instanceof Blob) return b;
+    if (b && typeof b === 'object' && typeof b.base64 === 'string') {
+        try {
+            const converted = base64ToBlob(b.base64, typeof b.type === 'string' ? b.type : '');
+            return converted instanceof Blob ? converted : null;
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+function formatMergeBytes(n) {
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    if (n < 1024) return `${n} Б`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
+    return `${(n / 1024 / 1024).toFixed(1)} МБ`;
+}
+
+/**
+ * Превью вложений, которые будут ДОБАВЛЕНЫ слиянием (только новые из файла):
+ * миниатюры скриншотов и список PDF. Возвращает функцию освобождения object URL.
+ * @returns {() => void}
+ */
+export function renderMergeAttachmentPreview(container, storeDiffs) {
+    const urls = [];
+    if (!container) return () => {};
+    container.innerHTML = '';
+    const diffs = Array.isArray(storeDiffs) ? storeDiffs : [];
+    const shots = (diffs.find((d) => d.storeName === 'screenshots') || {}).importOnly || [];
+    const pdfs = (diffs.find((d) => d.storeName === 'pdfFiles') || {}).importOnly || [];
+    if (shots.length === 0 && pdfs.length === 0) return () => {};
+
+    const box = document.createElement('div');
+    box.className = 'db-merge-attach-preview';
+    box.style.cssText = 'margin-top:12px;padding:10px 12px;border:1px solid rgba(128,128,128,.28);border-radius:12px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:600;font-size:13px;margin-bottom:8px;';
+    title.textContent = `Вложения, которые будут добавлены: снимков ${shots.length}, PDF ${pdfs.length}`;
+    box.appendChild(title);
+
+    if (shots.length > 0) {
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+        shots.slice(0, MERGE_PREVIEW_MAX_THUMBS).forEach((rec) => {
+            const blob = mergePreviewBlobOf(rec);
+            const cell = document.createElement('div');
+            cell.style.cssText =
+                'width:72px;height:72px;border-radius:8px;overflow:hidden;background:rgba(128,128,128,.15);display:flex;align-items:center;justify-content:center;font-size:10px;';
+            if (blob && /^image\//.test(blob.type || '')) {
+                const url = URL.createObjectURL(blob);
+                urls.push(url);
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = 'Скриншот из файла слияния';
+                img.loading = 'lazy';
+                img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+                img.title = `${formatMergeBytes(blob.size)} — нажмите, чтобы открыть крупнее`;
+                cell.style.cursor = 'zoom-in';
+                cell.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+                cell.appendChild(img);
+            } else {
+                cell.textContent = 'нет данных';
+            }
+            grid.appendChild(cell);
+        });
+        box.appendChild(grid);
+        if (shots.length > MERGE_PREVIEW_MAX_THUMBS) {
+            const more = document.createElement('div');
+            more.style.cssText = 'font-size:11px;opacity:.7;margin-top:4px;';
+            more.textContent = `…и ещё ${shots.length - MERGE_PREVIEW_MAX_THUMBS}`;
+            box.appendChild(more);
+        }
+    }
+
+    if (pdfs.length > 0) {
+        const ul = document.createElement('ul');
+        ul.style.cssText = 'margin:8px 0 0;padding:0;list-style:none;font-size:12px;';
+        pdfs.slice(0, MERGE_PREVIEW_MAX_PDFS).forEach((rec) => {
+            const blob = mergePreviewBlobOf(rec);
+            const li = document.createElement('li');
+            li.style.cssText = 'display:flex;justify-content:space-between;gap:8px;padding:2px 0;';
+            const nm = document.createElement('span');
+            nm.textContent = `📄 ${rec?.name || rec?.fileName || 'документ.pdf'}`;
+            nm.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            const sz = document.createElement('span');
+            sz.textContent = formatMergeBytes(blob ? blob.size : 0);
+            sz.style.opacity = '.7';
+            const openBtn = document.createElement('button');
+            openBtn.type = 'button';
+            openBtn.textContent = 'Открыть';
+            openBtn.disabled = !blob;
+            openBtn.style.cssText =
+                'padding:0 8px;font-size:11px;border-radius:6px;border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit;cursor:pointer;';
+            openBtn.addEventListener('click', () => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank', 'noopener');
+                setTimeout(() => URL.revokeObjectURL(url), 120000);
+            });
+            const viewBtn = document.createElement('button');
+            viewBtn.type = 'button';
+            viewBtn.textContent = 'Просмотр';
+            viewBtn.disabled = !blob;
+            viewBtn.setAttribute('aria-expanded', 'false');
+            viewBtn.style.cssText = openBtn.style.cssText;
+            let frame = null;
+            viewBtn.addEventListener('click', () => {
+                if (!blob) return;
+                if (frame) {
+                    frame.remove();
+                    frame = null;
+                    viewBtn.textContent = 'Просмотр';
+                    viewBtn.setAttribute('aria-expanded', 'false');
+                    return;
+                }
+                // Принудительно application/pdf: любой другой тип в iframe того же origin был бы исполнен как страница
+                const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+                urls.push(url);
+                frame = document.createElement('iframe');
+                frame.src = url;
+                frame.title = `Просмотр: ${rec?.name || rec?.fileName || 'PDF'}`;
+                frame.className = 'db-merge-pdf-frame';
+                frame.style.cssText =
+                    'flex-basis:100%;width:100%;height:320px;border:1px solid rgba(128,128,128,.35);border-radius:8px;background:#fff;margin-top:4px;';
+                li.appendChild(frame);
+                viewBtn.textContent = 'Скрыть';
+                viewBtn.setAttribute('aria-expanded', 'true');
+            });
+            li.style.flexWrap = 'wrap';
+            li.append(nm, sz, viewBtn, openBtn);
+            ul.appendChild(li);
+        });
+        box.appendChild(ul);
+        if (pdfs.length > MERGE_PREVIEW_MAX_PDFS) {
+            const more = document.createElement('div');
+            more.style.cssText = 'font-size:11px;opacity:.7;margin-top:4px;';
+            more.textContent = `…и ещё ${pdfs.length - MERGE_PREVIEW_MAX_PDFS} PDF`;
+            box.appendChild(more);
+        }
+    }
+    container.appendChild(box);
+    return () => {
+        urls.forEach((u) => URL.revokeObjectURL(u));
+        urls.length = 0;
+    };
+}
+
+const MERGE_FIELD_LABELS = {
+    title: 'Название',
+    name: 'Название',
+    url: 'Ссылка',
+    description: 'Описание',
+    content: 'Содержимое',
+    text: 'Текст',
+    notes: 'Заметки',
+    tags: 'Теги',
+    folder: 'Папка',
+    folderId: 'Папка',
+    categoryId: 'Категория',
+    category: 'Категория',
+    dateAdded: 'Добавлено',
+    dateUpdated: 'Изменено',
+    createdAt: 'Создано',
+    updatedAt: 'Изменено',
+    screenshotIds: 'Скриншоты',
+    inn: 'ИНН',
+    phone: 'Телефон',
+    organizationName: 'Организация',
+    level: 'Уровень',
+    color: 'Цвет',
+    dueAt: 'Срок',
+    note: 'Заметка',
+};
+
+/** Понятное название поля записи для окна конфликтов; неизвестные поля остаются как есть. */
+export function mergeFieldLabel(key) {
+    return MERGE_FIELD_LABELS[key] || String(key);
+}
+
 export const __dbMergeConflictUiInternals = {
     formatConflictValueForUi,
     buildConflictDiffView,
@@ -2040,6 +2282,12 @@ export function openDbMergeModal() {
     closeButtons.forEach((btn) => {
         if (!btn._dbMergeCloseHandler) {
             btn._dbMergeCloseHandler = () => {
+                existing.querySelectorAll('.db-merge-attach-host').forEach((h) => {
+                    h.querySelectorAll('img').forEach((im) => {
+                        if (im.src.startsWith('blob:')) URL.revokeObjectURL(im.src);
+                    });
+                    h.innerHTML = '';
+                });
                 existing.classList.add('hidden');
                 document.body.classList.remove('overflow-hidden');
             };
@@ -2089,12 +2337,15 @@ export function openDbMergeModal() {
             badge.classList.toggle('is-active', badgeStep === step);
         });
         stepSelect.classList.toggle('hidden', step !== 'select');
-        stepAnalyze.classList.toggle('hidden', step !== 'analyze');
+        // Сводка по разделам и превью вложений остаются видны на шагах конфликтов и применения
+        stepAnalyze.classList.toggle('hidden', step === 'select');
         stepResolve.classList.toggle('hidden', step !== 'resolve');
         stepApply.classList.toggle('hidden', step !== 'apply');
     };
 
     let lastAnalysis = null;
+    /** Освобождение object URL миниатюр превью вложений. */
+    let releaseAttachmentPreview = null;
     let currentMergePlan = null;
     let footerMode = FOOTER_MODE.DEFAULT;
     let hasSelectedFileForAnalysis = false;
@@ -2104,6 +2355,10 @@ export function openDbMergeModal() {
     let lastMergeSourceFileName = '';
 
     const closeModal = () => {
+        if (releaseAttachmentPreview) {
+            releaseAttachmentPreview();
+            releaseAttachmentPreview = null;
+        }
         existing.classList.add('hidden');
         document.body.classList.remove('overflow-hidden');
     };
@@ -2149,17 +2404,17 @@ export function openDbMergeModal() {
             card.className = 'db-merge-store-card';
             card.innerHTML = `
                 <div class="db-merge-store-card-head">
-                    <span class="db-merge-store-name">${escapeHtml(storeName)}</span>
+                    <span class="db-merge-store-name" title="${escapeHtml(storeName)}">${escapeHtml(mergeStoreHumanLabel(storeName))}</span>
                     <div class="db-merge-store-badges">
-                        <span class="db-merge-store-badge added">+${importOnly.length}</span>
-                        <span class="db-merge-store-badge same">=${identical.length}</span>
-                        <span class="db-merge-store-badge conflict">!${conflicts.length}</span>
+                        <span class="db-merge-store-badge added" title="Новых записей из файла: будут добавлены">+${importOnly.length}</span>
+                        <span class="db-merge-store-badge same" title="Совпадающих записей: не меняются">=${identical.length}</span>
+                        <span class="db-merge-store-badge conflict" title="Конфликтов: запись есть и у вас, и в файле, но отличается">!${conflicts.length}</span>
                     </div>
                 </div>
                 <div class="db-merge-store-meta">
                     <span>Локальные: ${localOnly.length}</span>
                     <span class="db-merge-store-meta-sep"></span>
-                    <span>Импорт: ${importOnly.length}</span>
+                    <span>Новых из файла: ${importOnly.length}</span>
                     <span class="db-merge-store-meta-sep"></span>
                     <span>Конфликтов: ${conflicts.length}</span>
                 </div>
@@ -2172,6 +2427,21 @@ export function openDbMergeModal() {
         });
 
         overallStatsEl.textContent = `Локальных: ${totalLocal} · Новых из файла: ${totalImport} · Конфликтов: ${totalConflicts}`;
+
+        // Превью вложений: отдельный контейнер после карточек store'ов
+        if (releaseAttachmentPreview) releaseAttachmentPreview();
+        let previewHost = storesSummaryEl.parentElement.querySelector('.db-merge-attach-host');
+        if (!previewHost) {
+            previewHost = document.createElement('div');
+            previewHost.className = 'db-merge-attach-host';
+            storesSummaryEl.insertAdjacentElement('afterend', previewHost);
+        }
+        try {
+            releaseAttachmentPreview = renderMergeAttachmentPreview(previewHost, analysis.storeDiffs);
+        } catch (e) {
+            console.warn('[DbMerge] превью вложений не построено', e);
+            releaseAttachmentPreview = null;
+        }
     };
 
     const renderConflicts = (analysis) => {
@@ -2185,7 +2455,7 @@ export function openDbMergeModal() {
             wrapper.open = true;
             const summary = document.createElement('summary');
             summary.innerHTML = `
-                <span><i class="fas fa-exchange-alt mr-1" aria-hidden="true"></i>${escapeHtml(diff.storeName)}</span>
+                <span><i class="fas fa-exchange-alt mr-1" aria-hidden="true"></i>${escapeHtml(mergeStoreHumanLabel(diff.storeName))}</span>
                 <span class="db-merge-conflict-group-count">${diff.conflicts.length} конфликт(ов)</span>
             `;
             wrapper.appendChild(summary);
@@ -2201,7 +2471,7 @@ export function openDbMergeModal() {
                               .slice(0, 8)
                               .map(
                                   ({ key }) =>
-                                      `<span class="db-merge-duplicate-chip">${escapeHtml(key)}</span>`,
+                                      `<span class="db-merge-duplicate-chip">${escapeHtml(mergeFieldLabel(key))}</span>`,
                               )
                               .join('')
                         : '<span class="db-merge-duplicate-chip is-empty">Нет совпадающих полей</span>';
@@ -2212,7 +2482,7 @@ export function openDbMergeModal() {
                               .map(
                                   ({ key, localUi }) => `
                                     <div class="db-merge-conflict-field-row is-different">
-                                        <div class="db-merge-conflict-field-name">${escapeHtml(key)}</div>
+                                        <div class="db-merge-conflict-field-name" title="${escapeHtml(key)}">${escapeHtml(mergeFieldLabel(key))}</div>
                                         <div class="db-merge-conflict-field-value">${escapeHtml(localUi)}</div>
                                     </div>
                                 `,
@@ -2226,7 +2496,7 @@ export function openDbMergeModal() {
                               .map(
                                   ({ key, incomingUi }) => `
                                     <div class="db-merge-conflict-field-row is-different">
-                                        <div class="db-merge-conflict-field-name">${escapeHtml(key)}</div>
+                                        <div class="db-merge-conflict-field-name" title="${escapeHtml(key)}">${escapeHtml(mergeFieldLabel(key))}</div>
                                         <div class="db-merge-conflict-field-value">${escapeHtml(incomingUi)}</div>
                                     </div>
                                 `,
@@ -2295,9 +2565,43 @@ export function openDbMergeModal() {
                 list.appendChild(row);
             });
 
+            const bulk = document.createElement('div');
+            bulk.className = 'db-merge-bulk-bar';
+            bulk.innerHTML = `<span>Для всех в разделе:</span>
+                <button type="button" class="db-merge-bulk-btn" data-bulk="local">Оставить локальные</button>
+                <button type="button" class="db-merge-bulk-btn" data-bulk="import">Взять из файла</button>
+                <button type="button" class="db-merge-bulk-btn" data-bulk="both">Сохранить обе</button>`;
+            bulk.addEventListener('click', (ev) => {
+                const b = ev.target instanceof Element ? ev.target.closest('[data-bulk]') : null;
+                if (!b) return;
+                list.querySelectorAll('.db-merge-conflict-row').forEach((r) =>
+                    r.querySelector(`.db-merge-choice-btn[data-choice="${b.getAttribute('data-bulk')}"]`)?.click(),
+                );
+            });
+            wrapper.appendChild(bulk);
             wrapper.appendChild(list);
             conflictsContainer.appendChild(wrapper);
         });
+
+        // Сводка прогресса: «Решено X из Y» (клики по выбору обновляют её через делегирование)
+        const totalRows = conflictsContainer.querySelectorAll('.db-merge-conflict-row').length;
+        if (totalRows > 0) {
+            const prog = document.createElement('div');
+            prog.className = 'db-merge-conflict-progress';
+            prog.setAttribute('aria-live', 'polite');
+            const upd = () => {
+                const done = conflictsContainer.querySelectorAll('.db-merge-conflict-row[data-resolution]').length;
+                prog.innerHTML = `Решено <b>${done}</b> из <b>${totalRows}</b> конфликтов${
+                    done < totalRows ? ' — остальные получат решение по умолчанию' : ' — всё выбрано'
+                }`;
+                prog.classList.toggle('is-done', done === totalRows);
+            };
+            if (conflictsContainer._progHandler) conflictsContainer.removeEventListener('click', conflictsContainer._progHandler);
+            conflictsContainer._progHandler = () => setTimeout(upd, 0);
+            conflictsContainer.addEventListener('click', conflictsContainer._progHandler);
+            upd();
+            conflictsContainer.insertBefore(prog, conflictsContainer.firstChild);
+        }
 
         initSplitters();
     };
@@ -2587,6 +2891,27 @@ export function openDbMergeModal() {
             };
 
             try {
+                // Итоговое подтверждение: что именно будет изменено (до резервной копии и до записи в БД)
+                const plannedResolutions = collectUserResolutions();
+                const plannedPlan = buildMergePlan(lastAnalysis, plannedResolutions);
+                const planRows = summarizeMergePlanByStore(plannedPlan);
+                const planLines = planRows.length
+                    ? planRows.map((r) => `${escapeHtml(r.label)}: +${r.inserts} новых, ~${r.updates} обновлений`).join('<br>')
+                    : summarizeMergeAnalysisStats(lastAnalysis).conflicts > 0
+                      ? 'Изменений не будет: конфликты разрешены в пользу ваших локальных данных.'
+                      : 'Изменений нет — все записи уже совпадают.';
+                try {
+                    const { showAppConfirm } = await import('../ui/app-confirm-modal.js');
+                    const go = await showAppConfirm({
+                        title: 'Подтвердите слияние',
+                        message: `${planLines}<br><br><span style="opacity:.75">Записи не удаляются. Перед применением будет предложена резервная копия; при сбое изменения откатываются автоматически.</span>`,
+                        messageIsHtml: true,
+                        confirmText: 'Выполнить слияние',
+                    });
+                    if (!go) return;
+                } catch (confirmErr) {
+                    console.warn('[DbMerge] Подтверждение недоступно, продолжаем', confirmErr);
+                }
                 setStep('apply');
                 animateProgress(5, 'Проверка резервного копирования…');
 
@@ -2663,9 +2988,44 @@ export function openDbMergeModal() {
                         console.warn('[DbMerge] Не удалось записать историю слияния:', histErr);
                     }
                     setFooterMode(FOOTER_MODE.COMPLETED);
+                    try {
+                        const reportText = buildMergeReportText({
+                            sourceFileName: lastMergeSourceFileName,
+                            analysis: lastAnalysis,
+                            mergePlan: currentMergePlan,
+                            backupOutcome: pre.outcome,
+                        });
+                        const detailEl = document.getElementById('dbMergeProgressDetail');
+                        if (detailEl && !detailEl.parentElement.querySelector('.db-merge-report-btn')) {
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'db-merge-report-btn';
+                            btn.style.cssText =
+                                'margin-top:10px;padding:6px 12px;font-size:.8rem;border-radius:8px;border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit;cursor:pointer;';
+                            btn.textContent = 'Скачать отчёт (.txt)';
+                            btn.addEventListener('click', () => {
+                                const url = URL.createObjectURL(
+                                    new Blob([reportText], { type: 'text/plain;charset=utf-8' }),
+                                );
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `merge-report-${new Date().toISOString().slice(0, 10)}.txt`;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                setTimeout(() => URL.revokeObjectURL(url), 2000);
+                            });
+                            detailEl.insertAdjacentElement('afterend', btn);
+                        }
+                    } catch (reportErr) {
+                        console.warn('[DbMerge] Отчёт не построен:', reportErr);
+                    }
                 } catch (e) {
                     console.error('[DbMerge] Ошибка при применении плана слияния:', e);
-                    deps.showNotification?.('Ошибка при слиянии. Подробности в консоли.', 'error');
+                    deps.showNotification?.(
+                        `Ошибка при слиянии: ${e && e.message ? e.message : 'неизвестная ошибка'}. Данные восстановлены из снимка, если он был создан.`,
+                        'error',
+                    );
                     animateProgress(0, 'Ошибка слияния.');
                 }
             } finally {

@@ -28,6 +28,8 @@ export function createDefaultTrainingProgress() {
         srsPreset: 'balanced',
         /** Дополнительный множитель к интервалу (0.5..2), дублирует смысл пресета при ручной настройке */
         intervalScale: 1,
+        /** Лимит новых карточек в день (0..200) */
+        srsNewPerDay: 10,
         trackProgress: {},
         quizStats: { sessions: 0, answered: 0, correct: 0 },
         /** Встроенные треки, скрытые пользователем в «Учебнике» (id из TRAINING_TRACKS) */
@@ -111,6 +113,8 @@ export function reconcileTrainingProgress(primary, secondary) {
     base.srsPreset = newer.srsPreset || base.srsPreset;
     const isc = Number(newer.intervalScale);
     base.intervalScale = Number.isFinite(isc) ? isc : base.intervalScale;
+    const npd = Number(newer.srsNewPerDay);
+    base.srsNewPerDay = Number.isFinite(npd) ? npd : base.srsNewPerDay;
     base.hiddenBuiltinTrackIds = normalizeHiddenBuiltinTrackIds([
         ...(base.hiddenBuiltinTrackIds || []),
         ...(o.hiddenBuiltinTrackIds || []),
@@ -144,6 +148,8 @@ export function normalizeTrainingProgress(raw) {
     }
     const sc = Number(merged.intervalScale);
     merged.intervalScale = Number.isFinite(sc) ? Math.min(2, Math.max(0.5, sc)) : 1;
+    const np = Math.floor(Number(merged.srsNewPerDay));
+    merged.srsNewPerDay = Number.isFinite(np) ? Math.min(200, Math.max(0, np)) : 10;
     merged.hiddenBuiltinTrackIds = normalizeHiddenBuiltinTrackIds(merged.hiddenBuiltinTrackIds);
     return merged;
 }

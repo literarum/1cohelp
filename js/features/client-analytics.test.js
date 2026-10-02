@@ -202,3 +202,37 @@ describe('client-analytics blacklist navigation', () => {
         expect(focus).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('normalizeSearchText: быстрый путь эквивалентен NFD-варианту', () => {
+    const reference = (v) =>
+        String(v ?? '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    it('совпадает с эталоном на русском, латинице, диакритике и пробелах', async () => {
+        const { normalizeSearchText } = await import('./client-analytics.js');
+        const samples = [
+            'Йод ЁЛКА ёж',
+            '  много   пробелов\tи\nпереносов ',
+            'Café Ångström Zoë',
+            'ООО «Ромашка» №5 — тест',
+            'ЙЁйё',
+            'ǅ ﬁ ² ½',
+            '',
+            null,
+            undefined,
+            12345,
+            'é уже с комбинируемым знаком',
+        ];
+        for (const s of samples) expect(normalizeSearchText(s)).toBe(reference(s));
+    });
+
+    it('й и е/ё считаются эквивалентными при поиске', async () => {
+        const { normalizeSearchText } = await import('./client-analytics.js');
+        expect(normalizeSearchText('Ёжик')).toBe(normalizeSearchText('ежик'));
+        expect(normalizeSearchText('Майкл')).toBe(normalizeSearchText('маикл'));
+    });
+});

@@ -41,6 +41,9 @@ import {
     saveToIndexedDB,
     clearIndexedDBStore,
     performDBOperation,
+    forEachBatchInStore,
+    yieldToMain,
+    bulkPutToIndexedDB,
 } from '../db/indexeddb.js';
 
 import {
@@ -1067,60 +1070,241 @@ export async function addToSearchIndex(
  * Удаляет элемент из поискового индекса
  */
 export async function removeFromSearchIndex(itemId, itemType) {
+    return removeManyFromSearchIndex(itemType, [itemId]);
+}
+
+/**
+ * Удаляет из индекса сразу набор элементов одного типа ОДНИМ проходом курсора
+ * в одной readwrite-транзакции (чтение и запись атомарны). Для пакетных операций
+ * (очистка раздела, удаление файла/пачки) вместо O(N × размер индекса).
+ * @param {string} itemType
+ * @param {Iterable<string|number>} itemIds
+ */
+export async function removeManyFromSearchIndex(itemType, itemIds, opts = {}) {
     if (!State.db) {
         return;
     }
-
-    const stringItemId = String(itemId);
-
+    const idSet = new Set(Array.from(itemIds, (x) => String(x)));
+    if (idSet.size === 0) return;
+    // Точечный путь: если переданы прежние данные записей (неизменяемые clientAnalyticsRecords),
+    // затрагиваем только их токены, а не весь индекс (полный проход — десятки секунд на больших базах).
+    if (
+        itemType === 'clientAnalyticsRecords' &&
+        Array.isArray(opts.items) &&
+        opts.items.length > 0 &&
+        opts.items.length <= 20000 &&
+        opts.items.length === idSet.size
+    ) {
+        const ok = await removeAnalyticsRecordsFromIndexByTokens(opts.items, idSet);
+        if (ok) return;
+    }
     try {
         const transaction = State.db.transaction('searchIndex', 'readwrite');
         const store = transaction.objectStore('searchIndex');
-        const request = store.openCursor();
-        const updates = [];
-
-        await new Promise((resolve, reject) => {
-            request.onsuccess = (event) => {
-                const cursor = event.target.result;
-                if (cursor) {
-                    const entry = cursor.value;
-                    const initialRefCount = entry.refs.length;
-                    entry.refs = entry.refs.filter(
-                        (ref) => !(String(ref.id) === stringItemId && ref.type === itemType),
-                    );
-
-                    if (entry.refs.length === 0) {
-                        updates.push({ operation: 'delete', key: cursor.key });
-                    } else if (entry.refs.length < initialRefCount) {
-                        updates.push({ operation: 'put', data: entry });
-                    }
-                    cursor.continue();
-                } else {
-                    resolve();
-                }
-            };
-            request.onerror = (event) => reject(event.target.error);
+        const done = new Promise((resolve, reject) => {
+            transaction.oncomplete = resolve;
+            transaction.onerror = (e) => reject(e.target.error);
+            transaction.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
         });
+        const request = store.openCursor();
+        request.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) return;
+            const entry = cursor.value;
+            const before = entry.refs.length;
+            const kept = entry.refs.filter(
+                (ref) => !(ref.type === itemType && idSet.has(String(ref.id))),
+            );
+            if (kept.length === 0) {
+                cursor.delete();
+            } else if (kept.length < before) {
+                entry.refs = kept;
+                cursor.update(entry);
+            }
+            cursor.continue();
+        };
+        await done;
+    } catch (error) {
+        console.error(`[removeManyFromSearchIndex] Error for ${itemType} (${idSet.size}):`, error);
+    }
+}
 
-        if (updates.length > 0) {
-            const updateTransaction = State.db.transaction('searchIndex', 'readwrite');
-            const updateStore = updateTransaction.objectStore('searchIndex');
-            updates.forEach((update) => {
-                if (update.operation === 'delete') {
-                    updateStore.delete(update.key);
-                } else if (update.operation === 'put') {
-                    updateStore.put(update.data);
+/** Точечное удаление набора записей clientAnalyticsRecords по их токенам (см. removeManyFromSearchIndex). */
+async function removeAnalyticsRecordsFromIndexByTokens(items, idSet) {
+    try {
+        const words = new Set();
+        let sliceStart = performance.now();
+        for (const item of items) {
+            if (!item || item.id == null) return false;
+            for (const text of Object.values(getTextForItem('clientAnalyticsRecords', item))) {
+                if (typeof text !== 'string' || !text.trim()) continue;
+                for (const t of tokenizeNormalized(text)) words.add(t);
+            }
+            if (performance.now() - sliceStart > 12) {
+                await yieldToMain();
+                sliceStart = performance.now();
+            }
+        }
+        if (words.size === 0) return false;
+        const list = Array.from(words);
+        const CHUNK = 5000;
+        for (let off = 0; off < list.length; off += CHUNK) {
+            const slice = list.slice(off, off + CHUNK);
+            await new Promise((resolve, reject) => {
+                const tx = State.db.transaction('searchIndex', 'readwrite');
+                const store = tx.objectStore('searchIndex');
+                tx.oncomplete = resolve;
+                tx.onerror = (e) => reject(e.target.error);
+                tx.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
+                for (const word of slice) {
+                    const req = store.get(word);
+                    req.onsuccess = () => {
+                        const entry = req.result;
+                        if (!entry) return;
+                        const kept = entry.refs.filter(
+                            (r) => !(r.type === 'clientAnalyticsRecords' && idSet.has(String(r.id))),
+                        );
+                        if (kept.length === entry.refs.length) return;
+                        if (kept.length === 0) store.delete(word);
+                        else store.put({ ...entry, refs: kept });
+                    };
                 }
             });
-            await new Promise((resolve, reject) => {
-                updateTransaction.oncomplete = resolve;
-                updateTransaction.onerror = (e) => reject(e.target.error);
-                updateTransaction.onabort = (e) =>
-                    reject(e.target.error || new Error('Transaction aborted'));
-            });
+            await yieldToMain();
         }
-    } catch (error) {
-        console.error(`[removeFromSearchIndex V6] Error for ${itemType}-${stringItemId}:`, error);
+        return true;
+    } catch (e) {
+        console.warn('[search] пакетное точечное удаление не удалось, полный проход:', e);
+        return false;
+    }
+}
+
+/**
+ * Точечное удаление записи clientAnalyticsRecords из индекса по её токенам
+ * (записи раздела неизменяемы, токены воспроизводимы) — без полного прохода по индексу.
+ * Возвращает false, если применить нельзя (тогда вызывающий делает полный проход).
+ * @param {object} oldItemData
+ */
+async function removeAnalyticsRecordFromIndexByTokens(oldItemData) {
+    if (!State.db || !oldItemData || oldItemData.id == null) return false;
+    try {
+        const words = new Set();
+        for (const text of Object.values(getTextForItem('clientAnalyticsRecords', oldItemData))) {
+            if (typeof text !== 'string' || !text.trim()) continue;
+            for (const t of tokenizeNormalized(text)) words.add(t);
+        }
+        if (words.size === 0) return false; // недостаточно данных для точечного удаления
+        const id = String(oldItemData.id);
+        const transaction = State.db.transaction('searchIndex', 'readwrite');
+        const store = transaction.objectStore('searchIndex');
+        const done = new Promise((resolve, reject) => {
+            transaction.oncomplete = resolve;
+            transaction.onerror = (e) => reject(e.target.error);
+            transaction.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
+        });
+        for (const word of words) {
+            const req = store.get(word);
+            req.onsuccess = () => {
+                const entry = req.result;
+                if (!entry) return;
+                const kept = entry.refs.filter(
+                    (r) => !(r.type === 'clientAnalyticsRecords' && String(r.id) === id),
+                );
+                if (kept.length === entry.refs.length) return;
+                if (kept.length === 0) store.delete(word);
+                else store.put({ ...entry, refs: kept });
+            };
+        }
+        await done;
+        return true;
+    } catch (e) {
+        console.warn('[search] точечное удаление из индекса не удалось, полный проход:', e);
+        return false;
+    }
+}
+
+/**
+ * Пакетное добавление простых записей (одно хранилище, поля из getTextForItem) в индекс:
+ * токены собираются в памяти по порции, затем сливаются с индексом ОДНОЙ транзакцией.
+ * Семантика ссылок совпадает с построением индекса (store/type/id/field/weight, лимит MAX_REFS_PER_WORD,
+ * без дублей id+field). Для клиентской аналитики и массовых вставок закладок.
+ * @param {string} storeName
+ * @param {object[]} items  записи с id
+ * @param {(item: object) => object} [prepare] подготовка записи (например добавить _folderNameForIndex)
+ */
+export async function bulkAddToSearchIndex(storeName, items, prepare = null) {
+    if (!State.db || !Array.isArray(items) || items.length === 0) return;
+    const batch = new Map();
+    const weights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
+    let sliceStart = performance.now();
+    for (const raw of items) {
+        if (!raw || raw.id == null) continue;
+        const item = prepare ? prepare(raw) : raw;
+        const id = String(item.id);
+        const seen = new Set();
+        for (const [fieldKey, text] of Object.entries(getTextForItem(storeName, item))) {
+            if (!text || typeof text !== 'string' || text.trim() === '') continue;
+            const ref = {
+                store: storeName,
+                type: storeName,
+                id,
+                field: fieldKey,
+                weight: weights[fieldKey] || 1.0,
+            };
+            for (const token of tokenizeNormalized(text)) {
+                if (token.length < MIN_TOKEN_LEN_FOR_INDEX && !isExceptionShortToken(token))
+                    continue;
+                const dk = `${token}\u0001${fieldKey}`;
+                if (seen.has(dk)) continue;
+                seen.add(dk);
+                let refs = batch.get(token);
+                if (!refs) {
+                    refs = [];
+                    batch.set(token, refs);
+                }
+                refs.push(ref);
+            }
+        }
+        if (performance.now() - sliceStart > 12) {
+            await yieldToMain();
+            sliceStart = performance.now();
+        }
+    }
+    if (batch.size === 0) return;
+    const words = Array.from(batch.keys());
+    const CHUNK = 6000;
+    for (let off = 0; off < words.length; off += CHUNK) {
+        const slice = words.slice(off, off + CHUNK);
+        await new Promise((resolve, reject) => {
+            const tx = State.db.transaction('searchIndex', 'readwrite');
+            const store = tx.objectStore('searchIndex');
+            tx.oncomplete = resolve;
+            tx.onerror = (e) => reject(e.target.error);
+            tx.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
+            for (const word of slice) {
+                const add = batch.get(word);
+                const req = store.get(word);
+                req.onsuccess = () => {
+                    const entry = req.result;
+                    if (!entry) {
+                        store.put({ word, refs: add.slice(0, MAX_REFS_PER_WORD) });
+                        return;
+                    }
+                    const have = new Set(entry.refs.map((r) => `${r.type}\u0001${r.id}\u0001${r.field}`));
+                    let changed = false;
+                    for (const r of add) {
+                        if (entry.refs.length >= MAX_REFS_PER_WORD) break;
+                        const k = `${r.type}\u0001${r.id}\u0001${r.field}`;
+                        if (have.has(k)) continue;
+                        have.add(k);
+                        entry.refs.push(r);
+                        changed = true;
+                    }
+                    if (changed) store.put(entry);
+                };
+            }
+        });
+        await yieldToMain();
     }
 }
 
@@ -1215,6 +1399,13 @@ export async function updateSearchIndex(
 
     try {
         if (operation === 'delete') {
+            if (
+                storeName === 'clientAnalyticsRecords' &&
+                oldItemData &&
+                (await removeAnalyticsRecordFromIndexByTokens(oldItemData))
+            ) {
+                return;
+            }
             await removeFromSearchIndex(refItemId, storeName);
             console.log(`${LOG_PREFIX_USI} Index entries removed for ${storeName}:${refItemId}`);
         } else if (operation === 'add' || operation === 'update') {
@@ -1832,7 +2023,9 @@ export async function buildInitialSearchIndex(progressCallback) {
             );
         }
 
+        let itemDupKeys = new Set();
         const processItemInMemory = (itemData, storeName) => {
+            itemDupKeys = new Set();
             const textsByField = getTextForItem(storeName, itemData);
             let indexableId = itemData.id;
             if (storeName === 'clientData') indexableId = 'current';
@@ -1884,24 +2077,17 @@ export async function buildInitialSearchIndex(progressCallback) {
                 for (const token of tokens) {
                     if (token.length < MIN_TOKEN_LEN_FOR_INDEX && !isExceptionShortToken(token))
                         continue;
-                    if (!indexData.has(token)) indexData.set(token, []);
-                    const refs = indexData.get(token);
-                    const refAlreadyAdded = refs.some(
-                        (r) =>
-                            r.store === refDetails.store &&
-                            r.id === refDetails.id &&
-                            r.field === refDetails.field &&
-                            (r.blockIndex === undefined
-                                ? refDetails.blockIndex === undefined
-                                : r.blockIndex === refDetails.blockIndex) &&
-                            (r.tableIndex === undefined
-                                ? refDetails.tableIndex === undefined
-                                : r.tableIndex === refDetails.tableIndex) &&
-                            (r.rowIndex === undefined
-                                ? refDetails.rowIndex === undefined
-                                : r.rowIndex === refDetails.rowIndex),
-                    );
-                    if (!refAlreadyAdded && refs.length < MAX_REFS_PER_WORD) {
+                    // Дубликаты возможны только внутри одного элемента (id уникален) —
+                    // проверяем по локальному Set вместо O(refs) сканирования на каждый токен.
+                    const dupKey = `${token}\u0001${refDetails.field}\u0001${refDetails.blockIndex}\u0001${refDetails.tableIndex}\u0001${refDetails.rowIndex}`;
+                    if (itemDupKeys.has(dupKey)) continue;
+                    let refs = indexData.get(token);
+                    if (!refs) {
+                        refs = [];
+                        indexData.set(token, refs);
+                    }
+                    if (refs.length < MAX_REFS_PER_WORD) {
+                        itemDupKeys.add(dupKey);
                         refs.push(refDetails);
                     }
                 }
@@ -1953,35 +2139,41 @@ export async function buildInitialSearchIndex(progressCallback) {
                         progressCallback(processedItems, totalItemsToEstimate, false);
                 }
             } else {
-                const items = await getAllFromIndexedDB(source.name);
-                if (!Array.isArray(items)) {
-                    continue;
-                }
-                for (const item of items) {
-                    if (
-                        item &&
-                        typeof item === 'object' &&
-                        (item.id !== undefined || source.name === 'clientData')
-                    ) {
-                        if (source.name === 'bookmarks') {
-                            if (item.folder === ARCHIVE_FOLDER_ID) {
-                                processedItems++;
-                                if (progressCallback)
-                                    progressCallback(processedItems, totalItemsToEstimate, false);
-                                continue;
+                // Порционное чтение курсором (по 2000) с уступкой главному потоку:
+                // не держим всё хранилище в памяти и не блокируем UI длинной задачей.
+                const processBatch = async (items) => {
+                    let sliceStart = performance.now();
+                    for (const item of items) {
+                        if (
+                            item &&
+                            typeof item === 'object' &&
+                            (item.id !== undefined || source.name === 'clientData')
+                        ) {
+                            if (source.name === 'bookmarks') {
+                                if (item.folder === ARCHIVE_FOLDER_ID) {
+                                    processedItems++;
+                                    continue;
+                                }
+                                if (item.folder && bookmarkFoldersMap.has(String(item.folder))) {
+                                    item._folderNameForIndex = bookmarkFoldersMap.get(
+                                        String(item.folder),
+                                    );
+                                }
                             }
-                            if (item.folder && bookmarkFoldersMap.has(String(item.folder))) {
-                                item._folderNameForIndex = bookmarkFoldersMap.get(
-                                    String(item.folder),
-                                );
-                            }
+                            processItemInMemory(item, source.type);
+                            processedItems++;
                         }
-                        processItemInMemory(item, source.type);
-                        processedItems++;
-                        if (progressCallback)
-                            progressCallback(processedItems, totalItemsToEstimate, false);
+                        if (performance.now() - sliceStart > 12) {
+                            if (progressCallback)
+                                progressCallback(processedItems, totalItemsToEstimate, false);
+                            await yieldToMain();
+                            sliceStart = performance.now();
+                        }
                     }
-                }
+                    if (progressCallback)
+                        progressCallback(processedItems, totalItemsToEstimate, false);
+                };
+                await forEachBatchInStore(source.name, processBatch, { batchSize: 1500 });
             }
         }
 
@@ -2015,18 +2207,22 @@ export async function buildInitialSearchIndex(progressCallback) {
             console.log(
                 `${LOG_PREFIX_BUILD} In-memory index created with ${indexData.size} unique tokens. Starting batch write to IndexedDB.`,
             );
-        const transaction = State.db.transaction(['searchIndex'], 'readwrite');
-        const store = transaction.objectStore('searchIndex');
-
-        for (const [word, refs] of indexData.entries()) {
-            store.put({ word, refs });
+        // Запись порциями (каждая — своя транзакция) с уступкой главному потоку;
+        // статус «built» ставится только после успешной записи всех порций.
+        {
+            const WRITE_CHUNK = 4000;
+            let chunk = [];
+            for (const [word, refs] of indexData.entries()) {
+                chunk.push({ word, refs });
+                if (chunk.length >= WRITE_CHUNK) {
+                    await bulkPutToIndexedDB('searchIndex', chunk);
+                    chunk = [];
+                    await yieldToMain();
+                }
+            }
+            if (chunk.length) await bulkPutToIndexedDB('searchIndex', chunk);
+            indexData.clear();
         }
-
-        await new Promise((resolve, reject) => {
-            transaction.oncomplete = resolve;
-            transaction.onerror = (e) => reject(`Transaction failed: ${e.target.error}`);
-            transaction.onabort = (e) => reject(`Transaction aborted: ${e.target.error}`);
-        });
 
         if (!overallSuccess) {
             await saveToIndexedDB('preferences', {

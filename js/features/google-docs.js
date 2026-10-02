@@ -9,6 +9,8 @@ import {
     linkify,
 } from '../utils/html.js';
 import { SHABLONY_DOC_ID } from '../constants.js';
+import { NotificationService } from '../services/notification.js';
+import { createBackgroundPoller, DEFAULT_POLL_INTERVAL_MS } from './background-poller.js';
 
 // ============================================================================
 // GOOGLE DOCS INTEGRATION
@@ -35,9 +37,61 @@ let originalShablonyData = [];
 const GOOGLE_DOC_CACHE_PREFIX = 'copilot1co:gdoc-cache:';
 const GOOGLE_DOC_REQUEST_TIMEOUT_MS = 12000;
 const GOOGLE_DOC_RETRY_DELAYS_MS = [250, 900, 1800];
+/** Для фонового цикла: меньше попыток, экспоненциальная пауза внутри цикла (штатный интервал не меняется). */
+export const GOOGLE_DOC_BACKGROUND_RETRY_DELAYS_MS = [1500, 4500];
+const GOOGLE_DOC_BASE_URL =
+    'https://script.google.com/macros/s/AKfycby5ak0hPZF7_YJnhqYD8g1M2Ck6grzq11mpKqPFIWaX9_phJe5H_97cXmnClXKg1Nrl/exec';
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Ошибка связи с Google Docs со структурированным описанием (слой/тип/статус) для диагностики. */
+export class GoogleDocsError extends Error {
+    /**
+     * @param {string} message
+     * @param {{ kind?: string, status?: number|null, attempts?: number, chain?: string, url?: string, durationMs?: number }} [info]
+     */
+    constructor(message, info = {}) {
+        super(message);
+        this.name = 'GoogleDocsError';
+        this.kind = info.kind || 'unknown';
+        this.status = info.status ?? null;
+        this.attempts = info.attempts ?? null;
+        this.chain = info.chain || '';
+        this.url = info.url || '';
+        this.durationMs = info.durationMs ?? null;
+    }
+}
+
+/** Структурированное описание ошибки (errorInfo) из любого исключения. */
+export function buildGoogleDocsErrorInfo(error) {
+    const message = error?.message || String(error || '');
+    let kind = error?.kind;
+    if (!kind) {
+        if (/нет подключения к интернету/i.test(message)) kind = 'offline';
+        else if (/время ожидания|timed out|timeout/i.test(message)) kind = 'timeout';
+        else if (/статус\s*\d{3}/i.test(message)) kind = 'http';
+        else if (/разбора json/i.test(message)) kind = 'parse';
+        else if (/ошибка от сервера/i.test(message)) kind = 'server';
+        else if (/формат|не найден в ответе/i.test(message)) kind = 'format';
+        else if (isLikelyTransientNetworkError(message)) kind = 'network';
+        else kind = 'unknown';
+    }
+    let status = error?.status ?? null;
+    if (status == null) {
+        const m = /статус\s*(\d{3})/i.exec(message);
+        if (m) status = Number(m[1]);
+    }
+    return {
+        service: 'google-docs',
+        kind,
+        status,
+        attempts: error?.attempts ?? null,
+        chain: error?.chain || '',
+        url: error?.url || '',
+        durationMs: error?.durationMs ?? null,
+    };
 }
 
 function isLikelyTransientNetworkError(message) {
@@ -60,18 +114,37 @@ async function requestJsonViaFetch(requestUrl, timeoutMs) {
     let timeoutId = null;
     const timeoutError = new Promise((_, reject) => {
         timeoutId = setTimeout(
-            () => reject(new Error('Превышено время ожидания загрузки документа.')),
+            () =>
+                reject(
+                    new GoogleDocsError('Превышено время ожидания загрузки документа.', {
+                        kind: 'timeout',
+                    }),
+                ),
             timeoutMs,
         );
     });
-    const response = await Promise.race([fetch(requestUrl), timeoutError]);
-    if (timeoutId) {
-        clearTimeout(timeoutId);
+    let response;
+    try {
+        response = await Promise.race([fetch(requestUrl), timeoutError]);
+    } catch (err) {
+        if (err instanceof GoogleDocsError) throw err;
+        throw new GoogleDocsError(err?.message || String(err), { kind: 'network' });
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
     }
     if (!response?.ok) {
-        throw new Error(`Ошибка загрузки: статус ${response?.status ?? 'unknown'}`);
+        throw new GoogleDocsError(`Ошибка загрузки: статус ${response?.status ?? 'unknown'}`, {
+            kind: 'http',
+            status: response?.status ?? null,
+        });
     }
-    return await response.json();
+    try {
+        return await response.json();
+    } catch (err) {
+        throw new GoogleDocsError(`Ошибка разбора JSON: ${err?.message || String(err)}`, {
+            kind: 'parse',
+        });
+    }
 }
 
 function requestJsonViaXhr(requestUrl, timeoutMs) {
@@ -83,18 +156,34 @@ function requestJsonViaXhr(requestUrl, timeoutMs) {
 
         xhr.onload = () => {
             if (xhr.status < 200 || xhr.status >= 300) {
-                reject(new Error(`Ошибка загрузки: статус ${xhr.status}`));
+                reject(
+                    new GoogleDocsError(`Ошибка загрузки: статус ${xhr.status}`, {
+                        kind: 'http',
+                        status: xhr.status,
+                    }),
+                );
                 return;
             }
             try {
                 resolve(JSON.parse(xhr.responseText || '[]'));
             } catch (error) {
-                reject(new Error(`Ошибка разбора JSON: ${error.message || String(error)}`));
+                reject(
+                    new GoogleDocsError(`Ошибка разбора JSON: ${error.message || String(error)}`, {
+                        kind: 'parse',
+                    }),
+                );
             }
         };
-        xhr.onerror = () => reject(new Error('Ошибка сети при загрузке документа.'));
-        xhr.ontimeout = () => reject(new Error('Превышено время ожидания загрузки документа.'));
-        xhr.onabort = () => reject(new Error('Запрос загрузки документа был прерван.'));
+        xhr.onerror = () =>
+            reject(new GoogleDocsError('Ошибка сети при загрузке документа.', { kind: 'network' }));
+        xhr.ontimeout = () =>
+            reject(
+                new GoogleDocsError('Превышено время ожидания загрузки документа.', {
+                    kind: 'timeout',
+                }),
+            );
+        xhr.onabort = () =>
+            reject(new GoogleDocsError('Запрос загрузки документа был прерван.', { kind: 'network' }));
         xhr.send();
     });
 }
@@ -103,38 +192,74 @@ function requestJsonViaXhr(requestUrl, timeoutMs) {
 const GOOGLE_DOC_NEGATIVE_CACHE_MS = 30000;
 let googleDocNetworkFailedAt = 0;
 
-async function requestGoogleDocJson(requestUrl, { force = false } = {}) {
+function sanitizeUrlForReport(requestUrl) {
+    try {
+        const u = new URL(requestUrl);
+        return `${u.origin}${u.pathname}`;
+    } catch {
+        return '';
+    }
+}
+
+async function requestGoogleDocJson(
+    requestUrl,
+    { force = false, retryDelays = GOOGLE_DOC_RETRY_DELAYS_MS } = {},
+) {
     if (!force && googleDocNetworkFailedAt && Date.now() - googleDocNetworkFailedAt < GOOGLE_DOC_NEGATIVE_CACHE_MS) {
-        throw new Error('Сеть недоступна: повторный запрос отложен (недавний сбой). Нажмите «Повторить».');
+        throw new GoogleDocsError(
+            'Сеть недоступна: повторный запрос отложен (недавний сбой). Нажмите «Повторить».',
+            { kind: 'network', url: sanitizeUrlForReport(requestUrl) },
+        );
     }
     const errors = [];
+    const startedAt = Date.now();
+    let attempts = 0;
+    let lastFetchError = null;
 
-    for (let attempt = 0; attempt < GOOGLE_DOC_RETRY_DELAYS_MS.length + 1; attempt++) {
+    for (let attempt = 0; attempt < retryDelays.length + 1; attempt++) {
+        attempts += 1;
         try {
             const json = await requestJsonViaFetch(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
             googleDocNetworkFailedAt = 0;
             return json;
         } catch (error) {
+            lastFetchError = error;
             errors.push(`fetch:${error?.message || String(error)}`);
-            const hasMoreAttempts = attempt < GOOGLE_DOC_RETRY_DELAYS_MS.length;
+            // HTTP-ответ получен — повторять бессмысленно (кроме 5xx/429)
+            const st = error?.status;
+            if (error?.kind === 'http' && !(st >= 500 || st === 429)) break;
+            const hasMoreAttempts = attempt < retryDelays.length;
             if (!hasMoreAttempts) break;
-            await sleep(GOOGLE_DOC_RETRY_DELAYS_MS[attempt]);
+            // экспоненциальная пауза внутри цикла (+ небольшой джиттер)
+            await sleep(retryDelays[attempt] + Math.floor(Math.random() * 120));
         }
     }
 
-    try {
-        const json = await requestJsonViaXhr(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
-        googleDocNetworkFailedAt = 0;
-        return json;
-    } catch (error) {
-        googleDocNetworkFailedAt = Date.now();
-        errors.push(`xhr:${error?.message || String(error)}`);
-        throw new Error(
-            `${normalizeNetworkError(error)} [chain=${errors
-                .map((e) => e.replace(/\s+/g, ' ').trim())
-                .join(' | ')}]`,
-        );
+    // XHR — запасной транспорт только при сетевых сбоях (HTTP-ответ уже получен fetch-ем)
+    let finalError = lastFetchError;
+    if (!lastFetchError || lastFetchError.kind === 'network' || lastFetchError.kind === 'timeout') {
+        attempts += 1;
+        try {
+            const json = await requestJsonViaXhr(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
+            googleDocNetworkFailedAt = 0;
+            return json;
+        } catch (error) {
+            finalError = lastFetchError || error;
+            errors.push(`xhr:${error?.message || String(error)}`);
+        }
     }
+    if (!finalError || finalError.kind === 'network' || finalError.kind === 'timeout') {
+        googleDocNetworkFailedAt = Date.now();
+    }
+    const chain = errors.map((e) => e.replace(/\s+/g, ' ').trim()).join(' | ');
+    throw new GoogleDocsError(`${normalizeNetworkError(finalError)} [chain=${chain}]`, {
+        kind: finalError?.kind || 'network',
+        status: finalError?.status ?? null,
+        attempts,
+        chain,
+        url: sanitizeUrlForReport(requestUrl),
+        durationMs: Date.now() - startedAt,
+    });
 }
 
 function getGoogleDocCacheKey(docId) {
@@ -202,6 +327,7 @@ export function startTimestampUpdater() {
  * Update refresh button timestamps
  */
 export function updateRefreshButtonTimestamps() {
+    updateConnectionChip();
     GOOGLE_DOC_SECTIONS.forEach((section) => {
         const refreshButton = document.getElementById(`force-refresh-${section.id}-btn`);
         if (!refreshButton) return;
@@ -230,7 +356,7 @@ export function updateRefreshButtonTimestamps() {
 /**
  * Fetch Google Docs data
  */
-export async function fetchGoogleDocs(docIds, force = false) {
+export async function fetchGoogleDocs(docIds, force = false, options = {}) {
     if (!Array.isArray(docIds) || docIds.length === 0) {
         console.error(
             'КРИТИЧЕСКАЯ ОШИБКА: В функцию fetchGoogleDocs не передан массив ID документов.',
@@ -238,8 +364,7 @@ export async function fetchGoogleDocs(docIds, force = false) {
         return [];
     }
 
-    const BASE_URL =
-        'https://script.google.com/macros/s/AKfycby5ak0hPZF7_YJnhqYD8g1M2Ck6grzq11mpKqPFIWaX9_phJe5H_97cXmnClXKg1Nrl/exec';
+    const BASE_URL = GOOGLE_DOC_BASE_URL;
     const params = new URLSearchParams();
     params.append('docIds', docIds.join(','));
     params.append('v', new Date().getTime());
@@ -252,11 +377,17 @@ export async function fetchGoogleDocs(docIds, force = false) {
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         console.debug('[fetchGoogleDocs] Офлайн: navigator.onLine === false');
-        throw new Error('Нет подключения к интернету. Включите сеть и повторите попытку.');
+        throw new GoogleDocsError('Нет подключения к интернету. Включите сеть и повторите попытку.', {
+            kind: 'offline',
+            url: sanitizeUrlForReport(requestUrl),
+        });
     }
 
     try {
-        const results = await requestGoogleDocJson(requestUrl, { force });
+        const results = await requestGoogleDocJson(requestUrl, {
+            force,
+            retryDelays: options.retryDelays || GOOGLE_DOC_RETRY_DELAYS_MS,
+        });
         console.log(
             '[fetchGoogleDocs] Получен ответ от API:',
             results,
@@ -265,8 +396,8 @@ export async function fetchGoogleDocs(docIds, force = false) {
             'Является массивом:',
             Array.isArray(results),
         );
-        if (results.error) {
-            throw new Error(`Ошибка от сервера: ${results.message}`);
+        if (results && results.error) {
+            throw new GoogleDocsError(`Ошибка от сервера: ${results.message}`, { kind: 'server' });
         }
 
         // API может возвращать массив результатов напрямую: [{ status: 'success', content: { type: 'paragraphs', data: [...] } }, ...]
@@ -291,6 +422,10 @@ export async function fetchGoogleDocs(docIds, force = false) {
                     message: item.message,
                     data: data,
                     error: item.status === 'error' ? item.message || 'Ошибка загрузки' : null,
+                    errorInfo:
+                        item.status === 'error'
+                            ? { service: 'google-docs', kind: 'server' }
+                            : undefined,
                 };
                 console.log(
                     `[fetchGoogleDocs] Обработан элемент ${index}:`,
@@ -350,7 +485,12 @@ export async function fetchGoogleDocs(docIds, force = false) {
         }
 
         console.error('Неожиданный формат ответа от API:', results);
-        return docIds.map((id) => ({ docId: id, data: [], error: 'Неверный формат ответа' }));
+        return docIds.map((id) => ({
+            docId: id,
+            data: [],
+            error: 'Неверный формат ответа',
+            errorInfo: { service: 'google-docs', kind: 'format' },
+        }));
     } catch (error) {
         const message = error?.message || String(error);
         const isNetworkError = /интернет|сеть|fetch|failed|network|socket|err_/i.test(message);
@@ -359,7 +499,8 @@ export async function fetchGoogleDocs(docIds, force = false) {
         } else {
             console.error(`Ошибка при загрузке документов: ${message}`);
         }
-        return docIds.map((id) => ({ docId: id, data: [], error: error.message }));
+        const errorInfo = buildGoogleDocsErrorInfo(error);
+        return docIds.map((id) => ({ docId: id, data: [], error: error.message, errorInfo }));
     }
 }
 
@@ -851,8 +992,442 @@ export function handleShablonySearch() {
     renderStyledParagraphs(container, filteredData, query);
 }
 
+// ============================================================================
+// СВЯЗЬ С GOOGLE DOCS: состояние, залипающее уведомление, синхронизация, фоновый опрос
+// ============================================================================
+
+const GDOCS_LAST_SUCCESS_KEY = 'copilot1co:gdocs-last-success';
+export const GDOCS_ERROR_NOTIFICATION_ID = 'gdocs-connection-error';
+export const GOOGLE_DOCS_POLL_INTERVAL_MS = DEFAULT_POLL_INTERVAL_MS;
+
+function readLastSuccess() {
+    try {
+        return Number(localStorage.getItem(GDOCS_LAST_SUCCESS_KEY)) || 0;
+    } catch {
+        return 0;
+    }
+}
+function writeLastSuccess(ts) {
+    try {
+        localStorage.setItem(GDOCS_LAST_SUCCESS_KEY, String(ts));
+    } catch {
+        /* localStorage недоступен — не критично */
+    }
+}
+
+const gdocsConnection = {
+    /** unknown | syncing | ok | error */
+    status: 'unknown',
+    lastSuccessAt: readLastSuccess(),
+    lastAttemptAt: 0,
+    lastError: null,
+    lastErrorMessage: '',
+    lastReason: '',
+    consecutiveFailures: 0,
+    usingCache: false,
+};
+const gdocsListeners = new Set();
+let gdocsErrorDismissedByUser = false;
+let gdocsPoller = null;
+let gdocsSyncInFlight = null;
+let lastRenderedSignature = '';
+
+export function getGoogleDocsConnectionState() {
+    return { ...gdocsConnection, poller: gdocsPoller ? gdocsPoller.getState() : null };
+}
+export function subscribeGoogleDocsConnection(fn) {
+    gdocsListeners.add(fn);
+    return () => gdocsListeners.delete(fn);
+}
+function emitConnection() {
+    updateConnectionChip();
+    for (const fn of gdocsListeners) {
+        try {
+            fn(getGoogleDocsConnectionState());
+        } catch {
+            /* слушатели не должны ломать синхронизацию */
+        }
+    }
+}
+
+function formatClock(ts) {
+    try {
+        return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return '';
+    }
+}
+
+function describeErrorShort(info) {
+    switch (info?.kind) {
+        case 'offline':
+            return 'Нет подключения к интернету.';
+        case 'timeout':
+            return 'Сервер Google не ответил вовремя.';
+        case 'http':
+            return `Сервер Google вернул ошибку${info.status ? ` HTTP ${info.status}` : ''}.`;
+        case 'parse':
+            return 'Сервер вернул данные в неожиданном формате.';
+        case 'server':
+            return 'Скрипт Google Docs сообщил об ошибке.';
+        case 'format':
+            return 'Ответ сервера имеет неожиданную структуру.';
+        default:
+            return 'Сервер Google недоступен (возможно, заблокирован сетью).';
+    }
+}
+
+/** Залипающая карточка об ошибке связи: без таймера, с кнопками «Повторить» и «Диагностика». */
+function showConnectionErrorCard(info, rawMessage, { forceShow }) {
+    const NS = NotificationService;
+    if (!NS) return;
+    const exists = NS.has(GDOCS_ERROR_NOTIFICATION_ID);
+    if (!exists && gdocsErrorDismissedByUser && !forceShow) return;
+    if (forceShow) gdocsErrorDismissedByUser = false;
+    const last = gdocsConnection.lastSuccessAt;
+    const cacheNote = loadGoogleDocCacheEntry(SHABLONY_DOC_ID)
+        ? ' Раздел «Шаблоны» показывает сохранённую копию.'
+        : '';
+    const message =
+        `${describeErrorShort(info)}${cacheNote} ` +
+        (last
+            ? `Последнее обновление: ${formatClock(last)}. `
+            : 'Успешных обновлений в этом профиле ещё не было. ') +
+        'Приложение повторит попытку автоматически (раз в 5 минут и сразу при появлении сети).';
+    NS.show({
+        id: GDOCS_ERROR_NOTIFICATION_ID,
+        type: 'error',
+        title: 'Нет связи с Google Docs',
+        message,
+        sticky: true,
+        dedupe: false,
+        isDismissible: true,
+        onDismiss: () => {
+            gdocsErrorDismissedByUser = true;
+        },
+        actions: [
+            {
+                id: 'gdocs-retry',
+                label: 'Повторить',
+                icon: 'fa-sync-alt',
+                onClick: () => {
+                    syncGoogleDocsNow({ reason: 'manual', force: true, interactive: true }).catch(
+                        () => {},
+                    );
+                },
+            },
+        ],
+        diagnostics: {
+            title: 'Google Docs / Шаблоны',
+            message: rawMessage,
+            layer: 'external',
+            system: 'external',
+            source: 'google-docs',
+            errorInfo: info,
+            details: {
+                lastSuccessAt: last ? new Date(last).toISOString() : 'никогда',
+                consecutiveFailures: gdocsConnection.consecutiveFailures,
+                trigger: gdocsConnection.lastReason,
+            },
+        },
+    });
+}
+
+function recordSyncFailure(error, { reason, usingCache }) {
+    const info = buildGoogleDocsErrorInfo(error);
+    const raw = error?.message || String(error);
+    const wasOk = gdocsConnection.status !== 'error';
+    gdocsConnection.status = 'error';
+    gdocsConnection.lastError = info;
+    gdocsConnection.lastErrorMessage = raw;
+    gdocsConnection.lastReason = reason;
+    gdocsConnection.lastAttemptAt = Date.now();
+    gdocsConnection.consecutiveFailures += 1;
+    gdocsConnection.usingCache = Boolean(usingCache);
+    const forceShow = reason !== 'interval' && !String(reason).startsWith('catchup');
+    // Фоновые повторы не «воскрешают» карточку, закрытую пользователем, но обновляют видимую
+    showConnectionErrorCard(info, raw, { forceShow: forceShow || wasOk });
+    emitConnection();
+}
+
+function recordSyncSuccess({ reason, usingCache = false }) {
+    const wasError = gdocsConnection.status === 'error';
+    gdocsConnection.status = 'ok';
+    gdocsConnection.lastError = null;
+    gdocsConnection.lastErrorMessage = '';
+    gdocsConnection.lastReason = reason;
+    gdocsConnection.lastAttemptAt = Date.now();
+    gdocsConnection.consecutiveFailures = 0;
+    gdocsConnection.usingCache = usingCache;
+    gdocsConnection.lastSuccessAt = Date.now();
+    writeLastSuccess(gdocsConnection.lastSuccessAt);
+    gdocsErrorDismissedByUser = false;
+    NotificationService?.dismiss(GDOCS_ERROR_NOTIFICATION_ID);
+    if (wasError) {
+        NotificationService?.show({
+            id: 'gdocs-connection-restored',
+            type: 'success',
+            message: 'Связь с Google Docs восстановлена, данные обновлены.',
+            duration: 3500,
+        });
+    }
+    // ручной/стартовый успех сдвигает штатный срок; плановые циклы расписание уже учли сами
+    if (reason !== 'interval' && !String(reason).startsWith('catchup')) gdocsPoller?.markRun(true);
+    emitConnection();
+}
+
+function updateConnectionChip() {
+    const chip = document.getElementById('gdocs-connection-chip');
+    if (!chip) return;
+    const c = gdocsConnection;
+    let text;
+    let state;
+    if (c.status === 'syncing') {
+        text = 'Синхронизация…';
+        state = 'syncing';
+    } else if (c.status === 'error') {
+        text = 'Нет связи с Google Docs';
+        state = 'error';
+    } else if (c.status === 'ok') {
+        const mins = Math.floor((Date.now() - c.lastSuccessAt) / 60000);
+        text = mins < 1 ? 'Google Docs: обновлено только что' : `Google Docs: обновлено ${mins} мин назад`;
+        state = 'ok';
+    } else {
+        text = 'Google Docs: ожидание';
+        state = 'unknown';
+    }
+    chip.dataset.state = state;
+    const label = chip.querySelector('.gdocs-chip__text');
+    if (label) label.textContent = text;
+    chip.title =
+        state === 'error'
+            ? 'Нажмите, чтобы открыть диагностику связи'
+            : 'Автообновление: раз в 5 минут (при открытой вкладке и наличии сети)';
+}
+
 /**
- * Load and render Google Doc
+ * Зонды связности для самодиагностики: локальный сервер, внешний хост, реальный запрос к скрипту.
+ */
+export async function runGoogleDocsConnectivityProbes({ withEndpoint = false } = {}) {
+    const timed = async (label, fn, ms = 6000) => {
+        const t0 = performance.now();
+        const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const tid = setTimeout(() => ctl?.abort(), ms);
+        try {
+            await fn(ctl?.signal);
+            return { label, ok: true, ms: performance.now() - t0 };
+        } catch (err) {
+            return {
+                label,
+                ok: false,
+                ms: performance.now() - t0,
+                error: err?.name === 'AbortError' ? 'таймаут' : err?.message || String(err),
+            };
+        } finally {
+            clearTimeout(tid);
+        }
+    };
+    const sameOrigin = await timed('Локальный сервер приложения', (signal) =>
+        fetch(`${location.origin}${location.pathname}`, {
+            method: 'HEAD',
+            cache: 'no-store',
+            signal,
+        }).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        }),
+    );
+    const external = await timed('Хост script.google.com', (signal) =>
+        fetch('https://script.google.com/', { mode: 'no-cors', cache: 'no-store', signal }),
+    );
+    const probes = { sameOrigin, external };
+    if (withEndpoint) {
+        probes.endpoint = await timed(
+            'Запрос к скрипту Google Docs',
+            () =>
+                requestGoogleDocJson(
+                    `${GOOGLE_DOC_BASE_URL}?docIds=${encodeURIComponent(SHABLONY_DOC_ID)}&v=${Date.now()}`,
+                    { force: true, retryDelays: [] },
+                ),
+            15000,
+        );
+    }
+    return probes;
+}
+
+function updateShablonySearchIndex(docId, results) {
+    if (typeof window.updateSearchIndex !== 'function') return Promise.resolve();
+    if (docId !== SHABLONY_DOC_ID) return Promise.resolve();
+    try {
+        const rawData = results[0]?.data || results[0]?.content?.data || [];
+        const normalized = normalizeShablonyData(rawData).map((line) => String(line));
+        const blocks = parseShablonyContent(normalized);
+        return Promise.resolve(window.updateSearchIndex('shablony', docId, blocks, 'update')).catch(
+            (indexError) => console.error('Ошибка индексации для shablony:', indexError),
+        );
+    } catch (indexError) {
+        console.error('Ошибка индексации для shablony:', indexError);
+        return Promise.resolve();
+    }
+}
+
+function dataSignature(results) {
+    try {
+        const raw = results?.[0]?.data || results?.[0]?.content?.data || [];
+        const str = JSON.stringify(raw);
+        let h = 5381;
+        for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+        return `${str.length}:${h}`;
+    } catch {
+        return String(Date.now());
+    }
+}
+
+function setRefreshButtonBusy(busy) {
+    const btn = document.getElementById('force-refresh-shablony-btn');
+    if (!btn) return;
+    btn.disabled = busy;
+    btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+    const icon = btn.querySelector('i');
+    if (icon) icon.classList.toggle('fa-spin', busy);
+}
+
+/**
+ * Единый конвейер синхронизации «Шаблонов» (ручной, стартовый, фоновый, диагностика).
+ * Single-flight: параллельные вызовы присоединяются к текущему запросу.
+ * @param {{ reason?: string, force?: boolean, interactive?: boolean, docId?: string, containerId?: string }} [opts]
+ * @returns {Promise<{ ok: boolean, changed?: boolean, error?: object, errorInfo?: object, usingCache?: boolean }>}
+ */
+export function syncGoogleDocsNow(opts = {}) {
+    if (gdocsSyncInFlight) return gdocsSyncInFlight;
+    const reason = opts.reason || 'manual';
+    const docId = opts.docId || SHABLONY_DOC_ID;
+    const containerId = opts.containerId || 'doc-content-shablony';
+    const force = opts.force !== false;
+    const background = reason === 'interval' || String(reason).startsWith('catchup');
+
+    gdocsSyncInFlight = (async () => {
+        const prevStatus = gdocsConnection.status;
+        gdocsConnection.status = 'syncing';
+        gdocsConnection.lastReason = reason;
+        emitConnection();
+        setRefreshButtonBusy(true);
+        try {
+            let results;
+            let thrown = null;
+            try {
+                results = await fetchGoogleDocs([docId], force, {
+                    retryDelays: background
+                        ? GOOGLE_DOC_BACKGROUND_RETRY_DELAYS_MS
+                        : GOOGLE_DOC_RETRY_DELAYS_MS,
+                });
+            } catch (err) {
+                thrown = err;
+            }
+            const hasData =
+                Array.isArray(results) &&
+                results.some((item) => {
+                    const arr = item?.data || item?.content?.data;
+                    return Array.isArray(arr) && arr.length > 0 && !item.error;
+                });
+
+            if (thrown || !hasData) {
+                const errItem = Array.isArray(results) ? results.find((r) => r?.error) : null;
+                let error = thrown;
+                if (!error) {
+                    error = new GoogleDocsError(errItem?.error || 'Документ не содержит данных', {
+                        kind: errItem?.errorInfo?.kind || 'format',
+                        status: errItem?.errorInfo?.status ?? null,
+                        attempts: errItem?.errorInfo?.attempts ?? null,
+                        chain: errItem?.errorInfo?.chain || '',
+                        url: errItem?.errorInfo?.url || '',
+                    });
+                }
+                // Пустой, но успешный ответ — не сбой связи
+                if (!thrown && !errItem && Array.isArray(results)) {
+                    gdocsConnection.status = prevStatus === 'syncing' ? 'ok' : prevStatus;
+                    recordSyncSuccess({ reason });
+                    return { ok: true, changed: false, empty: true };
+                }
+                const cached = loadGoogleDocCacheEntry(docId);
+                recordSyncFailure(error, { reason, usingCache: Boolean(cached) });
+                return {
+                    ok: false,
+                    error,
+                    errorInfo: buildGoogleDocsErrorInfo(error),
+                    usingCache: Boolean(cached),
+                };
+            }
+
+            // Успех: перерисовываем только при изменении контента (без мерцания и сброса прокрутки)
+            const sig = dataSignature(results);
+            const container = document.getElementById(containerId);
+            const hasBlocks = Boolean(container?.querySelector('.shablony-block'));
+            const changed = sig !== lastRenderedSignature || (container && !hasBlocks);
+            State.googleDocTimestamps = State.googleDocTimestamps || new Map();
+            State.googleDocTimestamps.set(docId, Date.now());
+            if (changed) {
+                lastRenderedSignature = sig;
+                const scroller = container;
+                const prevScroll = scroller ? scroller.scrollTop : 0;
+                if (container) {
+                    updateGoogleDocStatusMessage(containerId, { visible: false, message: '' });
+                    renderGoogleDocContent(results, container, containerId);
+                    if (scroller) scroller.scrollTop = prevScroll;
+                    const inp = document.getElementById('shablony-search-input');
+                    if (inp?.value?.trim()) handleShablonySearch();
+                } else {
+                    const raw = results[0]?.data || results[0]?.content?.data || [];
+                    originalShablonyData = normalizeShablonyData(raw);
+                    saveGoogleDocCache(docId, originalShablonyData);
+                }
+                await updateShablonySearchIndex(docId, results);
+                if (background && prevStatus !== 'unknown') {
+                    NotificationService?.show({
+                        id: 'gdocs-content-updated',
+                        type: 'info',
+                        message: 'Шаблоны обновлены из Google Docs.',
+                        duration: 3500,
+                    });
+                }
+            } else if (container) {
+                updateGoogleDocStatusMessage(containerId, { visible: false, message: '' });
+            }
+            updateRefreshButtonTimestamps();
+            recordSyncSuccess({ reason });
+            return { ok: true, changed: Boolean(changed) };
+        } finally {
+            setRefreshButtonBusy(false);
+            gdocsSyncInFlight = null;
+        }
+    })();
+    return gdocsSyncInFlight;
+}
+
+/** Проверка связи для самодиагностики: реальная попытка + зонды; обновляет карточку об ошибке. */
+export async function checkGoogleDocsConnection() {
+    const res = await syncGoogleDocsNow({ reason: 'diagnostics', force: true });
+    const probes = res.ok ? null : await runGoogleDocsConnectivityProbes();
+    return { ...res, probes, state: getGoogleDocsConnectionState() };
+}
+
+/** Запускает фоновый опрос (раз в 5 минут); идемпотентно. */
+export function startGoogleDocsBackgroundSync() {
+    if (gdocsPoller) return gdocsPoller;
+    gdocsPoller = createBackgroundPoller({
+        intervalMs: GOOGLE_DOCS_POLL_INTERVAL_MS,
+        task: ({ reason }) => syncGoogleDocsNow({ reason, force: true }),
+    });
+    gdocsPoller.start();
+    if (typeof window !== 'undefined') window.__gdocsPoller = gdocsPoller;
+    return gdocsPoller;
+}
+
+export function getGoogleDocsPollerState() {
+    return gdocsPoller ? gdocsPoller.getState() : null;
+}
+
+/**
+ * Load and render Google Doc (первичная загрузка и ручное обновление; с индикатором и HUD)
  */
 export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = false) {
     const docContainer = document.getElementById(targetContainerId);
@@ -860,167 +1435,116 @@ export async function loadAndRenderGoogleDoc(docId, targetContainerId, force = f
         console.error(`КРИТИЧЕСКАЯ ОШИБКА: HTML-элемент #${targetContainerId} не найден.`);
         return;
     }
-
-    docContainer.innerHTML =
-        '<div class="text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Загрузка данных из Google-дока...</div>';
-    console.log(
-        `[ШАГ 1] Инициализация... Запрос для ID: ${docId}. Принудительное обновление: ${force}`,
-    );
+    const hasRendered = Boolean(docContainer.querySelector('.shablony-block'));
+    if (!hasRendered) {
+        docContainer.innerHTML =
+            '<div class="text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Загрузка данных из Google-дока...</div>';
+    }
 
     const hudId = `gdoc-${targetContainerId}`;
     const humanLabel = targetContainerId === 'doc-content-shablony' ? 'Шаблоны' : 'Документ';
-
-    let hudTaskStarted = false;
-    if (window.BackgroundStatusHUD && typeof window.BackgroundStatusHUD.startTask === 'function') {
-        window.BackgroundStatusHUD.startTask(hudId, humanLabel, { weight: 0.4, total: 4 });
-        window.BackgroundStatusHUD.updateTask(hudId, 0, 4);
-        hudTaskStarted = true;
+    const hud = window.BackgroundStatusHUD;
+    const hudOk = hud && typeof hud.startTask === 'function';
+    if (hudOk) {
+        hud.startTask(hudId, humanLabel, { weight: 0.4, total: 4 });
+        hud.updateTask(hudId, 1, 4);
     }
 
+    const reason = force ? 'manual' : 'startup';
+    let outcome;
     try {
-        let results = await fetchGoogleDocs([docId], force);
-        let statusMessage = { visible: false, message: '' };
-        const hasUsableData = Array.isArray(results)
-            ? results.some((item) => {
-                  const arr = item?.data || item?.content?.data;
-                  return Array.isArray(arr) && arr.length > 0;
-              })
-            : false;
-        const allHaveErrors =
-            Array.isArray(results) &&
-            results.length > 0 &&
-            results.every((item) => Boolean(item?.error));
-
-        if (!hasUsableData && allHaveErrors) {
-            const cachedEntry = loadGoogleDocCacheEntry(docId);
-            const cachedData = cachedEntry?.data || [];
-            if (cachedData.length > 0) {
-                console.warn(
-                    `[google-docs] Использую кэш для документа ${docId} из-за сетевой ошибки.`,
-                );
-                const cacheAgeMinutes =
-                    cachedEntry?.ts && Number.isFinite(cachedEntry.ts)
-                        ? Math.max(1, Math.floor((Date.now() - cachedEntry.ts) / 60000))
-                        : null;
-                statusMessage = {
-                    visible: true,
-                    message: cacheAgeMinutes
-                        ? `Показаны кэшированные данные (обновлены ~${cacheAgeMinutes} мин назад).`
-                        : 'Показаны кэшированные данные из последней успешной загрузки.',
-                };
-                results = [
-                    {
-                        docId,
-                        status: 'cached',
-                        content: { type: 'paragraphs', data: cachedData },
-                        data: cachedData,
-                        error: null,
-                        message: 'Показаны кэшированные данные из последней успешной загрузки.',
-                    },
-                ];
-            }
-        }
-
-        if (
-            window.BackgroundStatusHUD &&
-            typeof window.BackgroundStatusHUD.updateTask === 'function'
-        ) {
-            window.BackgroundStatusHUD.updateTask(hudId, 2, 4);
-        }
-
-        // Update timestamp
-        if (!State.googleDocTimestamps) {
-            State.googleDocTimestamps = new Map();
-        }
-        State.googleDocTimestamps.set(docId, Date.now());
-
-        updateGoogleDocStatusMessage(targetContainerId, statusMessage);
-        renderGoogleDocContent(results, docContainer, targetContainerId);
-
-        if (targetContainerId === 'doc-content-shablony') {
-            queueMicrotask(() => {
-                const inp = document.getElementById('shablony-search-input');
-                if (inp?.value?.trim()) {
-                    handleShablonySearch();
-                }
-            });
-        }
-
-        if (
-            window.BackgroundStatusHUD &&
-            typeof window.BackgroundStatusHUD.updateTask === 'function'
-        ) {
-            window.BackgroundStatusHUD.updateTask(hudId, 4, 4);
-        }
-
-        console.log(
-            `УСПЕХ: Содержимое Google Doc (ID: ${docId}) отображено в #${targetContainerId}.`,
-        );
-
-        // Update search index if available
-        if (typeof window.updateSearchIndex === 'function') {
-            const sectionId = targetContainerId.replace('doc-content-', '');
-            console.log(`[ИНДЕКСАЦИЯ] Запуск updateSearchIndex для ${sectionId} (ID: ${docId}).`);
-            try {
-                if (docId === SHABLONY_DOC_ID && sectionId === 'shablony') {
-                    const rawData = results[0]?.data || results[0]?.content?.data || [];
-                    const normalized = normalizeShablonyData(rawData).map((line) => String(line));
-                    const blocks = parseShablonyContent(normalized);
-                    await window.updateSearchIndex('shablony', docId, blocks, 'update');
-                }
-            } catch (indexError) {
-                console.error(`Ошибка индексации для ${sectionId}:`, indexError);
-            }
-        }
-
-        // Завершаем задачу после успешной загрузки
-        if (
-            hudTaskStarted &&
-            window.BackgroundStatusHUD &&
-            typeof window.BackgroundStatusHUD.finishTask === 'function'
-        ) {
-            window.BackgroundStatusHUD.finishTask(hudId, true);
-        }
+        outcome = await syncGoogleDocsNow({ reason, force, docId, containerId: targetContainerId });
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const isNetwork = /сеть|интернет|fetch|Failed|network|ERR_/i.test(message);
-        // Сетевая недоступность внешнего сервиса — ожидаемое состояние (офлайн), не программная ошибка:
-        // console.error попадает в буфер runtime-ошибок и ложно переводит самотестирование в ERROR.
-        if (isNetwork) {
-            console.warn(`Документ ${targetContainerId} не загружен (нет сети):`, message);
-        } else {
-            console.error(`ОШИБКА ЗАГРУЗКИ для ${targetContainerId}:`, error);
+        outcome = { ok: false, error };
+    }
+
+    if (outcome.ok) {
+        if (hudOk) hud.updateTask(hudId, 4, 4);
+        if (hudOk) hud.finishTask(hudId, true);
+        return;
+    }
+
+    // Ошибка: показываем кэш, если он есть, иначе — блок ошибки с «Повторить» и «Диагностика»
+    const error = outcome.error;
+    const message = error instanceof Error ? error.message : String(error);
+    const isNetwork = /сеть|интернет|fetch|Failed|network|ERR_/i.test(message);
+    if (isNetwork) {
+        console.warn(`Документ ${targetContainerId} не загружен (нет сети):`, message);
+    } else {
+        console.warn(`Документ ${targetContainerId} не загружен:`, message);
+    }
+    const cachedEntry = loadGoogleDocCacheEntry(docId);
+    if (cachedEntry?.data?.length) {
+        const ageMin = cachedEntry.ts
+            ? Math.max(1, Math.floor((Date.now() - cachedEntry.ts) / 60000))
+            : null;
+        updateGoogleDocStatusMessage(targetContainerId, {
+            visible: true,
+            message: ageMin
+                ? `Показаны сохранённые данные (обновлены ~${ageMin} мин назад): нет связи с Google Docs.`
+                : 'Показаны сохранённые данные из последней успешной загрузки: нет связи с Google Docs.',
+        });
+        if (!docContainer.querySelector('.shablony-block')) {
+            const cachedResults = [
+                {
+                    docId,
+                    status: 'cached',
+                    content: { type: 'paragraphs', data: cachedEntry.data },
+                    data: cachedEntry.data,
+                    error: null,
+                },
+            ];
+            renderGoogleDocContent(cachedResults, docContainer, targetContainerId);
+            lastRenderedSignature = dataSignature(cachedResults);
+            await updateShablonySearchIndex(docId, cachedResults);
         }
+    } else {
+        updateGoogleDocStatusMessage(targetContainerId, { visible: false, message: '' });
         const userMessage = isNetwork
             ? 'Не удалось загрузить документ. Проверьте подключение к интернету.'
-            : message;
-        updateGoogleDocStatusMessage(targetContainerId, { visible: false, message: '' });
+            : message.replace(/\s*\[chain=.*\]\s*$/, '');
         docContainer.innerHTML =
-            '<div class="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">' +
+            '<div class="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded gdocs-error-block">' +
             '<p>' +
             escapeHtml(userMessage) +
             '</p>' +
-            '<button type="button" class="mt-2 px-3 py-1 rounded bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700" data-retry-doc="' +
+            '<div class="flex flex-wrap gap-2 mt-2">' +
+            '<button type="button" class="px-3 py-1 rounded bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700" data-retry-doc="' +
             escapeHtml(docId) +
             '" data-retry-target="' +
             escapeHtml(targetContainerId) +
             '">Повторить</button>' +
-            '</div>';
+            '<button type="button" class="px-3 py-1 rounded bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700" data-gdocs-diagnose="1"><i class="fas fa-stethoscope mr-1" aria-hidden="true"></i>Диагностика</button>' +
+            '</div></div>';
         docContainer.querySelector('[data-retry-doc]')?.addEventListener('click', function () {
             const doc = this.getAttribute('data-retry-doc');
             const target = this.getAttribute('data-retry-target');
             if (doc && target) loadAndRenderGoogleDoc(doc, target, true);
         });
-
-        // Завершаем задачу при ошибке
-        if (
-            hudTaskStarted &&
-            window.BackgroundStatusHUD &&
-            typeof window.BackgroundStatusHUD.finishTask === 'function'
-        ) {
-            window.BackgroundStatusHUD.finishTask(hudId, false);
-        }
+        docContainer.querySelector('[data-gdocs-diagnose]')?.addEventListener('click', () => {
+            openGoogleDocsDiagnostics();
+        });
     }
+    if (hudOk) hud.finishTask(hudId, false);
+}
+
+/** Открывает режим диагностики с контекстом последней ошибки связи с Google Docs. */
+export function openGoogleDocsDiagnostics() {
+    const c = gdocsConnection;
+    const ctx = {
+        source: 'google-docs',
+        type: 'error',
+        title: 'Google Docs / Шаблоны',
+        message: c.lastErrorMessage || 'Состояние связи: ' + c.status,
+        layer: 'external',
+        system: 'external',
+        errorInfo: c.lastError || { service: 'google-docs', kind: 'unknown' },
+        details: { lastSuccessAt: c.lastSuccessAt ? new Date(c.lastSuccessAt).toISOString() : 'никогда' },
+        ts: Date.now(),
+    };
+    const open = window.CopilotDiagnostics?.openForIssue || window.openDiagnosticsForIssue;
+    if (typeof open === 'function') open(ctx);
+    else NotificationService.diagnosticsHandler?.(ctx);
 }
 
 /**
@@ -1080,7 +1604,10 @@ export function initGoogleDocSections() {
                 <div class="p-4 bg-gray-100 dark:bg-gray-800 min-h-[60vh] flex flex-col">
                     <div class="flex-shrink-0 flex flex-wrap gap-y-2 justify-between items-center mb-4">
                          <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${section.title}</h2>
-                         <div class="flex items-center gap-2">
+                         <div class="flex items-center gap-2 flex-wrap">
+                             <button type="button" id="gdocs-connection-chip" class="gdocs-chip" data-state="unknown" aria-live="polite">
+                                 <span class="gdocs-chip__dot" aria-hidden="true"></span><span class="gdocs-chip__text">Google Docs: ожидание</span>
+                             </button>
                              <button id="force-refresh-${section.id}-btn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors" title="Принудительно обновить данные с сервера">
                                  <i class="fas fa-sync-alt mr-2"></i>Обновить<span class="update-timestamp ml-1"></span>
                              </button>
@@ -1099,6 +1626,12 @@ export function initGoogleDocSections() {
                 </div>
             `;
             mainContentArea.appendChild(tabContentDiv);
+
+            document.getElementById('gdocs-connection-chip')?.addEventListener('click', () => {
+                if (gdocsConnection.status === 'error') openGoogleDocsDiagnostics();
+                else syncGoogleDocsNow({ reason: 'manual', force: true, interactive: true }).catch(() => {});
+            });
+            updateConnectionChip();
 
             const refreshButton = document.getElementById(`force-refresh-${section.id}-btn`);
             if (refreshButton) {
@@ -1156,6 +1689,7 @@ export function initGoogleDocSections() {
     });
 
     startTimestampUpdater();
+    startGoogleDocsBackgroundSync();
     console.log(
         '[initGoogleDocSections] Функция завершена, загрузка инициирована, таймер запущен.',
     );
@@ -1168,5 +1702,8 @@ if (typeof window !== 'undefined') {
     window.renderGoogleDocContent = renderGoogleDocContent;
     window.fetchGoogleDocs = fetchGoogleDocs;
     window.handleShablonySearch = handleShablonySearch;
+    window.syncGoogleDocsNow = syncGoogleDocsNow;
+    window.checkGoogleDocsConnection = checkGoogleDocsConnection;
+    window.getGoogleDocsConnectionState = getGoogleDocsConnectionState;
     window.parseShablonyContent = parseShablonyContent;
 }

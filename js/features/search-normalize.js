@@ -76,8 +76,22 @@ function isCyrillic(word) {
  * @param {string} word — слово в нижнем регистре, ё уже заменено на е
  * @returns {string} основа слова, не короче MIN_STEM_LEN
  */
+const stemMemo = new Map();
+const STEM_MEMO_LIMIT = 60000;
+
 export function stemWord(word) {
     if (!word || typeof word !== 'string') return '';
+    // Функция чистая; словарь слов повторяется тысячи раз при индексации больших баз — память-кэш
+    // даёт многократное ускорение построения индекса (результат тот же).
+    const hit = stemMemo.get(word);
+    if (hit !== undefined) return hit;
+    const res = stemWordUncached(word);
+    if (stemMemo.size >= STEM_MEMO_LIMIT) stemMemo.clear();
+    stemMemo.set(word, res);
+    return res;
+}
+
+function stemWordUncached(word) {
     const w = word.trim().toLowerCase().replace(/ё/g, 'е');
     if (w.length <= MIN_STEM_LEN) return w;
 

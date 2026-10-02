@@ -24,20 +24,25 @@ import {
     assignMentorPackIdForImport,
     validateMentorPackStrict,
     mentorPackToUserTrack,
+    duplicateMentorPack,
 } from './training-mentor-packs.js';
 import {
     loadBuiltinTrackOverrides,
     saveBuiltinTrackOverride,
     getEffectiveBuiltinTrack,
 } from './training-builtin-curriculum.js';
-import {
-    gradeToQuality,
-    sm2Schedule,
-    scaleInterval,
-    intervalScaleFromPreset,
-    nextDueFromInterval,
-} from './training-srs.js';
+import { intervalScaleFromPreset } from './training-srs.js';
 import { buildSrsFlipCardSectionHtml, toggleSrsFlip } from './training-srs-flip.js';
+import {
+    buildReviewQueue,
+    countIntroducedToday,
+    findDuplicateCard,
+    forecastDue,
+    normalizeNewPerDay,
+    previewIntervals,
+    scheduleReview,
+    summarizeDeck,
+} from './training-srs-queue.js';
 import {
     loadTrainingProgress,
     saveTrainingProgress,
@@ -421,8 +426,84 @@ export function initTrainingSystem() {
         if (id && id !== 'training') closeTrainingModal();
     });
 
+    // Фильтр учебника и кнопка «Продолжить»
+    root.addEventListener('click', (e) => {
+        const t = e.target instanceof Element ? e.target : null;
+        if (!t) return;
+        const f = t.closest('[data-training-filter]');
+        if (f) {
+            textbookFilter = f.getAttribute('data-training-filter') || 'all';
+            void renderTrainingPage();
+            return;
+        }
+        if (t.closest('[data-training-continue]')) {
+            const mount = document.getElementById('trainingMount');
+            const step = mount?.querySelector('.training-step:not(.training-step--done):not(.training-step--locked)');
+            if (step instanceof HTMLElement) {
+                const details = step.closest('details');
+                if (details && !details.open) details.open = true;
+                step.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                step.classList.add('training-step--flash');
+                setTimeout(() => step.classList.remove('training-step--flash'), 1600);
+            }
+        }
+    });
+    // Запоминаем ручное сворачивание модулей (событие toggle не всплывает — ловим в capture)
+    root.addEventListener(
+        'toggle',
+        (e) => {
+            const d = e.target;
+            if (d instanceof HTMLDetailsElement && d.dataset.trackToggle) {
+                trackOpenState.set(d.dataset.trackToggle, d.open);
+            }
+        },
+        true,
+    );
+
+    // Горячие клавиши повторения: 1–4 — оценка, пробел — перевернуть (только пока видна карточка SRS)
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+        const mount = document.getElementById('trainingMount');
+        if (!mount || mount.offsetParent === null) return;
+        const flip = mount.querySelector('[data-srs-flip-root]');
+        if (!flip) return;
+        const a = document.activeElement;
+        if (
+            a instanceof HTMLElement &&
+            (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))
+        ) {
+            return;
+        }
+        if (document.querySelector('.fixed.inset-0:not(.hidden)[role="dialog"]')) return;
+        const map = { 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' };
+        if (map[e.key]) {
+            const btn = mount.querySelector(`[data-srs-grade="${map[e.key]}"]`);
+            if (btn instanceof HTMLElement) {
+                e.preventDefault();
+                btn.click();
+            }
+        } else if (e.key === ' ' && !(a instanceof HTMLButtonElement)) {
+            e.preventDefault();
+            toggleSrsFlip(flip);
+        }
+    });
+
     root.addEventListener('change', (e) => {
         const t = e.target;
+        if (t && t instanceof HTMLInputElement && t.id === 'trainingSrsNewPerDay') {
+            void (async () => {
+                try {
+                    const progress = await loadTrainingProgress(State);
+                    progress.srsNewPerDay = normalizeNewPerDay(t.value);
+                    await saveTrainingProgress(State, progress);
+                    await renderTrainingPage();
+                } catch (err) {
+                    logTrainingEvent('error', 'SRS_NEW_PER_DAY', String(err));
+                    deps.showNotification?.('Не удалось сохранить лимит', 'error');
+                }
+            })();
+            return;
+        }
         if (t && t instanceof HTMLSelectElement && t.id === 'trainingSrsPreset') {
             void (async () => {
                 try {
@@ -577,6 +658,12 @@ export function initTrainingSystem() {
         if (mx && mx instanceof HTMLElement) {
             const pid = mx.getAttribute('data-mentor-pack-id');
             if (pid) void handleMentorExportPack(pid);
+            return;
+        }
+        const mdup = t.closest?.('[data-training-mentor-duplicate]');
+        if (mdup && mdup instanceof HTMLElement) {
+            const pid = mdup.getAttribute('data-mentor-pack-id');
+            if (pid) void handleMentorDuplicatePack(pid);
             return;
         }
         const md = t.closest?.('[data-training-mentor-delete]');
@@ -811,6 +898,18 @@ async function addSrsCard(card) {
     const progress = await loadTrainingProgress(State);
     const scale =
         Number(progress.intervalScale) || intervalScaleFromPreset(String(progress.srsPreset));
+    try {
+        const existing = (await getAllFromIndexedDB('trainingSrsCards')) || [];
+        const dup = findDuplicateCard(existing, card);
+        if (dup) {
+            deps.showNotification?.('Такая карточка уже есть в колоде — дубликат не добавлен', 'warning', {
+                duration: 3500,
+            });
+            return;
+        }
+    } catch (e) {
+        logTrainingEvent('error', 'SRS_DUP_CHECK', String(e));
+    }
     const row = {
         front: card.front,
         back: card.back,
@@ -851,23 +950,14 @@ async function handleSrsGrade(cardId, grade) {
         return;
     }
     if (!card) return;
-    const q = gradeToQuality(/** @type {any} */ (grade));
-    const next = sm2Schedule(
-        q,
-        card.repetitions || 0,
-        card.easeFactor || 2.5,
-        card.intervalDays || 0,
-    );
-    const interval = scaleInterval(next.intervalDays, scale);
-    const dueAt = nextDueFromInterval(Date.now(), interval);
+    const now = Date.now();
+    // scheduleReview: интервал по SM-2 хранится немасштабированным, масштаб — только к дате показа;
+    // «Заново» возвращает карточку в очередь через 10 минут.
+    const next = scheduleReview(card, /** @type {any} */ (grade), scale, now);
     const updated = {
         ...card,
-        repetitions: next.repetitions,
-        easeFactor: next.easeFactor,
-        // Храним НЕмасштабированный SM-2 интервал: масштаб применяется только к dueAt (иначе множится от повторения к повторению)
-        intervalDays: next.intervalDays,
-        dueAt,
-        updatedAt: new Date().toISOString(),
+        ...next,
+        updatedAt: new Date(now).toISOString(),
     };
     try {
         await saveToIndexedDB('trainingSrsCards', updated);
@@ -1011,6 +1101,22 @@ async function handleMentorExportPack(packId) {
 /**
  * @param {string} packId
  */
+async function handleMentorDuplicatePack(packId) {
+    try {
+        const packs = await loadMentorQuizPacks(State);
+        const src = packs.find((p) => p.id === packId);
+        const copy = src ? duplicateMentorPack(src) : null;
+        if (!copy) throw new Error('Пакет не найден');
+        await saveMentorQuizPack(State, copy);
+        logTrainingEvent('info', 'MENTOR_PACK_DUPLICATE', packId, { newId: copy.id });
+        deps.showNotification?.('Копия пакета создана', 'success', { duration: 2200 });
+        await renderTrainingPage();
+    } catch (e) {
+        logTrainingEvent('error', 'MENTOR_DUPLICATE_FAIL', String(e));
+        deps.showNotification?.('Не удалось создать копию', 'error');
+    }
+}
+
 async function handleMentorDeletePack(packId) {
     const confirmed =
         typeof deps.showAppConfirm === 'function'
@@ -1151,19 +1257,37 @@ export async function renderTrainingPage() {
         : 'textbook';
 
     let weakList = [];
-    let srsDue = [];
+    let srsView = null;
     try {
         weakList = await getAllFromIndexedDB('trainingWeakSpots');
     } catch {
         weakList = [];
     }
-    try {
-        const all = await getAllFromIndexedDB('trainingSrsCards');
-        const now = Date.now();
-        srsDue = (all || []).filter((c) => c && typeof c.dueAt === 'number' && c.dueAt <= now);
-        srsDue.sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
-    } catch {
-        srsDue = [];
+    if (segment === 'srs') {
+        try {
+            const all = (await getAllFromIndexedDB('trainingSrsCards')) || [];
+            const now = Date.now();
+            const newPerDay = normalizeNewPerDay(progress.srsNewPerDay);
+            const scale =
+                Number(progress.intervalScale) ||
+                intervalScaleFromPreset(String(progress.srsPreset));
+            const q = buildReviewQueue({
+                cards: all,
+                now,
+                newPerDay,
+                newIntroducedToday: countIntroducedToday(all, now),
+            });
+            srsView = {
+                queue: q,
+                deck: summarizeDeck(all, now),
+                forecast: forecastDue(all, now, 7),
+                newPerDay,
+                previews: q.queue[0] ? previewIntervals(q.queue[0], scale, now) : null,
+            };
+        } catch (e) {
+            logTrainingEvent('error', 'SRS_VIEW_BUILD', String(e));
+            srsView = null;
+        }
     }
 
     let mentorPacks = [];
@@ -1187,7 +1311,7 @@ export async function renderTrainingPage() {
     } else if (segment === 'mentor') {
         body = renderMentorPanel(mentorPacks);
     } else if (segment === 'srs') {
-        body = renderSrsPanel(srsDue);
+        body = renderSrsPanel(srsView);
     } else if (segment === 'weak') {
         body = renderWeakPanel(weakList);
     } else {
@@ -1216,6 +1340,32 @@ export async function renderTrainingPage() {
 /**
  * @param {import('./training-curriculum.js').TrainingTrack[]} userTracks
  */
+/** Фильтр учебника: all | progress | new | done. Хранится на время сессии страницы. */
+let textbookFilter = 'all';
+/** Ручное раскрытие/сворачивание модулей: trackId → открыт ли (сохраняется между перерисовками). */
+const trackOpenState = new Map();
+
+/**
+ * Сводка по модулю: сколько шагов завершено и в каком он состоянии.
+ * @param {object} progress
+ * @param {{ id: string, steps: Array<{ id: string }> }} track
+ * @returns {{ done: number, total: number, pct: number, status: 'new' | 'progress' | 'done' }}
+ */
+export function computeTrackStats(progress, track) {
+    const tp = ensureTrackProgress(progress, track.id);
+    const total = Array.isArray(track.steps) ? track.steps.length : 0;
+    let done = 0;
+    for (const step of track.steps || []) if (isStepComplete(tp, step)) done++;
+    const pct = total === 0 ? 100 : Math.round((done / total) * 100);
+    const status = total > 0 && done === total ? 'done' : done > 0 ? 'progress' : 'new';
+    return { done, total, pct, status };
+}
+
+function passesTextbookFilter(progress, track) {
+    if (textbookFilter === 'all') return true;
+    return computeTrackStats(progress, track).status === textbookFilter;
+}
+
 /**
  * @param {object} progress
  * @param {import('./training-curriculum.js').TrainingTrack} track
@@ -1312,11 +1462,19 @@ function renderTrainingTrackSection(progress, track) {
         ? `<button type="button" class="training-icon-btn shrink-0 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60" data-training-builtin-edit data-track-id="${escapeHtml(track.id)}" aria-label="Настроить стандартный модуль" title="Настроить"><i class="fas fa-sliders-h text-sm" aria-hidden="true"></i></button>`
         : '';
 
-    return `<section class="training-track-card rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/80 shadow-sm overflow-hidden">
-            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    const tstats = computeTrackStats(progress, track);
+    const isOpen = trackOpenState.has(String(track.id))
+        ? trackOpenState.get(String(track.id))
+        : tstats.status !== 'done';
+    const statusLabel = { new: 'Не начат', progress: `${tstats.done} из ${tstats.total}`, done: 'Завершён' }[tstats.status];
+    return `<section class="training-track-card rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/80 shadow-sm overflow-hidden" data-track-status="${tstats.status}">
+            <details class="training-track-details" data-track-toggle="${escapeHtml(String(track.id))}" ${isOpen ? 'open' : ''}>
+            <summary class="training-track-summary px-5 py-4 border-b border-gray-200 dark:border-gray-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
+                        <i class="fas fa-chevron-right training-track-chevron" aria-hidden="true"></i>
                         <h3 class="text-xl font-bold text-gray-900 dark:text-gray-50">${escapeHtml(track.title)}</h3>
+                        <span class="training-track-badge training-track-badge--${tstats.status}">${statusLabel}</span>
                     </div>
                     ${track.subtitle ? `<p class="text-sm text-gray-500 dark:text-gray-400">${escapeHtml(track.subtitle)}</p>` : ''}
                 </div>
@@ -1326,8 +1484,9 @@ function renderTrainingTrackSection(progress, track) {
                     ${builtinEditBtn}
                     <div class="training-progress-ring" style="--p:${pct}"><span>${pct}%</span></div>
                 </div>
-            </div>
+            </summary>
             <ol class="p-5 space-y-6 list-none">${cards || '<li class="text-sm text-gray-500 px-2">В этом модуле пока нет шагов — откройте «Изменить» в заголовке карточки.</li>'}</ol>
+            </details>
         </section>`;
 }
 
@@ -1344,7 +1503,10 @@ function renderTextbook(progress, userTracks) {
                 <i class="fas fa-plus" aria-hidden="true"></i> Новый модуль
             </button>
         </div>`;
-    const userSections = sortedUser.map((t) => renderTrainingTrackSection(progress, t)).join('');
+    const userSections = sortedUser
+        .filter((t) => passesTextbookFilter(progress, t))
+        .map((t) => renderTrainingTrackSection(progress, t))
+        .join('');
     const emptyUserHint =
         sortedUser.length === 0
             ? '<p class="text-sm text-gray-500 dark:text-gray-400 mb-8">Пока нет своих модулей — нажмите «Новый модуль», добавьте шаги и при необходимости квизы.</p>'
@@ -1360,10 +1522,43 @@ function renderTextbook(progress, userTracks) {
     const builtinSections = visibleBuiltinDefs
         .map((t) => {
             const eff = getEffectiveBuiltinTrack(t.id, cachedBuiltinOverrides);
-            return eff ? renderTrainingTrackSection(progress, eff) : '';
+            return eff && passesTextbookFilter(progress, eff)
+                ? renderTrainingTrackSection(progress, eff)
+                : '';
         })
         .join('');
-    return `<div class="space-y-8">${toolbar}${emptyUserHint}${userSections}${builtinIntro}${builtinSections}</div>`;
+    const allVisible = [
+        ...sortedUser,
+        ...visibleBuiltinDefs.map((t) => getEffectiveBuiltinTrack(t.id, cachedBuiltinOverrides)).filter(Boolean),
+    ];
+    let stepsDone = 0;
+    let stepsTotal = 0;
+    const counts = { all: allVisible.length, new: 0, progress: 0, done: 0 };
+    allVisible.forEach((t) => {
+        const st = computeTrackStats(progress, t);
+        stepsDone += st.done;
+        stepsTotal += st.total;
+        counts[st.status]++;
+    });
+    const overallPct = stepsTotal ? Math.round((stepsDone / stepsTotal) * 100) : 0;
+    const chip = (id, label) =>
+        `<button type="button" class="training-filter-chip ${textbookFilter === id ? 'is-active' : ''}" data-training-filter="${id}" aria-pressed="${textbookFilter === id}">${label} <span class="training-filter-count">${counts[id]}</span></button>`;
+    const overview = allVisible.length === 0 ? '' : `
+        <div class="training-overview">
+            <div class="training-overview__main">
+                <div class="training-overview__title">Общий прогресс: ${stepsDone} из ${stepsTotal} шагов</div>
+                <div class="training-overview__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${overallPct}"><span style="width:${overallPct}%"></span></div>
+            </div>
+            <button type="button" class="training-overview__continue" data-training-continue ${stepsDone >= stepsTotal ? 'disabled' : ''}><i class="fas fa-play" aria-hidden="true"></i> Продолжить</button>
+        </div>
+        <div class="training-filters" role="group" aria-label="Фильтр модулей">
+            ${chip('all', 'Все')}${chip('progress', 'В процессе')}${chip('new', 'Не начаты')}${chip('done', 'Завершены')}
+        </div>`;
+    const emptyFilter =
+        textbookFilter !== 'all' && !userSections && !builtinSections
+            ? '<p class="text-sm text-gray-500 dark:text-gray-400">В этом фильтре модулей нет.</p>'
+            : '';
+    return `<div class="space-y-8">${overview}${toolbar}${emptyUserHint}${userSections}${builtinIntro}${builtinSections}${emptyFilter}</div>`;
 }
 
 /**
@@ -1386,6 +1581,7 @@ function renderMentorPanel(packs) {
                         <button type="button" data-training-mentor-publish data-mentor-pack-id="${escapeHtml(pk.id)}" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700">Отправить в учебник</button>
                     </div>
                     <div class="flex items-center gap-1 justify-end sm:ps-3 sm:border-l sm:border-gray-200 dark:sm:border-gray-600">
+                        <button type="button" data-training-mentor-duplicate data-mentor-pack-id="${escapeHtml(pk.id)}" class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="Дублировать пакет" title="Дублировать"><i class="far fa-clone text-sm" aria-hidden="true"></i></button>
                         <button type="button" data-training-mentor-edit data-mentor-pack-id="${escapeHtml(pk.id)}" class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="Изменить пакет" title="Изменить"><i class="fas fa-pen text-sm" aria-hidden="true"></i></button>
                         <button type="button" data-training-mentor-delete data-mentor-pack-id="${escapeHtml(pk.id)}" class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-red-600 bg-red-500/10 dark:bg-red-950/30 hover:bg-red-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30" aria-label="Удалить пакет" title="Удалить"><i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>
                     </div>
@@ -1401,9 +1597,14 @@ function renderMentorPanel(packs) {
             <div class="training-mentor-hero rounded-2xl p-6 shadow-sm">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-gray-50 tracking-tight">Режим наставника</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-300 mt-2 max-w-3xl leading-relaxed">
-                    Здесь вы собираете квиз-тесты и передаёте ученику файлом JSON.
-                    В другом экземпляре приложения ученик открывает этот раздел, нажимает «Загрузить JSON», затем «Отправить в учебник» — тест появится в разделе «Учебник» как обычный модуль с мини-квизом.
+                    Соберите квиз-тест и передайте ученику файлом — без сервера и аккаунтов.
                 </p>
+                <ol class="training-mentor-steps" aria-label="Как это работает">
+                    <li><b>1</b><span>Создайте тест и выгрузите JSON</span></li>
+                    <li><b>2</b><span>Ученик загружает файл в этом разделе</span></li>
+                    <li><b>3</b><span>«Отправить в учебник» — модуль с мини-квизом готов</span></li>
+                </ol>
+                <p class="training-mentor-totals" aria-live="polite">${(packs || []).length ? `Пакетов: <b>${(packs || []).length}</b> · вопросов всего: <b>${(packs || []).reduce((n, p) => n + (p.questions?.length || 0), 0)}</b>` : 'Пакетов пока нет'}</p>
                 <div class="mt-4 flex flex-wrap gap-2">
                     <button type="button" data-training-mentor-new class="training-mentor-btn training-mentor-btn--primary inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                         <i class="fas fa-plus" aria-hidden="true"></i> Создать квиз-тест
@@ -1425,23 +1626,63 @@ function renderMentorPanel(packs) {
 /**
  * @param {object[]} srsDue
  */
-function renderSrsPanel(srsDue) {
-    const card = srsDue[0];
-    const queueInfo = `<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">В очереди на повторение: <strong>${srsDue.length}</strong>.</p>`;
+function renderSrsPanel(view) {
     const scaleSelect = `
-        <div class="mb-6 flex flex-wrap items-center gap-3">
-            <label for="trainingSrsPreset" class="text-sm font-medium text-gray-700 dark:text-gray-200">Пресет интервалов повторения</label>
-            <select id="trainingSrsPreset" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-                <option value="gentle">Мягче (дольше между показами)</option>
-                <option value="balanced">Сбалансировано</option>
-                <option value="intensive">Интенсивнее (чаще)</option>
-            </select>
+        <div class="mb-5 flex flex-wrap items-end gap-4">
+            <div class="flex flex-col gap-1">
+                <label for="trainingSrsPreset" class="text-xs font-medium text-gray-600 dark:text-gray-300">Интервалы повторения</label>
+                <select id="trainingSrsPreset" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
+                    <option value="gentle">Мягче (дольше между показами)</option>
+                    <option value="balanced">Сбалансировано</option>
+                    <option value="intensive">Интенсивнее (чаще)</option>
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label for="trainingSrsNewPerDay" class="text-xs font-medium text-gray-600 dark:text-gray-300">Новых карточек в день</label>
+                <input id="trainingSrsNewPerDay" type="number" min="0" max="200" step="1" value="${view ? view.newPerDay : 10}" class="w-28 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
+            </div>
         </div>`;
+    if (!view) {
+        return `${scaleSelect}<p class="text-sm text-gray-500">Не удалось построить очередь повторений. Попробуйте обновить страницу.</p>`;
+    }
+    const { queue, deck, forecast, previews } = view;
+    const card = queue.queue[0];
+    const chip = (label, value, tone) =>
+        `<div class="training-srs-stat training-srs-stat--${tone}"><span class="training-srs-stat__value">${value}</span><span class="training-srs-stat__label">${label}</span></div>`;
+    const stats = `<div class="training-srs-stats" role="group" aria-label="Состояние колоды">
+        ${chip('К повторению', queue.dueReviews, 'due')}
+        ${chip('Новых сегодня', queue.dueNew, 'new')}
+        ${chip('Учится', deck.learning + deck.young, 'young')}
+        ${chip('Выучено', deck.mature, 'mature')}
+        ${chip('Всего', deck.total, 'total')}
+    </div>`;
+    const maxF = Math.max(1, ...forecast);
+    const dayNames = ['Сейчас', 'Завтра'];
+    const bars = `<div class="training-srs-forecast" aria-label="Прогноз повторений на 7 дней">
+        ${forecast
+            .map((n, i) => {
+                const label = dayNames[i] || `+${i} д`;
+                const h = Math.round((n / maxF) * 100);
+                return `<div class="training-srs-forecast__col" title="${label}: ${n}"><span class="training-srs-forecast__n">${n}</span><span class="training-srs-forecast__bar" style="height:${Math.max(n ? 8 : 2, h)}%"></span><span class="training-srs-forecast__d">${label}</span></div>`;
+            })
+            .join('')}
+    </div>`;
+    const notes = [];
+    if (queue.blockedNew > 0) {
+        notes.push(`Ещё ${queue.blockedNew} нов. карточек ждут завтрашнего лимита.`);
+    }
+    if (queue.laterToday > 0) {
+        notes.push(`Позже сегодня вернутся: ${queue.laterToday}.`);
+    }
+    const noteHtml = notes.length
+        ? `<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">${notes.join(' ')}</p>`
+        : '';
 
     if (!card) {
-        return `${scaleSelect}${queueInfo}
+        const done = deck.total > 0;
+        return `${scaleSelect}${stats}${bars}${noteHtml}
         <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center text-gray-500">
-            <p class="mb-4">Нет карточек к показу. Добавьте из регламента, закладки или вручную.</p>
+            <p class="mb-4">${done ? '🎉 На сейчас всё повторено. Загляните позже или добавьте новые карточки.' : 'В колоде пока нет карточек. Добавьте из регламента, закладки или вручную.'}</p>
             <div class="flex flex-wrap justify-center gap-2">
                 <button type="button" class="px-4 py-2 rounded-xl bg-primary text-white text-sm" data-training-import-reglament>Из регламента</button>
                 <button type="button" class="px-4 py-2 rounded-xl bg-gray-700 text-white text-sm" data-training-import-bookmark>Из закладки</button>
@@ -1450,19 +1691,22 @@ function renderSrsPanel(srsDue) {
         </div>`;
     }
 
-    return `${scaleSelect}${queueInfo}
+    const hint = (g) => (previews && previews[g] ? `<span class="training-srs-grade__hint">${previews[g]}</span>` : '');
+    const gradeBtn = (g, label, key, cls) =>
+        `<button type="button" class="training-srs-grade py-2 rounded-xl ${cls} text-white text-sm" data-srs-grade="${g}" data-card-id="${card.id}" aria-keyshortcuts="${key}"><span>${label}</span>${hint(g)}<kbd class="training-srs-grade__key" aria-hidden="true">${key}</kbd></button>`;
+    return `${scaleSelect}${stats}${bars}${noteHtml}
     <div class="max-w-xl mx-auto rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 shadow-md">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Карточка</p>
+        <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Карточка · осталось в очереди: ${queue.queue.length}</p>
         ${buildSrsFlipCardSectionHtml({
             front: card.front,
             back: card.back,
             cardId: card.id,
         })}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button type="button" class="py-2 rounded-xl bg-red-600/90 text-white text-sm" data-srs-grade="again" data-card-id="${card.id}">Ужас</button>
-            <button type="button" class="py-2 rounded-xl bg-amber-600/90 text-white text-sm" data-srs-grade="hard" data-card-id="${card.id}">Сложно</button>
-            <button type="button" class="py-2 rounded-xl bg-emerald-600/90 text-white text-sm" data-srs-grade="good" data-card-id="${card.id}">Хорошо</button>
-            <button type="button" class="py-2 rounded-xl bg-sky-600/90 text-white text-sm" data-srs-grade="easy" data-card-id="${card.id}">Легко</button>
+            ${gradeBtn('again', 'Заново', '1', 'bg-red-600/90')}
+            ${gradeBtn('hard', 'Сложно', '2', 'bg-amber-600/90')}
+            ${gradeBtn('good', 'Хорошо', '3', 'bg-emerald-600/90')}
+            ${gradeBtn('easy', 'Легко', '4', 'bg-sky-600/90')}
         </div>
         <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600 flex flex-wrap gap-2 justify-center">
             <button type="button" class="px-3 py-1.5 rounded-xl text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100" data-training-import-reglament>+ Регламент</button>
@@ -1495,8 +1739,17 @@ function renderWeakPanel(weakList) {
         })
         .join('');
     return `<div class="rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/80 p-5">
-        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-50 mb-4">Слабые места</h3>
-        ${rows ? `<ul class="list-none">${rows}</ul>` : '<p class="text-gray-500 text-sm">Пока пусто.</p>'}
+        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-50 mb-1">Слабые места${rows ? ` <span class="training-weak-count">${(weakList || []).length}</span>` : ''}</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Темы, где были ошибки или сомнения: вернитесь к ним перед следующей сменой.</p>
+        ${
+            rows
+                ? `<ul class="list-none">${rows}</ul>`
+                : `<div class="training-empty">
+                    <i class="fas fa-seedling" aria-hidden="true"></i>
+                    <strong>Слабых мест пока нет</strong>
+                    <span>Они появляются двумя способами: автоматически — когда вы ошибаетесь в мини-квизе шага, и вручную — кнопкой «Слабое место» на шаге учебника.</span>
+                </div>`
+        }
     </div>`;
 }
 
@@ -1519,5 +1772,31 @@ function renderStatsPanel(progress) {
             <p class="text-xs text-gray-500 uppercase">Точность</p>
             <p class="text-3xl font-bold text-primary">${rate}%</p>
         </div>
+    </div>${renderTrackProgressTable(progress)}`;
+}
+
+/** Таблица прогресса по всем видимым модулям (для вкладки «Статистика»). */
+function renderTrackProgressTable(progress) {
+    const hidden = new Set(progress.hiddenBuiltinTrackIds || []);
+    const tracks = [
+        ...(cachedUserTracks || []),
+        ...TRAINING_TRACKS.filter((t) => !hidden.has(t.id))
+            .map((t) => getEffectiveBuiltinTrack(t.id, cachedBuiltinOverrides))
+            .filter(Boolean),
+    ];
+    if (tracks.length === 0) return '';
+    const rows = tracks
+        .map((t) => {
+            const st = computeTrackStats(progress, t);
+            return `<tr>
+                <td class="py-2 pr-3 font-medium">${escapeHtml(t.title)}</td>
+                <td class="py-2 pr-3 w-1/2"><div class="training-overview__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${st.pct}"><span style="width:${st.pct}%"></span></div></td>
+                <td class="py-2 text-right tabular-nums text-sm">${st.done}/${st.total}</td>
+            </tr>`;
+        })
+        .join('');
+    return `<div class="mt-6 rounded-xl border border-gray-200 dark:border-gray-600 p-4 bg-white dark:bg-gray-800">
+        <p class="text-xs text-gray-500 uppercase mb-2">Прогресс по модулям</p>
+        <table class="w-full text-sm"><tbody>${rows}</tbody></table>
     </div>`;
 }

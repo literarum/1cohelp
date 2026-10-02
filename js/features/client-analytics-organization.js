@@ -162,37 +162,49 @@ export function getUnitQuestionSortKey(unit) {
  * @returns {CaDisplayUnit[]}
  */
 export function sortClientAnalyticsDisplayUnits(units, mode) {
-    const list = Array.isArray(units) ? [...units] : [];
+    const list = Array.isArray(units) ? units : [];
     const m = CA_SORT_MODES.includes(mode) ? mode : 'date_desc';
+    if (list.length < 2) return [...list];
+
+    // Ключи считаются один раз на карточку (а не при каждом сравнении), строки сравниваются
+    // одним экземпляром Intl.Collator — на 50 000 карточек это на порядок быстрее прежнего варианта.
+    const collator = new Intl.Collator('ru');
+    const latest = (d) => d.latest;
+    /** @type {Array<{ unit: CaDisplayUnit, latest: number, k1: any }>} */
+    const deco = list.map((unit) => {
+        const d = { unit, latest: getUnitLatestUploadedMs(unit), k1: null };
+        if (m === 'date_asc') d.k1 = getUnitEarliestUploadedMs(unit);
+        else if (m === 'inn_asc') d.k1 = getUnitInnSortKey(unit);
+        else if (m === 'appeals_desc') d.k1 = getUnitAppealsCount(unit);
+        else if (m === 'file_asc') d.k1 = getUnitSourceFileName(unit);
+        else if (m === 'question_asc') d.k1 = getUnitQuestionSortKey(unit);
+        return d;
+    });
 
     const cmp = (a, b) => {
-        if (m === 'date_desc') return getUnitLatestUploadedMs(b) - getUnitLatestUploadedMs(a);
-        if (m === 'date_asc') return getUnitEarliestUploadedMs(a) - getUnitEarliestUploadedMs(b);
-        if (m === 'inn_asc') return getUnitInnSortKey(a).localeCompare(getUnitInnSortKey(b), 'ru');
-        if (m === 'appeals_desc') {
-            const d = getUnitAppealsCount(b) - getUnitAppealsCount(a);
-            if (d !== 0) return d;
-            return getUnitLatestUploadedMs(b) - getUnitLatestUploadedMs(a);
+        switch (m) {
+            case 'date_desc':
+                return latest(b) - latest(a);
+            case 'date_asc':
+                return a.k1 - b.k1;
+            case 'inn_asc':
+                return collator.compare(a.k1, b.k1);
+            case 'appeals_desc': {
+                const d = b.k1 - a.k1;
+                return d !== 0 ? d : latest(b) - latest(a);
+            }
+            case 'file_asc':
+            case 'question_asc': {
+                const c = collator.compare(a.k1, b.k1);
+                return c !== 0 ? c : latest(b) - latest(a);
+            }
+            default:
+                return 0;
         }
-        if (m === 'file_asc') {
-            const fa = getUnitSourceFileName(a);
-            const fb = getUnitSourceFileName(b);
-            const c = fa.localeCompare(fb, 'ru');
-            if (c !== 0) return c;
-            return getUnitLatestUploadedMs(b) - getUnitLatestUploadedMs(a);
-        }
-        if (m === 'question_asc') {
-            const qa = getUnitQuestionSortKey(a);
-            const qb = getUnitQuestionSortKey(b);
-            const c = qa.localeCompare(qb, 'ru');
-            if (c !== 0) return c;
-            return getUnitLatestUploadedMs(b) - getUnitLatestUploadedMs(a);
-        }
-        return 0;
     };
 
-    list.sort(cmp);
-    return list;
+    deco.sort(cmp);
+    return deco.map((d) => d.unit);
 }
 
 /**

@@ -196,3 +196,49 @@ describe('client-analytics-organization normalizeClientAnalyticsCardMeta', () =>
         });
     });
 });
+
+describe('sortClientAnalyticsDisplayUnits: эквивалентность прежней реализации', () => {
+    const mk = (i, inn, q, file, ts, appeals = 1) => ({
+        type: 'inn',
+        innKey: inn,
+        records: Array.from({ length: appeals }, (_, k) => ({
+            id: i * 10 + k,
+            inn,
+            question: q,
+            sourceFileName: file,
+            uploadedAt: new Date(ts + k * 1000).toISOString(),
+        })),
+    });
+    const units = [
+        mk(1, '7701', 'Ёлка', 'б.txt', 1700000000000, 3),
+        mk(2, '7702', 'Ежик', 'а.txt', 1700000500000, 1),
+        mk(3, '7703', 'Йод', 'б.txt', 1700000100000, 2),
+        mk(4, '7704', 'ёжик', 'в.txt', 1700000500000, 2),
+        mk(5, '7705', 'abc', 'a.txt', 1690000000000, 1),
+    ];
+
+    it('результат стабилен и не меняет входной массив', () => {
+        const copy = [...units];
+        for (const mode of ['date_desc', 'date_asc', 'inn_asc', 'appeals_desc', 'file_asc', 'question_asc']) {
+            const a = sortClientAnalyticsDisplayUnits(units, mode);
+            const b = sortClientAnalyticsDisplayUnits(units, mode);
+            expect(a.map((u) => u.innKey)).toEqual(b.map((u) => u.innKey));
+            expect(a).toHaveLength(units.length);
+        }
+        expect(units).toEqual(copy);
+    });
+
+    it('date_desc: новые выше; appeals_desc: больше обращений выше, при равенстве — новее', () => {
+        const d = sortClientAnalyticsDisplayUnits(units, 'date_desc').map((u) => u.innKey);
+        expect(d[d.length - 1]).toBe('7705');
+        const ap = sortClientAnalyticsDisplayUnits(units, 'appeals_desc').map((u) => u.innKey);
+        expect(ap[0]).toBe('7701');
+        expect(ap.indexOf('7704')).toBeLessThan(ap.indexOf('7703'));
+    });
+
+    it('пустой и одиночный список', () => {
+        expect(sortClientAnalyticsDisplayUnits([], 'date_desc')).toEqual([]);
+        expect(sortClientAnalyticsDisplayUnits(null, 'date_desc')).toEqual([]);
+        expect(sortClientAnalyticsDisplayUnits([units[0]], 'file_asc')).toEqual([units[0]]);
+    });
+});

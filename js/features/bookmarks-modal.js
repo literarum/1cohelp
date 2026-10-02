@@ -13,6 +13,7 @@ import {
 } from '../ui/modals-manager.js';
 import { SCREENSHOT_EDIT_FIELD } from '../ui/screenshot-attachment-field.js';
 import { formatTagsForInput } from '../features/global-tags.js';
+import { bindCtrlEnterSubmit, attachCharCounter } from '../ui/form-helpers.js';
 
 let bookmarkModalConfigGlobal = null;
 let State = null;
@@ -127,7 +128,7 @@ export async function ensureBookmarkModal() {
                         <input type="hidden" id="bookmarkId" name="bookmarkId">
                         <div class="mb-4">
                             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="bookmarkTitle">Название <span class="text-red-500">*</span></label>
-                            <input type="text" id="bookmarkTitle" name="bookmarkTitle" required
+                            <input type="text" id="bookmarkTitle" name="bookmarkTitle" required maxlength="200" autocomplete="off"
                                 class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base">
                         </div>
                         <div class="mb-4">
@@ -236,6 +237,8 @@ export async function ensureBookmarkModal() {
             } else
                 console.error(`${LOG_PREFIX} Ошибка: Функция handleBookmarkFormSubmit не найдена!`);
 
+            bindCtrlEnterSubmit(formElement, modal);
+            attachCharCounter(formElement.elements.bookmarkTitle, 200);
             if (typeof attachBookmarkScreenshotHandlers === 'function') {
                 attachBookmarkScreenshotHandlers(formElement);
             } else

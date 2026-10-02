@@ -6,6 +6,7 @@
 
 /** Порядок отображения групп в UI */
 export const HEALTH_SYSTEM_ORDER = [
+    'external',
     'runtime',
     'storage_quota',
     'memory',
@@ -24,10 +25,15 @@ export const HEALTH_SYSTEM_ORDER = [
     'clipboard',
     'runtime_errors',
     'watchdog',
+    'observability',
+    'app_init',
     'general',
 ];
 
 export const HEALTH_SYSTEM_LABELS = {
+    external: 'Внешние сервисы (Google Docs)',
+    observability: 'Наблюдаемость (перекрёстные проверки)',
+    app_init: 'Инициализация приложения',
     runtime: 'Среда и платформа (сеть, контекст, Web Storage API)',
     storage_quota: 'Квота хранилища и persistence',
     memory: 'Память (heap, устройство)',

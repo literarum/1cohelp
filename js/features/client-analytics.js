@@ -11,7 +11,18 @@ import {
     getFromIndexedDB,
     saveToIndexedDB,
     deleteFromIndexedDB,
+    getAllProjected,
+    forEachBatchInStore,
+    bulkPutToIndexedDB,
+    bulkDeleteFromIndexedDB,
+    countInIndexedDB,
+    maxKeyInIndexedDB,
+    getAllKeysFromIndexedDB,
+    getAllFromIndex,
+    clearIndexedDBStore,
+    yieldToMain,
 } from '../db/indexeddb.js';
+import { createVirtualGrid, decorateCardForView } from '../utils/virtual-grid.js';
 import { parseTxtIntoRecords } from './client-analytics-parse.js';
 import {
     BOOKMARK_CARD_ICON_BUTTON_CLASS,
@@ -53,8 +64,134 @@ const CA_ORG_VIEW_PREF_ID = 'clientAnalyticsOrgView';
 let deps = {
     showNotification: null,
     updateSearchIndex: null,
+    removeManyFromSearchIndex: null,
+    bulkAddToSearchIndex: null,
     applyCurrentView: null,
 };
+
+// ============================================================================
+// КЭШ НАБОРА ДАННЫХ (большие базы: 100 000+ записей)
+// ============================================================================
+// Записи читаются курсором порциями один раз; дальше поиск/сортировка/фильтры работают по памяти.
+// Актуальность проверяется дешёвой сигнатурой (count + максимальный ключ) и версией мутаций.
+
+const caCache = {
+    version: 0,
+    sig: null,
+    records: null,
+    loading: null,
+    loadingSig: null,
+    groupedAll: null,
+    innMap: null,
+    lastQuery: '',
+    lastFiltered: null,
+    lastFilteredBase: null,
+    units: null,
+    blLevels: null,
+    filesMeta: null,
+};
+
+function resetCaDerived() {
+    caCache.groupedAll = null;
+    caCache.innMap = null;
+    caCache.lastQuery = '';
+    caCache.lastFiltered = null;
+    caCache.units = null;
+}
+
+/** Сбросить кэш (после внешних изменений данных раздела). */
+export function invalidateClientAnalyticsCache() {
+    caCache.version++;
+    caCache.sig = null;
+    caCache.records = null;
+    caCache.loading = null;
+    caCache.blLevels = null;
+    caCache.filesMeta = null;
+    resetCaDerived();
+}
+
+/** Дёшево проверить, что хранилище не менялось: количество + максимальный ключ. */
+async function readCaStoreSignature() {
+    const [c, m] = await Promise.all([
+        countInIndexedDB('clientAnalyticsRecords'),
+        maxKeyInIndexedDB('clientAnalyticsRecords'),
+    ]);
+    return `${c}:${m}`;
+}
+
+const tsMemo = new Map();
+function uploadedTs(v) {
+    const key = v || 0;
+    let t = tsMemo.get(key);
+    if (t === undefined) {
+        if (tsMemo.size > 5000) tsMemo.clear();
+        t = new Date(key).getTime();
+        tsMemo.set(key, t);
+    }
+    return t;
+}
+
+/**
+ * @param {{ force?: boolean, onProgress?: (loaded: number, total: number) => void }} [opts]
+ * @returns {Promise<object[]>} записи, отсортированные по uploadedAt (новые первыми)
+ */
+async function loadClientAnalyticsDataset(opts = {}) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const sig = await readCaStoreSignature();
+        if (!opts.force && caCache.records && caCache.sig === sig) return caCache.records;
+        if (caCache.loading && caCache.loadingSig === sig && !opts.force) return caCache.loading;
+        const startVersion = caCache.version;
+        const total = parseInt(sig, 10) || 0;
+        const p = (async () => {
+            const acc = [];
+            await forEachBatchInStore(
+                'clientAnalyticsRecords',
+                async (rows) => {
+                    for (const r of rows) if (r && r.id != null) acc.push(r);
+                    if (opts.onProgress) opts.onProgress(acc.length, total);
+                },
+                { batchSize: 5000 },
+            );
+            acc.sort((a, b) => uploadedTs(b.uploadedAt) - uploadedTs(a.uploadedAt));
+            return acc;
+        })();
+        caCache.loading = p;
+        caCache.loadingSig = sig;
+        let acc;
+        try {
+            acc = await p;
+        } finally {
+            if (caCache.loading === p) {
+                caCache.loading = null;
+                caCache.loadingSig = null;
+            }
+        }
+        if (caCache.version !== startVersion) continue; // данные менялись во время чтения — перечитать
+        resetCaDerived();
+        caCache.records = acc;
+        caCache.sig = sig;
+        return acc;
+    }
+    // крайний случай: данные постоянно менялись — отдаём то, что есть
+    return caCache.records || [];
+}
+
+/** После локальной мутации: поправить кэш без полного перечитывания. */
+async function caPatchAfterMutation(removedIds) {
+    caCache.version++;
+    resetCaDerived();
+    caCache.blLevels = null;
+    if (caCache.records && removedIds && removedIds.size) {
+        caCache.records = caCache.records.filter((r) => !removedIds.has(r.id));
+        try {
+            caCache.sig = await readCaStoreSignature();
+        } catch {
+            invalidateClientAnalyticsCache();
+        }
+    } else {
+        invalidateClientAnalyticsCache();
+    }
+}
 
 let clientAnalyticsSearchQuery = '';
 let clientAnalyticsFilesCollapsed = true;
@@ -137,28 +274,34 @@ export function groupClientAnalyticsRecordsForDisplay(records) {
         if (!innStacks.has(innKey)) innStacks.set(innKey, []);
         innStacks.get(innKey).push(r);
     }
-    const sortByUploadedDesc = (a, b) =>
-        new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime();
+    const sortByUploadedDesc = (a, b) => uploadedTs(b.uploadedAt) - uploadedTs(a.uploadedAt);
     for (const arr of innStacks.values()) {
         arr.sort(sortByUploadedDesc);
     }
     noInnRecords.sort(sortByUploadedDesc);
     const stacks = [...innStacks.entries()].map(([innKey, recs]) => ({ innKey, records: recs }));
-    stacks.sort((a, b) => {
-        const ta = new Date(a.records[0]?.uploadedAt || 0).getTime();
-        const tb = new Date(b.records[0]?.uploadedAt || 0).getTime();
-        return tb - ta;
-    });
+    stacks.sort((a, b) => uploadedTs(b.records[0]?.uploadedAt) - uploadedTs(a.records[0]?.uploadedAt));
     return { innStacks: stacks, noInnRecords };
 }
 
-function normalizeSearchText(value) {
-    return String(value ?? '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+// Символы, у которых нет канонического разложения (ASCII, Latin-1 знаки, кириллица без й/ё/ї…, общая пунктуация).
+// Если в строке только они — дорогой NFD можно пропустить: результат тот же.
+const NFD_NOT_NEEDED_BREAK_RE =
+    /[^\u0000-\u00bf\u0410-\u0418\u041a-\u042f\u0430-\u0438\u043a-\u044f\u2000-\u206f]/;
+const MARKS_RE = /[\u0300-\u036f]/g;
+const WS_NEEDS_COLLAPSE_RE = /\s\s|[^\S ]/;
+
+/**
+ * Нормализация для поиска: нижний регистр, без диакритики (й→и, ё→е), схлопнутые пробелы.
+ * Быстрый путь без String.prototype.normalize для типичного русского/ASCII текста.
+ */
+export function normalizeSearchText(value) {
+    let s = String(value ?? '').toLowerCase();
+    if (s.indexOf('й') !== -1) s = s.replace(/й/g, 'и');
+    if (s.indexOf('ё') !== -1) s = s.replace(/ё/g, 'е');
+    if (NFD_NOT_NEEDED_BREAK_RE.test(s)) s = s.normalize('NFD').replace(MARKS_RE, '');
+    // Схлопывать пробелы нужно только если есть двойной пробел или нестандартный пробельный символ.
+    return (WS_NEEDS_COLLAPSE_RE.test(s) ? s.replace(/\s+/g, ' ') : s).trim();
 }
 
 export function buildClientAnalyticsSearchIndexLine(record) {
@@ -178,6 +321,54 @@ export function buildClientAnalyticsSearchIndexLine(record) {
     return normalizeSearchText(chunks.filter(Boolean).join(' '));
 }
 
+let warmedRecordsRef = null;
+function warmClientAnalyticsSearchLinesOnce(records) {
+    if (warmedRecordsRef === records) return;
+    warmedRecordsRef = records;
+    warmClientAnalyticsSearchLines(records);
+}
+let searchWarmupToken = 0;
+/**
+ * Фоновый прогрев кэша поисковых строк порциями в простое: первый поиск по большой базе
+ * не строит 100 000 строк разом. Новый вызов отменяет предыдущий прогрев.
+ */
+export function warmClientAnalyticsSearchLines(records) {
+    const token = ++searchWarmupToken;
+    if (!Array.isArray(records) || records.length < 2000) return;
+    let i = 0;
+    // Короткие срезы (≈6 мс) через setTimeout: requestIdleCallback в занятой странице почти не срабатывает.
+    const SLICE_MS = 6;
+    const step = () => {
+        if (token !== searchWarmupToken) return;
+        const t0 = performance.now();
+        while (i < records.length) {
+            const rec = records[i++];
+            if (rec && typeof rec === 'object') getCachedSearchLine(rec);
+            if ((i & 63) === 0) {
+                if (performance.now() - t0 > SLICE_MS) break;
+                try {
+                    if (navigator.scheduling?.isInputPending?.()) break;
+                } catch {
+                    /* ignore */
+                }
+            }
+        }
+        if (i < records.length) setTimeout(step, 4);
+    };
+    setTimeout(step, 50);
+}
+
+/** Нормализованная строка поиска записи кэшируется (записи в кэше неизменяемы). */
+const searchLineCache = new WeakMap();
+function getCachedSearchLine(record) {
+    let line = searchLineCache.get(record);
+    if (line === undefined) {
+        line = buildClientAnalyticsSearchIndexLine(record);
+        searchLineCache.set(record, line);
+    }
+    return line;
+}
+
 export function filterClientAnalyticsRecordsByQuery(records, query) {
     const prepared = Array.isArray(records) ? records : [];
     const q = normalizeSearchText(query);
@@ -185,9 +376,55 @@ export function filterClientAnalyticsRecordsByQuery(records, query) {
     const tokens = q.split(' ').filter(Boolean);
     if (!tokens.length) return prepared;
     return prepared.filter((record) => {
-        const line = buildClientAnalyticsSearchIndexLine(record);
+        const line =
+            record && typeof record === 'object'
+                ? getCachedSearchLine(record)
+                : buildClientAnalyticsSearchIndexLine(record);
         return tokens.every((token) => line.includes(token));
     });
+}
+
+/**
+ * Фильтр по запросу порциями (не блокирует UI). Возвращает null, если запрос устарел.
+ * Инкрементальное сужение: запрос, продолжающий предыдущий, фильтрует уже найденное.
+ */
+async function filterRecordsChunked(records, query, isStale) {
+    const q = normalizeSearchText(query);
+    if (!q) return records;
+    const tokens = q.split(' ').filter(Boolean);
+    if (!tokens.length) return records;
+    let base = records;
+    if (
+        caCache.lastFiltered &&
+        caCache.lastQuery &&
+        q.startsWith(caCache.lastQuery) &&
+        caCache.lastFilteredBase === records
+    ) {
+        base = caCache.lastFiltered;
+    }
+    const out = [];
+    let sliceStart = performance.now();
+    for (let i = 0; i < base.length; i++) {
+        const rec = base[i];
+        const line = getCachedSearchLine(rec);
+        let ok = true;
+        for (let k = 0; k < tokens.length; k++) {
+            if (!line.includes(tokens[k])) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok) out.push(rec);
+        if ((i & 511) === 511 && performance.now() - sliceStart > 12) {
+            await yieldToMain();
+            if (isStale()) return null;
+            sliceStart = performance.now();
+        }
+    }
+    caCache.lastQuery = q;
+    caCache.lastFiltered = out;
+    caCache.lastFilteredBase = records;
+    return out;
 }
 
 /**
@@ -624,26 +861,29 @@ function updateClientAnalyticsFilesListChrome(fileCount) {
  * @returns {Promise<void>}
  */
 async function purgeClientAnalyticsSectionStoresFromIndexedDb() {
-    const existing = await getAllFromIndexedDB('clientAnalyticsRecords');
-    for (const r of existing) {
-        if (deps.updateSearchIndex) {
-            await deps.updateSearchIndex('clientAnalyticsRecords', r.id, null, 'delete', r);
+    const ids = await getAllKeysFromIndexedDB('clientAnalyticsRecords');
+    if (ids.length) {
+        // один проход по индексу для всех записей вместо O(N × размер индекса)
+        if (deps.removeManyFromSearchIndex) {
+            await deps.removeManyFromSearchIndex('clientAnalyticsRecords', ids);
+        } else if (deps.updateSearchIndex) {
+            for (const id of ids) {
+                await deps.updateSearchIndex('clientAnalyticsRecords', id, null, 'delete', {
+                    id,
+                });
+            }
         }
-        await deleteFromIndexedDB('clientAnalyticsRecords', r.id);
     }
-    const existingFiles = await getAllFromIndexedDB('clientAnalyticsFiles');
-    for (const f of existingFiles) {
-        await deleteFromIndexedDB('clientAnalyticsFiles', f.id);
+    await clearIndexedDBStore('clientAnalyticsRecords');
+    for (const name of [
+        'clientAnalyticsFiles',
+        'clientAnalyticsFolders',
+        'clientAnalyticsTags',
+        'clientAnalyticsCardMeta',
+    ]) {
+        await clearIndexedDBStore(name);
     }
-    const wipeStore = async (name) => {
-        const rows = await getAllFromIndexedDB(name);
-        for (const row of Array.isArray(rows) ? rows : []) {
-            if (row && row.id != null) await deleteFromIndexedDB(name, row.id);
-        }
-    };
-    await wipeStore('clientAnalyticsFolders');
-    await wipeStore('clientAnalyticsTags');
-    await wipeStore('clientAnalyticsCardMeta');
+    invalidateClientAnalyticsCache();
 }
 
 /**
@@ -677,14 +917,21 @@ export async function clearEntireClientAnalyticsSection() {
  * @param {number} sourceFileId
  */
 async function deleteRecordsForFile(sourceFileId) {
-    const all = await getAllFromIndexedDB('clientAnalyticsRecords');
-    const toDel = all.filter((r) => r && r.sourceFileId === sourceFileId);
-    for (const rec of toDel) {
-        if (deps.updateSearchIndex) {
-            await deps.updateSearchIndex('clientAnalyticsRecords', rec.id, null, 'delete', rec);
+    const rows = await getAllFromIndex('clientAnalyticsRecords', 'sourceFileId', sourceFileId);
+    const keys = rows.map((r) => r.id);
+    if (keys.length) {
+        if (deps.removeManyFromSearchIndex) {
+            await deps.removeManyFromSearchIndex('clientAnalyticsRecords', keys, { items: rows });
+        } else if (deps.updateSearchIndex) {
+            for (const id of keys) {
+                await deps.updateSearchIndex('clientAnalyticsRecords', id, null, 'delete', { id });
+            }
         }
-        await deleteFromIndexedDB('clientAnalyticsRecords', rec.id);
+        for (let off = 0; off < keys.length; off += 5000) {
+            await bulkDeleteFromIndexedDB('clientAnalyticsRecords', keys.slice(off, off + 5000));
+        }
     }
+    await caPatchAfterMutation(new Set(keys));
 }
 
 /**
@@ -713,6 +960,56 @@ function setClientAnalyticsIngestPanelVisible(visible) {
     if (!panel) return;
     panel.classList.toggle('hidden', !visible);
     panel.setAttribute('aria-hidden', visible ? 'false' : 'true');
+}
+
+/** Метаданные файлов без тяжёлого rawText (дубликаты, список файлов). */
+async function getClientAnalyticsFilesMeta() {
+    if (caCache.filesMeta) return caCache.filesMeta;
+    const ver = caCache.version;
+    const rows = await getAllProjected('clientAnalyticsFiles', (f) => {
+        if (!f) return undefined;
+        const { rawText: _omit, ...meta } = f;
+        return meta;
+    });
+    if (ver === caCache.version) caCache.filesMeta = rows;
+    return rows;
+}
+
+let parseWorkerSeq = 0;
+/**
+ * Разбор крупного файла в Web Worker (UI не блокируется). Небольшие файлы и любые сбои воркера —
+ * синхронный разбор в основном потоке (результат идентичен).
+ * @param {string} text
+ * @param {string} fileName
+ */
+async function parseTxtOffMainThread(text, fileName) {
+    if (typeof Worker === 'undefined' || text.length < 120000) {
+        return parseTxtIntoRecords(text, fileName);
+    }
+    try {
+        const worker = new Worker(new URL('./client-analytics-parse-worker.js', import.meta.url), {
+            type: 'module',
+        });
+        const id = ++parseWorkerSeq;
+        const rows = await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('worker timeout')), 120000);
+            worker.onmessage = (e) => {
+                if (!e.data || e.data.id !== id) return;
+                clearTimeout(timer);
+                if (e.data.ok) resolve(e.data.rows);
+                else reject(new Error(e.data.error || 'worker error'));
+            };
+            worker.onerror = (e) => {
+                clearTimeout(timer);
+                reject(new Error(e && e.message ? e.message : 'worker failed'));
+            };
+            worker.postMessage({ id, text, fileName });
+        }).finally(() => worker.terminate());
+        return rows;
+    } catch (err) {
+        console.warn('[client-analytics] разбор в воркере недоступен, основной поток:', err);
+        return parseTxtIntoRecords(text, fileName);
+    }
 }
 
 /**
@@ -746,10 +1043,10 @@ export async function ingestTxtFile(file, opts = {}) {
         percent: 30,
         fileLabel,
     });
-    const parsed = parseTxtIntoRecords(text, file.name);
+    const parsed = await parseTxtOffMainThread(text, file.name);
     const structureSignature = buildClientAnalyticsStructureSignature(parsed);
     const recordsStructureSha256 = await sha256HexUtf8(structureSignature);
-    const existingFiles = await getAllFromIndexedDB('clientAnalyticsFiles');
+    const existingFiles = await getClientAnalyticsFilesMeta();
     const duplicateReason = decideClientAnalyticsDuplicateReason(
         {
             name: file.name,
@@ -782,6 +1079,7 @@ export async function ingestTxtFile(file, opts = {}) {
     });
 
     const id = await saveToIndexedDB('clientAnalyticsFiles', fileRow);
+    caCache.filesMeta = null;
     const saved = await getFromIndexedDB('clientAnalyticsFiles', id);
     if (!saved || saved.textSha256 !== textSha256) {
         await deleteFromIndexedDB('clientAnalyticsFiles', id);
@@ -797,37 +1095,60 @@ export async function ingestTxtFile(file, opts = {}) {
 
     try {
         const n = parsed.length || 1;
-        for (let i = 0; i < parsed.length; i++) {
-            const row = parsed[i];
+        const BATCH = 1000;
+        for (let off = 0; off < parsed.length; off += BATCH) {
+            const recs = parsed.slice(off, off + BATCH).map((row) => {
+                const rec = {
+                    sourceFileId: id,
+                    sourceFileName: file.name,
+                    uploadedAt,
+                    inn: row.inn,
+                    kpp: row.kpp || '',
+                    phones: row.phones || [],
+                    phonesJoined: (row.phones || []).join(' '),
+                    emails: row.emails || [],
+                    emailsJoined: (row.emails || []).join(' '),
+                    question: row.question || '',
+                    contextSnippet: row.contextSnippet || '',
+                    confidence: row.confidence || 'medium',
+                };
+                if (row.listItemIndex != null && Number.isFinite(row.listItemIndex)) {
+                    rec.listItemIndex = row.listItemIndex;
+                }
+                return rec;
+            });
+            // пакет в одной транзакции (ждём commit), затем одна пакетная индексация
+            const keys = await bulkPutToIndexedDB('clientAnalyticsRecords', recs);
+            recs.forEach((r, i) => {
+                r.id = keys[i];
+            });
+            if (deps.bulkAddToSearchIndex) {
+                await deps.bulkAddToSearchIndex('clientAnalyticsRecords', recs);
+            } else if (deps.updateSearchIndex) {
+                for (const r of recs) {
+                    await deps.updateSearchIndex('clientAnalyticsRecords', r.id, r, 'add', null);
+                }
+            }
+            recordCount += recs.length;
             updateClientAnalyticsIngestProgress({
-                phase: `Сохранение записей и индекс: ${i + 1} / ${parsed.length}`,
-                percent: 40 + (55 * (i + 1)) / n,
+                phase: `Сохранение записей и индекс: ${recordCount} / ${parsed.length}`,
+                percent: 40 + (55 * recordCount) / n,
                 fileLabel,
             });
-            const rec = {
-                sourceFileId: id,
-                sourceFileName: file.name,
-                uploadedAt,
-                inn: row.inn,
-                kpp: row.kpp || '',
-                phones: row.phones || [],
-                phonesJoined: (row.phones || []).join(' '),
-                emails: row.emails || [],
-                emailsJoined: (row.emails || []).join(' '),
-                question: row.question || '',
-                contextSnippet: row.contextSnippet || '',
-                confidence: row.confidence || 'medium',
-            };
-            if (row.listItemIndex != null && Number.isFinite(row.listItemIndex)) {
-                rec.listItemIndex = row.listItemIndex;
-            }
-            const rid = await saveToIndexedDB('clientAnalyticsRecords', rec);
-            const again = await getFromIndexedDB('clientAnalyticsRecords', rid);
-            if (again && deps.updateSearchIndex) {
-                await deps.updateSearchIndex('clientAnalyticsRecords', rid, again, 'add', null);
-            }
-            recordCount++;
+            await yieldToMain();
         }
+        // перепроверка целостности: число сохранённых записей файла совпадает с разобранным
+        const storedCount = await countInIndexedDB(
+            'clientAnalyticsRecords',
+            'sourceFileId',
+            id,
+        );
+        if (storedCount !== parsed.length) {
+            throw new Error(
+                `Проверка целостности записей не пройдена: сохранено ${storedCount} из ${parsed.length}`,
+            );
+        }
+        invalidateClientAnalyticsCache();
         if (parsed.length === 0) {
             saved.parseStatus = 'ok';
             saved.parseError =
@@ -843,6 +1164,7 @@ export async function ingestTxtFile(file, opts = {}) {
         saved.parseStatus = 'error';
         saved.parseError = e?.message || String(e);
         await saveToIndexedDB('clientAnalyticsFiles', saved);
+        invalidateClientAnalyticsCache();
         throw e;
     }
 
@@ -855,6 +1177,7 @@ export async function ingestTxtFile(file, opts = {}) {
 export async function deleteAnalyticsFile(fileId) {
     await deleteRecordsForFile(fileId);
     await deleteFromIndexedDB('clientAnalyticsFiles', fileId);
+    caCache.filesMeta = null;
 }
 
 /**
@@ -867,6 +1190,7 @@ export async function deleteAnalyticsRecord(recordId) {
         await deps.updateSearchIndex('clientAnalyticsRecords', recordId, null, 'delete', rec);
     }
     await deleteFromIndexedDB('clientAnalyticsRecords', recordId);
+    await caPatchAfterMutation(new Set([recordId]));
 }
 
 /**
@@ -913,19 +1237,33 @@ export async function importClientAnalyticsSection(data) {
         if (oldId != null) idMap.set(oldId, newId);
     }
 
-    for (const r of records) {
-        const copy = { ...r };
-        delete copy.id;
-        const sid = copy.sourceFileId;
-        if (sid != null && idMap.has(sid)) {
-            copy.sourceFileId = idMap.get(sid);
+    for (let off = 0; off < records.length; off += 1000) {
+        const batch = [];
+        for (const r of records.slice(off, off + 1000)) {
+            if (!r || typeof r !== 'object') continue;
+            const copy = { ...r };
+            delete copy.id;
+            const sid = copy.sourceFileId;
+            if (sid != null && idMap.has(sid)) {
+                copy.sourceFileId = idMap.get(sid);
+            }
+            batch.push(copy);
         }
-        const nid = await saveToIndexedDB('clientAnalyticsRecords', copy);
-        const saved = await getFromIndexedDB('clientAnalyticsRecords', nid);
-        if (saved && deps.updateSearchIndex) {
-            await deps.updateSearchIndex('clientAnalyticsRecords', nid, saved, 'add', null);
+        if (!batch.length) continue;
+        const keys = await bulkPutToIndexedDB('clientAnalyticsRecords', batch);
+        batch.forEach((r, i) => {
+            r.id = keys[i];
+        });
+        if (deps.bulkAddToSearchIndex) {
+            await deps.bulkAddToSearchIndex('clientAnalyticsRecords', batch);
+        } else if (deps.updateSearchIndex) {
+            for (const r of batch) {
+                await deps.updateSearchIndex('clientAnalyticsRecords', r.id, r, 'add', null);
+            }
         }
+        await yieldToMain();
     }
+    invalidateClientAnalyticsCache();
 
     const folderRows = Array.isArray(data.folders) ? data.folders : [];
     const tagRows = Array.isArray(data.tags) ? data.tags : [];
@@ -1256,40 +1594,151 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
     return el;
 }
 
+let caRenderSeq = 0;
+/** @type {ReturnType<typeof createVirtualGrid> | null} */
+let caGrid = null;
+let caGridContainer = null;
+let caHadItems = false;
+
+function ensureClientAnalyticsStatusEl(container) {
+    let el = document.getElementById('clientAnalyticsListStatus');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'clientAnalyticsListStatus';
+        el.className = 'vg-status';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.hidden = true;
+        container.parentNode.insertBefore(el, container);
+    }
+    return el;
+}
+
+function setClientAnalyticsStatus(container, text, withReset) {
+    const el = ensureClientAnalyticsStatusEl(container);
+    if (!text) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.hidden = false;
+    el.textContent = text;
+    if (withReset) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.id = 'clientAnalyticsResetFiltersBtn';
+        b.textContent = 'Сбросить поиск';
+        b.addEventListener('click', () => {
+            const si = document.getElementById('clientAnalyticsSearchInput');
+            if (si) {
+                si.value = '';
+                si.dispatchEvent(new Event('input', { bubbles: true }));
+                si.focus();
+            }
+        });
+        el.appendChild(b);
+    }
+}
+
+function destroyClientAnalyticsGrid() {
+    if (caGrid) {
+        caGrid.destroy();
+        caGrid = null;
+        caGridContainer = null;
+    }
+}
+
+function showClientAnalyticsSkeleton(container, label) {
+    destroyClientAnalyticsGrid();
+    container.textContent = '';
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < 6; i++) {
+        const sk = document.createElement('div');
+        sk.className = 'vg-skeleton';
+        sk.setAttribute('aria-hidden', 'true');
+        frag.appendChild(sk);
+    }
+    const p = document.createElement('p');
+    p.className = 'vg-progress';
+    p.id = 'clientAnalyticsLoadProgress';
+    p.textContent = label || 'Загрузка базы…';
+    frag.appendChild(p);
+    container.appendChild(frag);
+}
+
 /**
  * Рендер списка записей и метаданных файлов.
+ * Данные читаются курсором один раз и кэшируются; в DOM — только видимые карточки (виртуализация).
+ * Повторные вызовы отменяют устаревшие (последний выигрывает).
+ * @param {{ light?: boolean, force?: boolean, keepScroll?: boolean }} [opts]
+ *   light — быстрый путь для набора запроса (без перечтения чёрного списка и файлов);
+ *   keepScroll — после мутации сохранить позицию прокрутки.
  */
-export async function renderClientAnalyticsPage() {
+export async function renderClientAnalyticsPage(opts = {}) {
     const container = document.getElementById('clientAnalyticsContainer');
     const filesListEl = document.getElementById('clientAnalyticsFilesList');
     const filesSectionEl = document.getElementById('clientAnalyticsFilesSection');
     if (!container) return;
+    const seq = ++caRenderSeq;
+    const isStale = () => seq !== caRenderSeq;
 
-    const records = await getAllFromIndexedDB('clientAnalyticsRecords');
+    const viewMode =
+        (State.viewPreferences && State.viewPreferences['clientAnalyticsContainer']) ||
+        container.dataset.defaultView ||
+        'cards';
+    const applyContainerClasses = () => {
+        container.className =
+            viewMode === 'cards'
+                ? CARD_CONTAINER_CLASSES.join(' ')
+                : LIST_CONTAINER_CLASSES.join(' ');
+        if (viewMode === 'cards') {
+            const gridCols =
+                SECTION_GRID_COLS.clientAnalyticsContainer || SECTION_GRID_COLS.default;
+            gridCols.forEach((c) => container.classList.add(c));
+            container.classList.add('gap-4', 'auto-rows-fr');
+        }
+        container.dataset.view = viewMode === 'list' ? 'list' : 'cards';
+    };
+
+    if (!caCache.records) {
+        applyContainerClasses();
+        showClientAnalyticsSkeleton(container, 'Загрузка базы…');
+    }
+    const records = await loadClientAnalyticsDataset({
+        force: !!opts.force,
+        onProgress: (n, t) => {
+            const pe = document.getElementById('clientAnalyticsLoadProgress');
+            if (pe) pe.textContent = `Загрузка базы: ${n.toLocaleString('ru-RU')} из ${t.toLocaleString('ru-RU')}`;
+        },
+    });
+    if (isStale()) return;
+
     /** @type {Map<string, number>} */
-    let blacklistLevelByInn = new Map();
-    if (State.db) {
+    let blacklistLevelByInn = caCache.blLevels || new Map();
+    if (State.db && (!opts.light || !caCache.blLevels)) {
         try {
             const blEntries = await getAllFromIndexedDB('blacklistedClients');
             blacklistLevelByInn = buildMaxBlacklistLevelByInnMap(blEntries);
+            caCache.blLevels = blacklistLevelByInn;
         } catch (err) {
             console.warn(
                 '[client-analytics] не удалось загрузить чёрный список для перекрёстной сверки',
                 err,
             );
         }
+        if (isStale()) return;
     }
-    const sorted = records
-        .filter((r) => r && r.id != null)
-        .sort((a, b) => {
-            const ta = new Date(a.uploadedAt || 0).getTime();
-            const tb = new Date(b.uploadedAt || 0).getTime();
-            return tb - ta;
-        });
-    const totalRecords = sorted.length;
-    const filtered = filterClientAnalyticsRecordsByQuery(sorted, clientAnalyticsSearchQuery);
-    const groupedAll = groupClientAnalyticsRecordsForDisplay(sorted);
-    const groupedFiltered = groupClientAnalyticsRecordsForDisplay(filtered);
+
+    warmClientAnalyticsSearchLinesOnce(records);
+    const totalRecords = records.length;
+    if (!caCache.groupedAll) caCache.groupedAll = groupClientAnalyticsRecordsForDisplay(records);
+    const groupedAll = caCache.groupedAll;
+
+    const query = clientAnalyticsSearchQuery;
+    const filtered = await filterRecordsChunked(records, query, isStale);
+    if (filtered === null || isStale()) return;
+    const groupedFiltered =
+        filtered === records ? groupedAll : groupClientAnalyticsRecordsForDisplay(filtered);
     const cardCountAll = groupedAll.innStacks.length + groupedAll.noInnRecords.length;
     const cardCountFiltered =
         groupedFiltered.innStacks.length + groupedFiltered.noInnRecords.length;
@@ -1306,6 +1755,7 @@ export async function renderClientAnalyticsPage() {
     };
     try {
         orgState = await loadClientAnalyticsOrgState();
+        if (isStale()) return;
         syncClientAnalyticsOrgToolbarDom(orgState.folders, orgState.tags, orgState.view);
     } catch (e) {
         console.warn('[client-analytics] не удалось загрузить папки/теги', e);
@@ -1319,114 +1769,165 @@ export async function renderClientAnalyticsPage() {
                 ? ' · фильтр'
                 : '';
         countEl.textContent =
-            clientAnalyticsSearchQuery.trim().length > 0
+            query.trim().length > 0
                 ? `Карточек: ${cardCountAll} · по запросу: ${cardCountFiltered} (${filtered.length} обращ.)${filterSuffix}`
                 : `Карточек: ${cardCountAll} · обращений: ${totalRecords}${filterSuffix}`;
     }
 
-    const viewMode =
-        (State.viewPreferences && State.viewPreferences['clientAnalyticsContainer']) ||
-        container.dataset.defaultView ||
-        'cards';
+    applyContainerClasses();
 
-    container.innerHTML = '';
-    container.className =
-        viewMode === 'cards' ? CARD_CONTAINER_CLASSES.join(' ') : LIST_CONTAINER_CLASSES.join(' ');
-    if (viewMode === 'cards') {
-        const gridCols = SECTION_GRID_COLS.clientAnalyticsContainer || SECTION_GRID_COLS.default;
-        gridCols.forEach((c) => container.classList.add(c));
-        container.classList.add('gap-4', 'auto-rows-fr');
-    }
+    const emptyMsg = (html) => {
+        destroyClientAnalyticsGrid();
+        container.innerHTML = html;
+        caHadItems = false;
+    };
 
     if (cardCountFiltered === 0) {
-        container.innerHTML =
-            clientAnalyticsSearchQuery.trim().length > 0
+        setClientAnalyticsStatus(container, '', false);
+        emptyMsg(
+            query.trim().length > 0
                 ? `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">По запросу «${escapeHtml(
-                      clientAnalyticsSearchQuery,
+                      query,
                   )}» ничего не найдено.</p>`
-                : '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">Записей пока нет. Загрузите один или несколько .txt файлов выше.</p>';
-    } else {
-        let units = buildDisplayUnitsFromGrouped(groupedFiltered);
-        units = sortClientAnalyticsDisplayUnits(units, orgState.view.sortMode);
-        const metaRecord = Object.fromEntries(orgState.metaById);
-        units = filterUnitsByFolder(units, orgState.view.folderFilter, metaRecord);
-        units = filterUnitsByTagsAny(units, orgState.view.tagFilterIds, metaRecord);
-        const sections = groupClientAnalyticsUnitsForRender(
-            units,
-            orgState.view.groupMode,
-            orgState.folders,
-            orgState.tags,
-            metaRecord,
+                : '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">Записей пока нет. Загрузите один или несколько .txt файлов выше.</p>',
         );
-
-        /**
-         * @param {import('./client-analytics-organization.js').CaDisplayUnit} u
-         */
-        const orgPayloadForUnit = (u) => {
-            const id = getClientAnalyticsUnitMetaId(u);
-            const meta = orgState.metaById.get(id) || { folderId: null, tagIds: [] };
-            const chips = buildClientAnalyticsMetaChipsHtml(
-                meta,
-                orgState.foldersById,
-                orgState.tagsById,
-            );
-            return { metaId: id, chipsHtml: chips };
-        };
-
-        if (!units.length) {
-            container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">По выбранным фильтрам папки и тегов карточек нет. Сбросьте фильтры или назначьте папки и теги через иконку на карточке.</p>`;
+    } else {
+        const metaRecord = Object.fromEntries(orgState.metaById);
+        const pipeKey = JSON.stringify([
+            caCache.version,
+            query.trim() ? caCache.lastQuery : '',
+            orgState.view.sortMode,
+            orgState.view.groupMode,
+            orgState.view.folderFilter,
+            orgState.view.tagFilterIds,
+            orgState.folders.map((f) => [f.id, f.name, f.sortOrder]),
+            orgState.tags.map((t) => [t.id, t.name, t.sortOrder]),
+            orgState.metaById.size,
+            Array.from(orgState.metaById, ([k, m]) => [k, m.folderId, m.tagIds]),
+        ]);
+        let flat;
+        let unitCount = 0;
+        if (caCache.units && caCache.units.key === pipeKey) {
+            flat = caCache.units.flat;
+            unitCount = caCache.units.unitCount;
         } else {
-            const frag = document.createDocumentFragment();
+            let units = buildDisplayUnitsFromGrouped(groupedFiltered);
+            units = sortClientAnalyticsDisplayUnits(units, orgState.view.sortMode);
+            units = filterUnitsByFolder(units, orgState.view.folderFilter, metaRecord);
+            units = filterUnitsByTagsAny(units, orgState.view.tagFilterIds, metaRecord);
+            unitCount = units.length;
+            const sections = groupClientAnalyticsUnitsForRender(
+                units,
+                orgState.view.groupMode,
+                orgState.folders,
+                orgState.tags,
+                metaRecord,
+            );
+            flat = [];
             for (const sec of sections) {
-                if (sec.label) {
-                    const h = document.createElement('h3');
-                    h.className =
-                        'ca-section-heading col-span-full text-sm font-semibold text-gray-700 dark:text-gray-200 mt-3 mb-2 px-0.5 border-b border-gray-200 dark:border-gray-600 pb-1';
-                    h.textContent = sec.label;
-                    frag.appendChild(h);
-                }
-                for (const u of sec.units) {
-                    if (u.type === 'inn') {
-                        const blLevel = getBlacklistLevelForClientInn(
-                            u.innKey,
-                            blacklistLevelByInn,
-                        );
-                        frag.appendChild(
-                            createInnStackCardElement(
-                                { innKey: u.innKey, records: u.records },
-                                viewMode,
-                                blLevel,
-                                orgPayloadForUnit(u),
-                            ),
-                        );
-                    } else {
-                        const blLevel = getBlacklistLevelForClientInn(
-                            u.record.inn,
-                            blacklistLevelByInn,
-                        );
-                        frag.appendChild(
-                            createRecordCardElement(
-                                u.record,
-                                viewMode,
-                                blLevel,
-                                orgPayloadForUnit(u),
-                            ),
-                        );
-                    }
-                }
+                if (sec.label) flat.push({ kind: 'h', label: sec.label });
+                for (const u of sec.units) flat.push({ kind: 'u', u });
             }
-            container.appendChild(frag);
+            caCache.units = { key: pipeKey, flat, unitCount };
+        }
+
+        if (!unitCount) {
+            setClientAnalyticsStatus(container, '', false);
+            emptyMsg(
+                `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full py-6">По выбранным фильтрам папки и тегов карточек нет. Сбросьте фильтры или назначьте папки и теги через иконку на карточке.</p>`,
+            );
+        } else {
+            const filtersActive =
+                query.trim().length > 0 ||
+                orgState.view.folderFilter !== CA_FOLDER_FILTER_ALL ||
+                (orgState.view.tagFilterIds || []).length > 0;
+            setClientAnalyticsStatus(
+                container,
+                filtersActive
+                    ? `Показано ${unitCount.toLocaleString('ru-RU')} из ${cardCountAll.toLocaleString('ru-RU')} карточек`
+                    : '',
+                query.trim().length > 0,
+            );
+
+            /** @param {import('./client-analytics-organization.js').CaDisplayUnit} u */
+            const orgPayloadForUnit = (u) => {
+                const id = getClientAnalyticsUnitMetaId(u);
+                const meta = orgState.metaById.get(id) || { folderId: null, tagIds: [] };
+                return {
+                    metaId: id,
+                    chipsHtml: buildClientAnalyticsMetaChipsHtml(
+                        meta,
+                        orgState.foldersById,
+                        orgState.tagsById,
+                    ),
+                };
+            };
+            const renderItem = (item, _i, mode) => {
+                let el;
+                if (item.kind === 'h') {
+                    el = document.createElement('h3');
+                    el.className =
+                        'ca-section-heading col-span-full text-sm font-semibold text-gray-700 dark:text-gray-200 mt-3 mb-2 px-0.5 border-b border-gray-200 dark:border-gray-600 pb-1';
+                    el.textContent = item.label;
+                    return el;
+                }
+                const u = item.u;
+                if (u.type === 'inn') {
+                    el = createInnStackCardElement(
+                        { innKey: u.innKey, records: u.records },
+                        mode,
+                        getBlacklistLevelForClientInn(u.innKey, blacklistLevelByInn),
+                        orgPayloadForUnit(u),
+                    );
+                } else {
+                    el = createRecordCardElement(
+                        u.record,
+                        mode,
+                        getBlacklistLevelForClientInn(u.record.inn, blacklistLevelByInn),
+                        orgPayloadForUnit(u),
+                    );
+                }
+                decorateCardForView(el, mode);
+                return el;
+            };
+            if (!caGrid || caGridContainer !== container) {
+                destroyClientAnalyticsGrid();
+                container.textContent = '';
+                caGrid = createVirtualGrid({
+                    container,
+                    renderItem,
+                    isFullRow: (it) => it.kind === 'h',
+                    getViewMode: () => (container.dataset.view === 'list' ? 'list' : 'cards'),
+                    estimateRowHeight: (m) => (m === 'list' ? 130 : 230),
+                });
+                caGridContainer = container;
+            } else {
+                // обновить замыкания (данные чёрного списка/организации новые)
+                caGrid.destroy();
+                container.textContent = '';
+                caGrid = createVirtualGrid({
+                    container,
+                    renderItem,
+                    isFullRow: (it) => it.kind === 'h',
+                    getViewMode: () => (container.dataset.view === 'list' ? 'list' : 'cards'),
+                    estimateRowHeight: (m) => (m === 'list' ? 130 : 230),
+                });
+            }
+            caGrid.setItems(flat, { keepScroll: !!opts.keepScroll, animate: !caHadItems });
+            caHadItems = true;
+            if (typeof deps.applyCurrentView === 'function') {
+                deps.applyCurrentView('clientAnalyticsContainer');
+            } else if (typeof window.applyCurrentView === 'function') {
+                window.applyCurrentView('clientAnalyticsContainer');
+            }
         }
     }
 
-    if (typeof deps.applyCurrentView === 'function') {
-        deps.applyCurrentView('clientAnalyticsContainer');
-    } else if (typeof window.applyCurrentView === 'function') {
-        window.applyCurrentView('clientAnalyticsContainer');
-    }
+    if (isStale()) return;
 
-    if (filesListEl && filesSectionEl) {
-        const files = await getAllFromIndexedDB('clientAnalyticsFiles');
+    if (filesListEl && filesSectionEl && !opts.light) {
+        const files = await getClientAnalyticsFilesMeta();
+        if (isStale()) return;
         const byDate = files
             .filter(Boolean)
             .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
@@ -1458,6 +1959,15 @@ export async function renderClientAnalyticsPage() {
     }
 }
 
+async function getInnStackFromCache(innKey) {
+    const records = await loadClientAnalyticsDataset();
+    if (!caCache.groupedAll) caCache.groupedAll = groupClientAnalyticsRecordsForDisplay(records);
+    if (!caCache.innMap) {
+        caCache.innMap = new Map(caCache.groupedAll.innStacks.map((s) => [s.innKey, s.records]));
+    }
+    return caCache.innMap.get(innKey) || [];
+}
+
 /**
  * Модалка: хронология всех обращений по одному ИНН (данные перечитываются из IndexedDB).
  * @param {string} innKey нормализованный ИНН (10/12 цифр)
@@ -1471,12 +1981,8 @@ export async function showClientAnalyticsInnHistoryModal(innKey) {
     const titleEl = document.getElementById('clientAnalyticsDetailTitle');
     if (!modal || !body || !titleEl) return;
 
-    const all = await getAllFromIndexedDB('clientAnalyticsRecords');
-    const stack = all
-        .filter((r) => r && r.id != null && normalizeInnForBlacklistLookup(r.inn) === key)
-        .sort(
-            (a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime(),
-        );
+    // из кэша набора данных (без перечитывания 100 000 записей из IndexedDB на каждое открытие)
+    const stack = (await getInnStackFromCache(key)).slice();
     if (!stack.length) return;
 
     deactivateModalFocus(modal);
@@ -2063,7 +2569,7 @@ export function initClientAnalyticsUi() {
             (async () => {
                 await deleteAnalyticsRecord(rid);
                 if (deps.showNotification) deps.showNotification('Запись удалена', 'success');
-                await renderClientAnalyticsPage();
+                await renderClientAnalyticsPage({ keepScroll: true });
             })();
             return;
         }
@@ -2099,7 +2605,8 @@ export function initClientAnalyticsUi() {
     const clearSearchBtn = document.getElementById('clearClientAnalyticsSearchBtn');
     if (searchInput && !searchInput._clientAnalyticsSearchBound) {
         searchInput._clientAnalyticsSearchBound = true;
-        searchInput.addEventListener('input', async () => {
+        let searchTimer = 0;
+        searchInput.addEventListener('input', () => {
             clientAnalyticsSearchQuery = searchInput.value || '';
             if (clearSearchBtn) {
                 clearSearchBtn.classList.toggle(
@@ -2107,7 +2614,11 @@ export function initClientAnalyticsUi() {
                     clientAnalyticsSearchQuery.trim().length === 0,
                 );
             }
-            await renderClientAnalyticsPage();
+            // debounce: на большой базе не перестраиваем список на каждую букву
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                void renderClientAnalyticsPage({ light: true });
+            }, 160);
         });
     }
     if (clearSearchBtn && !clearSearchBtn._clientAnalyticsSearchBound) {
@@ -2118,7 +2629,7 @@ export function initClientAnalyticsUi() {
             clientAnalyticsSearchQuery = '';
             clearSearchBtn.classList.add('hidden');
             searchInput.focus();
-            await renderClientAnalyticsPage();
+            await renderClientAnalyticsPage({ light: true });
         });
     }
     if (clearSearchBtn) {

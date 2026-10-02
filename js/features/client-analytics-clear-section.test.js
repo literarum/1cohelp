@@ -27,6 +27,33 @@ vi.mock('../db/indexeddb.js', () => ({
         const idx = arr.findIndex((row) => row && row.id === id);
         if (idx !== -1) arr.splice(idx, 1);
     },
+    getAllProjected: async (name, fn) =>
+        (inventory[name] || []).map((r) => fn(r)).filter((v) => v !== undefined),
+    forEachBatchInStore: async (name, cb) => {
+        const rows = [...(inventory[name] || [])];
+        if (rows.length) await cb(rows);
+        return rows.length;
+    },
+    bulkPutToIndexedDB: async (name, rows) => {
+        const arr = (inventory[name] = inventory[name] || []);
+        return rows.map((r) => {
+            const id = r.id ?? arr.length + 1000;
+            arr.push({ ...r, id });
+            return id;
+        });
+    },
+    bulkDeleteFromIndexedDB: async (name, keys) => {
+        inventory[name] = (inventory[name] || []).filter((r) => !keys.includes(r.id));
+    },
+    countInIndexedDB: async (name) => (inventory[name] || []).length,
+    maxKeyInIndexedDB: async (name) =>
+        Math.max(0, ...(inventory[name] || []).map((r) => Number(r.id) || 0)),
+    getAllKeysFromIndexedDB: async (name) => (inventory[name] || []).map((r) => r.id),
+    getAllFromIndex: async () => [],
+    clearIndexedDBStore: async (name) => {
+        inventory[name] = [];
+    },
+    yieldToMain: async () => {},
 }));
 
 import {

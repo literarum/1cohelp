@@ -29,6 +29,7 @@ export function setTabsOverflowDependencies(dependencies) {
 // КОНСТАНТЫ
 // ============================================================================
 
+let lastVisibleTabsSignature = '';
 const MAX_UPDATE_VISIBLE_TABS_RETRIES = 5;
 const LAYOUT_ERROR_MARGIN = 5;
 /** Допуск (px) при сравнении границ вкладок (субпиксельный рендер) */
@@ -89,6 +90,21 @@ export function updateVisibleTabs() {
     }
 
     State.updateVisibleTabsRetryCount = 0;
+
+    // Пересчёт раскладки вкладок дорог (сброс классов + чтение rect каждой вкладки). Если ширина панели,
+    // набор доступных вкладок и подписи не менялись с прошлого раза — результат прежний, пропускаем.
+    const signature = (() => {
+        const tabs = tabsNav.querySelectorAll('.tab-btn:not(#moreTabsBtn)');
+        let sig = `${tabsNav.offsetWidth}|${window.innerWidth}|${tabs.length}|`;
+        for (const t of tabs) {
+            sig += `${t.id}${t.classList.contains('hidden') ? 'h' : 'v'}${(t.textContent || '').length},`;
+        }
+        return sig;
+    })();
+    if (signature === lastVisibleTabsSignature && moreTabsDropdown.dataset.tabsLaidOut === '1') {
+        return;
+    }
+    lastVisibleTabsSignature = signature;
 
     moreTabsDropdown.innerHTML = '';
     if (moreTabsContainer) {
@@ -177,6 +193,7 @@ export function updateVisibleTabs() {
         }
         moreTabsDropdown.appendChild(dropdownFragment);
     }
+    moreTabsDropdown.dataset.tabsLaidOut = '1';
 }
 
 /**

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { getAllFromIndexedDB } from '../db/indexeddb.js';
+import { refreshBookmarksList } from '../components/bookmarks.js';
 
 let createBookmarkElement = null;
 let applyCurrentView = null;
@@ -62,20 +63,11 @@ export async function addBookmarkToDOM(bookmarkData) {
         }
     }
 
-    const folderMap = await buildBookmarkFolderMap();
-    const newElement = await createBookmarkElement(bookmarkData, folderMap);
-    if (!newElement) {
-        console.error(
-            'addBookmarkToDOM: Не удалось создать DOM-элемент для закладки:',
-            bookmarkData,
-        );
-        return;
-    }
-
-    bookmarksContainer.appendChild(newElement);
-    console.log(`Закладка ID ${bookmarkData.id} добавлена в DOM.`);
-
-    applyCurrentView('bookmarksContainer');
+    // Список виртуализирован (в DOM только видимые карточки) — модель обновляем перерисовкой
+    // с учётом фильтров/сортировки и сохранением прокрутки, а не вставкой узла.
+    void buildBookmarkFolderMap;
+    await refreshBookmarksList({ force: true, keepScroll: true });
+    console.log(`Закладка ID ${bookmarkData.id} добавлена в список.`);
 }
 
 export async function updateBookmarkInDOM(bookmarkData) {
@@ -85,30 +77,8 @@ export async function updateBookmarkInDOM(bookmarkData) {
         return;
     }
 
-    const existingElement = bookmarksContainer.querySelector(
-        `.bookmark-item[data-id="${bookmarkData.id}"]`,
-    );
-    if (!existingElement) {
-        console.warn(
-            `updateBookmarkInDOM: Не найден элемент закладки с ID ${bookmarkData.id} для обновления в DOM.`,
-        );
-        await addBookmarkToDOM(bookmarkData);
-        return;
-    }
-
-    const folderMap = await buildBookmarkFolderMap();
-    const newElement = await createBookmarkElement(bookmarkData, folderMap);
-    if (!newElement) {
-        console.error(
-            `updateBookmarkInDOM: Не удалось создать обновленный элемент для закладки ID ${bookmarkData.id}.`,
-        );
-        return;
-    }
-
-    existingElement.replaceWith(newElement);
-    console.log(`Закладка ID ${bookmarkData.id} обновлена в DOM.`);
-
-    applyCurrentView('bookmarksContainer');
+    await refreshBookmarksList({ force: true, keepScroll: true });
+    console.log(`Закладка ID ${bookmarkData.id} обновлена в списке.`);
 }
 
 export async function removeBookmarkFromDOM(bookmarkId) {
@@ -157,24 +127,9 @@ export async function removeBookmarkFromDOM(bookmarkId) {
         return;
     }
 
-    const itemToRemove = bookmarksContainer.querySelector(
-        `.bookmark-item[data-id="${bookmarkId}"]`,
-    );
-    if (itemToRemove) {
-        itemToRemove.remove();
-        console.log(`Удален элемент закладки ${bookmarkId} из DOM.`);
-
-        if (!bookmarksContainer.querySelector('.bookmark-item')) {
-            bookmarksContainer.innerHTML =
-                '<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">Нет сохраненных закладок</div>';
-            console.log('Контейнер закладок пуст, добавлено сообщение.');
-        }
-        applyCurrentView('bookmarksContainer');
-    } else {
-        console.warn(
-            `removeBookmarkFromDOM: Элемент закладки ${bookmarkId} не найден в DOM для удаления.`,
-        );
-    }
+    // Перерисовка списка из актуального снимка (карточка могла быть вне видимого окна).
+    await refreshBookmarksList({ force: true, keepScroll: true });
+    console.log(`Закладка ${bookmarkId} убрана из списка.`);
     try {
         const removed = await removeFromFavoritesDB('bookmark', bookmarkId);
         if (removed) {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { __googleDocsInternals, fetchGoogleDocs } from './google-docs.js';
+import { __googleDocsInternals, fetchGoogleDocs, buildGoogleDocsErrorInfo, GoogleDocsError } from './google-docs.js';
 
 describe('google-docs transport compatibility', () => {
     beforeEach(() => {
@@ -67,5 +67,31 @@ describe('google-docs transport compatibility', () => {
         expect(filtered.join('\n')).toContain('Title B');
         expect(filtered.join('\n')).toContain('matchword');
         expect(filtered.some((l) => String(l).includes('no match'))).toBe(false);
+    });
+
+    it('offline: кидает GoogleDocsError(kind=offline)', async () => {
+        Object.defineProperty(globalThis.navigator, 'onLine', { value: false, configurable: true });
+        let err = null;
+        try {
+            await fetchGoogleDocs(['doc-1']);
+        } catch (e) {
+            err = e;
+        }
+        expect(err).toBeInstanceOf(GoogleDocsError);
+        expect(buildGoogleDocsErrorInfo(err).kind).toBe('offline');
+    });
+
+    it('HTTP 403 не ретраится и возвращает errorInfo со статусом', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({}) });
+        vi.stubGlobal('fetch', fetchMock);
+        const result = await fetchGoogleDocs(['doc-1'], true);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result[0].errorInfo.kind).toBe('http');
+        expect(result[0].errorInfo.status).toBe(403);
+    });
+
+    it('buildGoogleDocsErrorInfo определяет тип по тексту', () => {
+        expect(buildGoogleDocsErrorInfo(new Error('Превышено время ожидания')).kind).toBe('timeout');
+        expect(buildGoogleDocsErrorInfo(new Error('Ошибка загрузки: статус 500')).status).toBe(500);
     });
 });

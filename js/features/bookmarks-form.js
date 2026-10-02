@@ -3,6 +3,13 @@
 import { getFromIndexedDB } from '../db/indexeddb.js';
 import { parseTagsFromUserString } from '../features/global-tags.js';
 import { flushPendingPdfRenamesInContainer } from '../features/pdf-attachments.js';
+import {
+    normalizeUrlInput,
+    setFieldError,
+    clearFieldError,
+    autoClearErrorOnInput,
+    shakeField,
+} from '../ui/form-helpers.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
 
 // ============================================================================
@@ -80,7 +87,7 @@ export async function handleBookmarkFormSubmit(event) {
 
     const id = form.elements.bookmarkId.value;
     const title = form.elements.bookmarkTitle.value.trim();
-    const url = form.elements.bookmarkUrl.value.trim();
+    const urlRaw = form.elements.bookmarkUrl.value.trim();
     const description = form.elements.bookmarkDescription.value.trim();
 
     const folderValue = form.elements.bookmarkFolder.value;
@@ -104,49 +111,42 @@ export async function handleBookmarkFormSubmit(event) {
         }
     }
 
+    const restoreSaveButton = () => {
+        saveButton.disabled = false;
+        saveButton.innerHTML = id
+            ? '<i class="fas fa-save mr-1"></i> Сохранить изменения'
+            : '<i class="fas fa-plus mr-1"></i> Добавить';
+    };
+    const failField = (input, message) => {
+        restoreSaveButton();
+        setFieldError(input, message);
+        autoClearErrorOnInput(input);
+        shakeField(input);
+        input.focus();
+    };
+    ['bookmarkTitle', 'bookmarkUrl', 'bookmarkDescription'].forEach((n) =>
+        clearFieldError(form.elements[n]),
+    );
+
     if (!title) {
-        if (typeof showNotification === 'function')
-            showNotification("Заполните поле 'Название'", 'error');
-        saveButton.disabled = false;
-        saveButton.innerHTML = id
-            ? '<i class="fas fa-save mr-1"></i> Сохранить изменения'
-            : '<i class="fas fa-plus mr-1"></i> Добавить';
-        form.elements.bookmarkTitle.focus();
+        failField(form.elements.bookmarkTitle, 'Введите название закладки');
         return;
     }
-    if (!url && !description) {
-        if (typeof showNotification === 'function')
-            showNotification("Заполните 'Описание', т.к. URL не указан", 'error');
-        saveButton.disabled = false;
-        saveButton.innerHTML = id
-            ? '<i class="fas fa-save mr-1"></i> Сохранить изменения'
-            : '<i class="fas fa-plus mr-1"></i> Добавить';
-        form.elements.bookmarkDescription.focus();
-        return;
-    }
-    if (url) {
-        try {
-            let testUrl = url;
-            if (!testUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/i) && testUrl.includes('.')) {
-                if (!testUrl.startsWith('//')) {
-                    testUrl = 'https://' + testUrl;
-                }
-            }
-            const parsedUrl = new URL(testUrl);
-            // Исполняемые схемы в закладках недопустимы (javascript:/data:/vbscript:) — хранимый XSS-вектор.
-            if (/^(javascript|data|vbscript):$/i.test(parsedUrl.protocol)) {
-                throw new Error('unsafe url scheme');
-            }
-        } catch {
-            if (typeof showNotification === 'function')
-                showNotification('Введите корректный URL (например, https://example.com)', 'error');
-            saveButton.disabled = false;
-            saveButton.innerHTML = id
-                ? '<i class="fas fa-save mr-1"></i> Сохранить изменения'
-                : '<i class="fas fa-plus mr-1"></i> Добавить';
-            form.elements.bookmarkUrl.focus();
+    let url = '';
+    if (urlRaw) {
+        const normalized = normalizeUrlInput(urlRaw);
+        if (!normalized.ok) {
+            failField(form.elements.bookmarkUrl, normalized.error);
             return;
         }
+        url = normalized.url;
+    }
+    if (!url && !description) {
+        failField(
+            form.elements.bookmarkDescription,
+            'Укажите описание — без URL закладка хранит только текст',
+        );
+        return;
     }
 
     const screenshotOps = [];

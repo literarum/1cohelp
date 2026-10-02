@@ -44,6 +44,26 @@ export function newMentorPackId() {
 }
 
 /**
+ * Копия пакета с новым id и пометкой в названии (для быстрой подготовки вариантов теста).
+ * @param {MentorQuizPack} pack
+ * @returns {MentorQuizPack | null}
+ */
+export function duplicateMentorPack(pack) {
+    const n = normalizeMentorQuizPack(pack);
+    if (!n) return null;
+    const now = new Date().toISOString();
+    const base = n.title.replace(/\s*\(копия(?: \d+)?\)$/u, '');
+    return {
+        ...n,
+        id: newMentorPackId(),
+        title: `${base} (копия)`.slice(0, 500),
+        questions: n.questions.map((q) => JSON.parse(JSON.stringify(q))),
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+/**
  * @param {unknown} raw
  * @returns {MentorQuizPack | null}
  */

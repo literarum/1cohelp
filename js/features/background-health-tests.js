@@ -1,5 +1,6 @@
 'use strict';
 
+import { waitForUserIdle } from '../utils/user-idle.js';
 import {
     CURRENT_SCHEMA_VERSION,
     USER_PREFERENCES_KEY,
@@ -33,6 +34,8 @@ import {
     getApplicationHealthStateForExport,
 } from './application-health-state.js';
 import { runLocalStorageHealthProbe } from './health-localstorage-probe.js';
+import { startDiagnosticsOverlay } from './diagnostics-ui.js';
+import { checkGoogleDocsConnection } from './google-docs.js';
 
 let deps = {};
 /** Счётчик циклов watchdog (interval) для периодического второго контура целостности данных */
@@ -72,6 +75,8 @@ async function runExportPipelineDryRunCheck(depsBag, reportFn, runWithTimeoutFn)
         return;
     }
     try {
+        // Сухой экспорт хэширует всю базу: ждём паузу во вводе, чтобы не мешать поиску и прокрутке.
+        await waitForUserIdle({ quietMs: 2000, maxWaitMs: 12000 });
         const t0 =
             typeof performance !== 'undefined' && typeof performance.now === 'function'
                 ? performance.now()
@@ -295,7 +300,7 @@ export function initBackgroundHealthTestsSystem() {
 
     const report = (level, title, message, meta = {}) => {
         const system = meta.system || inferSystemFromTitle(title);
-        const entry = { title, message, system };
+        const entry = { title, message, system, level: level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info' };
         if (level === 'error') results.errors.push(entry);
         if (level === 'warn') results.warnings.push(entry);
         results.checks.push(entry);
@@ -827,7 +832,7 @@ export function initBackgroundHealthTestsSystem() {
                     }
                 }
 
-                runLocalStorageHealthProbe(report);
+            runLocalStorageHealthProbe(report);
 
                 // Тест 2.1: резервный контур — хранилища «База клиентов и аналитика»
                 let caFileId = null;
@@ -949,7 +954,7 @@ export function initBackgroundHealthTestsSystem() {
 
                 updateHud(40);
 
-                // Тест 3: индексация и поиск (расширенный набор проверок)
+            // Тест 3: индексация и поиск (расширенный набор проверок)
                 await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
                 updateHud(48);
 
@@ -1463,7 +1468,16 @@ export function initBackgroundHealthTestsSystem() {
      * поисковый индекс, алгоритмы, хранилища, watchdog) и возвращает полный отчёт.
      * Используется из настроек приложения для модального окна «Состояние здоровья».
      */
-    const runManualFullDiagnostic = async () => {
+    const runManualFullDiagnosticCore = async (dx) => {
+        const stage = (id, text) => {
+            try {
+                dx?.setStage(id, text);
+            } catch {
+                /* оверлей не критичен */
+            }
+        };
+        const cancelled = () => Boolean(dx?.cancelled);
+        const t0 = Date.now();
         const savedErrors = [...results.errors];
         const savedWarnings = [...results.warnings];
         const savedChecks = [...results.checks];
@@ -1473,9 +1487,25 @@ export function initBackgroundHealthTestsSystem() {
 
         const startedAt = nowLabel();
         try {
+            stage('env', 'Проверяю среду и сеть…');
             // Тесты 1–1.5: среда исполнения (см. platform-health-probes.js)
             await runPlatformHealthProbeSuite(runWithTimeout, report, { probeTag: 'manual' });
 
+            stage('external', 'Проверяю связь с Google Docs…');
+            try {
+                const gd = await runWithTimeout(checkGoogleDocsConnection(), 25000);
+                if (gd?.ok) {
+                    report('info', 'Google Docs / Шаблоны', 'Связь работает, данные получены.', { system: 'external' });
+                } else {
+                    const em = gd?.error?.message || 'Связь с Google Docs недоступна.';
+                    report('error', 'Google Docs / Шаблоны', em, { system: 'external' });
+                    results.errors[results.errors.length - 1].errorInfo = gd?.errorInfo || gd?.error?.info || null;
+                }
+            } catch (gErr) {
+                report('error', 'Google Docs / Шаблоны', gErr?.message || String(gErr), { system: 'external' });
+            }
+            if (cancelled()) throw new Error('Проверка отменена пользователем');
+            stage('storage', 'Проверяю хранилище…');
             runLocalStorageHealthProbe(report);
 
             // Тест 2: IndexedDB запись/чтение
@@ -1515,8 +1545,11 @@ export function initBackgroundHealthTestsSystem() {
             }
 
             // Тест 3: индексация и поиск (расширенный набор проверок)
+            stage('search', 'Проверяю поиск и индекс…');
+            if (cancelled()) throw new Error('Проверка отменена пользователем');
             await runSearchAndIndexHealthTests(deps, report, runWithTimeout);
 
+            stage('ui', 'Проверяю интерфейс…');
             // Тест 3.0a: поверхность UI — полный режим (явный запрос пользователя из настроек)
             try {
                 await runWithTimeout(
@@ -1529,6 +1562,8 @@ export function initBackgroundHealthTestsSystem() {
                 });
             }
 
+            stage('data', 'Проверяю экспорт и данные…');
+            if (cancelled()) throw new Error('Проверка отменена пользователем');
             // Тест 3.1: цепочка экспорта (без записи файла)
             await runExportPipelineDryRunCheck(deps, report, runWithTimeout);
 
@@ -1937,6 +1972,7 @@ export function initBackgroundHealthTestsSystem() {
                 });
             }
 
+            stage('integrity', 'Проверяю целостность данных…');
             // Watchdog: IndexedDB структура + автосохранение
             await runWatchdogCycle('manual');
 
@@ -1966,9 +2002,11 @@ export function initBackgroundHealthTestsSystem() {
                 startedAt,
                 finishedAt,
                 success: mergedErrs.length === 0,
+                durationMs: Date.now() - t0,
+                __fresh: true,
             };
         } catch (err) {
-            report('error', 'Ручной прогон', err.message);
+            if (!cancelled()) report('error', 'Ручной прогон', err.message);
             const mergedErrs = mergeRuntimeHubErrorsForReport(results.errors);
             recordApplicationHealthSnapshot({
                 phase: HEALTH_PHASE.MANUAL_DEEP,
@@ -1988,12 +2026,41 @@ export function initBackgroundHealthTestsSystem() {
                 finishedAt: nowLabel(),
                 success: false,
                 error: err.message,
+                cancelled: cancelled(),
+                durationMs: Date.now() - t0,
+                __fresh: true,
             };
         } finally {
             results.errors = savedErrors;
             results.warnings = savedWarnings;
             results.checks = savedChecks;
         }
+    };
+
+    let manualRunInFlight = null;
+    const runManualFullDiagnostic = (options = {}) => {
+        if (manualRunInFlight) return manualRunInFlight;
+        manualRunInFlight = (async () => {
+            let dx = null;
+            if (options.overlay !== false && typeof document !== 'undefined') {
+                try {
+                    dx = startDiagnosticsOverlay({});
+                } catch {
+                    dx = null;
+                }
+            }
+            try {
+                const rep = await runManualFullDiagnosticCore(dx);
+                dx?.finish?.(rep?.cancelled ? 'Проверка отменена' : 'Готово');
+                return rep;
+            } catch (e) {
+                dx?.close?.();
+                throw e;
+            } finally {
+                manualRunInFlight = null;
+            }
+        })();
+        return manualRunInFlight;
     };
 
     window.runManualFullDiagnostic = runManualFullDiagnostic;

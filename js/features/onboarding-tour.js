@@ -250,7 +250,7 @@ const TOUR_STEP_BLUEPRINTS = [
     {
         title: 'Таймер: прибавить и убавить',
         description:
-            'Кнопки увеличивают и уменьшают время на 1 минуту. Управляются также шорткатами из справки по горячим клавишам.',
+            'Каждый клик меняет время на 5 секунд; с Ctrl (⌘) — на 10 секунд, с Ctrl+Shift — на 30 секунд. Шорткаты описаны в справке по горячим клавишам.',
         highlightGroupSelectors: ['#timerDecreaseButton', '#timerIncreaseButton'],
         selectors: ['#timerDecreaseButton', '#timerIncreaseButton'],
         side: 'bottom',

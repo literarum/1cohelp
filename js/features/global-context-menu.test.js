@@ -7,6 +7,9 @@ import {
     shouldDeferToNativeContextMenu,
     clampMenuPosition,
     buildMenuItemDescriptors,
+    buildContextItems,
+    extractInnCandidate,
+    looksLikeRequisites,
 } from './global-context-menu-shared.js';
 
 describe('global-context-menu', () => {
@@ -78,5 +81,45 @@ describe('global-context-menu', () => {
         });
         const ids = d.filter((x) => x.type === 'item').map((x) => x.id);
         expect(ids).not.toContain('view-toggle');
+    });
+
+    it('buildContextItems: пункты карточки и выделенного текста', () => {
+        expect(buildContextItems(undefined)).toEqual([]);
+        const items = buildContextItems({
+            card: { open: true, copyUrl: false, edit: true, favorite: false, remove: true },
+            selection: 'текст',
+        });
+        const ids = items.filter((x) => x.type === 'item').map((x) => x.id);
+        expect(ids).toEqual(['ctx-open', 'ctx-edit', 'ctx-delete', 'ctx-copy-selection', 'ctx-search-selection']);
+    });
+});
+
+
+describe('контекстное меню: ИНН и дублирование', () => {
+    it('extractInnCandidate принимает 10/12 цифр с разделителями', () => {
+        expect(extractInnCandidate('7707083893')).toBe('7707083893');
+        expect(extractInnCandidate(' 7707 0838 93 ')).toBe('7707083893');
+        expect(extractInnCandidate('500100732259')).toBe('500100732259');
+        expect(extractInnCandidate('12345')).toBe('');
+        expect(extractInnCandidate('abc7707083893')).toBe('');
+        expect(extractInnCandidate('77070838931')).toBe('');
+    });
+    it('пункт чёрного списка появляется только для ИНН', () => {
+        const withInn = buildContextItems({ selection: '7707083893' }).map((i) => i.id);
+        const without = buildContextItems({ selection: 'привет' }).map((i) => i.id);
+        expect(withInn).toContain('ctx-blacklist-inn');
+        expect(without).not.toContain('ctx-blacklist-inn');
+    });
+    it('«Дублировать запись» — только если карточка поддерживает', () => {
+        expect(buildContextItems({ card: { open: true, duplicate: true } }).map((i) => i.id)).toContain('ctx-duplicate');
+        expect(buildContextItems({ card: { open: true } }).map((i) => i.id)).not.toContain('ctx-duplicate');
+    });
+
+    it('looksLikeRequisites: длинные числа — да, обычный текст — нет', () => {
+        expect(looksLikeRequisites('ИНН 7707083893')).toBe(true);
+        expect(looksLikeRequisites('112-233-445 95')).toBe(true);
+        expect(looksLikeRequisites('просто текст')).toBe(false);
+        expect(looksLikeRequisites('12 34')).toBe(false);
+        expect(looksLikeRequisites(null)).toBe(false);
     });
 });

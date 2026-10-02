@@ -13,19 +13,164 @@ const MAX_TITLE_LEN = 500;
 const MAX_SUBTITLE_LEN = 500;
 const MAX_QUIZ_OPTIONS = 12;
 
+const ALLOWED_TAGS = new Set([
+    'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'UL', 'OL', 'LI', 'A', 'H2', 'H3', 'H4',
+    'BLOCKQUOTE', 'CODE', 'PRE', 'SPAN', 'DIV', 'HR', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH',
+    'TD', 'SUB', 'SUP', 'MARK', 'SMALL', 'IMG',
+]);
+
+/** Теги, которые удаляются вместе с содержимым (исполняемые, формы, медиа, пространства имён SVG/MathML). */
+const DROP_TAGS = new Set([
+    'SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'FORM', 'INPUT', 'BUTTON',
+    'TEXTAREA', 'SELECT', 'OPTION', 'LINK', 'META', 'BASE', 'TEMPLATE', 'NOSCRIPT', 'AUDIO',
+    'VIDEO', 'CANVAS', 'FRAME', 'FRAMESET', 'APPLET', 'TITLE', 'HEAD', 'PICTURE', 'SOURCE',
+    'TRACK', 'DIALOG', 'XMP', 'PLAINTEXT', 'LISTING',
+]);
+
+const SAFE_URL_RE = /^(https?:|mailto:|tel:|#|\/(?!\/)|\.{1,2}\/)/i;
+const SAFE_IMG_RE = /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i;
+
 /**
+ * @param {string} v
+ * @returns {boolean}
+ */
+function isSafeUrl(v) {
+    // Управляющие символы и пробелы внутри схемы ("java\tscript:") не должны обходить проверку
+    const t = String(v || '')
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u0020\u007f-\u009f]+/g, '')
+        .trim();
+    return !!t && SAFE_URL_RE.test(t);
+}
+
+/**
+ * @param {Element} el
+ */
+function cleanAttributes(el) {
+    const tag = el.tagName;
+    for (const attr of Array.from(el.attributes)) {
+        const name = attr.name.toLowerCase();
+        let keep = false;
+        if (name === 'class') {
+            const toks = attr.value
+                .split(/\s+/)
+                .filter((x) => /^[\w-]{1,48}$/.test(x))
+                .slice(0, 8);
+            if (toks.length) {
+                el.setAttribute('class', toks.join(' '));
+                continue;
+            }
+        } else if (tag === 'A' && name === 'href') {
+            keep = isSafeUrl(attr.value);
+        } else if (tag === 'A' && name === 'title') {
+            keep = true;
+        } else if ((tag === 'TD' || tag === 'TH') && (name === 'colspan' || name === 'rowspan')) {
+            keep = /^\d{1,2}$/.test(attr.value);
+        } else if (tag === 'OL' && name === 'start') {
+            keep = /^\d{1,4}$/.test(attr.value);
+        } else if (tag === 'IMG' && name === 'src') {
+            keep = SAFE_IMG_RE.test(attr.value.trim());
+        } else if (tag === 'IMG' && name === 'alt') {
+            keep = true;
+        }
+        if (!keep) el.removeAttribute(attr.name);
+    }
+    if (tag === 'A') {
+        if (el.hasAttribute('href')) {
+            el.setAttribute('target', '_blank');
+            el.setAttribute('rel', 'noopener noreferrer');
+        } else {
+            el.removeAttribute('target');
+            el.removeAttribute('rel');
+        }
+    }
+}
+
+/**
+ * @param {Node} parent
+ */
+function cleanChildren(parent) {
+    for (const node of Array.from(parent.childNodes)) {
+        if (node.nodeType === 3) continue;
+        if (node.nodeType !== 1) {
+            parent.removeChild(node);
+            continue;
+        }
+        const el = /** @type {Element} */ (node);
+        const tag = el.tagName.toUpperCase();
+        // Не-HTML пространство имён (svg/math внутри разметки) — удаляем целиком
+        if (DROP_TAGS.has(tag) || (el.namespaceURI && !/xhtml/.test(el.namespaceURI))) {
+            parent.removeChild(el);
+            continue;
+        }
+        cleanChildren(el);
+        if (!ALLOWED_TAGS.has(tag)) {
+            while (el.firstChild) parent.insertBefore(el.firstChild, el);
+            parent.removeChild(el);
+            continue;
+        }
+        if (tag === 'IMG' && !SAFE_IMG_RE.test((el.getAttribute('src') || '').trim())) {
+            parent.removeChild(el);
+            continue;
+        }
+        cleanAttributes(el);
+    }
+}
+
+/**
+ * Резерв без DOM (Node/тесты без окружения): оставляет только простые теги без атрибутов.
+ * @param {string} html
+ * @returns {string}
+ */
+function sanitizeWithoutDom(html) {
+    let s = String(html);
+    for (let i = 0; i < 3; i++) {
+        s = s
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .replace(
+                /<(script|style|iframe|object|embed|svg|math|form|template|noscript|textarea|select|button)\b[\s\S]*?<\/\1\s*>/gi,
+                '',
+            )
+            .replace(
+                /<(script|style|iframe|object|embed|svg|math|form|template|noscript|textarea|select|button)\b[\s\S]*$/gi,
+                '',
+            );
+    }
+    s = s.replace(/<\s*(\/?)\s*([a-z][a-z0-9]*)\b[^>]*>/gi, (m, slash, name) => {
+        const up = String(name).toUpperCase();
+        if (!ALLOWED_TAGS.has(up) || up === 'IMG' || up === 'A') return '';
+        return `<${slash}${String(name).toLowerCase()}>`;
+    });
+    return s.replace(/<(?![/a-z])/gi, '&lt;');
+}
+
+/**
+ * Безопасный HTML для учебных материалов: allow-list тегов и атрибутов на реальном DOM
+ * (вместо regex-вычёркивания), удаление скриптов, обработчиков, javascript:/data: ссылок, svg/math.
  * @param {string} html
  * @returns {string}
  */
 export function sanitizeTrainingBodyHtml(html) {
-    if (typeof html !== 'string') return '';
-    let s = html
-        .replace(/<script\b[\s\S]*?<\/script>/gi, '')
-        .replace(/<script\b[\s\S]*$/gi, '')
-        .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, '');
-    s = s.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
-    s = s.replace(/\s(href|src)\s*=\s*["']?\s*javascript:/gi, ' data-blocked=');
-    return s.trim().slice(0, MAX_BODY_LEN);
+    if (typeof html !== 'string' || !html) return '';
+    const pass = (/** @type {string} */ src) => {
+        if (typeof DOMParser === 'undefined') return sanitizeWithoutDom(src);
+        let doc;
+        try {
+            doc = new DOMParser().parseFromString(`<body>${src}</body>`, 'text/html');
+        } catch {
+            return sanitizeWithoutDom(src);
+        }
+        const body = doc.body;
+        if (!body) return '';
+        cleanChildren(body);
+        return body.innerHTML;
+    };
+    let out = pass(html).trim();
+    if (out.length > MAX_BODY_LEN) {
+        // Обрезаем и повторно пропускаем через DOM, чтобы не остались незакрытые теги
+        out = pass(out.slice(0, MAX_BODY_LEN)).trim();
+    }
+    return out;
 }
 
 /**
@@ -108,7 +253,7 @@ export function normalizeUserTrackRecord(raw) {
         o.subtitle != null ? String(o.subtitle).trim().slice(0, MAX_SUBTITLE_LEN) : undefined;
     const stepsRaw = Array.isArray(o.steps) ? o.steps : [];
     /** @type {import('./training-curriculum.js').TrainingStep[]} */
-    const steps = stepsRaw.map(normalizeUserStep).filter(Boolean);
+    const steps = dedupeStepIds(stepsRaw.map(normalizeUserStep).filter(Boolean));
     const createdAt = String(o.createdAt || new Date().toISOString()).slice(0, 40);
     const updatedAt = String(o.updatedAt || createdAt).slice(0, 40);
     return {
@@ -120,6 +265,22 @@ export function normalizeUserTrackRecord(raw) {
         createdAt,
         updatedAt,
     };
+}
+
+/**
+ * Одинаковые id шагов склеивали бы прогресс разных шагов: делаем уникальными.
+ * @param {import('./training-curriculum.js').TrainingStep[]} steps
+ * @returns {import('./training-curriculum.js').TrainingStep[]}
+ */
+export function dedupeStepIds(steps) {
+    const seen = new Set();
+    return steps.map((st) => {
+        let id = st.id;
+        let n = 2;
+        while (seen.has(id)) id = `${st.id}-${n++}`;
+        seen.add(id);
+        return id === st.id ? st : { ...st, id };
+    });
 }
 
 function writeMirror(tracks) {

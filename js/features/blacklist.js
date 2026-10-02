@@ -316,6 +316,8 @@ export function sortAndRenderBlacklist() {
     renderBlacklistTable(entriesToRender);
 }
 
+let blacklistRenderToken = 0;
+
 /**
  * Рендерит таблицу черного списка
  */
@@ -365,14 +367,20 @@ export function renderBlacklistTable(entries) {
         .trim()
         .toLowerCase();
 
-    const highlight = (text) => {
-        if (!text) return deps.escapeHtml?.(text) || text || '';
-        if (!lowerQuery) return deps.escapeHtml?.(text) || text;
+    // Регулярное выражение подсветки строится один раз на отрисовку, а не на каждую ячейку.
+    let highlightRegex = null;
+    if (lowerQuery) {
         const esc = (deps.escapeRegExp || ((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))(
             lowerQuery,
         );
         // ё/е взаимозаменяемы при подсветке — как и в фильтре
-        const regex = new RegExp(`(${esc.replace(/[её]/gi, '[еёЕЁ]')})`, 'gi');
+        highlightRegex = new RegExp(`(${esc.replace(/[её]/gi, '[еёЕЁ]')})`, 'gi');
+    }
+    const highlight = (text) => {
+        if (!text) return deps.escapeHtml?.(text) || text || '';
+        if (!highlightRegex) return deps.escapeHtml?.(text) || text;
+        const regex = highlightRegex;
+        regex.lastIndex = 0;
         return wrapMatchesEscaped(
             String(text),
             regex,
@@ -380,7 +388,8 @@ export function renderBlacklistTable(entries) {
         );
     };
 
-    entries.forEach((entry) => {
+    const renderToken = ++blacklistRenderToken;
+    const buildRow = (entry) => {
         const tr = document.createElement('tr');
         tr.dataset.entryId = entry.id;
         tr.className =
@@ -445,10 +454,35 @@ export function renderBlacklistTable(entries) {
             tr.classList.add('bg-yellow-50/50', 'dark:bg-yellow-900/30');
         }
 
-        tbody.appendChild(tr);
-    });
+        return tr;
+    };
 
+    // Первые строки — сразу, остальные порциями в простое: тысячи строк не блокируют главный поток
+    // (раньше таблица на 2 000 записей собиралась целиком за один длинный проход).
+    const FIRST_CHUNK = 120;
+    const NEXT_CHUNK = 200;
+    const firstFrag = document.createDocumentFragment();
+    const firstEnd = Math.min(FIRST_CHUNK, entries.length);
+    for (let i = 0; i < firstEnd; i++) firstFrag.appendChild(buildRow(entries[i]));
+    tbody.appendChild(firstFrag);
     container.appendChild(table);
+
+    if (entries.length > firstEnd) {
+        let next = firstEnd;
+        const schedule =
+            typeof requestIdleCallback === 'function'
+                ? (fn) => requestIdleCallback(fn, { timeout: 800 })
+                : (fn) => setTimeout(fn, 16);
+        const pump = () => {
+            if (renderToken !== blacklistRenderToken || !table.isConnected) return;
+            const frag = document.createDocumentFragment();
+            const end = Math.min(next + NEXT_CHUNK, entries.length);
+            for (; next < end; next++) frag.appendChild(buildRow(entries[next]));
+            tbody.appendChild(frag);
+            if (next < entries.length) schedule(pump);
+        };
+        schedule(pump);
+    }
 }
 
 // ============================================================================
