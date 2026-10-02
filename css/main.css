@@ -35,16 +35,24 @@
 @import url('./layout/copyright.css');
 @import url('./utilities/elevation.css');
 @import url('./components/pdf-dropzone.css');
+@import url('./components/virtual-grid.css');
 @import url('./components/folders-examples.css');
 @import url('./components/health-modal.css');
 @import url('./components/db-merge-modal.css');
 @import url('./components/onboarding-tour.css');
 @import url('./components/global-context-menu.css');
+@import url('./components/motion.css');
 @import url('./components/reminders.css');
 @import url('./components/engineering-cockpit.css');
+@import url('./components/toasts.css');
+@import url('./components/diagnostics.css');
 @import url('./components/training.css');
 @import url('./components/client-analytics.css');
 @import url('./components/birthday-mode.css');
+@import url('./components/xml-analyzer.css');
+@import url('./components/custom-select.css');
+@import url('./components/font-settings.css');
+@import url('./components/requisites-check.css');
 
 /* 6. Скроллбар и кнопки (используют переменные из theme/variables.css) */
 @import url('./inline-styles.css');
