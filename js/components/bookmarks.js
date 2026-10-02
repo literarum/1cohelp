@@ -6,7 +6,12 @@ import {
     getAllFromIndexWithKeyVariants,
     getFromIndexedDB,
     saveToIndexedDB,
+    forEachBatchInStore,
+    countInIndexedDB,
+    maxKeyInIndexedDB,
+    getStoreVersion,
 } from '../db/indexeddb.js';
+import { createVirtualGrid, decorateCardForView } from '../utils/virtual-grid.js';
 import {
     BOOKMARK_ACTION_FOCUS_VISIBLE_CLASS,
     BOOKMARK_CARD_ICON_BUTTON_CLASS,
@@ -17,7 +22,16 @@ import {
 } from '../config.js';
 import { ARCHIVE_FOLDER_ID, ARCHIVE_FOLDER_NAME } from '../constants.js';
 import { SEED_FLAG, setSeedFlag, shouldSeedDefaults } from '../db/seed-flags.js';
-import { updateSearchIndex } from '../features/search.js';
+import {
+    updateSearchIndex,
+    removeManyFromSearchIndex,
+    bulkAddToSearchIndex,
+} from '../features/search.js';
+import { initBookmarksTools } from '../features/bookmarks-tools-ui.js';
+import {
+    bulkDeleteBookmarks,
+    bulkSetBookmarksArchived,
+} from '../features/bookmarks-bulk.js';
 import { addRecentlyDeletedRecord } from '../features/recently-deleted.js';
 import { State as GlobalState } from '../app/state.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
@@ -156,6 +170,99 @@ export function setBookmarksDependencies(deps) {
     // Не затирать showAppConfirm, если ключ не передан (entry.js / частичные deps).
     if (deps.showAppConfirm !== undefined) {
         showAppConfirm = deps.showAppConfirm;
+    }
+}
+
+// ============================================================================
+// КЭШ СПИСКА ЗАКЛАДОК, ВИРТУАЛИЗАЦИЯ И ВЫДЕЛЕНИЕ (большие базы: 20 000+)
+// ============================================================================
+
+const bmCache = {
+    key: null,
+    all: null,
+    folders: null,
+    folderMap: null,
+    loading: null,
+    loadingKey: null,
+    scope: null,
+    result: null,
+};
+
+/** Выделение (режим массовых операций). */
+const bmSelection = { active: false, ids: new Set() };
+/** @type {ReturnType<typeof createVirtualGrid> | null} */
+let bmGrid = null;
+let bmHadItems = false;
+let bmFilterSeq = 0;
+/** Текущий отрисованный (отфильтрованный) список — для «выбрать все». */
+let bmCurrentList = [];
+
+const bmCollator = new Intl.Collator('ru');
+const bmSearchBlobCache = new WeakMap();
+function bookmarkSearchFields(bm) {
+    let f = bmSearchBlobCache.get(bm);
+    if (!f) {
+        f = {
+            title: bm.title ? String(bm.title).toLowerCase() : '',
+            desc: bm.description ? String(bm.description).toLowerCase() : '',
+            url: bm.url ? String(bm.url).toLowerCase() : '',
+        };
+        bmSearchBlobCache.set(bm, f);
+    }
+    return f;
+}
+
+/** Сбросить кэш списка закладок (после внешних изменений). */
+export function invalidateBookmarksCache() {
+    bmCache.key = null;
+    bmCache.all = null;
+    bmCache.scope = null;
+    bmCache.result = null;
+}
+
+/**
+ * Снимок закладок и папок. Валидность — по версии записи хранилищ (performDBOperation)
+ * и сигнатуре count+maxKey (ловит удаления/импорт в обход performDBOperation).
+ */
+async function getBookmarksSnapshot({ force = false } = {}) {
+    const [c, m] = await Promise.all([
+        countInIndexedDB('bookmarks'),
+        maxKeyInIndexedDB('bookmarks'),
+    ]);
+    const key = `${getStoreVersion('bookmarks')}|${getStoreVersion('bookmarkFolders')}|${c}|${m}`;
+    if (!force && bmCache.all && bmCache.key === key) return bmCache;
+    if (!force && bmCache.loading && bmCache.loadingKey === key) return bmCache.loading;
+    const p = (async () => {
+        const all = [];
+        await forEachBatchInStore(
+            'bookmarks',
+            (rows) => {
+                for (const r of rows) all.push(r);
+            },
+            { batchSize: 5000 },
+        );
+        const folders = (await getAllFromIndexedDB('bookmarkFolders')) || [];
+        const folderMap = {};
+        for (const folder of folders) {
+            if (folder && typeof folder.id !== 'undefined') folderMap[folder.id] = folder;
+        }
+        bmCache.all = all;
+        bmCache.folders = folders;
+        bmCache.folderMap = folderMap;
+        bmCache.key = key;
+        bmCache.scope = null;
+        bmCache.result = null;
+        return bmCache;
+    })();
+    bmCache.loading = p;
+    bmCache.loadingKey = key;
+    try {
+        return await p;
+    } finally {
+        if (bmCache.loading === p) {
+            bmCache.loading = null;
+            bmCache.loadingKey = null;
+        }
     }
 }
 
@@ -400,6 +507,35 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
     return bookmarkElement;
 }
 
+/** Подсветка кнопок сортировки по текущему состоянию GlobalState.currentBookmarksSort. */
+export function updateBookmarksSortButtons() {
+    const baseClass =
+        'h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border';
+    const inactiveClass = `${baseClass} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`;
+    const activeClass = `${baseClass} border-transparent bg-primary text-white hover:bg-secondary`;
+    const sortState = GlobalState.currentBookmarksSort || {
+        criteria: 'date',
+        direction: 'asc',
+    };
+    const criteriaToBtnId = {
+        date: 'sortBookmarksByDate',
+        title: 'sortBookmarksByTitle',
+        folder: 'sortBookmarksByFolder',
+    };
+    ['date', 'title', 'folder'].forEach((criteria) => {
+        const btn = document.getElementById(criteriaToBtnId[criteria]);
+        if (!btn) return;
+        btn.className = sortState.criteria === criteria ? activeClass : inactiveClass;
+        const icon = btn.querySelector('.sort-icon');
+        if (icon) {
+            icon.className =
+                sortState.criteria === criteria
+                    ? `sort-icon fas ${sortState.direction === 'desc' ? 'fa-arrow-down' : 'fa-arrow-up'} ml-1 w-3 opacity-100`
+                    : 'sort-icon fas ml-1 w-3 opacity-0';
+        }
+    });
+}
+
 /**
  * Инициализирует систему закладок
  */
@@ -478,34 +614,7 @@ export function initBookmarkSystem() {
 
     const sortControls = document.getElementById('bookmarksSortControls');
     if (sortControls && !sortControls.dataset.sortHandlersAttached) {
-        const baseClass =
-            'h-9 px-3.5 leading-5 text-sm font-medium rounded-md transition inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm border';
-        const inactiveClass = `${baseClass} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`;
-        const activeClass = `${baseClass} border-transparent bg-primary text-white hover:bg-secondary`;
-
-        const updateBookmarksSortButtonsUI = () => {
-            const sortState = GlobalState.currentBookmarksSort || {
-                criteria: 'date',
-                direction: 'asc',
-            };
-            const criteriaToBtnId = {
-                date: 'sortBookmarksByDate',
-                title: 'sortBookmarksByTitle',
-                folder: 'sortBookmarksByFolder',
-            };
-            ['date', 'title', 'folder'].forEach((criteria) => {
-                const btn = document.getElementById(criteriaToBtnId[criteria]);
-                if (!btn) return;
-                btn.className = sortState.criteria === criteria ? activeClass : inactiveClass;
-                const icon = btn.querySelector('.sort-icon');
-                if (icon) {
-                    icon.className =
-                        sortState.criteria === criteria
-                            ? `sort-icon fas ${sortState.direction === 'desc' ? 'fa-arrow-down' : 'fa-arrow-up'} ml-1 w-3 opacity-100`
-                            : 'sort-icon fas ml-1 w-3 opacity-0';
-                }
-            });
-        };
+        const updateBookmarksSortButtonsUI = updateBookmarksSortButtons;
 
         const handleBookmarksSortClick = (criteria) => {
             if (!GlobalState.currentBookmarksSort) {
@@ -538,6 +647,42 @@ export function initBookmarkSystem() {
         sortControls.dataset.sortHandlersAttached = 'true';
         console.log('Кнопки сортировки закладок инициализированы в initBookmarkSystem.');
     }
+
+    initBookmarksTools({
+        getSnapshot: getBookmarksToolsSnapshot,
+        refresh: refreshBookmarksList,
+        setSelectionMode: setBookmarksSelectionMode,
+        isSelectionMode: isBookmarksSelectionMode,
+        updateSortButtons: updateBookmarksSortButtons,
+        removeFromIndex: removeManyFromSearchIndex,
+        updateIndex: updateSearchIndex,
+        reindexAfterMerge: async (removedIds, keepers) => {
+            try {
+                await removeManyFromSearchIndex('bookmarks', [
+                    ...removedIds,
+                    ...keepers.map((k) => k.id),
+                ]);
+                const snap = await getBookmarksToolsSnapshot();
+                await bulkAddToSearchIndex(
+                    'bookmarks',
+                    keepers.filter((k) => k.folder !== ARCHIVE_FOLDER_ID),
+                    (k) => {
+                        const f = k.folder != null ? snap.folderMap[k.folder] : null;
+                        return f && f.name ? { ...k, _folderNameForIndex: f.name } : k;
+                    },
+                );
+            } catch (e) {
+                console.warn('[bookmarks] переиндексация после слияния не удалась:', e);
+            }
+        },
+        notify: (m, t) => typeof showNotification === 'function' && showNotification(m, t),
+        confirm: (o) =>
+            typeof showAppConfirm === 'function'
+                ? showAppConfirm(o)
+                : typeof window !== 'undefined' && typeof window.showAppConfirm === 'function'
+                  ? window.showAppConfirm(o)
+                  : Promise.resolve(confirm(o.message)),
+    });
 
     populateBookmarkFolders();
     if (State && State.db) {
@@ -630,7 +775,7 @@ export async function loadBookmarks() {
             firstFolderId = folders[0]?.id;
         }
 
-        bookmarks = await getAllFromIndexedDB('bookmarks');
+        bookmarks = (await getBookmarksSnapshot({ force: true })).all;
         console.log(`loadBookmarks: Найдено ${bookmarks?.length || 0} существующих закладок.`);
 
         if (
@@ -696,37 +841,27 @@ export async function loadBookmarks() {
             await setSeedFlag(SEED_FLAG.BOOKMARKS);
         }
 
-        const folderMap = (folders || []).reduce((map, folder) => {
-            if (folder && typeof folder.id !== 'undefined') {
-                map[folder.id] = folder;
-            }
-            return map;
-        }, {});
-
+        // Единый конвейер с фильтрацией: учитывает поиск, теги, папку и сортировку, не сбрасывая их
         const bookmarkFolderFilter = document.getElementById('bookmarkFolderFilter');
-        let initialBookmarksToRender;
-        if (bookmarkFolderFilter && bookmarkFolderFilter.value === ARCHIVE_FOLDER_ID) {
-            initialBookmarksToRender = (bookmarks || []).filter(
-                (bm) => bm.folder === ARCHIVE_FOLDER_ID,
-            );
-        } else if (bookmarkFolderFilter && bookmarkFolderFilter.value !== '') {
-            initialBookmarksToRender = (bookmarks || []).filter(
-                (bm) =>
-                    String(bm.folder) === String(bookmarkFolderFilter.value) &&
-                    bm.folder !== ARCHIVE_FOLDER_ID,
-            );
+        const bookmarkSearchInputEl = document.getElementById('bookmarkSearchInput');
+        let initialBookmarksToRender = [];
+        if (bookmarkFolderFilter && bookmarkSearchInputEl) {
+            await filterBookmarks();
+            initialBookmarksToRender = bmCurrentList;
         } else {
-            initialBookmarksToRender = (bookmarks || []).filter(
-                (bm) => bm.folder !== ARCHIVE_FOLDER_ID,
+            const folderMap = (folders || []).reduce((map, folder) => {
+                if (folder && typeof folder.id !== 'undefined') {
+                    map[folder.id] = folder;
+                }
+                return map;
+            }, {});
+            initialBookmarksToRender = sortBookmarksList(
+                (bookmarks || []).filter((bm) => bm.folder !== ARCHIVE_FOLDER_ID),
+                folderMap,
+                GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' },
             );
+            await renderBookmarks(initialBookmarksToRender, folderMap);
         }
-
-        const sortedToRender = sortBookmarksList(
-            initialBookmarksToRender,
-            folderMap,
-            GlobalState.currentBookmarksSort || { criteria: 'date', direction: 'asc' },
-        );
-        await renderBookmarks(sortedToRender, folderMap);
 
         console.log(
             `Загрузка закладок завершена. Загружено ${folders?.length || 0} папок и ${
@@ -752,11 +887,28 @@ export async function loadBookmarks() {
  * @returns {Array} новый отсортированный массив
  */
 /** Единая нормализация метки времени для сортировки (устойчиво к невалидным датам и типам). */
+const bmTsCache = new WeakMap();
 function bookmarkSortTimestamp(bookmark) {
     if (!bookmark || typeof bookmark !== 'object') return 0;
-    const raw = bookmark.dateAdded ?? bookmark.dateUpdated ?? 0;
-    const ms = new Date(raw).getTime();
-    return Number.isFinite(ms) ? ms : 0;
+    // метка времени кэшируется на объекте: сортировка 20 000 записей не должна парсить даты на каждом сравнении
+    let ts = bmTsCache.get(bookmark);
+    if (ts === undefined) {
+        const raw = bookmark.dateAdded ?? bookmark.dateUpdated ?? 0;
+        const ms = new Date(raw).getTime();
+        ts = Number.isFinite(ms) ? ms : 0;
+        bmTsCache.set(bookmark, ts);
+    }
+    return ts;
+}
+
+const bmTitleKeyCache = new WeakMap();
+function bookmarkTitleSortKey(b) {
+    let k = bmTitleKeyCache.get(b);
+    if (k === undefined) {
+        k = (b.title || '').trim().toLowerCase();
+        bmTitleKeyCache.set(b, k);
+    }
+    return k;
 }
 
 function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
@@ -774,9 +926,9 @@ function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
             return (a.id || 0) - (b.id || 0);
         }
         if (criteria === 'title') {
-            const titleA = (a.title || '').trim().toLowerCase();
-            const titleB = (b.title || '').trim().toLowerCase();
-            const cmp = titleA.localeCompare(titleB, 'ru');
+            const titleA = bookmarkTitleSortKey(a);
+            const titleB = bookmarkTitleSortKey(b);
+            const cmp = bmCollator.compare(titleA, titleB);
             if (cmp !== 0) return cmp * mult;
             return (a.id || 0) - (b.id || 0);
         }
@@ -794,7 +946,7 @@ function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
             if (colorA !== colorB) return (colorA - colorB) * mult;
             const nameA = (folderA && folderA.name) || '';
             const nameB = (folderB && folderB.name) || '';
-            const cmp = nameA.localeCompare(nameB, 'ru');
+            const cmp = bmCollator.compare(nameA, nameB);
             if (cmp !== 0) return cmp * mult;
             return (a.id || 0) - (b.id || 0);
         }
@@ -802,10 +954,84 @@ function sortBookmarksList(bookmarks, folderMap = {}, sortState = {}) {
     });
 }
 
+function ensureBookmarksStatusEl(container) {
+    let el = document.getElementById('bookmarksListStatus');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'bookmarksListStatus';
+        el.className = 'vg-status';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.hidden = true;
+        container.parentNode.insertBefore(el, container);
+    }
+    return el;
+}
+
+function setBookmarksStatus(container, shown, total, filtered) {
+    const el = ensureBookmarksStatusEl(container);
+    if (!shown) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.hidden = false;
+    el.textContent = '';
+    const nf = (n) => n.toLocaleString('ru-RU');
+    const txt = document.createElement('span');
+    txt.textContent =
+        filtered && total > shown
+            ? `Показано ${nf(shown)} из ${nf(total)} закладок`
+            : `Закладок: ${nf(shown)}`;
+    el.appendChild(txt);
+    if (filtered && total > shown) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = 'Сбросить фильтры';
+        b.addEventListener('click', () => {
+            const si = document.getElementById('bookmarkSearchInput');
+            const ff = document.getElementById('bookmarkFolderFilter');
+            if (si) si.value = '';
+            if (ff) ff.value = '';
+            document.getElementById('clearBookmarkSearchBtn')?.classList.add('hidden');
+            void filterBookmarks();
+        });
+        el.appendChild(b);
+    }
+}
+
+function destroyBookmarksGrid() {
+    if (bmGrid) {
+        bmGrid.destroy();
+        bmGrid = null;
+    }
+}
+
+function buildBookmarkNode(bookmark, folderMap, mode) {
+    const el = createBookmarkElement(bookmark, folderMap, mode);
+    if (!el) return null;
+    decorateCardForView(el, mode);
+    if (bmSelection.active) {
+        const selected = bmSelection.ids.has(bookmark.id);
+        el.classList.toggle('vg-selected', selected);
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'vg-select-box';
+        cb.checked = selected;
+        cb.dataset.action = 'toggle-select';
+        cb.setAttribute('aria-label', `Выбрать закладку «${bookmark.title || 'без названия'}»`);
+        el.appendChild(cb);
+    }
+    return el;
+}
+
 /**
- * Рендерит закладки в контейнере
+ * Рендерит закладки в контейнере (виртуализированно: в DOM только видимые карточки).
+ * @param {object[]} bookmarks
+ * @param {Object} folderMap
+ * @param {{ keepScroll?: boolean, total?: number, filtered?: boolean }} [ropts]
  */
-export async function renderBookmarks(bookmarks, folderMap = {}) {
+export async function renderBookmarks(bookmarks, folderMap = {}, ropts = {}) {
     let container = document.getElementById('bookmarksContainer');
     if (!container) {
         await new Promise((r) => requestAnimationFrame(r));
@@ -816,11 +1042,15 @@ export async function renderBookmarks(bookmarks, folderMap = {}) {
         return;
     }
 
-    container.innerHTML = '';
-
     if (!bookmarks || bookmarks.length === 0) {
-        container.innerHTML =
-            '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full mb-2">Закладок пока нет.</p>';
+        destroyBookmarksGrid();
+        bmCurrentList = [];
+        bmHadItems = false;
+        container.innerHTML = ropts.filtered
+            ? '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full mb-2">По вашему запросу закладок не найдено.</p>'
+            : '<p class="text-gray-500 dark:text-gray-400 text-center col-span-full mb-2">Закладок пока нет.</p>';
+        setBookmarksStatus(container, 0, 0, false);
+        updateBookmarksBulkBar();
         return;
     }
 
@@ -837,25 +1067,184 @@ export async function renderBookmarks(bookmarks, folderMap = {}) {
         const gridCols = SECTION_GRID_COLS.bookmarksContainer || SECTION_GRID_COLS.default;
         if (gridCols && gridCols.length) gridCols.forEach((cls) => container.classList.add(cls));
     }
+    container.dataset.view = viewMode === 'list' ? 'list' : 'cards';
 
-    const fragment = document.createDocumentFragment();
+    const valid = [];
     for (const bookmark of bookmarks) {
         if (!bookmark || typeof bookmark !== 'object' || bookmark.id == null) {
             console.warn('[renderBookmarks] Пропуск невалидной закладки:', bookmark);
             continue;
         }
-        const bookmarkElement = createBookmarkElement(bookmark, folderMap, viewMode);
-        if (bookmarkElement) fragment.appendChild(bookmarkElement);
+        valid.push(bookmark);
     }
+    bmCurrentList = valid;
 
-    container.appendChild(fragment);
+    destroyBookmarksGrid();
+    container.textContent = '';
+    bmGrid = createVirtualGrid({
+        container,
+        renderItem: (bm, _i, mode) => buildBookmarkNode(bm, folderMap, mode),
+        getViewMode: () => (container.dataset.view === 'list' ? 'list' : 'cards'),
+        estimateRowHeight: (m) => (m === 'list' ? 84 : 200),
+    });
+    bmGrid.setItems(valid, { keepScroll: !!ropts.keepScroll, animate: !bmHadItems });
+    bmHadItems = true;
 
-    // Применение текущего вида (если функция доступна)
+    // Применение текущего вида (если функция доступна) — кнопки переключателя и классы контейнера
     if (typeof window.applyCurrentView === 'function') {
         window.applyCurrentView('bookmarksContainer');
     }
+    setBookmarksStatus(
+        container,
+        valid.length,
+        ropts.total ?? valid.length,
+        !!ropts.filtered,
+    );
+    updateBookmarksBulkBar();
+}
 
-    console.log(`[renderBookmarks] Отображено ${bookmarks.length} закладок.`);
+// ============================================================================
+// МАССОВЫЕ ОПЕРАЦИИ (выделение, удаление/архив пачкой)
+// ============================================================================
+
+function ensureBookmarksBulkBar() {
+    const container = document.getElementById('bookmarksContainer');
+    if (!container || !container.parentNode) return null;
+    let bar = document.getElementById('bookmarksBulkBar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'bookmarksBulkBar';
+        bar.className = 'vg-bulkbar';
+        bar.setAttribute('role', 'toolbar');
+        bar.setAttribute('aria-label', 'Массовые операции с закладками');
+        bar.hidden = true;
+        bar.innerHTML =
+            '<span class="vg-bulk-count" aria-live="polite"></span>' +
+            '<button type="button" data-bulk="all">Выбрать все</button>' +
+            '<button type="button" data-bulk="none">Снять выбор</button>' +
+            '<button type="button" data-bulk="archive">В архив</button>' +
+            '<button type="button" data-bulk="delete" class="vg-danger">Удалить</button>' +
+            '<button type="button" data-bulk="done">Готово</button>';
+        bar.addEventListener('click', (ev) => {
+            const b = ev.target.closest('button[data-bulk]');
+            if (b) void handleBookmarksBulkAction(b.dataset.bulk);
+        });
+        const status = document.getElementById('bookmarksListStatus');
+        container.parentNode.insertBefore(bar, status || container);
+    }
+    return bar;
+}
+
+function updateBookmarksBulkBar() {
+    const bar = ensureBookmarksBulkBar();
+    if (!bar) return;
+    bar.hidden = !bmSelection.active;
+    if (!bmSelection.active) return;
+    const n = bmSelection.ids.size;
+    const cnt = bar.querySelector('.vg-bulk-count');
+    if (cnt) {
+        cnt.textContent = n
+            ? `Выбрано: ${n.toLocaleString('ru-RU')} из ${bmCurrentList.length.toLocaleString('ru-RU')}`
+            : 'Нажмите на карточки, чтобы выбрать';
+    }
+    bar.querySelectorAll('[data-bulk="delete"],[data-bulk="archive"],[data-bulk="none"]').forEach(
+        (b) => {
+            b.disabled = n === 0;
+            b.style.opacity = n === 0 ? '0.5' : '';
+        },
+    );
+}
+
+/** Включить/выключить режим выделения закладок. */
+export function setBookmarksSelectionMode(on) {
+    bmSelection.active = !!on;
+    if (!on) bmSelection.ids.clear();
+    const btn = document.getElementById('bookmarksSelectModeBtn');
+    if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    void filterBookmarks({ keepScroll: true });
+}
+
+export function isBookmarksSelectionMode() {
+    return bmSelection.active;
+}
+
+async function handleBookmarksBulkAction(kind) {
+    if (kind === 'all') {
+        for (const b of bmCurrentList) bmSelection.ids.add(b.id);
+        void filterBookmarks({ keepScroll: true });
+        return;
+    }
+    if (kind === 'none') {
+        bmSelection.ids.clear();
+        void filterBookmarks({ keepScroll: true });
+        return;
+    }
+    if (kind === 'done') {
+        setBookmarksSelectionMode(false);
+        return;
+    }
+    const ids = Array.from(bmSelection.ids);
+    if (!ids.length) return;
+    const confirmModal =
+        typeof showAppConfirm === 'function'
+            ? showAppConfirm
+            : typeof window !== 'undefined' && typeof window.showAppConfirm === 'function'
+              ? window.showAppConfirm
+              : null;
+    try {
+        if (kind === 'delete') {
+            const message = `Удалить выбранные закладки (${ids.length.toLocaleString('ru-RU')})? Они будут перемещены в «Недавно удалённые» — оттуда их можно восстановить. Скриншоты закладок сохранятся для восстановления.`;
+            const ok = confirmModal
+                ? await confirmModal({
+                      title: 'Удаление закладок',
+                      message,
+                      confirmText: 'Удалить',
+                      cancelText: 'Отмена',
+                      confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
+                  })
+                : confirm(message);
+            if (!ok) return;
+            const res = await bulkDeleteBookmarks(ids, {
+                removeFromIndex: removeManyFromSearchIndex,
+            });
+            bmSelection.ids.clear();
+            invalidateBookmarksCache();
+            if (typeof showNotification === 'function') {
+                showNotification(
+                    `Удалено закладок: ${res.deleted.toLocaleString('ru-RU')}. Восстановить можно в «Недавно удалённые».`,
+                    res.failed ? 'warning' : 'success',
+                );
+            }
+        } else if (kind === 'archive') {
+            const res = await bulkSetBookmarksArchived(ids, true, {
+                updateIndex: updateSearchIndex,
+                removeFromIndex: removeManyFromSearchIndex,
+            });
+            bmSelection.ids.clear();
+            invalidateBookmarksCache();
+            if (typeof showNotification === 'function') {
+                showNotification(`В архив перемещено: ${res.changed.toLocaleString('ru-RU')}`, 'success');
+            }
+        }
+    } catch (e) {
+        console.error('[bookmarks bulk] ошибка массовой операции:', e);
+        if (typeof showNotification === 'function') {
+            showNotification('Ошибка массовой операции: ' + (e?.message || e), 'error');
+        }
+    }
+    await filterBookmarks({ keepScroll: true, force: true });
+}
+
+/** Перерисовать список (после внешних изменений закладок) с сохранением прокрутки. */
+export function refreshBookmarksList(opts = {}) {
+    if (opts.force) invalidateBookmarksCache();
+    return filterBookmarks({ keepScroll: opts.keepScroll !== false, force: !!opts.force });
+}
+
+/** Данные для инструментов закладок (дубликаты, сохранённые фильтры). */
+export async function getBookmarksToolsSnapshot() {
+    const snap = await getBookmarksSnapshot();
+    return { all: snap.all, folders: snap.folders, folderMap: snap.folderMap };
 }
 
 // ============================================================================
@@ -1045,9 +1434,13 @@ export function getCurrentBookmarkFormState(form) {
 // ============================================================================
 
 /**
- * Фильтрует и отображает закладки по поисковому запросу и папке
+ * Фильтрует и отображает закладки по поисковому запросу и папке.
+ * Данные берутся из кэша; запрос, продолжающий предыдущий, сужает прежний результат;
+ * устаревшие вызовы отбрасываются.
+ * @param {Event|{keepScroll?: boolean, force?: boolean}} [arg]
  */
-export async function filterBookmarks() {
+export async function filterBookmarks(arg) {
+    const opts = arg && typeof arg === 'object' && !('target' in arg) ? arg : {};
     const searchInput = document.getElementById('bookmarkSearchInput');
     const folderFilter = document.getElementById('bookmarkFolderFilter');
 
@@ -1056,60 +1449,90 @@ export async function filterBookmarks() {
         renderBookmarks([], {});
         return;
     }
+    const seq = ++bmFilterSeq;
 
     const rawSearch = searchInput.value.trim();
     const { textQuery, tagFilters } = parseSearchQueryTagsAndText(rawSearch);
     const searchValue = textQuery.toLowerCase();
     const selectedFolderValue = folderFilter.value;
+    const sortState = GlobalState.currentBookmarksSort || {
+        criteria: 'date',
+        direction: 'asc',
+    };
 
     try {
-        const allBookmarks = await getAllBookmarks();
-        const folders = await getAllFromIndexedDB('bookmarkFolders');
-        const folderMap = (folders || []).reduce((map, folder) => {
-            if (folder && typeof folder.id !== 'undefined') {
-                map[folder.id] = folder;
-            }
-            return map;
-        }, {});
+        const snap = await getBookmarksSnapshot({ force: !!opts.force });
+        if (seq !== bmFilterSeq) return;
+        const { all: allBookmarks, folderMap } = snap;
 
-        let bookmarksToDisplay = [];
-
-        if (selectedFolderValue === '') {
-            bookmarksToDisplay = allBookmarks.filter((bm) => bm.folder !== ARCHIVE_FOLDER_ID);
-        } else if (selectedFolderValue === ARCHIVE_FOLDER_ID) {
-            bookmarksToDisplay = allBookmarks.filter((bm) => bm.folder === ARCHIVE_FOLDER_ID);
+        // Область (папка) — кэшируется на версию снимка
+        const scopeKey = `${snap.key}|${selectedFolderValue}`;
+        let scopeList;
+        if (bmCache.scope && bmCache.scope.key === scopeKey) {
+            scopeList = bmCache.scope.list;
         } else {
-            // Должно совпадать с loadBookmarks: id папки в БД может быть числом или строкой (импорт),
-            // value у <option> всегда строка — строгое сравнение с parseInt давало пустой список.
-            bookmarksToDisplay = allBookmarks.filter(
-                (bm) =>
-                    String(bm.folder) === String(selectedFolderValue) &&
-                    bm.folder !== ARCHIVE_FOLDER_ID,
-            );
+            if (selectedFolderValue === '') {
+                scopeList = allBookmarks.filter((bm) => bm.folder !== ARCHIVE_FOLDER_ID);
+            } else if (selectedFolderValue === ARCHIVE_FOLDER_ID) {
+                scopeList = allBookmarks.filter((bm) => bm.folder === ARCHIVE_FOLDER_ID);
+            } else {
+                // Должно совпадать с loadBookmarks: id папки в БД может быть числом или строкой (импорт),
+                // value у <option> всегда строка — строгое сравнение с parseInt давало пустой список.
+                scopeList = allBookmarks.filter(
+                    (bm) =>
+                        String(bm.folder) === String(selectedFolderValue) &&
+                        bm.folder !== ARCHIVE_FOLDER_ID,
+                );
+            }
+            bmCache.scope = { key: scopeKey, list: scopeList };
         }
 
-        if (tagFilters.length > 0) {
-            bookmarksToDisplay = bookmarksToDisplay.filter((bm) =>
-                itemMatchesAllTags(bm, tagFilters),
-            );
+        const sortKey = `${sortState.criteria || 'date'}:${sortState.direction || 'asc'}`;
+        const baseKey = `${scopeKey}|${JSON.stringify(tagFilters)}|${sortKey}`;
+        let sortedToDisplay;
+        const prev = bmCache.result;
+        if (prev && prev.baseKey === baseKey && prev.search === searchValue) {
+            sortedToDisplay = prev.list;
+        } else {
+            let source;
+            let alreadySorted = false;
+            if (
+                prev &&
+                prev.baseKey === baseKey &&
+                prev.search &&
+                searchValue.startsWith(prev.search)
+            ) {
+                // дописывание запроса: сужаем прежний (уже отсортированный) результат
+                source = prev.list;
+                alreadySorted = true;
+            } else {
+                source = scopeList;
+                if (tagFilters.length > 0) {
+                    source = source.filter((bm) => itemMatchesAllTags(bm, tagFilters));
+                }
+            }
+            let list = source;
+            if (searchValue) {
+                list = source.filter((bm) => {
+                    const f = bookmarkSearchFields(bm);
+                    return (
+                        f.title.includes(searchValue) ||
+                        f.desc.includes(searchValue) ||
+                        f.url.includes(searchValue)
+                    );
+                });
+            }
+            sortedToDisplay = alreadySorted ? list : sortBookmarksList(list, folderMap, sortState);
+            bmCache.result = { baseKey, search: searchValue, list: sortedToDisplay };
         }
 
-        if (searchValue) {
-            bookmarksToDisplay = bookmarksToDisplay.filter((bm) => {
-                const titleMatch = bm.title && bm.title.toLowerCase().includes(searchValue);
-                const descMatch =
-                    bm.description && bm.description.toLowerCase().includes(searchValue);
-                const urlMatch = bm.url && bm.url.toLowerCase().includes(searchValue);
-                return titleMatch || descMatch || urlMatch;
-            });
-        }
-
-        const sortState = GlobalState.currentBookmarksSort || {
-            criteria: 'date',
-            direction: 'asc',
-        };
-        const sortedToDisplay = sortBookmarksList(bookmarksToDisplay, folderMap, sortState);
-        renderBookmarks(sortedToDisplay, folderMap);
+        if (seq !== bmFilterSeq) return;
+        const filtered = !!searchValue || tagFilters.length > 0 || selectedFolderValue !== '';
+        await renderBookmarks(sortedToDisplay, folderMap, {
+            keepScroll: !!opts.keepScroll,
+            total: allBookmarks.filter((bm) => bm.folder !== ARCHIVE_FOLDER_ID).length,
+            filtered,
+        });
 
         if (typeof window.ensureBookmarksScroll === 'function') {
             window.ensureBookmarksScroll();
@@ -1878,6 +2301,23 @@ export async function handleBookmarkAction(event) {
 
     const bookmarkItem = target.closest('.bookmark-item[data-id]');
     if (!bookmarkItem) return;
+
+    // Режим выделения: клик по карточке/чекбоксу переключает выбор, действия карточки не выполняются
+    if (bmSelection.active && !target.closest('button[data-action], a[data-action]')) {
+        const selId = parseInt(bookmarkItem.dataset.id, 10);
+        if (!isNaN(selId)) {
+            const cb = bookmarkItem.querySelector('.vg-select-box');
+            const isCb = target.classList && target.classList.contains('vg-select-box');
+            const want = isCb ? target.checked : !bmSelection.ids.has(selId);
+            if (want) bmSelection.ids.add(selId);
+            else bmSelection.ids.delete(selId);
+            bookmarkItem.classList.toggle('vg-selected', want);
+            if (cb) cb.checked = want;
+            if (!isCb) event.preventDefault();
+            updateBookmarksBulkBar();
+        }
+        return;
+    }
 
     const bookmarkId = parseInt(bookmarkItem.dataset.id, 10);
     if (isNaN(bookmarkId)) {
