@@ -1,5 +1,6 @@
 'use strict';
 
+import { confirmCriticalDeletion } from './critical-confirm.js';
 import { getCoreService, notify } from '../core/kernel.js';
 
 /**
@@ -129,6 +130,18 @@ export function initClearDataFunctionality() {
     });
 
     confirmAndClearDataBtn.addEventListener('click', async () => {
+        const reallySure = await confirmCriticalDeletion({
+            title: 'Удалить ВСЕ данные приложения?',
+            what: 'Будут безвозвратно удалены все данные Copilot 1СО в этом браузере.',
+            consequences: [
+                'Закладки, алгоритмы, регламенты, ссылки, скриншоты и PDF-вложения.',
+                'База клиентов, заметки, напоминания, избранное, настройки и оформление.',
+            ],
+            hint: 'Если вы не сделали экспорт — отмените и нажмите «Экспорт данных».',
+            confirmLabel: 'Да, удалить всё',
+            ackText: 'Я понимаю, что все данные приложения будут стёрты без возможности восстановления.',
+        });
+        if (!reallySure) return;
         console.log('Attempting to clear all application data...');
         closeConfirmModal();
 

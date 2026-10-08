@@ -5,6 +5,7 @@
  * Вынесено из script.js (Этап 5)
  */
 
+import { confirmCriticalDeletion } from './critical-confirm.js';
 import {
     closeClientAnalyticsClearAllModal,
     closeClientAnalyticsDetailModal,
@@ -838,7 +839,7 @@ export async function handleGlobalHotkey(event) {
         return;
     }
 
-    if (code === 'Backspace' && !isInputFocused) {
+    if (code === 'Backspace' && !isInputFocused && !ctrlOrMeta && !shift && !alt) {
         console.log('[GlobalHotkey Backspace] (Лайтбокс неактивен или Backspace не для него)');
         event.preventDefault();
         event.stopPropagation();
@@ -1213,15 +1214,13 @@ export async function handleGlobalHotkey(event) {
                 console.log('[Hotkey]   > Выполнение действия: очистка заметок клиента');
                 const clientNotes = document.getElementById('clientNotes');
                 if (clientNotes && clientNotes.value.trim() !== '') {
-                    const confirmed = showAppConfirm
-                        ? await showAppConfirm({
-                              title: 'Очистка данных обращения',
-                              message: 'Вы уверены, что хотите очистить поле данных по обращению?',
-                              confirmText: 'Очистить',
-                              cancelText: 'Отмена',
-                              confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
-                          })
-                        : confirm('Вы уверены, что хотите очистить поле данных по обращению?');
+                    const confirmed = await confirmCriticalDeletion({
+                        title: 'Очистить данные по обращению?',
+                        what: 'Будет очищено поле «Информация по обращению».',
+                        consequences: ['Набранный текст текущего обращения пропадёт.'],
+                        confirmLabel: 'Да, очистить обращение',
+                        ackText: 'Я понимаю, что данные текущего обращения будут удалены.',
+                    });
                     if (confirmed) {
                         if (typeof clearClientData === 'function') {
                             clearClientData();

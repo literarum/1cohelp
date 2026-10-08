@@ -13,7 +13,11 @@ import { applyMotionMode, sanitizeMotionMode } from '../utils/motion-pref.js';
 export const UI_BG_THEME_FACTORS = Object.freeze({ darkRel: 0.75, lightRel: 0.2 });
 
 /**
- * По базовому цвету фона (пипетка) возвращает вычисленные фоны для светлой и тёмной темы.
+ * По базовому цвету фона (пипетка) возвращает фоны для светлой и тёмной темы.
+ * Цвет «привязан» к теме, в которой выбран (options.activeTheme): в ней он показывается как есть,
+ * а парный фон другой темы сохраняет оттенок, но имеет «свою» светлоту: из тёмного выбора получается
+ * настоящий светлый фон (≈96%), из светлого — настоящий тёмный (≈9–13%).
+ * Без привязки считаются оба парных значения.
  */
 export function deriveThemeBackgroundPairFromHex(
     bgHex,
@@ -25,12 +29,16 @@ export function deriveThemeBackgroundPairFromHex(
     const baseHsl = hexToHslFn(bgHex);
     if (!baseHsl) return { light: bgHex, dark: bgHex };
     const { darkRel, lightRel } = UI_BG_THEME_FACTORS;
-    const computedLight = hslToHexFn(
-        ...Object.values(adjustHslFn(baseHsl, Math.round((100 - baseHsl.l) * lightRel), 0)),
-    );
-    const computedDark = hslToHexFn(
-        ...Object.values(adjustHslFn(baseHsl, -Math.round(baseHsl.l * darkRel), 0)),
-    );
+    const computedLight =
+        baseHsl.l < 60
+            ? hslToHexFn(baseHsl.h, Math.min(baseHsl.s, 45), 96)
+            : hslToHexFn(
+                  ...Object.values(adjustHslFn(baseHsl, Math.round((100 - baseHsl.l) * lightRel), 0)),
+              );
+    const computedDark =
+        baseHsl.l > 40
+            ? hslToHexFn(baseHsl.h, Math.min(baseHsl.s, 40), Math.round(8 + baseHsl.l * 0.05))
+            : hslToHexFn(...Object.values(adjustHslFn(baseHsl, -Math.round(baseHsl.l * darkRel), 0)));
 
     const activeTheme = options?.activeTheme;
     if (activeTheme === 'dark') return { light: computedLight, dark: bgHex };
@@ -194,10 +202,53 @@ export async function applyPreviewSettings(settings) {
                 ? 'dark'
                 : 'light';
 
-    const buildPalette = (themeBgHex, isDark) => {
+    // Палитра отталкивается от СТАНДАРТНЫХ цветов темы: при фоне, равном стандартному, она в точности
+    // совпадает со стандартной (никакого скачка при первом движении пипетки), а при другом фоне
+    // стандартные поверхности/рамки сдвигаются на ту же разницу по тону, насыщенности и светлоте.
+    const ANCHOR = {
+        dark: {
+            bg: '#12121f', surf1: '#27273f', surf2: '#363653', border: '#3a3a52', input: '#2f2f4a',
+            textP: '#ffffff', textS: '#b0b0b0', hover: 'rgba(255, 255, 255, 0.1)',
+        },
+        light: {
+            bg: '#f9fafb', surf1: '#f3f4f6', surf2: '#ffffff', border: '#d1d5db', input: '#f9fafb',
+            textP: '#111827', textS: '#4b5563', hover: 'rgba(0, 0, 0, 0.055)',
+        },
+    };
+    const clampPct = (v) => Math.max(0, Math.min(100, v));
+    const buildAnchoredPalette = (hsl, isDark) => {
+        const a = isDark ? ANCHOR.dark : ANCHOR.light;
+        const base = hexToHsl(a.bg);
+        // свой фон слишком далёк от стандартного по светлоте — контраст текста надёжнее считать заново
+        if (!base || (isDark ? hsl.l > 42 : hsl.l < 58)) return null;
+        let dH = hsl.h - base.h;
+        if (dH > 180) dH -= 360;
+        if (dH < -180) dH += 360;
+        const dS = hsl.s - base.s;
+        const dL = hsl.l - base.l;
+        const shift = (hex, lk = 1) => {
+            const c = hexToHsl(hex);
+            if (!c) return hex;
+            const h = (c.h + dH + 360) % 360;
+            return hslToHex(h, clampPct(c.s + dS), clampPct(c.l + dL * lk));
+        };
+        const surf1 = shift(a.surf1);
+        const surf2 = shift(a.surf2);
+        const border = shift(a.border);
+        const input = shift(a.input);
+        const text = customText
+            ? { p: customText, s: customText }
+            : { p: a.textP, s: a.textS };
+        return { textP: text.p, textS: text.s, surf1, surf2, border, input, hover: a.hover };
+    };
+
+    const buildPalette = (themeBgHex, isDarkSlot) => {
         if (!themeBgHex) return null;
         const hsl = hexToHsl(themeBgHex);
         if (!hsl) return null;
+        const anchored = buildAnchoredPalette(hsl, isDarkSlot);
+        if (anchored) return anchored;
+        const isDark = isDarkSlot;
         const darkBoost = Math.round(hsl.l * darkRelFactor);
         const lightBoost = Math.round((100 - hsl.l) * lightRelFactor);
 
@@ -241,6 +292,7 @@ export async function applyPreviewSettings(settings) {
         bgHex || '',
         customText || '',
         activeTheme,
+        settings?.backgroundAnchor || '',
         Number(settings?.darkTextDimPoints ?? 12),
     ].join('|');
     // Память верна, только пока переменные палитры реально стоят на элементе (метка в самом style):
@@ -258,7 +310,7 @@ export async function applyPreviewSettings(settings) {
             hexToHsl,
             hslToHex,
             adjustHsl,
-            { activeTheme },
+            { activeTheme: settings?.backgroundAnchor === 'light' || settings?.backgroundAnchor === 'dark' ? settings.backgroundAnchor : activeTheme },
         );
         const palLight = buildPalette(bgLight, false);
         const palDark = buildPalette(bgDark, true);
@@ -277,7 +329,10 @@ export async function applyPreviewSettings(settings) {
             style.setProperty('--override-input-bg-light', palLight.input);
             style.setProperty('--override-hover-light', palLight.hover);
             style.setProperty('--override-scrollbar-track-light', palLight.surf2);
-            style.setProperty('--override-scrollbar-thumb-light', palLight.border);
+            style.setProperty(
+                '--override-scrollbar-thumb-light',
+                `color-mix(in srgb, ${palLight.textS} 45%, transparent)`,
+            );
 
             style.setProperty('--override-text-primary-dark', palDark.textP);
             style.setProperty('--override-text-secondary-dark', palDark.textS);
@@ -287,7 +342,10 @@ export async function applyPreviewSettings(settings) {
             style.setProperty('--override-input-bg-dark', palDark.input);
             style.setProperty('--override-hover-dark', palDark.hover);
             style.setProperty('--override-scrollbar-track-dark', palDark.surf2);
-            style.setProperty('--override-scrollbar-thumb-dark', palDark.border);
+            style.setProperty(
+                '--override-scrollbar-thumb-dark',
+                `color-mix(in srgb, ${palDark.textS} 45%, transparent)`,
+            );
         } else {
             body.classList.remove('custom-background-active');
         }
@@ -334,13 +392,21 @@ export async function applyPreviewSettings(settings) {
 
     const radiusRaw = settings?.borderRadius;
     const hasUnit = typeof radiusRaw === 'string' && /[a-z%]+$/i.test(radiusRaw.trim());
-    const radiusValue = hasUnit
-        ? radiusRaw.trim()
-        : `${Number.isFinite(radiusRaw) ? radiusRaw : DEFAULT_BORDER_RADIUS_PX}px`;
+    // Ползунок 0–20 → фактический базовый радиус: до 5 px — 1:1 (стандарт не меняется), дальше плавнее,
+    // иначе производные радиусы (×1.25…×2.25) на максимуме превращали мелкие элементы в «таблетки» и налезали друг на друга.
+    const sliderPx = Number.isFinite(radiusRaw) ? radiusRaw : DEFAULT_BORDER_RADIUS_PX;
+    const effectivePx = sliderPx <= 5 ? sliderPx : Math.round((5 + (sliderPx - 5) * 0.45) * 10) / 10;
+    const radiusValue = hasUnit ? radiusRaw.trim() : `${effectivePx}px`;
     root.style.setProperty('--border-radius', radiusValue);
 
     const density = Number.isFinite(settings?.contentDensity) ? settings.contentDensity : 3;
-    root.style.setProperty('--content-spacing', `${density * 0.25}rem`);
+    // 3 — стандарт (0.75rem). Ниже стандарта шаг мельче и есть пол 0.4rem: на «Компактно» панели не должны терять внутренние отступы.
+    const dClamped = Math.max(0, Math.min(6, density));
+    const contentSpacingRem =
+        dClamped <= 3 ? 0.4 + dClamped * ((0.75 - 0.4) / 3) : 0.75 + (dClamped - 3) * 0.25;
+    root.style.setProperty('--content-spacing', `${Math.round(contentSpacingRem * 1000) / 1000}rem`);
+    // Масштаб плотности для структурных элементов (карточки, вкладки, отступы страницы): 0 → 0.6, 3 → 1, 6 → 1.4
+    root.style.setProperty('--density-scale', String(Math.round((0.6 + Math.max(0, Math.min(6, density)) * (0.8 / 6)) * 1000) / 1000));
 
     const appContent = document.getElementById('appContent');
     const staticWrapper = document.getElementById('staticHeaderWrapper');

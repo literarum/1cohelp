@@ -155,10 +155,19 @@ function buildSection() {
     sec.innerHTML = `
         <h3 id="acm-profile-heading" class="app-customization-section-title ac-title">Профили</h3>
         <p class="app-customization-section-hint ac-hint">Перенос оформления между браузерами и компьютерами и полный сброс. Готовые образы — на вкладке «Оформление».</p>
-        <div class="ap-actions">
-            <button type="button" class="ap-btn" data-ap="export">Экспорт профиля</button>
-            <button type="button" class="ap-btn" data-ap="import">Импорт профиля…</button>
-            <button type="button" class="ap-btn ap-btn--danger" data-ap="reset">Сбросить всё оформление</button>
+        <div class="ap-actions ap-actions--cards">
+            <button type="button" class="ap-btn ap-card" data-ap="export">
+                <span class="ap-card__icon" aria-hidden="true"><i class="fas fa-file-export"></i></span>
+                <span class="ap-card__text"><b>Экспорт профиля</b><small>Сохранить оформление в файл .json</small></span>
+            </button>
+            <button type="button" class="ap-btn ap-card" data-ap="import">
+                <span class="ap-card__icon" aria-hidden="true"><i class="fas fa-file-import"></i></span>
+                <span class="ap-card__text"><b>Импорт профиля</b><small>Загрузить оформление из файла</small></span>
+            </button>
+            <button type="button" class="ap-btn ap-btn--danger ap-card" data-ap="reset">
+                <span class="ap-card__icon" aria-hidden="true"><i class="fas fa-rotate-left"></i></span>
+                <span class="ap-card__text"><b>Сбросить всё оформление</b><small>Вернуть цвета, шрифты, форму и фон к стандартным</small></span>
+            </button>
             <input type="file" accept="application/json,.json" hidden data-ap-file>
         </div>
         <p class="ap-note">Аварийный сброс, если интерфейс не открывается: добавьте к адресу <code>?resetUi=1</code>.</p>`;

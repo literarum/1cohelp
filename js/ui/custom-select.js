@@ -299,7 +299,8 @@ class CustomSelect {
             p.style.left = p.style.top = p.style.width = p.style.maxHeight = '';
             return;
         }
-        const width = Math.max(r.width, 160);
+        // минимум 15rem: короткие подписи («Нет сохранённых фильтров») не переносятся, длинные названия читаются
+        const width = Math.min(Math.max(r.width, 240), vw - 16);
         p.style.width = width + 'px';
         p.style.minWidth = width + 'px';
         const left = Math.min(Math.max(8, r.left), Math.max(8, vw - width - 8));

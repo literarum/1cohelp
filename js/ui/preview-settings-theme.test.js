@@ -52,4 +52,18 @@ describe('preview-settings theme helpers', () => {
         expect(light.toLowerCase()).toBe(seed);
         expect(dark.toLowerCase()).not.toBe(seed);
     });
+
+    it('парный фон другой темы имеет «свою» светлоту (тёмный выбор → светлая пара и наоборот)', () => {
+        const lum = (hex) => hexToHsl(hex).l;
+        const fromDark = deriveThemeBackgroundPairFromHex('#1a2a4a', hexToHsl, hslToHex, adjustHsl, {
+            activeTheme: 'dark',
+        });
+        expect(fromDark.dark.toLowerCase()).toBe('#1a2a4a');
+        expect(lum(fromDark.light)).toBeGreaterThan(90);
+        const fromLight = deriveThemeBackgroundPairFromHex('#dbeafe', hexToHsl, hslToHex, adjustHsl, {
+            activeTheme: 'light',
+        });
+        expect(fromLight.light.toLowerCase()).toBe('#dbeafe');
+        expect(lum(fromLight.dark)).toBeLessThan(18);
+    });
 });

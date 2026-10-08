@@ -91,4 +91,11 @@ describe('customization-studio: чистые функции', () => {
         expect(describeMotion('auto', 'reduce')).toMatch(/системе/);
         expect(describeMotion('calm', 'calm')).toMatch(/спокойн/);
     });
+
+    it('pickAppearance сохраняет тему, в которой выбран фон, только для кастомного фона', () => {
+        const a = pickAppearance({ isBackgroundCustom: true, backgroundColor: '#112233', backgroundAnchor: 'dark' });
+        expect(a.backgroundAnchor).toBe('dark');
+        expect(pickAppearance({ isBackgroundCustom: true, backgroundColor: '#112233', backgroundAnchor: 'x' }).backgroundAnchor).toBeUndefined();
+        expect(pickAppearance({ isBackgroundCustom: false, backgroundAnchor: 'dark' }).backgroundAnchor).toBeUndefined();
+    });
 });

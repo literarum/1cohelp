@@ -52,6 +52,7 @@ export const STUDIO_KEYS = Object.freeze([
     'theme',
     'primaryColor',
     'backgroundColor',
+    'backgroundAnchor',
     'isBackgroundCustom',
     'customTextColor',
     'isTextCustom',
@@ -233,7 +234,10 @@ export function pickAppearance(src) {
     out.theme = ['light', 'dark', 'auto'].includes(s.theme || s.themeMode) ? s.theme || s.themeMode : def.theme;
     out.primaryColor = normalizeHexLoose(s.primaryColor) || def.primaryColor;
     out.isBackgroundCustom = !!(s.isBackgroundCustom && normalizeHexLoose(s.backgroundColor));
-    if (out.isBackgroundCustom) out.backgroundColor = normalizeHexLoose(s.backgroundColor);
+    if (out.isBackgroundCustom) {
+        out.backgroundColor = normalizeHexLoose(s.backgroundColor);
+        if (s.backgroundAnchor === 'dark' || s.backgroundAnchor === 'light') out.backgroundAnchor = s.backgroundAnchor;
+    }
     out.isTextCustom = !!(s.isTextCustom && normalizeHexLoose(s.customTextColor));
     if (out.isTextCustom) out.customTextColor = normalizeHexLoose(s.customTextColor);
     out.borderRadius = clampBorderRadiusPx(s.borderRadius);
@@ -360,8 +364,14 @@ function createController(root) {
         cps.themeMode = app.theme;
         cps.primaryColor = app.primaryColor;
         cps.isBackgroundCustom = !!app.isBackgroundCustom;
-        if (app.isBackgroundCustom) cps.backgroundColor = app.backgroundColor;
-        else delete cps.backgroundColor;
+        if (app.isBackgroundCustom) {
+            cps.backgroundColor = app.backgroundColor;
+            if (app.backgroundAnchor) cps.backgroundAnchor = app.backgroundAnchor;
+            else delete cps.backgroundAnchor;
+        } else {
+            delete cps.backgroundColor;
+            delete cps.backgroundAnchor;
+        }
         cps.isTextCustom = !!app.isTextCustom;
         if (app.isTextCustom) cps.customTextColor = app.customTextColor;
         else delete cps.customTextColor;
@@ -417,7 +427,10 @@ function createController(root) {
                 return true;
             }
             State.userPreferences = { ...(State.userPreferences || {}), ...app };
-            if (!app.isBackgroundCustom) delete State.userPreferences.backgroundColor;
+            if (!app.isBackgroundCustom) {
+                delete State.userPreferences.backgroundColor;
+                delete State.userPreferences.backgroundAnchor;
+            }
             if (!app.isTextCustom) delete State.userPreferences.customTextColor;
             let ok = false;
             try {
@@ -443,7 +456,10 @@ function createController(root) {
     function syncOriginalAfterSave(app) {
         if (State.originalUISettings && typeof State.originalUISettings === 'object') {
             Object.assign(State.originalUISettings, app);
-            if (!app.isBackgroundCustom) delete State.originalUISettings.backgroundColor;
+            if (!app.isBackgroundCustom) {
+                delete State.originalUISettings.backgroundColor;
+                delete State.originalUISettings.backgroundAnchor;
+            }
             if (!app.isTextCustom) delete State.originalUISettings.customTextColor;
         }
         const settings = document.getElementById('customizeUIModal');
@@ -601,7 +617,7 @@ function createController(root) {
         const prev = readAppearance();
         const next = applyLookToAppearance(prev, look);
         writeAppearance(next);
-        if (next.theme !== prev.theme) withThemeTransition(() => applyNow());
+        if (next.theme !== prev.theme) void withThemeTransition(() => applyNow()).then(() => syncPicker());
         else applyNow();
         if (look.fonts) {
             const f = sanitizeFontSettings(look.fonts);
@@ -645,7 +661,10 @@ function createController(root) {
             }
         }
         if (id === 'fonts') remountFontSettings();
-        if (id === 'motion') syncMotion(readAppearance());
+        if (id === 'motion') {
+            syncMotion(readAppearance());
+            playMotionDemo();
+        }
     }
 
     // ----- Действия ---------------------------------------------------------
@@ -676,7 +695,7 @@ function createController(root) {
             return;
         }
         writeAppearance(next);
-        if (next.theme !== cur.theme) withThemeTransition(() => applyNow());
+        if (next.theme !== cur.theme) void withThemeTransition(() => applyNow()).then(() => syncPicker());
         else applyNow();
         syncAll();
         markChanged();
@@ -686,7 +705,7 @@ function createController(root) {
         if (!snapshot) return;
         const themeChanged = snapshot.theme !== readAppearance().theme;
         writeAppearance(snapshot);
-        if (themeChanged) withThemeTransition(() => applyNow());
+        if (themeChanged) void withThemeTransition(() => applyNow()).then(() => syncPicker());
         else applyNow();
         if (snapshotFonts) {
             applyFontSettings(snapshotFonts);
@@ -698,13 +717,31 @@ function createController(root) {
         await persistNow();
     }
 
+    const DEMO_CAPTIONS = {
+        full: 'Полные анимации: карточка выезжает, уведомление влетает, окно «всплывает».',
+        calm: 'Спокойный режим: только короткое плавное появление, без движения и масштаба.',
+        reduce: 'Движение отключено: всё появляется мгновенно, без анимации.',
+    };
+
     function playMotionDemo() {
-        const chip = $('#acMotionDemoChip');
-        if (!chip) return;
-        chip.classList.remove('is-playing');
+        const stage = $('#acMotionStage');
+        if (!stage) return;
+        const level = getMotionLevel();
+        const caption = $('#acMotionDemoCaption');
+        if (caption) caption.textContent = DEMO_CAPTIONS[level] || DEMO_CAPTIONS.full;
+        stage.dataset.level = level;
+        const actors = Array.from(stage.querySelectorAll('[data-demo], .ac-motion-chip'));
+        actors.forEach((a) => a.classList.remove('is-playing', 'is-shown'));
         // перезапуск CSS-анимации
-        void chip.offsetWidth;
-        chip.classList.add('is-playing');
+        void stage.offsetWidth;
+        actors.forEach((a, i) => {
+            a.style.setProperty('--demo-delay', level === 'full' ? `${i * 140}ms` : '0ms');
+            a.classList.add('is-playing');
+        });
+        // «после»-состояние остаётся (акторы не исчезают), а в режиме reduce видно мгновенную подсветку
+        stage.classList.remove('is-flash');
+        void stage.offsetWidth;
+        stage.classList.add('is-flash');
     }
 
     // ----- События -----------------------------------------------------------
@@ -715,11 +752,11 @@ function createController(root) {
             const prev = readAppearance();
             const next = { ...prev, theme: t.value };
             writeAppearance(next);
-            withThemeTransition(() => applyNow());
             syncTheme(next);
-            syncPicker();
             markActiveLook(next);
             markChanged();
+            // пипетка читает фактический цвет с экрана — обновляем её после того, как тема реально применена
+            void withThemeTransition(() => applyNow()).then(() => syncPicker());
         } else if (t.name === 'motionMode') {
             const next = { ...readAppearance(), motionMode: sanitizeMotionMode(t.value) };
             writeAppearance(next);

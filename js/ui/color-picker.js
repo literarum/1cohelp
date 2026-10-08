@@ -301,8 +301,18 @@ function updateColorAccessibilityHint() {
     const target = State?.uiModalState?.currentColorTarget || 'elements';
 
     if (target === 'background') {
-        el.textContent =
-            'Для фона палитра текста и панелей пересчитывается автоматически при предпросмотре и сохранении.';
+        const dark = effectiveThemeIsDark(State?.currentPreviewSettings);
+        const hsl = pickerHsl;
+        if (dark && hsl.l > 55) {
+            el.textContent =
+                'Светлый фон в тёмной теме: текст интерфейса светлый и на нём плохо читается. Светлый фон лучше выбрать в светлой теме — для тёмной он подберётся автоматически.';
+        } else if (!dark && hsl.l < 45) {
+            el.textContent =
+                'Тёмный фон в светлой теме: текст интерфейса тёмный и на нём плохо читается. Тёмный фон лучше выбрать в тёмной теме — для светлой он подберётся автоматически.';
+        } else {
+            el.textContent =
+                'Для фона палитра текста и панелей пересчитывается автоматически; парный фон другой темы подбирается сам.';
+        }
         return;
     }
     if (target === 'elements') {
@@ -566,6 +576,14 @@ function applyPreviewFromPickerHsl() {
             }
             if (typeof updatePreviewSettingsFromModal === 'function')
                 updatePreviewSettingsFromModal();
+            if (target === 'background') {
+                // Запоминаем, в какой теме выбран фон: этот цвет остаётся «как выбран» в ней,
+                // а для другой темы подбирается парный (иначе после переключения темы фон «уезжает»).
+                const anchor = activeUiThemeKeyForBackground(cps);
+                cps.backgroundAnchor = anchor;
+                if (State.currentPreviewSettings && typeof State.currentPreviewSettings === 'object')
+                    State.currentPreviewSettings.backgroundAnchor = anchor;
+            }
             if (typeof applyPreviewSettings === 'function') applyPreviewSettings(cps);
             State.isUISettingsDirty = true;
         }
@@ -609,7 +627,7 @@ function updateDualThemePreviewStrip() {
             hexToHsl,
             hslToHex,
             adjustHsl,
-            { activeTheme },
+            { activeTheme: backgroundAnchorFor(prev) },
         );
         lightEl.style.backgroundColor = bgL;
         darkEl.style.backgroundColor = bgD;
@@ -678,6 +696,12 @@ function activeUiThemeKeyForBackground(settings) {
     }
 }
 
+/** Тема, к которой «привязан» выбранный фон (запоминается при выборе; иначе — активная тема). */
+function backgroundAnchorFor(settings) {
+    const a = settings?.backgroundAnchor;
+    return a === 'dark' || a === 'light' ? a : activeUiThemeKeyForBackground(settings);
+}
+
 /**
  * HEX для пипетки с учётом текущей цели и флагов кастомизации (единая логика для модалки и переключателя).
  *
@@ -719,7 +743,7 @@ export function resolveHexForCustomizationTarget(settings, state) {
                         hexToHsl,
                         hslToHex,
                         adjustHsl,
-                        { activeTheme },
+                        { activeTheme: backgroundAnchorFor(settings) },
                     );
                     const activeHex = activeTheme === 'dark' ? pair.dark : pair.light;
                     return normalizeColorToHex(activeHex) || saved;
@@ -738,6 +762,13 @@ export function resolveHexForCustomizationTarget(settings, state) {
     if (target === 'text') {
         if (settings?.isTextCustom && settings.customTextColor) {
             return normalizeColorToHex(settings.customTextColor) || DEFAULT_HEX;
+        }
+        // фактический цвет текста на экране: при первом движении ползунка цвет не «перескакивает»
+        try {
+            const rendered = cssColorToHex(getComputedStyle(document.body).color);
+            if (rendered) return rendered;
+        } catch {
+            /* нет DOM — берём стандарт темы */
         }
         return effectiveThemeIsDark(settings) ? '#ffffff' : '#111827';
     }

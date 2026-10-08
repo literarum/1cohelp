@@ -17,9 +17,12 @@ export function setThemeToggleDependencies(dependencies) {
 export function initThemeToggle() {
     const themeToggleBtn = document.getElementById('themeToggle');
     themeToggleBtn?.addEventListener('click', async () => {
+        // Берём ВЫБРАННЫЙ режим (dark/light/auto), а не разрешённый: в режиме «Авто» на экране уже
+        // dark или light, и по нему цикл тёмная → светлая → авто → тёмная застревал.
+        const storedMode = deps.State?.userPreferences?.theme;
         const currentAppTheme =
+            (['dark', 'light', 'auto'].includes(storedMode) ? storedMode : null) ||
             document.documentElement.dataset.theme ||
-            deps.State?.userPreferences?.theme ||
             deps.DEFAULT_UI_SETTINGS?.themeMode;
         let nextTheme;
 
