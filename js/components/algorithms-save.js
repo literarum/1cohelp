@@ -451,7 +451,8 @@ export async function saveAlgorithm() {
             ? algorithmDescriptionInput.value.trim()
             : undefined;
     const algorithmTagsInput = document.getElementById('algorithmTags');
-    const tagsList = parseTagsFromUserString(algorithmTagsInput?.value || '');
+    // Главный алгоритм — особая карточка: у неё нет тегов и PDF, поле тегов не читаем и тегов не меняем.
+    const tagsList = isMainAlgo ? [] : parseTagsFromUserString(algorithmTagsInput?.value || '');
     if (!finalTitle) {
         showNotification('Заголовок не может быть пустым.', 'warning');
         algorithmTitleInput.focus();

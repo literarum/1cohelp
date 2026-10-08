@@ -351,7 +351,7 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
         <div class="${SCREENSHOT_EDIT_FIELD.wrapperCard} mt-4">
             <label class="${SCREENSHOT_EDIT_FIELD.label}">Скриншоты (опционально)</label>
             <p class="${SCREENSHOT_EDIT_FIELD.hint}">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl/Cmd+V) в эту область.</p>
-            <div id="screenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}">
+            <div id="screenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}" role="button" tabindex="0" aria-label="Добавить скриншоты: нажмите, перетащите изображения или вставьте из буфера">
             </div>
             <div class="${SCREENSHOT_EDIT_FIELD.actions}">
                 <button type="button" class="${SCREENSHOT_EDIT_FIELD.addBtnStep}">

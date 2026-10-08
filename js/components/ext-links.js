@@ -7,37 +7,10 @@
 
 import { escapeHtml, linkify } from '../utils/html.js';
 import { getAllFromIndexedDB } from '../db/indexeddb.js';
+import { folderColorStyle } from '../utils/folder-colors.js';
 import { NotificationService } from '../services/notification.js';
 
-// Полные классы для бейджей категорий (Tailwind не поддерживает динамические имена классов)
-const CATEGORY_BADGE_CLASSES = {
-    gray: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
-    red: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    orange: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    teal: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
-    blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-    purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    pink: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    rose: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
-};
-
-function normalizeCategoryColor(colorName) {
-    if (!colorName) return 'gray';
-    const raw = String(colorName).trim().toLowerCase();
-    const cleaned = raw
-        .replace(/^bg-/, '')
-        .replace(/\/.+$/, '')
-        .replace(/-(50|100|200|300|400|500|600|700|800|900|950)$/, '');
-    return CATEGORY_BADGE_CLASSES[cleaned] ? cleaned : 'gray';
-}
-
-function getCategoryBadgeClasses(colorName) {
-    const key = normalizeCategoryColor(colorName);
-    return CATEGORY_BADGE_CLASSES[key] || CATEGORY_BADGE_CLASSES.gray;
-}
+// Цвета категорий: палитра + произвольный #rrggbb (js/utils/folder-colors.js), отрисовка через --fc
 
 // ============================================================================
 // ЗАВИСИМОСТИ
@@ -161,9 +134,8 @@ export function createExtLinkElement(link, categoryMap = {}, viewMode = 'cards')
           : '';
     let categoryBadgeHTML = '';
     if (categoryData) {
-        const badgeClasses = getCategoryBadgeClasses(categoryData.color);
         categoryBadgeHTML = `
-            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap ${badgeClasses}" title="Папка: ${escapeHtml(
+            <span class="folder-badge folder-chip inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap" style="${folderColorStyle(categoryData.color)}" title="Папка: ${escapeHtml(
                 categoryData.name,
             )}">
                 ${escapeHtml(categoryData.name)}

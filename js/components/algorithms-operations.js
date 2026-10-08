@@ -481,13 +481,24 @@ export async function editAlgorithm(algorithmId, section = 'main') {
 
     try {
         descriptionContainer.style.display = isMainAlgorithm ? 'none' : 'block';
-        editModalTitle.textContent = `Редактирование: ${algorithm.title ?? 'Без названия'}`;
+        // Главный алгоритм: отдельный режим окна — без тегов и PDF-вложений (см. css: [data-edit-mode='main'])
+        editModal.dataset.editMode = isMainAlgorithm ? 'main' : 'card';
+        const tagsGroup = document.getElementById('algorithmTagsGroup');
+        if (tagsGroup) tagsGroup.hidden = isMainAlgorithm;
+        const pdfGroup = document.getElementById('algorithmPdfEditHost');
+        if (pdfGroup) pdfGroup.hidden = isMainAlgorithm;
+        editModalTitle.textContent = isMainAlgorithm
+            ? 'Редактирование главного алгоритма'
+            : `Редактирование: ${algorithm.title ?? 'Без названия'}`;
         algorithmTitleInput.value = algorithm.title ?? '';
         if (!isMainAlgorithm) {
             algorithmDescriptionInput.value = algorithm.description ?? '';
         }
         const algorithmTagsInput = document.getElementById('algorithmTags');
-        if (algorithmTagsInput) algorithmTagsInput.value = formatTagsForInput(algorithm.tags);
+        if (algorithmTagsInput) {
+            algorithmTagsInput.value = isMainAlgorithm ? '' : formatTagsForInput(algorithm.tags);
+            algorithmTagsInput.disabled = isMainAlgorithm;
+        }
 
         if (isMainAlgorithm) {
             if (!Array.isArray(algorithm.groups)) algorithm.groups = [];
@@ -748,7 +759,9 @@ export async function editAlgorithm(algorithmId, section = 'main') {
         const pdfHostEdit = document.getElementById('algorithmPdfEditHost');
         if (pdfHostEdit) {
             removePdfSectionsFromContainer(pdfHostEdit);
-            renderPdfAttachmentsSection(pdfHostEdit, 'algorithm', String(algorithm.id));
+            if (!isMainAlgorithm) {
+                renderPdfAttachmentsSection(pdfHostEdit, 'algorithm', String(algorithm.id));
+            }
         }
         if (typeof captureInitialEditState === 'function') {
             captureInitialEditState(algorithm, section);

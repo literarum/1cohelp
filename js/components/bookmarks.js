@@ -1,5 +1,7 @@
 'use strict';
 
+import { rankItems } from '../features/smart-search.js';
+import { renderSearchHint } from '../features/search-hint.js';
 import { escapeHtml, linkify, truncateText } from '../utils/html.js';
 import {
     getAllFromIndexedDB,
@@ -42,79 +44,26 @@ import {
     itemMatchesAllTags,
 } from '../features/global-tags.js';
 import {
+    folderColorStyle,
+    folderColorSortIndex,
+    FOLDER_COLOR_SORT_ORDER,
+    renderFolderColorPicker,
+    setFolderColorInPicker,
+    DEFAULT_FOLDER_COLOR,
+} from '../utils/folder-colors.js';
+import {
     attachModalBackdropWheelScroll,
     syncBodyScrollLockAfterModalClose,
 } from '../ui/modals-manager.js';
 
-// Полные классы для бейджей папок (Tailwind не поддерживает динамические имена классов — только явные строки)
-const FOLDER_BADGE_CLASSES = {
-    gray: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
-    red: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    orange: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    teal: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
-    blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-    purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    pink: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    rose: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
-};
-
-const FOLDER_DOT_CLASSES = {
-    gray: 'bg-gray-500',
-    red: 'bg-red-600',
-    orange: 'bg-orange-500',
-    yellow: 'bg-yellow-400',
-    green: 'bg-green-500',
-    teal: 'bg-teal-500',
-    blue: 'bg-blue-600',
-    indigo: 'bg-indigo-600',
-    purple: 'bg-purple-600',
-    pink: 'bg-pink-600',
-    rose: 'bg-rose-500',
-};
-
-function normalizeFolderColor(colorName) {
-    if (!colorName) return 'gray';
-    const raw = String(colorName).trim().toLowerCase();
-    const cleaned = raw
-        .replace(/^bg-/, '')
-        .replace(/\/.+$/, '')
-        .replace(/-(50|100|200|300|400|500|600|700|800|900|950)$/, '');
-    return FOLDER_BADGE_CLASSES[cleaned] ? cleaned : 'gray';
+// Цвета папок: палитра + произвольный #rrggbb (js/utils/folder-colors.js), отрисовка через --fc
+function getFolderBadgeStyle(colorName) {
+    return folderColorStyle(colorName);
 }
-
-function getFolderBadgeClasses(colorName) {
-    const key = normalizeFolderColor(colorName);
-    return FOLDER_BADGE_CLASSES[key] || FOLDER_BADGE_CLASSES.gray;
+function getFolderDotStyle(colorName) {
+    return folderColorStyle(colorName);
 }
-
-function getFolderDotClasses(colorName) {
-    const key = normalizeFolderColor(colorName);
-    return FOLDER_DOT_CLASSES[key] || FOLDER_DOT_CLASSES.gray;
-}
-
-/** Порядок цветов папок для сортировки «от красной к зелёной» */
-const FOLDER_COLOR_SORT_ORDER = [
-    'red',
-    'orange',
-    'yellow',
-    'green',
-    'teal',
-    'blue',
-    'indigo',
-    'purple',
-    'pink',
-    'rose',
-    'gray',
-];
-
-function getFolderColorSortIndex(colorName) {
-    const key = normalizeFolderColor(colorName);
-    const idx = FOLDER_COLOR_SORT_ORDER.indexOf(key);
-    return idx >= 0 ? idx : FOLDER_COLOR_SORT_ORDER.length;
-}
+const getFolderColorSortIndex = folderColorSortIndex;
 
 // ============================================================================
 // КОМПОНЕНТ РАБОТЫ С ЗАКЛАДКАМИ
@@ -293,9 +242,8 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
                 <i class="fas fa-archive mr-1 opacity-75"></i>${escapeHtml(ARCHIVE_FOLDER_NAME)}
             </span>`;
     } else if (folder) {
-        const badgeClasses = getFolderBadgeClasses(folder.color);
         folderBadgeHTML = `
-            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap ${badgeClasses}" title="Папка: ${escapeHtml(
+            <span class="folder-badge folder-chip inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap" style="${getFolderBadgeStyle(folder.color)}" title="Папка: ${escapeHtml(
                 folder.name,
             )}">
                 <i class="fas fa-folder mr-1 opacity-75"></i>${escapeHtml(folder.name)}
@@ -1490,41 +1438,46 @@ export async function filterBookmarks(arg) {
         const sortKey = `${sortState.criteria || 'date'}:${sortState.direction || 'asc'}`;
         const baseKey = `${scopeKey}|${JSON.stringify(tagFilters)}|${sortKey}`;
         let sortedToDisplay;
+        let searchInfo = null;
         const prev = bmCache.result;
         if (prev && prev.baseKey === baseKey && prev.search === searchValue) {
             sortedToDisplay = prev.list;
         } else {
-            let source;
-            let alreadySorted = false;
-            if (
-                prev &&
-                prev.baseKey === baseKey &&
-                prev.search &&
-                searchValue.startsWith(prev.search)
-            ) {
-                // дописывание запроса: сужаем прежний (уже отсортированный) результат
-                source = prev.list;
-                alreadySorted = true;
-            } else {
-                source = scopeList;
-                if (tagFilters.length > 0) {
-                    source = source.filter((bm) => itemMatchesAllTags(bm, tagFilters));
-                }
+            let source = scopeList;
+            if (tagFilters.length > 0) {
+                source = source.filter((bm) => itemMatchesAllTags(bm, tagFilters));
             }
             let list = source;
             if (searchValue) {
-                list = source.filter((bm) => {
-                    const f = bookmarkSearchFields(bm);
-                    return (
-                        f.title.includes(searchValue) ||
-                        f.desc.includes(searchValue) ||
-                        f.url.includes(searchValue)
-                    );
-                });
+                // «Умный» поиск: словоформы, синонимы предметной области, опечатки, неверная раскладка.
+                // Порядок (сортировка) остаётся пользовательским; релевантность отбирает кандидатов.
+                const ranked = rankItems(
+                    source,
+                    searchValue,
+                    (bm) => {
+                        const f = bookmarkSearchFields(bm);
+                        return [{ text: f.title, weight: 3 }, { text: f.desc, weight: 1.5 }, f.url];
+                    },
+                    { cacheKey: 'bookmarks' },
+                );
+                // при поиске порядок — по релевантности (точные совпадения выше «близких по смыслу»)
+                list = ranked.items;
+                searchInfo = {
+                    suggestion: ranked.suggestion,
+                    semantic: Math.max(0, ranked.items.length - ranked.exactCount),
+                    total: ranked.items.length,
+                };
             }
-            sortedToDisplay = alreadySorted ? list : sortBookmarksList(list, folderMap, sortState);
-            bmCache.result = { baseKey, search: searchValue, list: sortedToDisplay };
+            sortedToDisplay = searchValue ? list : sortBookmarksList(list, folderMap, sortState);
+            bmCache.result = { baseKey, search: searchValue, list: sortedToDisplay, info: searchInfo };
         }
+        if (prev && prev.baseKey === baseKey && prev.search === searchValue) searchInfo = prev.info || null;
+        renderSearchHint(
+            'bookmarkSearchHint',
+            document.getElementById('bookmarksContainer'),
+            document.getElementById('bookmarkSearchInput'),
+            searchValue ? searchInfo : null,
+        );
 
         if (seq !== bmFilterSeq) return;
         const filtered = !!searchValue || tagFilters.length > 0 || selectedFolderValue !== '';
@@ -1644,7 +1597,7 @@ export async function handleSaveFolderSubmit(event) {
     const nameInput = folderForm.elements.folderName;
     const name = nameInput.value.trim();
     const colorInput = folderForm.querySelector('input[name="folderColor"]:checked');
-    const color = colorInput?.value ?? 'blue';
+    const color = colorInput?.value ?? DEFAULT_FOLDER_COLOR;
 
     if (!name) {
         if (typeof showNotification === 'function') {
@@ -1748,10 +1701,7 @@ export async function handleSaveFolderSubmit(event) {
         delete folderForm.dataset.editingId;
         const submitButton = folderForm.querySelector('#folderSubmitBtn');
         if (submitButton) submitButton.textContent = 'Добавить папку';
-        const defaultColorInput = folderForm.querySelector(
-            'input[name="folderColor"][value="blue"]',
-        );
-        if (defaultColorInput) defaultColorInput.checked = true;
+        setFolderColorInPicker(folderForm, 'folderColor', DEFAULT_FOLDER_COLOR);
 
         const modal = document.getElementById('foldersModal');
         if (modal) {
@@ -1811,52 +1761,7 @@ export function showOrganizeFoldersModal() {
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1">Цвет</label>
-                                <div class="flex gap-2 flex-wrap">
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="gray" class="form-radio text-gray-600 focus:ring-gray-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-gray-500 border border-gray-300"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="red" class="form-radio text-red-600 focus:ring-red-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-red-600"></span>
-                                    </label>
-                                     <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="orange" class="form-radio text-orange-600 focus:ring-orange-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-orange-500"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="yellow" class="form-radio text-yellow-500 focus:ring-yellow-400">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-yellow-400"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="green" class="form-radio text-green-600 focus:ring-green-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-green-500"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="teal" class="form-radio text-teal-600 focus:ring-teal-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-teal-500"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="blue" checked class="form-radio text-blue-600 focus:ring-blue-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-blue-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="indigo" class="form-radio text-indigo-600 focus:ring-indigo-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-indigo-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="purple" class="form-radio text-purple-600 focus:ring-purple-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-purple-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="pink" class="form-radio text-pink-600 focus:ring-pink-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-pink-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="folderColor" value="rose" class="form-radio text-rose-600 focus:ring-rose-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-rose-500"></span>
-                                    </label>
-                                </div>
+                                ${renderFolderColorPicker('folderColor', DEFAULT_FOLDER_COLOR)}
                             </div>
                             <div class="flex justify-end">
                                 <button type="submit" id="folderSubmitBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -1887,10 +1792,7 @@ export function showOrganizeFoldersModal() {
                     delete form.dataset.editingId;
                     const submitButton = form.querySelector('#folderSubmitBtn');
                     if (submitButton) submitButton.textContent = 'Добавить папку';
-                    const defaultColorInput = form.querySelector(
-                        'input[name="folderColor"][value="blue"]',
-                    );
-                    if (defaultColorInput) defaultColorInput.checked = true;
+                    setFolderColorInPicker(form, 'folderColor', DEFAULT_FOLDER_COLOR);
                 }
             }
         });
@@ -1914,8 +1816,7 @@ export function showOrganizeFoldersModal() {
         delete form.dataset.editingId;
         const submitButton = form.querySelector('#folderSubmitBtn');
         if (submitButton) submitButton.textContent = 'Добавить папку';
-        const defaultColorInput = form.querySelector('input[name="folderColor"][value="blue"]');
-        if (defaultColorInput) defaultColorInput.checked = true;
+        setFolderColorInPicker(form, 'folderColor', DEFAULT_FOLDER_COLOR);
     }
 
     const foldersListElement = modal.querySelector('#foldersList');
@@ -2198,12 +2099,12 @@ export async function loadFoldersListInContainer(foldersListElement) {
                 'folder-item flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
             folderItem.dataset.folderId = folder.id;
 
-            const dotClass = getFolderDotClasses(folder.color);
+            const dotStyle = getFolderDotStyle(folder.color);
 
             folderItem.innerHTML = `
                 <div class="flex items-center flex-grow min-w-0 mr-2">
-                    <span class="w-4 h-4 rounded-full ${dotClass} mr-2 flex-shrink-0"></span>
-                    <span class="truncate" title="${folder.name}">${folder.name}</span>
+                    <span class="folder-dot w-4 h-4 rounded-full mr-2 flex-shrink-0" style="${dotStyle}"></span>
+                    <span class="truncate" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</span>
                 </div>
                 <div class="flex-shrink-0">
                     <button class="edit-folder-btn p-1 text-gray-500 hover:text-primary" title="Редактировать">
@@ -2249,10 +2150,7 @@ export async function loadFoldersListInContainer(foldersListElement) {
                         const folderData = await getFromIndexedDB('bookmarkFolders', folder.id);
                         if (folderData) {
                             form.elements.folderName.value = folderData.name;
-                            const colorInput = form.querySelector(
-                                `input[name="folderColor"][value="${folderData.color || 'blue'}"]`,
-                            );
-                            if (colorInput) colorInput.checked = true;
+                            setFolderColorInPicker(form, 'folderColor', folderData.color);
                             form.dataset.editingId = folder.id;
                             const submitButton = form.querySelector('button[type="submit"]');
                             if (submitButton) submitButton.textContent = 'Сохранить изменения';
