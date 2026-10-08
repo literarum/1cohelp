@@ -138,13 +138,18 @@ export function initMotionPref() {
 export function withThemeTransition(change) {
     try {
         if (isRichMotion() && typeof document.startViewTransition === 'function') {
-            document.startViewTransition(change);
-            return;
+            const t = document.startViewTransition(change);
+            // промис: «изменение применено» — чтобы вызывающий мог обновить зависящие от него контролы
+            return Promise.resolve(t && t.updateCallbackDone).catch(() => {});
         }
     } catch {
         /* упадём на обычную смену */
     }
-    change();
+    try {
+        return Promise.resolve(change());
+    } catch (e) {
+        return Promise.reject(e);
+    }
 }
 
 initMotionPref();
