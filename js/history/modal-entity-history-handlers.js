@@ -5,6 +5,7 @@
  */
 
 import { getFromIndexedDB } from '../db/indexeddb.js';
+import { setFolderColorInPicker } from '../utils/folder-colors.js';
 
 /**
  * @param {object} d
@@ -23,8 +24,7 @@ export function createModalEntityHistoryHandlers(d) {
             if (nameInput) nameInput.value = data.name || '';
             form.dataset.editingId = String(id);
             const color = data.color || 'blue';
-            const radio = form.querySelector(`input[name="folderColor"][value="${color}"]`);
-            if (radio) radio.checked = true;
+            setFolderColorInPicker(form, 'folderColor', color);
             const btn = form.querySelector('#folderSubmitBtn');
             if (btn) btn.textContent = 'Сохранить изменения';
         },
@@ -50,8 +50,7 @@ export function createModalEntityHistoryHandlers(d) {
             if (nameInput) nameInput.value = data.name || '';
             form.dataset.editingId = String(id);
             const color = data.color || 'blue';
-            const radio = form.querySelector(`input[name="categoryColor"][value="${color}"]`);
-            if (radio) radio.checked = true;
+            setFolderColorInPicker(form, 'categoryColor', color);
             const btn = form.querySelector('#extLinkCategorySubmitBtn');
             if (btn) btn.textContent = 'Сохранить изменения';
         },
