@@ -152,10 +152,21 @@ html.birthday-mode--reduced .birthday-garland__bulb {
 .app-brand-title__suffix {
     white-space: nowrap;
     margin-inline-start: 0;
+    /* «1» и «СО» — один знак логотипа: цвет строго от темы, цифры одной высоты с буквами, без зазора */
+    color: var(--color-primary) !important;
+    font-variant-numeric: lining-nums;
+    font-kerning: none;
+    letter-spacing: 0;
+}
+.app-brand-title__suffix > * {
+    color: inherit !important;
+}
+#appBrandTitle {
+    color: var(--color-primary) !important;
 }
 
 .app-brand-title__digit-one {
-    margin-right: -4px;
+    margin: 0;
 }
 
 .app-brand-title__party-emoji-wrap {
@@ -185,8 +196,8 @@ html.birthday-mode .app-brand-title__party-emoji-wrap {
     /* чуть выше базовой линии (менее отрицательный vertical-align) */
     vertical-align: -0.03em;
     /* ещё ближе к «СО» */
-    margin-left: -0.09em;
-    margin-inline-end: -0.2em;
+    margin-left: 0.02em;
+    margin-inline-end: 0.04em;
 }
 
 html.birthday-mode .app-brand-title__party-emoji {
@@ -200,7 +211,7 @@ html.birthday-mode .app-brand-title__party-emoji {
 }
 
 html.birthday-mode .app-brand-title__letters-so {
-    margin-left: -0.06em;
+    margin-left: 0.02em;
 }
 
 /* Конфетти-слой: выше липкой шапки (base.css z-index 30), ниже гирлянды (45) */

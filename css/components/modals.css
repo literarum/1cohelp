@@ -22,8 +22,11 @@ body.modal-open {
 #appConfirmModal .p-content,
 #confirmClearDataModal .p-content,
 #bookmarkModal .p-content,
-#cibLinkModal .p-content {
-    padding: 1rem 1.25rem !important;
+#cibLinkModal .p-content,
+#customizeUIModal .modal-inner-container > .p-content,
+#reminderArchiveModal .p-content {
+    /* токены шкалы отступов (polish-v15.css): 1rem / 1.25rem при базовой плотности */
+    padding: max(0.875rem, var(--sp-4, 1rem)) max(1rem, calc(var(--sp-4, 1rem) * 1.25)) !important;
 }
 
 /* Напоминание: воздух между блоками формы + единые отступы контента */
@@ -153,7 +156,12 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 }
 #algorithmModal .algorithm-step,
 #editModal .edit-step {
-    padding: 1rem 1.25rem !important;
+    padding: max(0.875rem, var(--sp-4, 1rem)) max(1rem, calc(var(--sp-4, 1rem) * 1.25)) !important;
+}
+/* свёрнутый шаг: компактная строка, отступы сверху и снизу равны */
+#editModal .edit-step.is-collapsed {
+    padding-top: var(--sp-2, 0.5rem) !important;
+    padding-bottom: var(--sp-2, 0.5rem) !important;
 }
 #algorithmModal .step-execution-dimmed-step {
     opacity: 0.25;
@@ -384,29 +392,30 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
     padding-top: 1rem;
     border-top: 1px solid var(--color-border);
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.25rem), 1fr));
-    gap: clamp(0.375rem, 1.25vw + 0.2rem, 0.5rem);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
     align-items: stretch;
-    justify-items: center;
+    justify-items: stretch;
     min-width: 0;
     width: 100%;
 }
 #customizeUIModal .settings-modal-extra-actions > button {
     box-sizing: border-box;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
+    justify-content: flex-start;
+    gap: 0.5rem;
     min-width: 0;
-    width: min(100%, 11.75rem);
+    width: 100%;
     max-width: 100%;
-    text-align: center;
+    min-height: 2.5rem;
+    text-align: left;
     white-space: normal;
     line-height: 1.25;
-    padding: 0.45rem 0.5rem;
-    font-size: clamp(0.6875rem, 1.4vw + 0.55rem, 0.8125rem);
-    word-break: break-word;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
 }
 @media (max-width: 420px) {
     #customizeUIModal .settings-modal-extra-actions {
@@ -420,7 +429,9 @@ html.dark #reminderModal #reminderFormIntent.reminder-form-control--intent {
 }
 #customizeUIModal .settings-modal-extra-actions > button i {
     flex-shrink: 0;
-    margin-right: 0;
+    margin-right: 0 !important;
+    width: 1.1em;
+    text-align: center;
 }
 @media (max-width: 380px) {
     #customizeUIModal .settings-modal-extra-actions > button i {

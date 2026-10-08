@@ -1024,3 +1024,60 @@ html[data-motion='calm'] .ac-motion-chip.is-playing {
 html[data-motion='reduce'] .ac-pane:not([hidden]) {
     animation: none;
 }
+
+/* ===== Демонстрация движения: маленькая «сцена» с тремя типами анимации ===== */
+.ac-motion-stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'card toast' 'card pop' 'chip chip';
+    gap: 0.6rem 0.75rem;
+    margin-top: 0.75rem;
+    padding: 0.85rem;
+    min-height: 9.5rem;
+    overflow: hidden;
+    border: 1px dashed color-mix(in srgb, var(--color-border, #888) 80%, transparent);
+    border-radius: calc(var(--border-radius, 8px) * 1.5);
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 5%, transparent);
+}
+.ac-motion-stage.is-flash { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent); }
+.ac-motion-stage.is-flash { animation: ac-stage-flash 900ms steps(1, end) 1; }
+@keyframes ac-stage-flash { 0%, 60% { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent); } 100% { box-shadow: none; } }
+.ac-motion-stage__card {
+    grid-area: card;
+    display: flex; flex-direction: column; gap: 0.2rem; justify-content: center;
+    padding: 0.75rem 0.9rem;
+    border-radius: calc(var(--border-radius, 8px) * 1.25);
+    background: var(--color-surface-2, #363653);
+    border: 1px solid var(--color-border, #3a3a52);
+    font-size: 0.8rem;
+}
+.ac-motion-stage__card span { opacity: 0.7; font-size: 0.72rem; }
+.ac-motion-stage__toast {
+    grid-area: toast; align-self: start;
+    padding: 0.45rem 0.7rem; font-size: 0.75rem; font-weight: 600;
+    border-radius: calc(var(--border-radius, 8px) * 1.25);
+    background: color-mix(in srgb, #22c55e 18%, var(--color-surface-2, #363653));
+    border: 1px solid color-mix(in srgb, #22c55e 45%, transparent);
+}
+.ac-motion-stage__toast i { color: #22c55e; margin-right: 0.3rem; }
+.ac-motion-stage__pop {
+    grid-area: pop; justify-self: end; align-self: end;
+    padding: 0.5rem 1rem; font-size: 0.78rem; font-weight: 600; color: #fff;
+    border-radius: calc(var(--border-radius, 8px) * 1.5);
+    background: var(--color-primary, #9933ff);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary, #9933ff) 40%, transparent);
+}
+.ac-motion-stage .ac-motion-chip { grid-area: chip; justify-self: start; transition: transform 160ms ease, background-color 160ms ease; cursor: default; }
+.ac-motion-stage .ac-motion-chip:hover { transform: translateY(-2px); background: color-mix(in srgb, var(--color-primary, #9933ff) 28%, transparent); }
+.ac-motion-stage [data-demo].is-playing { animation-delay: var(--demo-delay, 0ms); }
+.ac-motion-stage__card.is-playing { animation: ac-demo-slide-up 560ms var(--ease-emph, cubic-bezier(.2,.8,.2,1)) both; }
+.ac-motion-stage__toast.is-playing { animation: ac-demo-slide-left 560ms var(--ease-emph, cubic-bezier(.2,.8,.2,1)) both; }
+.ac-motion-stage__pop.is-playing { animation: ac-demo-pop 520ms var(--ease-emph, ease) both; }
+.ac-motion-stage .ac-motion-chip.is-playing { animation: ac-demo-pop 520ms var(--ease-emph, ease) both; animation-delay: var(--demo-delay, 0ms); }
+@keyframes ac-demo-slide-up { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+@keyframes ac-demo-slide-left { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: none; } }
+html[data-motion='calm'] .ac-motion-stage [data-demo].is-playing,
+html[data-motion='calm'] .ac-motion-stage .ac-motion-chip.is-playing { animation: motion-fade-in 220ms ease both; animation-delay: 0ms; }
+html[data-motion='calm'] .ac-motion-stage .ac-motion-chip:hover { transform: none; }
+html[data-motion='reduce'] .ac-motion-stage .ac-motion-chip:hover { transform: none; }

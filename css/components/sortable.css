@@ -61,6 +61,16 @@
     margin-top: 0;
 }
 
+/* свёрнутый шаг: полоса заголовка занимает всю карточку (без пустой полосы снизу) */
+#editModal .edit-step.is-collapsed .step-header {
+    margin-bottom: calc(var(--sp-2, 0.5rem) * -1);
+    margin-left: calc(var(--sp-4, 1rem) * -1.25);
+    margin-right: calc(var(--sp-4, 1rem) * -1.25);
+    padding-left: calc(var(--sp-4, 1rem) * 1.25 - 1px);
+    padding-right: calc(var(--sp-4, 1rem) * 1.25 - 1px);
+    border-radius: 0.5rem;
+}
+
 .edit-step.is-collapsed .step-toggle-icon {
     transform: rotate(-90deg);
 }
