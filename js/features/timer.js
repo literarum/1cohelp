@@ -927,11 +927,26 @@ export function switchToEditMode(unitSpanElement, _unitType) {
     input.style.backgroundColor = 'var(--color-input-bg)';
     input.style.color = 'var(--color-text-primary)';
 
+    const isMinutes = unitSpanElement === State.timerElements.minutesSpan;
     input.maxLength = 2;
-    input.value = String(currentValue).padStart(2, '0');
+    input.inputMode = 'numeric';
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', isMinutes ? 'Минуты' : 'Секунды');
+    input.value = String(isNaN(currentValue) ? 0 : currentValue).padStart(2, '0');
+
+    // Переход к соседнему полю: сначала фиксируем текущее, затем открываем следующее.
+    const goTo = (targetSpan) => {
+        commitTimerEdit(false);
+        if (targetSpan) switchToEditMode(targetSpan, targetSpan === State.timerElements.minutesSpan ? 'minutes' : 'seconds');
+    };
 
     input.addEventListener('input', () => {
         input.value = input.value.replace(/\D/g, '');
+        // Два введённых символа = поле заполнено: минуты → сразу секунды, секунды → применить.
+        if (input.value.length >= 2) {
+            if (isMinutes) goTo(State.timerElements.secondsSpan);
+            else commitTimerEdit(false);
+        }
     });
 
     input.addEventListener('keydown', (event) => {
@@ -941,6 +956,25 @@ export function switchToEditMode(unitSpanElement, _unitType) {
         } else if (event.key === 'Escape') {
             event.preventDefault();
             cancelTimerEdit();
+        } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            const step = (event.shiftKey ? 10 : 1) * (event.key === 'ArrowUp' ? 1 : -1);
+            const max = isMinutes ? 60 : 59;
+            const cur = parseInt(input.value, 10) || 0;
+            input.value = String(Math.min(max, Math.max(0, cur + step))).padStart(2, '0');
+            input.select();
+        } else if (event.key === 'Tab') {
+            // Tab / Shift+Tab ходят между минутами и секундами, не выпадая из таймера.
+            if (isMinutes && !event.shiftKey) {
+                event.preventDefault();
+                goTo(State.timerElements.secondsSpan);
+            } else if (!isMinutes && event.shiftKey) {
+                event.preventDefault();
+                goTo(State.timerElements.minutesSpan);
+            }
+        } else if (isMinutes && (event.key === ':' || event.key === '.' || event.key === ',')) {
+            event.preventDefault();
+            goTo(State.timerElements.secondsSpan);
         }
     });
 
@@ -957,14 +991,7 @@ export function switchToEditMode(unitSpanElement, _unitType) {
 
     unitSpanElement.style.display = 'none';
     unitSpanElement.parentNode.insertBefore(input, unitSpanElement.nextSibling);
-    if (unitSpanElement === State.timerElements.minutesSpan && State.timerElements.colonSpan) {
-        State.timerElements.colonSpan.style.display = 'none';
-    } else if (
-        unitSpanElement === State.timerElements.secondsSpan &&
-        State.timerElements.colonSpan
-    ) {
-        State.timerElements.colonSpan.style.display = 'none';
-    }
+    // Двоеточие остаётся на месте: при вводе видно «25 : 50», а не два «слипшихся» числа.
     input.focus();
     input.select();
 }
@@ -985,8 +1012,6 @@ export function commitTimerEdit(triggerButtonAction = false) {
 
     if (isNaN(value) || value < 0) {
         value = 0;
-    } else if (value > 59) {
-        value = 59;
     }
 
     const unitType = State.activeEditingUnitElement.id.includes('Minutes') ? 'minutes' : 'seconds';
@@ -1005,7 +1030,8 @@ export function commitTimerEdit(triggerButtonAction = false) {
         currentSeconds = value;
     }
 
-    timeLeftVisual = currentMinutes * 60 + currentSeconds;
+    // Секунды > 59 переносятся в минуты (90 → 01:30), общий предел — 60:00.
+    timeLeftVisual = Math.min(3600, currentMinutes * 60 + currentSeconds);
     timerCurrentSetDuration = timeLeftVisual;
     pausedRemainingMs = null;
     targetEndTime = 0;
@@ -1292,6 +1318,40 @@ export function initTimerSystem() {
     State.timerElements.secondsSpan.addEventListener('click', () =>
         switchToEditMode(State.timerElements.secondsSpan, 'seconds'),
     );
+
+    // Управление сегментами без мыши: Enter/цифра — ввод, ↑/↓ — ±1 (минута или секунда), колесо — то же.
+    [
+        [State.timerElements.minutesSpan, 'minutes', 60],
+        [State.timerElements.secondsSpan, 'seconds', 1],
+    ].forEach(([span, unit, secs]) => {
+        span.addEventListener('keydown', (event) => {
+            if (State.activeEditingUnitElement) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                switchToEditMode(span, unit);
+            } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                event.preventDefault();
+                adjustTimerDuration((event.key === 'ArrowUp' ? 1 : -1) * secs * (event.shiftKey ? 10 : 1));
+            } else if (/^\d$/.test(event.key)) {
+                event.preventDefault();
+                switchToEditMode(span, unit);
+                const inp = timerDisplayElement.querySelector('input.timer-input-active');
+                if (inp) inp.value = event.key;
+            }
+        });
+        span.addEventListener(
+            'wheel',
+            (event) => {
+                if (State.activeEditingUnitElement || !event.deltaY) return;
+                event.preventDefault();
+                adjustTimerDuration((event.deltaY < 0 ? 1 : -1) * secs);
+            },
+            { passive: false },
+        );
+        span.title = unit === 'minutes'
+            ? 'Минуты: клик или цифра — ввод, ↑/↓ или колесо — ±1 мин'
+            : 'Секунды: клик или цифра — ввод, ↑/↓ или колесо — ±1 с (больше 59 переносится в минуты)';
+    });
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && State.activeEditingUnitElement) {

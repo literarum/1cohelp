@@ -5,6 +5,8 @@
  * индексация в общем поиске, экспорт/импорт только раздела.
  */
 
+import { createMatcher as createSmartMatcher } from './smart-search.js';
+import { getSemanticIndex } from './semantic-engine.js';
 import { State } from '../app/state.js';
 import {
     getAllFromIndexedDB,
@@ -421,10 +423,81 @@ async function filterRecordsChunked(records, query, isStale) {
             sliceStart = performance.now();
         }
     }
+    const idLikeQuery = /\d{4,}/.test(q);
+    if ((out.length === 0 || (out.length < 15 && !idLikeQuery)) && /[a-zа-я]/.test(q)) {
+        // Точных совпадений нет — «умный» поиск по тексту обращений: словоформы, синонимы,
+        // опечатки, неверная раскладка. Числа (ИНН, телефоны) по-прежнему ищутся только точно.
+        const smart = await smartFilterRecordsChunked(records, query, isStale);
+        if (smart === null) return null;
+        caCache.lastQuery = q;
+        // lastFiltered сбрасываем: результат «умного» режима нельзя использовать для сужения.
+        caCache.lastFiltered = null;
+        caCache.lastFilteredBase = null;
+        if (out.length === 0) return smart;
+        // точные совпадения первыми, затем близкие по смыслу (без повторов)
+        const seen = new Set(out);
+        const extra = smart.filter((r) => !seen.has(r)).slice(0, 30);
+        return extra.length ? [...out, ...extra] : out;
+    }
     caCache.lastQuery = q;
     caCache.lastFiltered = out;
     caCache.lastFilteredBase = records;
     return out;
+}
+
+const caSemanticDocsCache = new WeakMap();
+
+/** Документы для семантического индекса базы клиентов (кэш по ссылке на массив записей). */
+function getClientSemanticDocs(records) {
+    let c = caSemanticDocsCache.get(records);
+    if (c && c.len === records.length) return c.docs;
+    const docs = [];
+    for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        if (!r || typeof r !== 'object') continue;
+        docs.push({
+            id: i,
+            fields: [
+                { text: String(r.question || ''), weight: 2 },
+                String(r.contextSnippet || ''),
+                String(r.sourceFileName || ''),
+            ],
+        });
+    }
+    caSemanticDocsCache.set(records, { len: records.length, docs });
+    return docs;
+}
+
+/**
+ * Семантический поиск по базе клиентов: BM25F + синонимы + опечатки + раскладка + выученные связи.
+ * Возвращает записи по релевантности (точные совпадения выше «близких по смыслу»).
+ */
+async function smartFilterRecordsChunked(records, query, isStale) {
+    try {
+        const docs = getClientSemanticDocs(records);
+        await yieldToMain();
+        if (isStale()) return null;
+        const index = getSemanticIndex('clients', docs, { learn: docs.length <= 3000 });
+        await yieldToMain();
+        if (isStale()) return null;
+        const res = index.search(query, { limit: 200 });
+        return res.hits.map((h) => records[h.id]).filter(Boolean);
+    } catch (e) {
+        console.warn('[client-analytics] semantic search failed, simple smart fallback', e);
+    }
+    const matcher = createSmartMatcher(query);
+    if (matcher.empty) return [];
+    const res = [];
+    for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        if (!r || typeof r !== 'object') continue;
+        const sc = matcher.score(
+            [{ text: String(r.question || ''), weight: 2 }, String(r.contextSnippet || '')],
+            'all',
+        );
+        if (sc > 0) res.push(r);
+    }
+    return res;
 }
 
 /**

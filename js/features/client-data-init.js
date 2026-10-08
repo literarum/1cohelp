@@ -5,6 +5,7 @@
  * Вынесено из script.js
  */
 
+import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
 import { buildClientNotesInputCompositeHandler } from './client-notes-input-debounce.js';
 
 let State = null;
@@ -371,16 +372,17 @@ export async function initClientDataSystem() {
 
     if (clearClientDataBtn) {
         clearClientDataBtn.addEventListener('click', async () => {
-            const confirmed =
-                typeof showAppConfirm === 'function'
-                    ? await showAppConfirm({
-                          title: 'Очистка данных',
-                          message: 'Вы уверены, что хотите очистить все данные по обращению?',
-                          confirmText: 'Очистить',
-                          cancelText: 'Отмена',
-                          confirmClass: 'bg-amber-500 hover:bg-amber-600 text-white',
-                      })
-                    : confirm('Вы уверены, что хотите очистить все данные по обращению?');
+            const confirmed = await confirmCriticalDeletion({
+                title: 'Очистить данные по обращению?',
+                what: 'Будет очищено поле «Информация по обращению» и связанные с ним введённые данные.',
+                consequences: [
+                    'Набранный текст и заметки текущего обращения пропадут.',
+                    'Закладки, алгоритмы и остальные разделы не затрагиваются.',
+                ],
+                hint: 'Если текст нужен — сначала сохраните его кнопкой «.txt».',
+                confirmLabel: 'Да, очистить обращение',
+                ackText: 'Я понимаю, что данные текущего обращения будут удалены.',
+            });
             if (confirmed) {
                 clearClientData();
             }

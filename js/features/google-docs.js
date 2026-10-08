@@ -39,8 +39,52 @@ const GOOGLE_DOC_REQUEST_TIMEOUT_MS = 12000;
 const GOOGLE_DOC_RETRY_DELAYS_MS = [250, 900, 1800];
 /** Для фонового цикла: меньше попыток, экспоненциальная пауза внутри цикла (штатный интервал не меняется). */
 export const GOOGLE_DOC_BACKGROUND_RETRY_DELAYS_MS = [1500, 4500];
-const GOOGLE_DOC_BASE_URL =
+const DEFAULT_GOOGLE_SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycby5ak0hPZF7_YJnhqYD8g1M2Ck6grzq11mpKqPFIWaX9_phJe5H_97cXmnClXKg1Nrl/exec';
+const GOOGLE_SCRIPT_URL_KEY = 'copilot1co:gdocs-script-url';
+
+/** Допустимый адрес развёртывания Apps Script: только script.google.com (защита от подмены адреса). */
+export function isValidGoogleScriptUrl(value) {
+    return /^https:\/\/script\.google\.com\/(?:macros\/s|a\/macros\/[\w.-]+\/s)\/[\w-]{20,}\/exec$/.test(
+        String(value || '').trim(),
+    );
+}
+
+export function getDefaultGoogleScriptUrl() {
+    return DEFAULT_GOOGLE_SCRIPT_URL;
+}
+
+/** Текущий адрес скрипта: пользовательский (если задан и валиден) либо встроенный. */
+export function getGoogleScriptUrl() {
+    try {
+        const v = localStorage.getItem(GOOGLE_SCRIPT_URL_KEY);
+        if (v && isValidGoogleScriptUrl(v)) return v.trim();
+    } catch {
+        /* ignore */
+    }
+    return DEFAULT_GOOGLE_SCRIPT_URL;
+}
+
+export function hasCustomGoogleScriptUrl() {
+    return getGoogleScriptUrl() !== DEFAULT_GOOGLE_SCRIPT_URL;
+}
+
+/** @returns {boolean} true, если сохранено; пустая строка / null — возврат к встроенному адресу. */
+export function setGoogleScriptUrl(value) {
+    const v = String(value || '').trim();
+    try {
+        if (!v || v === DEFAULT_GOOGLE_SCRIPT_URL) {
+            localStorage.removeItem(GOOGLE_SCRIPT_URL_KEY);
+        } else {
+            if (!isValidGoogleScriptUrl(v)) return false;
+            localStorage.setItem(GOOGLE_SCRIPT_URL_KEY, v);
+        }
+    } catch {
+        return false;
+    }
+    googleDocNetworkFailedAt = 0;
+    return true;
+}
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -138,13 +182,53 @@ async function requestJsonViaFetch(requestUrl, timeoutMs) {
             status: response?.status ?? null,
         });
     }
-    try {
-        return await response.json();
-    } catch (err) {
-        throw new GoogleDocsError(`Ошибка разбора JSON: ${err?.message || String(err)}`, {
-            kind: 'parse',
-        });
+    // Транспорты/подмены без text() (только json()) остаются совместимыми: читаем как раньше.
+    if (typeof response.text !== 'function' && typeof response.json === 'function') {
+        try {
+            return await response.json();
+        } catch (err) {
+            throw classifyNonJsonBody('', err, response);
+        }
     }
+    let text = '';
+    try {
+        text = await response.text();
+    } catch (err) {
+        throw new GoogleDocsError(`Ошибка чтения ответа: ${err?.message || String(err)}`, { kind: 'network' });
+    }
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        throw classifyNonJsonBody(text, err, response);
+    }
+}
+
+/**
+ * Ответ 200, но не JSON. Для Apps Script это почти всегда HTML-страница: вход в аккаунт Google
+ * (веб-приложение не опубликовано для «Всех»), «страница не найдена» (развёртывание удалено) или превышена квота.
+ */
+export function classifyNonJsonBody(text, err, response) {
+    const head = String(text || '').slice(0, 4000);
+    const isHtml = /^\s*<(!doctype|html|head|body|\?xml)/i.test(head) || /<title>/i.test(head);
+    if (!isHtml) {
+        return new GoogleDocsError(`Ошибка разбора JSON: ${err?.message || String(err)}`, { kind: 'parse' });
+    }
+    const low = head.toLowerCase();
+    let reason = 'html';
+    if (/accounts\.google\.com|sign in|войти|signin/.test(low) || (response && /accounts\.google\.com/.test(response.url || ''))) {
+        reason = 'auth';
+    } else if (/quota|too many times|слишком много|превышен/.test(low)) {
+        reason = 'quota';
+    } else if (/not found|не найден|удален|удалён|unable to open/.test(low)) {
+        reason = 'notfound';
+    }
+    const text2 = {
+        auth: 'Google вернул страницу входа: веб-приложение Apps Script не опубликовано для «Всех» (Anyone).',
+        quota: 'Google вернул страницу о превышении квоты скрипта.',
+        notfound: 'Google вернул «страница не найдена»: развёртывание скрипта удалено или адрес неверен.',
+        html: 'Google вернул HTML-страницу вместо данных (скрипт недоступен или вернул ошибку).',
+    }[reason];
+    return new GoogleDocsError(text2, { kind: reason });
 }
 
 function requestJsonViaXhr(requestUrl, timeoutMs) {
@@ -228,6 +312,8 @@ async function requestGoogleDocJson(
             // HTTP-ответ получен — повторять бессмысленно (кроме 5xx/429)
             const st = error?.status;
             if (error?.kind === 'http' && !(st >= 500 || st === 429)) break;
+            // ответ получен, но это не данные (страница входа / не найдено / квота / не JSON) — повторы бессмысленны
+            if (['auth', 'notfound', 'quota', 'html', 'parse'].includes(error?.kind)) break;
             const hasMoreAttempts = attempt < retryDelays.length;
             if (!hasMoreAttempts) break;
             // экспоненциальная пауза внутри цикла (+ небольшой джиттер)
@@ -252,14 +338,94 @@ async function requestGoogleDocJson(
         googleDocNetworkFailedAt = Date.now();
     }
     const chain = errors.map((e) => e.replace(/\s+/g, ' ').trim()).join(' | ');
+    // «Failed to fetch» бывает и при блокировке сети, и когда Google ответил без CORS-заголовков
+    // (удалённое/закрытое развёртывание, страница входа). no-cors-запрос различает эти случаи.
+    let refinedKind = finalError?.kind || 'network';
+    if (refinedKind === 'network' && typeof fetch === 'function') {
+        const reachable = await probeReachable(requestUrl);
+        if (reachable === true) refinedKind = 'cors';
+    }
     throw new GoogleDocsError(`${normalizeNetworkError(finalError)} [chain=${chain}]`, {
-        kind: finalError?.kind || 'network',
+        kind: refinedKind,
         status: finalError?.status ?? null,
         attempts,
         chain,
         url: sanitizeUrlForReport(requestUrl),
         durationMs: Date.now() - startedAt,
     });
+}
+
+/** true — сервер ответил (даже непрозрачным ответом); false — сеть/блокировка; null — не удалось определить. */
+async function probeReachable(requestUrl, ms = 6000) {
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tid = setTimeout(() => ctl?.abort(), ms);
+    try {
+        await fetch(requestUrl, { mode: 'no-cors', cache: 'no-store', signal: ctl?.signal });
+        return true;
+    } catch (e) {
+        return e?.name === 'AbortError' ? null : false;
+    } finally {
+        clearTimeout(tid);
+    }
+}
+
+/**
+ * Проверка подключения для окна настроек: достижимость хоста, ответ скрипта, вывод и подсказка.
+ * @returns {Promise<{ ok: boolean, kind: string, title: string, hint: string, status?: number|null, ms: number }>}
+ */
+export async function testGoogleScriptConnection(url = getGoogleScriptUrl()) {
+    const t0 = performance.now();
+    const requestUrl = `${url}?docIds=${encodeURIComponent(SHABLONY_DOC_ID)}&v=${Date.now()}`;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return { ok: false, kind: 'offline', ms: 0, title: 'Нет подключения к интернету', hint: 'Включите сеть и повторите проверку.' };
+    }
+    try {
+        const json = await requestJsonViaFetch(requestUrl, 15000);
+        const ok = Array.isArray(json) || (json && !json.error);
+        return {
+            ok,
+            kind: ok ? 'ok' : 'server',
+            ms: Math.round(performance.now() - t0),
+            title: ok ? 'Подключение работает' : 'Скрипт ответил ошибкой',
+            hint: ok ? 'Скрипт вернул данные.' : String(json?.message || 'Проверьте код скрипта и доступ к документу.'),
+        };
+    } catch (error) {
+        let kind = error?.kind || 'network';
+        if (kind === 'network') {
+            const reachable = await probeReachable(requestUrl);
+            kind = reachable === true ? 'cors' : reachable === false ? 'blocked' : 'timeout';
+        }
+        return {
+            ok: false,
+            kind,
+            status: error?.status ?? null,
+            ms: Math.round(performance.now() - t0),
+            title: describeErrorShort({ kind, status: error?.status }),
+            hint: describeErrorHint(kind, error?.status),
+        };
+    }
+}
+
+export function describeErrorHint(kind, status) {
+    switch (kind) {
+        case 'cors':
+        case 'auth':
+        case 'notfound':
+        case 'html':
+            return 'В Apps Script: «Начать развертывание → Управление» — тип «Веб-приложение», выполнять от своего имени, доступ «Все» (Anyone). Если развёртывание пересоздавали, вставьте новый адрес /exec в поле выше.';
+        case 'quota':
+            return 'Подождите (квота обновляется раз в сутки) или разверните скрипт под другим аккаунтом и укажите новый адрес.';
+        case 'blocked':
+            return 'Сеть или расширение блокирует script.google.com / googleusercontent.com. Проверьте VPN, прокси, блокировщики рекламы и корпоративный фильтр.';
+        case 'timeout':
+            return 'Сервер не ответил за отведённое время. Повторите позже.';
+        case 'http':
+            return status === 404 || status === 403
+                ? 'Адрес неверен или доступ закрыт: проверьте адрес /exec и права развёртывания.'
+                : 'Временная ошибка сервера Google. Повторите позже.';
+        default:
+            return 'Повторите попытку; если не помогает — откройте «Диагностику».';
+    }
 }
 
 function getGoogleDocCacheKey(docId) {
@@ -364,7 +530,7 @@ export async function fetchGoogleDocs(docIds, force = false, options = {}) {
         return [];
     }
 
-    const BASE_URL = GOOGLE_DOC_BASE_URL;
+    const BASE_URL = getGoogleScriptUrl();
     const params = new URLSearchParams();
     params.append('docIds', docIds.join(','));
     params.append('v', new Date().getTime());
@@ -1068,6 +1234,18 @@ function describeErrorShort(info) {
             return `Сервер Google вернул ошибку${info.status ? ` HTTP ${info.status}` : ''}.`;
         case 'parse':
             return 'Сервер вернул данные в неожиданном формате.';
+        case 'cors':
+            return 'Google отвечает, но скрипт недоступен браузеру (удалён или закрыт для «Всех»).';
+        case 'auth':
+            return 'Google просит войти в аккаунт: скрипт не опубликован для «Всех».';
+        case 'notfound':
+            return 'Развёртывание скрипта Google не найдено (удалено или адрес неверен).';
+        case 'quota':
+            return 'У скрипта Google исчерпана квота запросов.';
+        case 'html':
+            return 'Google вернул страницу вместо данных.';
+        case 'blocked':
+            return 'Сервер Google недоступен: сеть или расширение блокирует соединение.';
         case 'server':
             return 'Скрипт Google Docs сообщил об ошибке.';
         case 'format':
@@ -1098,6 +1276,7 @@ function showConnectionErrorCard(info, rawMessage, { forceShow }) {
         id: GDOCS_ERROR_NOTIFICATION_ID,
         type: 'error',
         title: 'Нет связи с Google Docs',
+        suppressKey: 'google-docs-connection',
         message,
         sticky: true,
         dedupe: false,
@@ -1114,6 +1293,21 @@ function showConnectionErrorCard(info, rawMessage, { forceShow }) {
                     syncGoogleDocsNow({ reason: 'manual', force: true, interactive: true }).catch(
                         () => {},
                     );
+                },
+            },
+            {
+                id: 'gdocs-settings',
+                label: 'Адрес скрипта',
+                icon: 'fa-link',
+                onClick: () => {
+                    document.getElementById('customizeUIBtn')?.click();
+                    setTimeout(() => {
+                        const f = document.getElementById('googleScriptUrlInput');
+                        if (f) {
+                            f.scrollIntoView({ block: 'center' });
+                            f.focus({ preventScroll: true });
+                        }
+                    }, 500);
                 },
             },
         ],
@@ -1245,7 +1439,7 @@ export async function runGoogleDocsConnectivityProbes({ withEndpoint = false } =
             'Запрос к скрипту Google Docs',
             () =>
                 requestGoogleDocJson(
-                    `${GOOGLE_DOC_BASE_URL}?docIds=${encodeURIComponent(SHABLONY_DOC_ID)}&v=${Date.now()}`,
+                    `${getGoogleScriptUrl()}?docIds=${encodeURIComponent(SHABLONY_DOC_ID)}&v=${Date.now()}`,
                     { force: true, retryDelays: [] },
                 ),
             15000,

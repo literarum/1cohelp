@@ -5,6 +5,9 @@
  * Содержит логику работы с избранным: добавление, удаление, отображение, навигация
  */
 
+import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
+import { rankItems } from './smart-search.js';
+import { renderSearchHint } from './search-hint.js';
 import { State } from '../app/state.js';
 import { escapeHtml, highlightElement, linkify, normalizeExternalHttpUrl } from '../utils/html.js';
 import { getFromIndexedDB } from '../db/indexeddb.js';
@@ -233,13 +236,43 @@ export async function renderFavoritesPage() {
     favoritesToRender.sort(
         (a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime(),
     );
+    const totalFavorites = favoritesToRender.length;
+    const favQuery = (document.getElementById('favoritesSearchInput')?.value || '').trim();
+    let favInfo = null;
+    if (favQuery) {
+        const ranked = rankItems(
+            favoritesToRender,
+            favQuery,
+            (fav) => [
+                { text: String(fav.title || ''), weight: 3 },
+                { text: String(fav.description || ''), weight: 1.5 },
+                String(fav.itemUrl || ''),
+                String(fav.itemType || ''),
+            ],
+            { cacheKey: 'favorites' },
+        );
+        favoritesToRender = ranked.items;
+        favInfo = {
+            suggestion: ranked.suggestion,
+            semantic: Math.max(0, ranked.items.length - ranked.exactCount),
+            total: ranked.items.length,
+        };
+    }
+    renderSearchHint(
+        'favoritesSearchHint',
+        container,
+        document.getElementById('favoritesSearchInput'),
+        favQuery ? favInfo : null,
+    );
 
     const currentView =
         State.viewPreferences['favoritesContainer'] || container.dataset.defaultView || 'cards';
 
     if (favoritesToRender.length === 0) {
         container.innerHTML =
-            '<p class="text-center py-6 text-gray-500 dark:text-gray-400 col-span-full">В избранном пока ничего нет.</p>';
+            totalFavorites > 0 && favQuery
+                ? `<p class="text-center py-6 text-gray-500 dark:text-gray-400 col-span-full">По запросу «${escapeHtml(favQuery)}» в избранном ничего не найдено.</p>`
+                : '<p class="text-center py-6 text-gray-500 dark:text-gray-400 col-span-full">В избранном пока ничего нет.</p>';
     } else {
         container.innerHTML = '';
         const fragment = document.createDocumentFragment();
@@ -863,35 +896,65 @@ export async function refreshAllFavoritableSectionsUI() {
 /**
  * Инициализирует систему избранного: регистрирует обработчики событий
  */
-export function initFavoritesSystem() {
-    // Регистрация глобального обработчика кликов по кнопкам избранного
-    document.addEventListener('click', handleFavoriteActionClick);
+/**
+ * Поиск в «Избранном» и кнопка «Очистить всё». Делегирование на document: работает независимо от того,
+ * вызывалась ли initFavoritesSystem (в приложении она не вызывается — раньше из‑за этого кнопка «Очистить всё» не работала).
+ */
+let favoritesControlsBound = false;
+export function bindFavoritesControlsOnce() {
+    if (favoritesControlsBound || typeof document === 'undefined') return;
+    favoritesControlsBound = true;
+    let favTimer = 0;
+    const rerender = (delay = 0) => {
+        clearTimeout(favTimer);
+        favTimer = setTimeout(() => void renderFavoritesPage(), delay);
+    };
+    document.addEventListener('input', (e) => {
+        const el = e.target;
+        if (!el || el.id !== 'favoritesSearchInput') return;
+        document.getElementById('clearFavoritesSearchBtn')?.classList.toggle('hidden', el.value.trim() === '');
+        rerender(180);
+    });
+    document.addEventListener('keydown', (e) => {
+        const el = e.target;
+        if (!el || el.id !== 'favoritesSearchInput' || e.key !== 'Escape' || !el.value) return;
+        e.stopPropagation();
+        el.value = '';
+        document.getElementById('clearFavoritesSearchBtn')?.classList.add('hidden');
+        rerender(0);
+    });
+    document.addEventListener('click', async (e) => {
+        const t = e.target instanceof Element ? e.target : null;
+        if (!t) return;
+        if (t.closest('#clearFavoritesSearchBtn')) {
+            const input = document.getElementById('favoritesSearchInput');
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
+            document.getElementById('clearFavoritesSearchBtn')?.classList.add('hidden');
+            rerender(0);
+            return;
+        }
+        if (t.closest('#clearFavoritesBtn')) {
+            await clearAllFavoritesWithConfirm();
+        }
+    });
+}
 
-    // Регистрация обработчика для контейнера избранного
-    const favoritesContainer = document.getElementById('favoritesContainer');
-    if (favoritesContainer) {
-        favoritesContainer.removeEventListener('click', handleFavoriteContainerClick);
-        favoritesContainer.addEventListener('click', handleFavoriteContainerClick);
-    }
+async function clearAllFavoritesWithConfirm() {
 
-    // Кнопка «Избранное» в хедере вешается в app-init; здесь не дублируем, чтобы избежать двойного вызова setActiveTab и мерцания при возврате из избранного.
-
-    // Кнопка очистки избранного
-    const clearFavoritesBtn = document.getElementById('clearFavoritesBtn');
-    if (clearFavoritesBtn) {
-        clearFavoritesBtn.addEventListener('click', async () => {
-            const confirmed = deps.showAppConfirm
-                ? await deps.showAppConfirm({
-                      title: 'Очистка избранного',
-                      message:
-                          'Вы уверены, что хотите очистить ВСЁ избранное? Это действие необратимо.',
-                      confirmText: 'Очистить',
-                      cancelText: 'Отмена',
-                      confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
-                  })
-                : confirm(
-                      'Вы уверены, что хотите очистить ВСЁ избранное? Это действие необратимо.',
-                  );
+            const confirmed = await confirmCriticalDeletion({
+                title: 'Очистить всё избранное?',
+                what: 'Из раздела «Избранное» будут удалены все отмеченные элементы.',
+                consequences: [
+                    'Список избранного станет пустым, звёздочки на карточках погаснут.',
+                    'Сами закладки, алгоритмы, регламенты и ссылки останутся на своих местах.',
+                ],
+                hint: 'Заново добавлять в избранное придётся вручную.',
+                confirmLabel: 'Да, очистить избранное',
+                ackText: 'Я понимаю, что весь список избранного будет очищен.',
+            });
             if (confirmed) {
                 if (deps.loadingOverlayManager?.createAndShow) {
                     deps.loadingOverlayManager.createAndShow();
@@ -916,8 +979,22 @@ export function initFavoritesSystem() {
                     deps.showNotification?.('Не удалось очистить избранное.', 'error');
                 }
             }
-        });
+}
+
+export function initFavoritesSystem() {
+    // Регистрация глобального обработчика кликов по кнопкам избранного
+    document.addEventListener('click', handleFavoriteActionClick);
+
+    // Регистрация обработчика для контейнера избранного
+    const favoritesContainer = document.getElementById('favoritesContainer');
+    if (favoritesContainer) {
+        favoritesContainer.removeEventListener('click', handleFavoriteContainerClick);
+        favoritesContainer.addEventListener('click', handleFavoriteContainerClick);
     }
+
+    // Кнопка «Избранное» в хедере вешается в app-init; здесь не дублируем, чтобы избежать двойного вызова setActiveTab и мерцания при возврате из избранного.
+
+    bindFavoritesControlsOnce();
 
     console.log('[Favorites] Система избранного инициализирована');
 }
@@ -926,6 +1003,7 @@ export function initFavoritesSystem() {
 export default {
     setFavoritesDependencies,
     initFavoritesSystem,
+    bindFavoritesControlsOnce,
     toggleFavorite,
     updateFavoriteStatusUI,
     renderFavoritesPage,
@@ -935,3 +1013,5 @@ export default {
     isFavorite,
     refreshAllFavoritableSectionsUI,
 };
+
+bindFavoritesControlsOnce();

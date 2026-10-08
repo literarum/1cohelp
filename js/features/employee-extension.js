@@ -46,6 +46,15 @@ export async function loadEmployeeExtension() {
     const displaySpan = document.getElementById('employeeExtensionDisplay');
     if (!displaySpan) return;
 
+    // Источник истины — State.userPreferences.employeeExtension. Отдельная запись 'employeeExtension'
+    // в IndexedDB — устаревшая: при миграции (user-preferences.js) её значение переносится в
+    // настройки и запись удаляется, поэтому раньше при каждом открытии настроек читался пустой
+    // «legacy»-ключ и добавочный не отображался.
+    const fromPrefs = State.userPreferences?.employeeExtension;
+    if (fromPrefs != null && String(fromPrefs).trim() !== '') {
+        updateExtensionDisplay(String(fromPrefs).trim());
+        return;
+    }
     let extension = '';
     try {
         if (State.db) {

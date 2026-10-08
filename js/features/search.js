@@ -5,6 +5,8 @@
  * Содержит всю логику полнотекстового поиска, индексации и обработки результатов
  */
 
+import { expandStemsSemantically, fixKeyboardLayout } from './smart-search.js';
+import { semanticGlobalSearch, invalidateGlobalSemanticCorpus } from './global-semantic.js';
 import {
     DB_VERSION,
     SEDO_CONFIG_KEY,
@@ -130,6 +132,16 @@ function expandQueryTokensWithSynonyms(queryTokens) {
                     if (t.length >= 4 || isExceptionShortToken(t)) expanded.add(t);
                 });
             });
+        }
+    }
+    // Тезаурус предметной области (ЭЦП ↔ подпись/сертификат/ключ, ошибка ↔ сбой …): только для одиночных слов
+    if (queryTokens.length === 1) {
+        try {
+            expandStemsSemantically(queryTokens)
+                .slice(0, 8)
+                .forEach((t) => expanded.add(t));
+        } catch {
+            /* тезаурус — улучшение; поиск работает и без него */
         }
     }
     return Array.from(expanded);
@@ -2377,6 +2389,46 @@ async function searchByTagsOnly(tagFilters, originalQuery) {
 }
 
 /**
+ * Семантическая добавка к результатам глобального поиска: записи, найденные «по смыслу»
+ * (синонимы, опечатки, выученные связи), которых нет среди результатов индекса.
+ * Любая ошибка здесь не должна ломать основной поиск.
+ */
+async function appendSemanticResults(results, rawQuery, maxTotal) {
+    const out = { results, suggestion: null };
+    try {
+        const q = String(rawQuery || '').trim();
+        if (q.length < 2 || /^[#/]/.test(q)) return out;
+        const sem = await semanticGlobalSearch(
+            q,
+            {
+                getAll: (s) => getAllFromIndexedDB(s),
+                getOne: (s, k) => getFromIndexedDB(s, k),
+                getText: getTextForItem,
+            },
+            40,
+        );
+        out.suggestion = sem.suggestion;
+        const seen = new Set(results.map((r) => `${r.type}|${r.id}`));
+        const room = Math.max(0, maxTotal - results.length);
+        const cap = Math.min(room, results.length >= 10 ? 5 : 15);
+        const extra = [];
+        for (const h of sem.hits) {
+            if (extra.length >= cap) break;
+            const r = convertItemToSearchResult({ store: h.ref.store, id: h.ref.id }, h.ref.item, h.score);
+            if (!r) continue;
+            const key = `${r.type}|${r.id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            extra.push({ ...r, semantic: true, why: h.why, highlightTerm: '', score: 0 });
+        }
+        out.results = extra.length ? [...results, ...extra] : results;
+    } catch (e) {
+        console.warn('[performSearch] semantic layer failed:', e);
+    }
+    return out;
+}
+
+/**
  * Выполняет поиск
  */
 let performSearchSeq = 0;
@@ -2437,6 +2489,22 @@ export async function performSearch(query) {
         );
         renderSearchWithoutIndexDb();
         return;
+    }
+
+    // Запрос набран в английской раскладке («cthnbabrfn» вместо «сертификат»): если по нему ничего нет — ищем исправленный
+    const layoutFixed = fixKeyboardLayout(query);
+    if (layoutFixed) {
+        try {
+            const probe = await getGlobalSearchResults(query);
+            if (isStale()) return;
+            if (!probe.length) {
+                const fixedProbe = await getGlobalSearchResults(layoutFixed);
+                if (isStale()) return;
+                if (fixedProbe.length) query = layoutFixed;
+            }
+        } catch {
+            /* без исправления раскладки поиск продолжится как обычно */
+        }
     }
 
     searchResultsContainer.innerHTML = loadingIndicatorHTML;
@@ -2546,6 +2614,14 @@ export async function performSearch(query) {
             }
         }
         if (isStale()) return;
+        const semanticPass = await appendSemanticResults(
+            limitedResults,
+            textQuery || query,
+            MAX_SEARCH_RESULTS_DISPLAY,
+        );
+        if (isStale()) return;
+        limitedResults = semanticPass.results;
+        if (semanticPass.suggestion) limitedResults.suggestion = semanticPass.suggestion;
         const endTime = performance.now();
         const executionTime = endTime - startTime;
 
@@ -3811,12 +3887,40 @@ export function renderSearchResults(results, query) {
         return;
     }
 
+    if (results.suggestion) {
+        const sg = document.createElement('div');
+        sg.className = 'search-suggest px-3 py-2 text-sm text-gray-600 dark:text-gray-300';
+        sg.innerHTML = `Возможно, вы искали <button type="button" class="search-hint-apply">${escapeHtml(
+            results.suggestion,
+        )}</button>`;
+        sg.querySelector('button').addEventListener('click', () => {
+            const inp = document.getElementById('globalSearchInput') || document.getElementById('searchInput');
+            if (inp) {
+                inp.value = results.suggestion;
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.focus();
+            }
+        });
+        searchResultsContainer.appendChild(sg);
+    }
+
     const ul = document.createElement('ul');
     ul.className = 'divide-y divide-gray-200 dark:divide-gray-600';
+    let semanticHeaderShown = false;
 
     results.forEach((result) => {
         if (!result || typeof result !== 'object') {
             return;
+        }
+
+        if (result.semantic && !semanticHeaderShown) {
+            semanticHeaderShown = true;
+            const hd = document.createElement('li');
+            hd.className =
+                'search-semantic-header px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800';
+            hd.setAttribute('role', 'presentation');
+            hd.textContent = 'Похожие по смыслу';
+            ul.appendChild(hd);
         }
 
         const li = document.createElement('li');
@@ -3951,6 +4055,12 @@ export function renderSearchResults(results, query) {
         li.appendChild(titleContainer);
         if (result.description) {
             li.appendChild(descriptionSpan);
+        }
+        if (result.semantic && Array.isArray(result.why) && result.why.length) {
+            const whySpan = document.createElement('p');
+            whySpan.className = 'search-why text-xs text-gray-500 dark:text-gray-400 mt-0.5';
+            whySpan.textContent = result.why.join(' · ');
+            li.appendChild(whySpan);
         }
 
         if (result.id) {

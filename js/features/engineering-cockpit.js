@@ -1,5 +1,6 @@
 'use strict';
 
+import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
 import {
     ingestRuntimeHubIssue,
     setRuntimeHubCockpitMirror,
@@ -746,7 +747,19 @@ function bindUi() {
         })();
     });
 
-    refs.clearLogsBtn?.addEventListener('click', () => {
+    refs.clearLogsBtn?.addEventListener('click', async () => {
+        const ok = await confirmCriticalDeletion({
+            title: 'Очистить логи и ошибки?',
+            what: 'Будут удалены накопленные в памяти логи и список ошибок инженерной панели.',
+            consequences: [
+                'Диагностическая история текущей сессии пропадёт — её не получится выгрузить в отчёт.',
+                'Данные приложения (закладки, заметки, настройки) не затрагиваются.',
+            ],
+            hint: 'Если нужен отчёт для разработчика — сначала сформируйте его.',
+            confirmLabel: 'Да, очистить логи',
+            ackText: 'Я понимаю, что логи и ошибки будут удалены безвозвратно.',
+        });
+        if (!ok) return;
         state.logs = [];
         state.errors = [];
         if (refs.logDetail) refs.logDetail.hidden = true;

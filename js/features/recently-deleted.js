@@ -1,5 +1,6 @@
 'use strict';
 
+import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
 import {
     getAllFromIndexedDB,
     getFromIndexedDB,
@@ -495,9 +496,17 @@ async function resolveClearBinUserConfirm() {
         return deps.showRecentlyDeletedClearConfirm();
     }
     if (typeof document !== 'undefined') {
-        const panel = document.getElementById('recentlyDeletedClearConfirmPanel');
-        if (panel) {
-            return openRecentlyDeletedClearConfirmPanel(panel);
+        if (document.getElementById('recentlyDeletedClearConfirmPanel')) {
+            return confirmCriticalDeletion({
+                title: 'Очистить корзину?',
+                what: 'Все материалы из «Недавно удалённых» будут удалены окончательно.',
+                consequences: [
+                    'Восстановить их из корзины после этого будет нельзя.',
+                    'Элементы, которые уже восстановлены в разделы, не затрагиваются.',
+                ],
+                confirmLabel: 'Да, очистить корзину',
+                ackText: 'Я понимаю, что содержимое корзины будет удалено без возможности восстановления.',
+            });
         }
     }
     if (typeof deps.showAppConfirm === 'function') {

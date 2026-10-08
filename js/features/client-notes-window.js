@@ -159,7 +159,11 @@ function applyParentStyles() {
     const isDark = document.documentElement.classList.contains('dark');
     const baseClasses =
         'client-notes-floating-panel flex flex-col rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 overflow-hidden isolate';
+    // Не затираем состояние видимости: раньше className перезаписывался целиком, и закрытая панель
+    // заметок снова появлялась при каждой смене темы (теряла класс hidden).
+    const wasHidden = panel.classList.contains('hidden');
     panel.className = baseClasses + (isDark ? ' dark' : '');
+    if (wasHidden) panel.classList.add('hidden');
     const vars = [
         '--color-primary',
         '--color-primary-default',

@@ -5,8 +5,15 @@
  * Вынесено из script.js
  */
 
+import { escapeHtml } from '../utils/html.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
 import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
+import {
+    folderColorStyle,
+    renderFolderColorPicker,
+    setFolderColorInPicker,
+    DEFAULT_FOLDER_COLOR,
+} from '../utils/folder-colors.js';
 
 // ============================================================================
 // ЗАВИСИМОСТИ
@@ -26,30 +33,6 @@ let getVisibleModals = null;
 let renderExtLinks = null;
 let getAllExtLinks = null;
 let showAppConfirm = null;
-
-const CATEGORY_DOT_CLASSES = {
-    gray: 'bg-gray-500',
-    red: 'bg-red-600',
-    orange: 'bg-orange-500',
-    yellow: 'bg-yellow-400',
-    green: 'bg-green-500',
-    teal: 'bg-teal-500',
-    blue: 'bg-blue-600',
-    indigo: 'bg-indigo-600',
-    purple: 'bg-purple-600',
-    pink: 'bg-pink-600',
-    rose: 'bg-rose-500',
-};
-
-function normalizeCategoryColor(colorName) {
-    if (!colorName) return 'gray';
-    const raw = String(colorName).trim().toLowerCase();
-    const cleaned = raw
-        .replace(/^bg-/, '')
-        .replace(/\/.+$/, '')
-        .replace(/-(50|100|200|300|400|500|600|700|800|900|950)$/, '');
-    return CATEGORY_DOT_CLASSES[cleaned] ? cleaned : 'gray';
-}
 
 export function setExtLinksCategoriesDependencies(deps) {
     if (deps.State !== undefined) State = deps.State;
@@ -138,52 +121,7 @@ export function showOrganizeExtLinkCategoriesModal() {
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-900 dark:text-gray-100">Цвет</label>
-                                <div class="flex gap-2 flex-wrap">
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="gray" class="form-radio text-gray-600 focus:ring-gray-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-gray-500 border border-gray-300"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="red" class="form-radio text-red-600 focus:ring-red-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-red-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="orange" class="form-radio text-orange-600 focus:ring-orange-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-orange-500"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="yellow" class="form-radio text-yellow-500 focus:ring-yellow-400">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-yellow-400"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="green" class="form-radio text-green-600 focus:ring-green-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-green-500"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="teal" class="form-radio text-teal-600 focus:ring-teal-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-teal-500"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="blue" checked class="form-radio text-blue-600 focus:ring-blue-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-blue-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="indigo" class="form-radio text-indigo-600 focus:ring-indigo-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-indigo-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="purple" class="form-radio text-purple-600 focus:ring-purple-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-purple-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="pink" class="form-radio text-pink-600 focus:ring-pink-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-pink-600"></span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" name="categoryColor" value="rose" class="form-radio text-rose-600 focus:ring-rose-500">
-                                        <span class="ml-2 w-5 h-5 rounded-full bg-rose-500"></span>
-                                    </label>
-                                </div>
+                                ${renderFolderColorPicker('categoryColor', DEFAULT_FOLDER_COLOR)}
                             </div>
                             <div class="flex justify-end">
                                 <button type="submit" id="extLinkCategorySubmitBtn" class="px-4 py-2 bg-primary hover:bg-secondary text-white rounded-md transition">
@@ -215,10 +153,7 @@ export function showOrganizeExtLinkCategoriesModal() {
                     delete form.dataset.editingId;
                     const submitButton = form.querySelector('#extLinkCategorySubmitBtn');
                     if (submitButton) submitButton.textContent = 'Добавить категорию';
-                    const defaultColorInput = form.querySelector(
-                        'input[name="categoryColor"][value="blue"]',
-                    );
-                    if (defaultColorInput) defaultColorInput.checked = true;
+                    setFolderColorInPicker(form, 'categoryColor', DEFAULT_FOLDER_COLOR);
                 }
             }
         });
@@ -236,8 +171,7 @@ export function showOrganizeExtLinkCategoriesModal() {
         delete form.dataset.editingId;
         const submitButton = form.querySelector('#extLinkCategorySubmitBtn');
         if (submitButton) submitButton.textContent = 'Добавить категорию';
-        const defaultColorInput = form.querySelector('input[name="categoryColor"][value="blue"]');
-        if (defaultColorInput) defaultColorInput.checked = true;
+        setFolderColorInPicker(form, 'categoryColor', DEFAULT_FOLDER_COLOR);
     }
 
     const categoriesListElement = modal.querySelector('#extLinkCategoriesList');
@@ -289,12 +223,12 @@ export async function loadExtLinkCategoriesList(categoriesListElement) {
                 'category-item flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
             categoryItem.dataset.categoryId = category.id;
 
-            const colorClass = CATEGORY_DOT_CLASSES[normalizeCategoryColor(category.color)];
+            const dotStyle = folderColorStyle(category.color);
 
             categoryItem.innerHTML = `
                 <div class="flex items-center flex-grow min-w-0 mr-2">
-                    <span class="w-4 h-4 rounded-full ${colorClass} mr-2 flex-shrink-0"></span>
-                    <span class="truncate text-gray-900 dark:text-gray-100" title="${category.name}">${category.name}</span>
+                    <span class="folder-dot w-4 h-4 rounded-full mr-2 flex-shrink-0" style="${dotStyle}"></span>
+                    <span class="truncate text-gray-900 dark:text-gray-100" title="${escapeHtml(category.name)}">${escapeHtml(category.name)}</span>
                 </div>
                 <div class="flex-shrink-0">
                     <button class="edit-category-btn p-1 text-gray-500 hover:text-primary" title="Редактировать">
@@ -325,15 +259,10 @@ export async function loadExtLinkCategoriesList(categoriesListElement) {
                     if (!form) return;
 
                     const nameInput = form.querySelector('#categoryName');
-                    const colorInputs = form.querySelectorAll('input[name="categoryColor"]');
                     const submitButton = form.querySelector('#extLinkCategorySubmitBtn');
 
                     if (nameInput) nameInput.value = category.name;
-                    if (colorInputs) {
-                        colorInputs.forEach((input) => {
-                            input.checked = input.value === (category.color || 'blue');
-                        });
-                    }
+                    setFolderColorInPicker(form, 'categoryColor', category.color);
                     if (submitButton) submitButton.textContent = 'Сохранить изменения';
                     form.dataset.editingId = category.id;
                 });
@@ -368,7 +297,7 @@ export async function handleSaveExtLinkCategorySubmit(event) {
     const nameInput = categoryForm.elements.categoryName;
     const name = nameInput.value.trim();
     const colorInput = categoryForm.querySelector('input[name="categoryColor"]:checked');
-    const color = colorInput?.value ?? 'blue';
+    const color = colorInput?.value ?? DEFAULT_FOLDER_COLOR;
 
     if (!name) {
         if (typeof showNotification === 'function') {
@@ -492,10 +421,7 @@ export async function handleSaveExtLinkCategorySubmit(event) {
         delete categoryForm.dataset.editingId;
         const submitButton = categoryForm.querySelector('#extLinkCategorySubmitBtn');
         if (submitButton) submitButton.textContent = 'Добавить категорию';
-        const defaultColorInput = categoryForm.querySelector(
-            'input[name="categoryColor"][value="blue"]',
-        );
-        if (defaultColorInput) defaultColorInput.checked = true;
+        setFolderColorInPicker(categoryForm, 'categoryColor', DEFAULT_FOLDER_COLOR);
 
         const modal = document.getElementById('extLinkCategoriesModal');
         if (modal) {

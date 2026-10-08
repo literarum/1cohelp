@@ -4,6 +4,7 @@
 // BOOKMARKS MODAL (вынос из script.js)
 // ============================================================================
 
+import '../ui/screenshot-attachment-field.js';
 import { refreshModalEntityHistoryToolbar } from '../history/modal-entity-history.js';
 import {
     activateModalFocus,
@@ -159,7 +160,7 @@ export async function ensureBookmarkModal() {
                         <div class="mb-4 ${SCREENSHOT_EDIT_FIELD.wrapperCard}">
                              <label class="${SCREENSHOT_EDIT_FIELD.label}">Скриншоты (опционально)</label>
                              <p class="${SCREENSHOT_EDIT_FIELD.hint}">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl/Cmd+V) в эту область.</p>
-                             <div id="bookmarkScreenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}">
+                             <div id="bookmarkScreenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}" role="button" tabindex="0" aria-label="Добавить скриншоты: нажмите, перетащите изображения или вставьте из буфера">
                              </div>
                              <div class="${SCREENSHOT_EDIT_FIELD.actions}">
                                  <button type="button" class="${SCREENSHOT_EDIT_FIELD.addBtnBookmark}">

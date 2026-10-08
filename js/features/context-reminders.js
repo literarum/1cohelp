@@ -1,5 +1,6 @@
 'use strict';
 
+import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
 import { reminderModalConfig } from '../config.js';
 import { toggleModalFullscreen, getVisibleModals, getTopmostModal } from '../ui/modals-manager.js';
 import { escapeHtml } from '../utils/html.js';
@@ -187,27 +188,204 @@ export async function renderRemindersPage() {
             return vb - va;
         });
 
-    if (pending.length === 0 && done.length === 0) {
+    updateReminderArchiveBadge(done.length);
+    if (isArchiveModalOpen()) renderReminderArchiveList(done);
+
+    if (pending.length === 0) {
         listEl.innerHTML = '';
-        if (emptyEl) emptyEl.classList.remove('hidden');
+        if (emptyEl) {
+            emptyEl.textContent = done.length
+                ? 'Активных напоминаний нет. Выполненные лежат в «Архиве».'
+                : 'Пока нет напоминаний. Создайте из этого экрана или из деталей закладки / блока обращения.';
+            emptyEl.classList.remove('hidden');
+        }
         return;
     }
     if (emptyEl) emptyEl.classList.add('hidden');
 
-    const parts = [];
-    if (pending.length) {
-        parts.push(
-            `<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Активные</h3>
-            <div class="space-y-3 mb-8" role="list">${pending.map((r) => renderReminderCard(r)).join('')}</div>`,
-        );
+    // Архив больше не занимает место на странице: он открывается кнопкой «Архив».
+    listEl.innerHTML = `<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Активные</h3>
+            <div class="space-y-3" role="list">${pending.map((r) => renderReminderCard(r)).join('')}</div>`;
+}
+
+function updateReminderArchiveBadge(count) {
+    const badge = document.getElementById('reminderArchiveCount');
+    if (!badge) return;
+    badge.textContent = String(count);
+    badge.classList.toggle('hidden', count === 0);
+}
+
+function archiveModalEl() {
+    return document.getElementById('reminderArchiveModal');
+}
+
+function isArchiveModalOpen() {
+    const m = archiveModalEl();
+    return !!m && !m.classList.contains('hidden');
+}
+
+function formatCompletedRu(row) {
+    const iso = row.completedAt || row.updatedAt || row.dueAt;
+    const t = Date.parse(iso || '');
+    return Number.isFinite(t)
+        ? new Date(t).toLocaleString('ru-RU', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+          })
+        : '—';
+}
+
+function renderReminderArchiveList(done) {
+    const list = document.getElementById('reminderArchiveList');
+    const clearBtn = document.getElementById('reminderArchiveClearBtn');
+    if (!list) return;
+    if (clearBtn) clearBtn.disabled = done.length === 0;
+    if (!done.length) {
+        list.innerHTML =
+            '<p class="text-center py-10 text-gray-500 dark:text-gray-400">Архив пуст.</p>';
+        return;
     }
-    if (done.length) {
-        parts.push(
-            `<h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Архив</h3>
-            <div class="space-y-2 opacity-80" role="list">${done.map((r) => renderReminderCard(r, true)).join('')}</div>`,
-        );
+    list.innerHTML = done
+        .map((row) => {
+            const id = escapeHtml(String(row.id));
+            const ctxType = CONTEXT_TYPE_LABELS[row.contextType] || '';
+            const ctx = row.contextLabel
+                ? `${ctxType ? `${escapeHtml(ctxType)}: ` : ''}${escapeHtml(row.contextLabel)}`
+                : escapeHtml(ctxType);
+            const state = row.status === 'dismissed' ? 'закрыто' : 'выполнено';
+            return `<article class="reminder-archive-item rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/90 p-3" role="listitem">
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+    <button type="button" class="reminder-archive-toggle min-w-0 flex-1 text-left" data-id="${id}" aria-expanded="false" title="Показать подробности">
+      <span class="block font-medium text-gray-900 dark:text-gray-100 truncate">${escapeHtml(row.title || 'Без названия')}</span>
+      <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5"><i class="far fa-check-circle mr-1"></i>${state}: ${escapeHtml(formatCompletedRu(row))}</span>
+    </button>
+    <div class="flex flex-wrap gap-2 flex-shrink-0">
+      <button type="button" class="reminder-restore-btn px-3 py-1 rounded-md bg-primary hover:bg-secondary text-white text-xs font-medium" data-id="${id}"><i class="fas fa-undo mr-1"></i>Восстановить</button>
+      <button type="button" class="reminder-archive-delete-btn px-3 py-1 rounded-md border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs font-medium" data-id="${id}"><i class="fas fa-trash-alt mr-1"></i>Удалить</button>
+    </div>
+  </div>
+  <div class="reminder-archive-details hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-1">
+    ${ctx ? `<p class="text-xs text-gray-500 dark:text-gray-400">${ctx}</p>` : ''}
+    <p><i class="far fa-clock mr-1 opacity-70"></i>Срок был: ${escapeHtml(formatDueRu(row.dueAt))}</p>
+    ${row.note ? `<p class="whitespace-pre-wrap">${escapeHtml(row.note)}</p>` : '<p class="text-gray-400">Без заметки.</p>'}
+  </div>
+</article>`;
+        })
+        .join('');
+}
+
+async function loadArchivedRows() {
+    const rows = await getAllRemindersFromDB();
+    return rows
+        .filter((r) => r.status === 'done' || r.status === 'dismissed')
+        .sort((a, b) => {
+            const va = Date.parse(a.completedAt || a.updatedAt || a.dueAt || '') || 0;
+            const vb = Date.parse(b.completedAt || b.updatedAt || b.dueAt || '') || 0;
+            return vb - va;
+        });
+}
+
+export async function openReminderArchive() {
+    const m = archiveModalEl();
+    if (!m) return;
+    renderReminderArchiveList(await loadArchivedRows());
+    m.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden', 'modal-open');
+}
+
+export function closeReminderArchive() {
+    const m = archiveModalEl();
+    if (!m) return;
+    m.classList.add('hidden');
+    if (!getVisibleModals().length) {
+        document.body.classList.remove('overflow-hidden', 'modal-open');
     }
-    listEl.innerHTML = parts.join('');
+}
+
+async function restoreReminder(id) {
+    const rows = await getAllRemindersFromDB();
+    const row = rows.find((r) => String(r.id) === String(id));
+    if (!row) return;
+    row.status = 'pending';
+    delete row.completedAt;
+    row.updatedAt = new Date().toISOString();
+    toastShownThisSession.delete(String(id));
+    await saveReminderRow(row);
+    deps.showNotification?.('Напоминание возвращено в активные.', 'success', 2500);
+    await renderRemindersPage();
+    await runReminderDueCheck();
+}
+
+async function clearReminderArchive() {
+    const done = await loadArchivedRows();
+    if (!done.length) return;
+    const ok = await confirmCriticalDeletion({
+        title: 'Очистить архив напоминаний?',
+        what: `Будет удалено напоминаний: ${done.length}. Активные напоминания не затрагиваются.`,
+        consequences: [
+            'Заголовки, заметки и привязки к закладкам/клиентам удаляемых напоминаний пропадут.',
+            'Восстановить их после очистки не получится.',
+        ],
+        confirmLabel: 'Да, очистить архив',
+        ackText: 'Я понимаю, что весь архив напоминаний будет удалён без возможности восстановления.',
+    });
+    if (!ok) return;
+    for (const r of done) await deleteReminderById(r.id);
+    deps.showNotification?.('Архив очищен.', 'info', 2500);
+    await renderRemindersPage();
+}
+
+function bindReminderArchive() {
+    const openBtn = document.getElementById('openReminderArchiveBtn');
+    if (openBtn && !openBtn._archBound) {
+        openBtn._archBound = true;
+        openBtn.addEventListener('click', () => void openReminderArchive());
+    }
+    const m = archiveModalEl();
+    if (!m || m._archBound) return;
+    m._archBound = true;
+    document.getElementById('reminderArchiveCloseBtn')?.addEventListener('click', closeReminderArchive);
+    m.addEventListener('mousedown', (e) => {
+        if (e.target === m || e.target.parentElement === m) closeReminderArchive();
+    });
+    document.addEventListener(
+        'keydown',
+        (e) => {
+            if (e.key !== 'Escape' || !isArchiveModalOpen()) return;
+            // Поверх может быть окно подтверждения — тогда Esc принадлежит ему.
+            if (document.querySelector('[data-critical-confirm]')) return;
+            e.preventDefault();
+            closeReminderArchive();
+        },
+        true,
+    );
+    document
+        .getElementById('reminderArchiveClearBtn')
+        ?.addEventListener('click', () => void clearReminderArchive());
+    document.getElementById('reminderArchiveList')?.addEventListener('click', async (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+        const restore = t.closest('.reminder-restore-btn');
+        const del = t.closest('.reminder-archive-delete-btn');
+        const tog = t.closest('.reminder-archive-toggle');
+        if (restore) {
+            await restoreReminder(restore.dataset.id);
+        } else if (del) {
+            await deleteReminderById(del.dataset.id);
+            toastShownThisSession.delete(String(del.dataset.id));
+            deps.showNotification?.('Удалено из архива.', 'info', 2000);
+            await renderRemindersPage();
+        } else if (tog) {
+            const details = tog.closest('.reminder-archive-item')?.querySelector('.reminder-archive-details');
+            if (details) {
+                const open = details.classList.toggle('hidden') === false;
+                tog.setAttribute('aria-expanded', String(open));
+            }
+        }
+    });
 }
 
 /**
@@ -528,6 +706,7 @@ export function openReminderFromClient() {
 
 export function initContextRemindersSystem() {
     bindReminderListClicks();
+    bindReminderArchive();
 
     const addBtn = document.getElementById('addReminderBtn');
     if (addBtn && !addBtn._bound) {
