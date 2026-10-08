@@ -212,8 +212,9 @@ html.dark {
 }
 
 html.dark {
-    --scrollbar-thumb-bg: var(--override-scrollbar-thumb-dark, var(--color-border-interactive));
-    --scrollbar-thumb-hover-bg: var(--color-hover-subtle, var(--color-border-interactive));
+    /* ползунок должен читаться на любой поверхности (раньше #3a3a52 на #2c2c46 был почти невидим) */
+    --scrollbar-thumb-bg: var(--override-scrollbar-thumb-dark, rgba(255, 255, 255, 0.3));
+    --scrollbar-thumb-hover-bg: var(--color-hover-subtle, rgba(255, 255, 255, 0.5));
 
     --hint-bg: rgba(120, 53, 15, 0.3);
     --hint-bg-strong: rgba(120, 53, 15, 0.5);
