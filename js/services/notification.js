@@ -3,6 +3,7 @@
 import { isReducedMotion } from '../utils/motion-pref.js';
 
 import { linkify as linkifyFn } from '../utils/html.js';
+import { getPrefs, decide, muteNotification, applyToDocument } from './notification-prefs.js';
 
 /**
  * Единая система тост-уведомлений.
@@ -116,6 +117,7 @@ export const NotificationService = {
     // Инициализация контейнера
     // ------------------------------------------------------------------------
     init() {
+        applyToDocument();
         if (
             this.importantNotificationsContainer &&
             document.body.contains(this.importantNotificationsContainer)
@@ -193,9 +195,11 @@ export const NotificationService = {
             console.warn('[NotificationService.show] Пустое сообщение.');
             return '';
         }
+        const type = normalizeType(opts.type);
+        // Пользовательские настройки уведомлений: выключено / тип отключён / «Не беспокоить» / «Больше не показывать»
+        if (!decide(getPrefs(), { ...opts, type, title, message }).show) return '';
         this.init();
 
-        const type = normalizeType(opts.type);
         const id = opts.id ? String(opts.id) : null;
 
         // Обновление существующего тоста по id
@@ -217,7 +221,7 @@ export const NotificationService = {
         }
 
         const sticky = Boolean(opts.sticky);
-        const dedupe = opts.dedupe !== false;
+        const dedupe = opts.dedupe !== false && getPrefs().groupDuplicates;
 
         // Группировка дубликатов (одинаковый тип + текст среди видимых/ожидающих)
         if (!id && dedupe) {
@@ -241,7 +245,7 @@ export const NotificationService = {
             !sticky &&
             rec.type !== 'error' &&
             rec.type !== 'progress' &&
-            this._visibleTimedCount() >= MAX_VISIBLE_TIMED
+            this._visibleTimedCount() >= this._maxVisible()
         ) {
             this.toastQueue.push(rec);
             // Не копим бесконечную очередь: выбрасываем самые старые «лёгкие» тосты
@@ -432,6 +436,7 @@ export const NotificationService = {
             console.warn('[NotificationService.showImportantRich] Пустое сообщение.');
             return;
         }
+        if (!decide(getPrefs(), { ...options, type, title: '', message }).show) return;
         this.init();
 
         const notificationId = fixedId || this._nextId('important-rich');
@@ -510,6 +515,16 @@ export const NotificationService = {
     // ------------------------------------------------------------------------
     // Внутренняя кухня
     // ------------------------------------------------------------------------
+    _maxVisible() {
+        return getPrefs().maxVisible || MAX_VISIBLE_TIMED;
+    },
+
+    /** Множитель времени показа из настроек (0 — «не закрывать» не трогаем). */
+    _scaleDuration(ms) {
+        if (!(ms > 0)) return ms;
+        return Math.max(1200, Math.round(ms * getPrefs().durationScale));
+    },
+
     _visibleTimedCount() {
         let n = 0;
         for (const r of this.activeToasts.values()) {
@@ -522,7 +537,8 @@ export const NotificationService = {
         const type = normalizeType(o.type);
         const meta = TYPE_META[type];
         const id = o.id || this._nextId(o.sticky ? 'important' : 'temp');
-        const diagnosticsOff = o.diagnostics === false || type !== 'error';
+        const diagnosticsOff =
+            o.diagnostics === false || type !== 'error' || !getPrefs().showDiagnosticsButton;
         const actions = Array.isArray(o.actions) ? o.actions.filter((a) => a && a.label) : [];
         const rec = {
             id,
@@ -566,8 +582,10 @@ export const NotificationService = {
             ) {
                 d = Math.max(d, MIN_DURATION_WITH_ACTIONS_MS);
             }
-            rec.durationMs = d;
+            rec.durationMs = this._scaleDuration(d);
         }
+        rec.muteSrc = { suppressKey: o.suppressKey, title: rec.title, message: rec.message };
+        rec.muteable = o.muteable !== false;
         return rec;
     },
 
@@ -638,6 +656,7 @@ export const NotificationService = {
         card.appendChild(bar);
 
         card.addEventListener('mouseenter', () => {
+            if (!getPrefs().pauseOnHover) return;
             rec.hold.hover = true;
             this._syncTimer(rec);
         });
@@ -746,6 +765,38 @@ export const NotificationService = {
                             ? this.diagnosticsHandler
                             : openDiagnosticsForToast;
                     handler(ctx);
+                },
+            });
+        }
+        if (
+            getPrefs().showMuteButton &&
+            rec.muteable !== false &&
+            (rec.type === 'error' || (rec.type === 'warning' && rec.sticky)) &&
+            !allActions.some((a) => a.id === 'mute')
+        ) {
+            allActions.push({
+                id: 'mute',
+                label: 'Больше не показывать',
+                icon: 'fa-bell-slash',
+                onClick: () => {
+                    const src = { ...(rec.muteSrc || {}), title: rec.title, message: rec.message };
+                    const type = rec.type;
+                    const key = muteNotification(src, type);
+                    this._remove(rec, { fireDismiss: true });
+                    this.show({
+                        type: 'info',
+                        force: true,
+                        message: 'Такое уведомление больше не будет показываться. Вернуть можно в Настройки → Уведомления.',
+                        duration: 7000,
+                        actions: [
+                            {
+                                label: 'Отменить',
+                                onClick: () => {
+                                    import('./notification-prefs.js').then((m) => m.unmuteNotification(key));
+                                },
+                            },
+                        ],
+                    });
                 },
             });
         }
@@ -938,8 +989,9 @@ export const NotificationService = {
             if (explicitDuration === undefined && d > 0 && (rec.actions.length || rec.diagnosticsCtx)) {
                 d = Math.max(d, MIN_DURATION_WITH_ACTIONS_MS);
             }
-            rec.durationMs = d;
+            rec.durationMs = this._scaleDuration(d);
         }
+        if (patch.suppressKey !== undefined) rec.muteSrc = { ...(rec.muteSrc || {}), suppressKey: patch.suppressKey };
         if (rec.card) {
             this._fillContent(rec);
             if (this.activeImportantNotifications.has(rec.id)) {
@@ -998,7 +1050,7 @@ export const NotificationService = {
     },
 
     _pumpQueue() {
-        while (this.toastQueue.length && this._visibleTimedCount() < MAX_VISIBLE_TIMED) {
+        while (this.toastQueue.length && this._visibleTimedCount() < this._maxVisible()) {
             const next = this.toastQueue.shift();
             this._mount(next);
         }
