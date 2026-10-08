@@ -1116,20 +1116,16 @@
                                 class="relative text-2xl md:text-3xl font-bold text-primary app-brand-title"
                                 id="appBrandTitle"
                             >
-                                Copilot&#32;<span
-                                    class="app-brand-title__suffix inline font-bold text-primary"
-                                    lang="ru"
+                                Copilot&#32;<span class="app-brand-title__suffix inline font-bold" lang="ru"
                                     ><span class="app-brand-title__digit-one">1</span
                                     ><span
                                         class="app-brand-title__party-emoji-wrap inline-flex items-end align-baseline"
                                         aria-hidden="true"
-                                    >
-                                        <span class="app-brand-title__party-emoji" role="presentation"
+                                        ><span class="app-brand-title__party-emoji" role="presentation"
                                             >&#x1F389;</span
-                                        >
-                                    </span>
-                                    <span class="app-brand-title__letters-so">СО</span>
-                                </span>
+                                        ></span
+                                    ><span class="app-brand-title__letters-so">СО</span></span
+                                >
                             </h1>
                             <p id="appSlogan" class="text-sm md:text-base text-primary">
                                 Ваш надежный второй пилот
@@ -2124,7 +2120,7 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-nowrap items-center gap-3 mb-4 h-10 overflow-x-auto bookmarks-filter-row">
+                    <div class="flex flex-nowrap items-center gap-3 mb-4 bookmarks-filter-row">
                         <div class="relative flex-1 min-w-0">
                             <label for="bookmarkSearchInput" class="sr-only">Поиск по закладкам</label>
                             <input
@@ -2142,7 +2138,7 @@
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
-                        <div class="relative flex-shrink-0 w-28 flex items-stretch" style="min-height: 2.5rem;">
+                        <div class="relative flex-shrink-0 w-40 flex items-stretch" style="min-height: 2.5rem;">
                             <label for="bookmarkFolderFilter" class="sr-only">Фильтр по папкам</label>
                             <select
                                 id="bookmarkFolderFilter"
@@ -2151,11 +2147,6 @@
                             >
                                 <option value="">Все папки</option>
                             </select>
-                            <div
-                                class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none"
-                            >
-                                <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
-                            </div>
                         </div>
                         <div
                             id="bookmarksSortControls"
@@ -3044,7 +3035,7 @@
                                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     />
                                 </div>
-                                <div class="mb-4">
+                                <div class="mb-4" id="algorithmTagsGroup">
                                     <label
                                         for="algorithmTags"
                                         class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
@@ -3334,6 +3325,16 @@
                                             <i class="fas fa-palette mr-2" aria-hidden="true"></i>
                                             Кастомизация
                                         </button>
+                                        <button
+                                            type="button"
+                                            id="openNotificationSettingsBtn"
+                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md transition bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                            title="Настройки уведомлений: типы, время показа, расположение, «Не беспокоить»"
+                                            aria-label="Открыть настройки уведомлений"
+                                        >
+                                            <i class="fas fa-bell mr-2" aria-hidden="true"></i>
+                                            Уведомления
+                                        </button>
                                     </div>
                                 </div>
 
@@ -3531,6 +3532,41 @@
                                                     проверку систем
                                                 </button>
                                             </div>
+                                        </div>
+
+                                        <div
+                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
+                                            id="googleScriptSettingsSection"
+                                        >
+                                            <label
+                                                for="googleScriptUrlInput"
+                                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
+                                                >Подключение к Google Docs (Apps Script)</label
+                                            >
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                Адрес веб-приложения (заканчивается на <code>/exec</code>).
+                                                Нужен, если развёртывание скрипта пересоздано. Пустое поле —
+                                                встроенный адрес.
+                                            </p>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <input
+                                                    type="url"
+                                                    id="googleScriptUrlInput"
+                                                    class="gs-url-input"
+                                                    placeholder="https://script.google.com/macros/s/…/exec"
+                                                    autocomplete="off"
+                                                    spellcheck="false"
+                                                    aria-describedby="googleScriptUrlStatus"
+                                                />
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-2 mt-2">
+                                                <button type="button" id="googleScriptTestBtn" class="gs-btn gs-btn--primary">
+                                                    <i class="fas fa-plug" aria-hidden="true"></i>Проверить подключение
+                                                </button>
+                                                <button type="button" id="googleScriptSaveBtn" class="gs-btn">Применить адрес</button>
+                                                <button type="button" id="googleScriptResetBtn" class="gs-btn">Встроенный адрес</button>
+                                            </div>
+                                            <div id="googleScriptUrlStatus" class="gs-status" role="status" aria-live="polite"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -3984,7 +4020,13 @@
                                         <h3 class="ac-title">Проверка</h3>
                                         <div class="ac-motion-demo">
                                             <button type="button" class="ac-btn ac-btn--primary" id="acMotionDemoBtn"><i class="fas fa-play" aria-hidden="true"></i> Показать пример</button>
-                                            <span class="ac-motion-chip" id="acMotionDemoChip" aria-hidden="true">Так двигаются элементы</span>
+                                            <span class="ac-note" id="acMotionDemoCaption" role="status" aria-live="polite"></span>
+                                        </div>
+                                        <div class="ac-motion-stage" id="acMotionStage" aria-hidden="true">
+                                            <div class="ac-motion-stage__card" data-demo="card"><b>Карточка</b><span>появляется на странице</span></div>
+                                            <div class="ac-motion-stage__toast" data-demo="toast"><i class="fas fa-circle-check"></i> Уведомление</div>
+                                            <div class="ac-motion-stage__pop" data-demo="pop">Окно</div>
+                                            <span class="ac-motion-chip" id="acMotionDemoChip">Кнопка наведения</span>
                                         </div>
                                     </div>
                                 </section>
@@ -5258,6 +5300,24 @@
                             </button>
                         </div>
                     </div>
+                    <div class="relative mb-4">
+                        <label for="favoritesSearchInput" class="sr-only">Поиск в избранном</label>
+                        <input
+                            type="text"
+                            id="favoritesSearchInput"
+                            placeholder="Поиск в избранном..."
+                            autocomplete="off"
+                            class="w-full min-w-0 h-10 px-3 pr-9 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
+                        />
+                        <button
+                            id="clearFavoritesSearchBtn"
+                            type="button"
+                            class="absolute top-1/2 right-3 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hidden"
+                            title="Очистить поиск в избранном"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <div
                         id="favoritesContainer"
                         class="grid gap-content auto-rows-fr"
@@ -5285,14 +5345,30 @@
                                 уточнение по задаче — без сервера.
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            id="addReminderBtn"
-                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-secondary text-white text-sm font-medium shadow-sm transition"
-                        >
-                            <i class="fas fa-plus" aria-hidden="true"></i>
-                            Новое напоминание
-                        </button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                id="openReminderArchiveBtn"
+                                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 text-sm font-medium shadow-sm transition"
+                                title="Выполненные и закрытые напоминания"
+                            >
+                                <i class="fas fa-archive" aria-hidden="true"></i>
+                                Архив
+                                <span
+                                    id="reminderArchiveCount"
+                                    class="hidden min-w-[1.5rem] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-xs font-semibold text-center"
+                                    >0</span
+                                >
+                            </button>
+                            <button
+                                type="button"
+                                id="addReminderBtn"
+                                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-secondary text-white text-sm font-medium shadow-sm transition"
+                            >
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                Новое напоминание
+                            </button>
+                        </div>
                     </div>
                     <p
                         id="remindersEmptyState"
@@ -5302,6 +5378,58 @@
                         обращения.
                     </p>
                     <div id="remindersList" class="space-y-3" role="region" aria-label="Список напоминаний"></div>
+                </div>
+            </div>
+
+            <div
+                id="reminderArchiveModal"
+                class="fixed inset-0 z-[74] hidden bg-black bg-opacity-60 overflow-y-auto p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reminderArchiveTitle"
+            >
+                <div class="flex min-h-full w-full items-center justify-center py-4 sm:py-6">
+                    <div
+                        class="modal-inner-container bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+                    >
+                        <div
+                            class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-600 flex-shrink-0"
+                        >
+                            <h2
+                                id="reminderArchiveTitle"
+                                class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center"
+                            >
+                                <i class="fas fa-archive mr-2 text-primary" aria-hidden="true"></i>Архив напоминаний
+                            </h2>
+                            <button
+                                type="button"
+                                id="reminderArchiveCloseBtn"
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Закрыть (Esc)"
+                            >
+                                <i class="fas fa-times text-xl" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div
+                            class="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-200 dark:border-gray-600 flex-shrink-0"
+                        >
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                Выполненные и закрытые напоминания. Их можно вернуть в активные или удалить.
+                            </p>
+                            <button
+                                type="button"
+                                id="reminderArchiveClearBtn"
+                                class="flex-shrink-0 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm transition"
+                            >
+                                <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Очистить архив
+                            </button>
+                        </div>
+                        <div
+                            id="reminderArchiveList"
+                            class="p-4 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-2"
+                            role="list"
+                        ></div>
+                    </div>
                 </div>
             </div>
 

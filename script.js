@@ -56,6 +56,18 @@ try {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
     else run();
 })();
+(function bootNotificationSettings() {
+    const run = () => {
+        import('./js/ui/notification-settings-ui.js')
+            .then((m) => m.initNotificationSettingsUI())
+            .catch((e) => console.warn('[notification-settings] init failed', e));
+        import('./js/ui/google-script-settings-ui.js')
+            .then((m) => m.initGoogleScriptSettingsUI())
+            .catch((e) => console.warn('[google-script-settings] init failed', e));
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 (function bootMobileShell() {
     const run = async () => {
         try {
