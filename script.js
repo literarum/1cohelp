@@ -1053,15 +1053,17 @@ function addEscapeHandler(modalElement) {
             const visibleModals = getVisibleModals();
             const topmost = getTopmostModal(visibleModals);
             if (topmost && topmost.id === modalElement.id) {
+                // Любое окно закрывается через единую проверку несохранённых изменений:
+                // раньше Esc в формах алгоритма/закладки закрывал их молча, и введённое терялось.
+                if (typeof requestCloseModal === 'function' && requestCloseModal(modalElement) === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 if (
-                    (modalElement.id === 'appCustomizationModal' ||
-                        modalElement.id === 'customizeUIModal') &&
-                    typeof requestCloseModal === 'function'
+                    modalElement.id === 'appCustomizationModal' ||
+                    modalElement.id === 'customizeUIModal'
                 ) {
-                    if (requestCloseModal(modalElement) === false) {
-                        event.stopPropagation();
-                        return;
-                    }
                     closeSettingsStackModal(modalElement);
                     event.stopPropagation();
                     return;
@@ -3603,15 +3605,8 @@ editMainBtn?.addEventListener('click', async () => {
     }
 });
 
-const exportMainBtn = document.getElementById('exportMainBtn');
-if (exportMainBtn) {
-    exportMainBtn.addEventListener('click', () => {
-        const mainAlgorithmContainer = document.getElementById('mainAlgorithm');
-        const mainTitleElement = document.querySelector('#mainContent h2');
-        const title = mainTitleElement ? mainTitleElement.textContent : 'Главная';
-        ExportService.exportElementToPdf(mainAlgorithmContainer, title);
-    });
-}
+// Обработчик #exportMainBtn живёт в js/ui/algorithm-modal-controls.js (раньше дублировался здесь —
+// при появлении кнопки экспорт запускался бы дважды).
 
 // showAddModal теперь импортируется из js/components/algorithms-operations.js
 const showAddModal = showAddModalModule;

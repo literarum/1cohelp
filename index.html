@@ -1715,7 +1715,7 @@
                                 class="bg-white dark:bg-gray-700 p-1 rounded-lg shadow-sm overflow-hidden"
                             >
                                 <textarea
-                                    id="clientNotes"
+                                    aria-label="Информация по обращению" id="clientNotes"
                                     rows="20"
                                     placeholder="Здесь для удобства можно фиксировать всю информацию по обращению клиента..."
                                     class="w-full p-1 resize-y bg-gray-50 dark:bg-gray-800 border-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100 custom-scrollbar"
@@ -1971,7 +1971,7 @@
                     <div class="mb-content flex flex-col md:flex-row gap-content-sm relative">
                         <input
                             type="text"
-                            id="linkSearchInput"
+                            aria-label="Поиск по ссылкам 1С" id="linkSearchInput"
                             placeholder="Поиск по названию..."
                             class="flex-grow px-3 pr-10 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                         />
@@ -2543,7 +2543,7 @@
                     <div class="mb-content flex flex-col md:flex-row gap-content-sm">
                         <input
                             type="text"
-                            id="extLinkSearchInput"
+                            aria-label="Поиск по внешним ресурсам" id="extLinkSearchInput"
                             placeholder="Поиск по ресурсам..."
                             class="flex-grow px-3 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                         />
@@ -2646,7 +2646,7 @@
                                     class="flex flex-col flex-grow min-h-0 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-xl overflow-hidden transition-colors"
                                 >
                                     <textarea
-                                        id="xmlAnalyzerDataInput"
+                                        aria-label="XML для анализа" id="xmlAnalyzerDataInput"
                                         class="w-full flex-grow min-h-[200px] p-4 border-0 border-transparent rounded-xl resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-0 focus:outline-none"
                                         placeholder="Вставьте любой XML (отчёт, рег. файл, ЕФС, СЭДО), JSON, base64 сертификата — или перетащите сюда несколько файлов (.xml, .zip, .json, .txt). Ctrl/Cmd+Enter — анализ"
                                     ></textarea>
@@ -3221,7 +3221,7 @@
 
             <!-- Окно Настройки UI -->
             <div
-                id="customizeUIModal"
+                data-no-autofocus id="customizeUIModal"
                 role="dialog"
                 aria-modal="true"
                 aria-label="Настройка интерфейса"
@@ -3346,7 +3346,7 @@
                                         >
                                         <div class="flex items-center space-x-3 mt-2">
                                             <button
-                                                id="decreaseFontBtn"
+                                                aria-label="Уменьшить масштаб" id="decreaseFontBtn"
                                                 class="p-1.5 rounded border border-gray-300 dark:border-gray-600 focus:outline-none text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                             >
                                                 <i class="fas fa-minus"></i>
@@ -3357,7 +3357,7 @@
                                                 >100%</span
                                             >
                                             <button
-                                                id="increaseFontBtn"
+                                                aria-label="Увеличить масштаб" id="increaseFontBtn"
                                                 class="p-1.5 rounded border border-gray-300 dark:border-gray-600 focus:outline-none text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                             >
                                                 <i class="fas fa-plus"></i>
@@ -3366,7 +3366,7 @@
                                                 id="resetFontBtn"
                                                 class="ml-2 text-xs text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
                                             >
-                                                Сбросить на 100%
+                                                Сбросить (стандарт 80%)
                                             </button>
                                         </div>
                                     </div>

@@ -1,0 +1,15 @@
+{
+  "name": "copilot-1co",
+  "private": true,
+  "type": "module",
+  "description": "Copilot 1СО — статическое PWA. Сборка не требуется; package.json нужен только для тестов.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "serve": "npx --yes http-server -p 8080 -c-1 ."
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.9"
+  }
+}

@@ -10,7 +10,7 @@
 const ASSET_QUERY_VERSION = '20261001pwa-sync';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
 const MAIN_CSS_QUERY_VERSION = '20261001pwa-sync';
-const VERSION = `20261008-v18`;
+const VERSION = `20261015-v19`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
