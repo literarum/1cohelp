@@ -616,3 +616,17 @@ html[data-motion='reduce'] .mobile-nav-item i {
         padding-block: 10px;
     }
 }
+
+/* Увеличенные цели нажатия в шапке задают display:inline-flex и перекрывали .hidden:
+   на телефоне «×» очистки поиска был виден при пустом поле. */
+#appContent header button.hidden {
+    display: none !important;
+}
+
+/* На сенсорных экранах плавающие «вверх/вниз» закрывали кнопки карточек (удалить, действия),
+   а прокрутка пальцем и так доступна. */
+@media (hover: none) and (pointer: coarse) {
+    #scrollNavButtons {
+        display: none !important;
+    }
+}

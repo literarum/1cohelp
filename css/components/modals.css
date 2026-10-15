@@ -958,3 +958,73 @@ html.dark .form-required-mark {
 .dark #extLinkCategoriesModal input[name='categoryColor']:checked + span {
     box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #c4b5fd;
 }
+
+/* Форма напоминания: поля были разного фона/высоты/кегля (input, select, datetime, textarea) */
+#reminderModal #reminderFormTitle,
+#reminderModal #reminderFormDueLocal,
+#reminderModal .cs-trigger,
+#reminderModal #reminderFormIntent,
+#reminderModal #reminderFormNote {
+    background-color: var(--color-input-bg) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 0.5rem;
+    font-size: 1rem !important;
+    color: var(--color-text-primary, inherit);
+}
+#reminderModal #reminderFormTitle,
+#reminderModal #reminderFormDueLocal,
+#reminderModal .cs-trigger {
+    min-height: 2.6rem;
+    height: 2.6rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+}
+#reminderModal label[for],
+#reminderModal .min-w-0 > label {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Настройки на узком экране: поле «добавочный» (min-width 280px, крупный шрифт) налезало на заголовок */
+@media (max-width: 640px) {
+    #customizeUIModal .p-content.border-b > .flex.justify-between {
+        flex-wrap: wrap;
+        row-gap: 0.5rem;
+    }
+    #customizeUIModal .p-content.border-b > .flex.justify-between > .flex {
+        flex: 1 1 100%;
+        order: 2;
+        justify-content: space-between;
+    }
+    #customizeUIModal .employee-extension-field {
+        min-width: 0 !important;
+        width: 100%;
+        font-size: 1rem !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+}
+
+/* Новый алгоритм / редактирование на узком экране: длинный заголовок выталкивал «развернуть» и «×»
+   на разные строки. Заголовок сжимается и переносится, кнопки остаются одной группой справа. */
+@media (max-width: 640px) {
+    #addModal .p-content.border-b > .flex.justify-between,
+    #editModal .p-content.border-b > .flex.justify-between {
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    #addModal #addModalTitle,
+    #editModal #editModalTitle {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 1.15rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+    #addModal .p-content.border-b > .flex.justify-between > :last-child,
+    #editModal .p-content.border-b > .flex.justify-between > :last-child {
+        display: flex;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+}

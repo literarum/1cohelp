@@ -32,3 +32,36 @@
         flex-wrap: nowrap !important;
     }
 }
+
+/* 768–1099 px: три группы шапки не помещаются в одну строку — таймер/тема уходили под поиск,
+   иконки справа налезали друг на друга. Поиск переносится на отдельную строку во всю ширину. */
+@media (min-width: 768px) and (max-width: 1099.98px) {
+    #staticHeaderWrapper header > div > div.header-toolbar-row {
+        grid-template-columns: auto auto !important;
+        grid-template-areas:
+            'tb-left tb-right'
+            'tb-search tb-search' !important;
+        justify-content: space-between !important;
+    }
+    #staticHeaderWrapper header > div > div.header-toolbar-row > :nth-child(1) {
+        grid-area: tb-left;
+        min-width: max-content;
+    }
+    #staticHeaderWrapper header > div > div.header-toolbar-row > :nth-child(2) {
+        grid-area: tb-search;
+        max-width: none !important;
+        width: 100%;
+    }
+    #staticHeaderWrapper header > div > div.header-toolbar-row > :nth-child(3) {
+        grid-area: tb-right;
+        justify-self: end;
+        min-width: max-content;
+    }
+}
+/* 768–899 px: логотип над панелью инструментов, иначе правая группа выходит за экран */
+@media (min-width: 768px) and (max-width: 899.98px) {
+    #staticHeaderWrapper header > div:has(> div.header-toolbar-row) {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+}

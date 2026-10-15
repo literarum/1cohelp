@@ -547,3 +547,37 @@ header .tab-btn { margin-inline: 0.0625rem; }
 #appContent [data-section-id][data-view='list'] {
     gap: calc(0.5rem * var(--density-scale, 1)) !important;
 }
+
+/* ---------- Контраст мелкого акцентного текста в тёмной теме (WCAG ≥ 4.5:1) ----------
+   Фиолетовый акцент на тёмных поверхностях давал ~3:1 для 11–12 px текста. */
+html.dark #clientAnalyticsRecordCount,
+html.dark #resetFontBtn,
+html.dark .xa-tab-active {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, #ffffff) !important;
+}
+
+/* ---------- Карточки: без пустой полосы сверху ----------
+   Содержимое карточек имело pt-10 (≈35 px) под кнопки действий, которые видны только при наведении.
+   Теперь отступ сверху обычный, а справа у заголовка оставлено место под кнопки. */
+[data-view='cards'] > .view-item > .pt-10,
+[data-view='cards'] > .view-item > div > .pt-10 {
+    padding-top: 0.15rem !important;
+}
+[data-view='cards'] > .view-item > .pt-10 > :first-child,
+[data-view='cards'] > .view-item > div > .pt-10 > :first-child {
+    padding-right: 7.25rem;
+}
+
+/* Меню «Ещё» (переполнение вкладок): пункты выравниваются по левому краю, иконки в одну колонку */
+.overflow-dropdown-item {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: left !important;
+    justify-content: flex-start !important;
+}
+.overflow-dropdown-item > i:first-child {
+    width: 1.1em;
+    text-align: center;
+    margin-right: 0 !important;
+}
