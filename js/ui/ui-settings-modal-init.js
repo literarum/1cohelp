@@ -312,7 +312,8 @@ export function initUISettingsModalHandlers() {
         }
         if (resetFontBtn && fontSizeLabel) {
             resetFontBtn.addEventListener('click', () => {
-                fontSizeLabel.textContent = '100%';
+                // стандарт приложения — 80% (getDefaultUISettings); «100%» резко увеличивал интерфейс
+                fontSizeLabel.textContent = '80%';
                 updateFontLabelAndPreview();
             });
         }

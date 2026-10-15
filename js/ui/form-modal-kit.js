@@ -25,7 +25,8 @@ import { flashButtonSuccess, shakeField, prefersReducedMotion } from './motion.j
 import { normalizeTagToken } from '../features/global-tags.js';
 
 const SUBTITLE_DEFAULT =
-    'Поля со <span class="text-red-500">*</span> обязательны · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> — сохранить · <kbd>Esc</kbd> — закрыть';
+    // фрагменты не разрываются посреди фразы в узких окнах («—\nсохранить»)
+    '<span class="whitespace-nowrap">Поля со <span class="text-red-500">*</span> обязательны</span> · <span class="whitespace-nowrap"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> — сохранить</span> · <span class="whitespace-nowrap"><kbd>Esc</kbd> — закрыть</span>';
 
 /**
  * Определяет тип вставленной строки: ИНН (с контрольной суммой), ссылка, телефон.

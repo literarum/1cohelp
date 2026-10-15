@@ -60,16 +60,19 @@ export function showUnsavedConfirmModal(message) {
         delete modal._unsavedLeaveClickHandler;
     }
     if (modal._unsavedEscapeKeyHandler) {
-        document.removeEventListener('keydown', modal._unsavedEscapeKeyHandler);
+        document.removeEventListener('keydown', modal._unsavedEscapeKeyHandler, true);
         delete modal._unsavedEscapeKeyHandler;
     }
+
+    // куда вернуть фокус после «Отмена» (поле формы, в котором нажали Esc)
+    const prevFocus = typeof document !== 'undefined' ? document.activeElement : null;
 
     return new Promise((resolve) => {
         let settled = false;
         const onEscape = (e) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
-                e.stopPropagation();
+                e.stopImmediatePropagation();
                 finish(false);
             }
         };
@@ -79,7 +82,7 @@ export function showUnsavedConfirmModal(message) {
         function finish(leave) {
             if (settled) return;
             settled = true;
-            document.removeEventListener('keydown', onEscape);
+            document.removeEventListener('keydown', onEscape, true);
             cancelBtn.removeEventListener('click', onCancel);
             leaveBtn.removeEventListener('click', onLeave);
             modal.classList.add('hidden');
@@ -91,6 +94,17 @@ export function showUnsavedConfirmModal(message) {
                 document.body.classList.remove('overflow-hidden', 'modal-open');
             }
             deactivateModalFocus(modal);
+            if (!leave && prevFocus && prevFocus !== document.body && prevFocus.isConnected) {
+                const restore = () => {
+                    try {
+                        prevFocus.focus({ preventScroll: true });
+                    } catch {
+                        /* элемент мог стать нефокусируемым */
+                    }
+                };
+                restore();
+                setTimeout(restore, 0);
+            }
             resolve(leave);
         }
 
@@ -100,13 +114,13 @@ export function showUnsavedConfirmModal(message) {
 
         cancelBtn.addEventListener('click', onCancel);
         leaveBtn.addEventListener('click', onLeave);
-        document.addEventListener('keydown', onEscape);
+        document.addEventListener('keydown', onEscape, true); // capture: раньше глобальных обработчиков Esc
 
         modal.classList.remove('hidden');
         document.body.classList.add('overflow-hidden', 'modal-open');
         activateModalFocus(modal);
-        if (typeof addEscapeHandler === 'function') {
-            addEscapeHandler(modal);
-        }
+        // Esc обрабатывает onEscape выше: общий обработчик закрывал окно, не разрешая Promise,
+        // из-за чего терялся фокус, а ожидающий код «висел».
+        void addEscapeHandler;
     });
 }

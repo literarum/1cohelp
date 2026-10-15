@@ -101,6 +101,28 @@ export function findPreferredField(modal) {
     return null;
 }
 
+/**
+ * Поле для автофокуса при открытии окна. Не фокусируем поле, если:
+ *  • окно помечено data-no-autofocus (настройки: первое поле — адрес Google Script в середине формы);
+ *  • сенсорный ввод (фокус в поле сразу выдвигает экранную клавиатуру и прокручивает окно);
+ *  • поле не видно без прокрутки окна.
+ */
+function pickAutoFocusField(modal) {
+    if (modal.hasAttribute('data-no-autofocus')) return null;
+    try {
+        if (window.matchMedia?.('(pointer: coarse)').matches) return null;
+    } catch {
+        /* ignore */
+    }
+    const el = findPreferredField(modal);
+    if (!el) return null;
+    const scroller = el.closest('.overflow-y-auto, [class*="overflow-y-auto"]') || modal;
+    const sr = scroller.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.top > sr.top + Math.min(sr.height, window.innerHeight) * 0.6) return null;
+    return el;
+}
+
 function announceVisibility(modal, shown) {
     try {
         document.dispatchEvent(new CustomEvent('app:modal-visibility', { detail: { modal, shown } }));
@@ -190,7 +212,7 @@ function onShown(modal) {
         activateModalFocus(modal);
         // Код окна мог уже поставить фокус на нужное поле — не перебиваем его.
         const alreadyInside = before && before !== modal && modal.contains(before) && before.focus;
-        const target = alreadyInside ? before : findPreferredField(modal);
+        const target = alreadyInside ? before : pickAutoFocusField(modal);
         if (target) {
             try {
                 target.focus({ preventScroll: true });
