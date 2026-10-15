@@ -362,7 +362,7 @@ export async function renderFavoritesPage() {
                 );
 
                 itemElement.innerHTML = `
-                    <div class="flex-grow min-w-0 cursor-pointer pt-10">
+                    <div class="flex-grow min-w-0 cursor-pointer pt-10 mb-3">
                         <div class="flex items-center min-w-0 mb-2">
                             <i class="fas ${iconClass} text-primary mr-2 text-lg flex-shrink-0"></i>
                             <h3 class="font-semibold text-gray-900 dark:text-gray-100 truncate flex-1 min-w-0" title="${escapeHtml(

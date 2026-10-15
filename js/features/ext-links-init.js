@@ -92,7 +92,7 @@ export async function initExternalLinksSystem() {
             </div>
             <div class="flex items-center gap-4 mb-4 flex-shrink-0">
                 <div class="relative flex-grow">
-                    <input type="text" id="extLinkSearchInput" placeholder="Поиск по ресурсам..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
+                    <input type="text" id="extLinkSearchInput" aria-label="Поиск по внешним ресурсам" placeholder="Поиск по ресурсам..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
                     <button id="clearExtLinkSearchBtn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700 hidden" title="Очистить поиск">
                         <i class="fas fa-times"></i>
                     </button>

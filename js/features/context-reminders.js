@@ -4,6 +4,7 @@ import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
 import { reminderModalConfig } from '../config.js';
 import { toggleModalFullscreen, getVisibleModals, getTopmostModal } from '../ui/modals-manager.js';
 import { escapeHtml } from '../utils/html.js';
+import { NotificationService } from '../services/notification.js';
 import { saveReminderRow, getAllRemindersFromDB, deleteReminderById } from '../db/reminders.js';
 import {
     addCalendarDaysUtc,
@@ -392,6 +393,11 @@ function bindReminderArchive() {
  * @param {object} row
  * @param {boolean} [archived]
  */
+/** Есть ли у напоминания контекст, который можно открыть (иначе кнопка «Открыть контекст» бесполезна). */
+function hasOpenableContext(row) {
+    return !!(row && row.contextType && row.contextType !== 'free' && row.contextId);
+}
+
 function renderReminderCard(row, archived = false) {
     const id = row.id;
     const title = escapeHtml(row.title || 'Без названия');
@@ -413,7 +419,7 @@ function renderReminderCard(row, archived = false) {
             <button type="button" class="reminder-done-btn px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium" data-id="${id}">Выполнено</button>
             <button type="button" class="reminder-snooze-btn px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs font-medium" data-id="${id}" data-days="1">+1 день</button>
             <button type="button" class="reminder-snooze-btn px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs font-medium" data-id="${id}" data-days="7">+7 дней</button>
-            <button type="button" class="reminder-open-btn px-3 py-1.5 rounded-lg border border-primary text-primary text-xs font-medium" data-id="${id}">Открыть контекст</button>
+            ${hasOpenableContext(row) ? `<button type="button" class="reminder-open-btn px-3 py-1.5 rounded-lg border border-primary text-primary text-xs font-medium" data-id="${id}">Открыть контекст</button>` : ''}
             <button type="button" class="reminder-delete-btn text-xs text-gray-500 hover:text-red-600" data-id="${id}">Удалить</button>
         </div>`;
 
@@ -519,6 +525,9 @@ export function openReminderModal(options = {}) {
 }
 
 export function closeReminderModal() {
+    const m0 = reminderModalEl();
+    if (m0) delete m0.dataset.pastDueConfirmed;
+    NotificationService.dismiss('reminder-form-warning');
     const modal = reminderModalEl();
     if (!modal) return;
     if (modal.classList.contains('is-fullscreen')) {
@@ -562,17 +571,37 @@ async function submitReminderForm() {
     const ctxIdInput = modal.querySelector('#reminderFormContextId');
     const ctxLabelInput = modal.querySelector('#reminderFormContextLabel');
 
+    const FORM_WARN_ID = 'reminder-form-warning';
+    const warn = (message) => {
+        // фиксированный id: предупреждение обновляется на месте и убирается после успешного сохранения
+        NotificationService.show({ id: FORM_WARN_ID, type: 'warning', message, duration: 5000 });
+    };
+
     const title = (titleInput?.value || '').trim();
     if (!title) {
-        deps.showNotification?.('Укажите заголовок напоминания.', 'warning', 4000);
+        warn('Укажите заголовок напоминания.');
+        titleInput?.focus();
         return;
     }
 
     const dueIso = localDatetimeToIso(dueInput?.value || '');
     if (!dueIso) {
-        deps.showNotification?.('Укажите корректную дату и время.', 'warning', 4000);
+        warn('Укажите корректную дату и время.');
+        dueInput?.focus();
         return;
     }
+    // Дата в прошлом: напоминание сработало бы сразу. Первое нажатие предупреждает,
+    // повторное «Сохранить» с той же датой — сохраняет осознанно.
+    if (new Date(dueIso).getTime() < Date.now() - 60 * 1000) {
+        if (modal.dataset.pastDueConfirmed !== dueInput.value) {
+            modal.dataset.pastDueConfirmed = dueInput.value;
+            warn('Дата уже прошла — напоминание сработает сразу. Нажмите «Сохранить» ещё раз, чтобы сохранить так.');
+            dueInput?.focus();
+            return;
+        }
+    }
+    delete modal.dataset.pastDueConfirmed;
+    NotificationService.dismiss(FORM_WARN_ID);
 
     const row = {
         title,
@@ -665,9 +694,29 @@ function bindReminderListClicks() {
         if (!id) return;
         e.preventDefault();
         if (del) {
+            // удаление с возможностью отмены: раньше одно нажатие удаляло безвозвратно
+            const rows = await getAllRemindersFromDB();
+            const removed = rows.find((r) => String(r.id) === String(id));
             await deleteReminderById(id);
             toastShownThisSession.delete(String(id));
-            deps.showNotification?.('Удалено.', 'info', 2000);
+            NotificationService.show({
+                type: 'info',
+                message: removed?.title ? `Напоминание «${removed.title}» удалено.` : 'Напоминание удалено.',
+                duration: 7000,
+                actions: removed
+                    ? [
+                          {
+                              label: 'Отменить',
+                              primary: true,
+                              onClick: async () => {
+                                  await saveReminderRow(removed);
+                                  await renderRemindersPage();
+                                  await runReminderDueCheck();
+                              },
+                          },
+                      ]
+                    : [],
+            });
             await renderRemindersPage();
             return;
         }

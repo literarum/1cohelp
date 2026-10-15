@@ -263,6 +263,19 @@ export function pluralRuAppeals(n) {
  * @param {object[]} records
  * @returns {{ innStacks: Array<{ innKey: string, records: object[] }>, noInnRecords: object[] }}
  */
+/**
+ * Новые обращения первыми. Записи одного файла имеют одинаковое время загрузки —
+ * тогда новее та, что ниже в файле (больший номер пункта), затем больший id.
+ * Раньше при равном времени первым шёл пункт 1, и карточка показывала самый старый вопрос.
+ */
+export function compareRecordsNewestFirst(a, b) {
+    const d = uploadedTs(b.uploadedAt) - uploadedTs(a.uploadedAt);
+    if (d) return d;
+    const li = (Number(b.listItemIndex) || 0) - (Number(a.listItemIndex) || 0);
+    if (li) return li;
+    return (Number(b.id) || 0) - (Number(a.id) || 0);
+}
+
 export function groupClientAnalyticsRecordsForDisplay(records) {
     const innStacks = new Map();
     const noInnRecords = [];
@@ -276,7 +289,7 @@ export function groupClientAnalyticsRecordsForDisplay(records) {
         if (!innStacks.has(innKey)) innStacks.set(innKey, []);
         innStacks.get(innKey).push(r);
     }
-    const sortByUploadedDesc = (a, b) => uploadedTs(b.uploadedAt) - uploadedTs(a.uploadedAt);
+    const sortByUploadedDesc = compareRecordsNewestFirst;
     for (const arr of innStacks.values()) {
         arr.sort(sortByUploadedDesc);
     }
@@ -775,13 +788,21 @@ function syncClientAnalyticsOrgToolbarDom(folders, tags, view) {
             if (col) btn.style.borderColor = col;
             tagBar.appendChild(btn);
         }
-        const clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className =
-            'text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 ml-1 underline-offset-2 hover:underline';
-        clearBtn.textContent = 'Сбросить фильтр тегов';
-        clearBtn.setAttribute('data-ca-clear-tag-filter', '1');
-        tagBar.appendChild(clearBtn);
+        if (sortedTags.length === 0) {
+            // тегов нет — вместо бесполезной кнопки сброса короткая подсказка
+            const hint = document.createElement('span');
+            hint.className = 'text-xs text-gray-500 dark:text-gray-400';
+            hint.textContent = 'нет — создаются в «Папки и теги»';
+            tagBar.appendChild(hint);
+        } else if (selected.size > 0) {
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.className =
+                'text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 ml-1 underline-offset-2 hover:underline';
+            clearBtn.textContent = 'Сбросить фильтр тегов';
+            clearBtn.setAttribute('data-ca-clear-tag-filter', '1');
+            tagBar.appendChild(clearBtn);
+        }
     }
 }
 
@@ -1130,7 +1151,9 @@ export async function ingestTxtFile(file, opts = {}) {
         existingFiles,
     );
     if (duplicateReason) {
-        throw new Error(duplicateReasonToMessage(duplicateReason, file.name));
+        const dupErr = new Error(duplicateReasonToMessage(duplicateReason, file.name));
+        dupErr.code = 'CA_DUPLICATE_FILE'; // ожидаемая ситуация, а не сбой
+        throw dupErr;
     }
 
     const fileRow = {
@@ -1563,9 +1586,11 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
     }
     let title;
     let titlePlain;
+    // реквизиты и контакты собираем по всем обращениям клиента: в последнем их может не быть
+    const stackKpp = rec.kpp || stack.records.find((r) => r && r.kpp)?.kpp || null;
     if (rec.inn) {
-        title = `ИНН ${escapeHtml(rec.inn)}${rec.kpp ? ` · КПП ${escapeHtml(rec.kpp)}` : ''}`;
-        titlePlain = `ИНН ${rec.inn}${rec.kpp ? ` · КПП ${rec.kpp}` : ''}`;
+        title = `ИНН ${escapeHtml(rec.inn)}${stackKpp ? ` · КПП ${escapeHtml(stackKpp)}` : ''}`;
+        titlePlain = `ИНН ${rec.inn}${stackKpp ? ` · КПП ${stackKpp}` : ''}`;
     } else {
         title = `ИНН ${escapeHtml(stack.innKey)}`;
         titlePlain = `ИНН ${stack.innKey}`;
@@ -1595,8 +1620,11 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
             : bl > 0
               ? frogBlacklistBadgeHtml(bl)
               : '';
-    const phones = (rec.phones || []).length ? escapeHtml(rec.phones.join(', ')) : '—';
-    const emails = (rec.emails || []).length ? escapeHtml(rec.emails.join(', ')) : '—';
+    const uniq = (key) => [...new Set(stack.records.flatMap((r) => (r && Array.isArray(r[key]) ? r[key] : [])))];
+    const allPhones = uniq('phones');
+    const allEmails = uniq('emails');
+    const phones = allPhones.length ? escapeHtml(allPhones.join(', ')) : '—';
+    const emails = allEmails.length ? escapeHtml(allEmails.join(', ')) : '—';
     const q = escapeHtml((rec.question || '').slice(0, 280));
     const fn = escapeHtml(rec.sourceFileName || '');
     const updated = formatClientAnalyticsRuDateTime(rec.uploadedAt);
@@ -1832,6 +1860,14 @@ export async function renderClientAnalyticsPage(opts = {}) {
         syncClientAnalyticsOrgToolbarDom(orgState.folders, orgState.tags, orgState.view);
     } catch (e) {
         console.warn('[client-analytics] не удалось загрузить папки/теги', e);
+    }
+
+    // «Очистить всё» бессмысленна на пустой базе
+    const clearAllBtnEl = document.getElementById('clientAnalyticsClearAllBtn');
+    if (clearAllBtnEl) {
+        clearAllBtnEl.disabled = totalRecords === 0;
+        clearAllBtnEl.classList.toggle('opacity-40', totalRecords === 0);
+        clearAllBtnEl.classList.toggle('cursor-not-allowed', totalRecords === 0);
     }
 
     const countEl = document.getElementById('clientAnalyticsRecordCount');
@@ -2506,9 +2542,13 @@ export function initClientAnalyticsUi() {
                         );
                     }
                 } catch (err) {
-                    console.error(err);
+                    const isDuplicate = err?.code === 'CA_DUPLICATE_FILE';
+                    // дубль файла — пользовательская ситуация: не пишем в консоль как ошибку
+                    // (мониторинг здоровья считал это сбоем приложения)
+                    if (isDuplicate) console.info('[client-analytics]', err.message);
+                    else console.error(err);
                     if (deps.showNotification) {
-                        deps.showNotification(err?.message || String(err), 'error');
+                        deps.showNotification(err?.message || String(err), isDuplicate ? 'warning' : 'error');
                     }
                 }
             }

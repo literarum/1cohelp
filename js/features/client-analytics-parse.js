@@ -352,6 +352,8 @@ export function extractQuestionFromAppealBody(text, inn, kpp, phones) {
         if (/^ИНН\s*[\d\s]+$/i.test(line)) return false;
         if (/^инн\s*[:\s]*\d{10,12}\s*$/i.test(line)) return false;
         if (/^КПП\s*\d{9}/i.test(line)) return false;
+        // строка только из реквизитов: «ИНН 7707083893 КПП 770701001», «ИНН: …, КПП: …»
+        if (/^(?:(?:ИНН|КПП|ОГРНИП|ОГРН)\s*[:№]?\s*\d{9,15}[\s,;/]*)+$/i.test(line)) return false;
         if (/^кпп\s*[:\s]*\d{9}\s*$/i.test(line)) return false;
         if (/^(?:тел|телефон|моб|phone)\s*[.:]?\s*[\d\s+()-]+$/i.test(line)) return false;
         if (innEsc && new RegExp(`^\\s*${innEsc}\\s*$`).test(line.replace(/\s/g, ''))) return false;
@@ -361,6 +363,8 @@ export function extractQuestionFromAppealBody(text, inn, kpp, phones) {
     let joined = filtered.join(' ').replace(/\s+/g, ' ').trim();
     if (inn) {
         joined = joined
+            // вместе с номером убираем и его подпись, иначе оставалось «ИНН КПП Вопрос: …»
+            .replace(new RegExp(`(?:ИНН|инн)\\s*[:№]?\\s*${innEsc}`, 'g'), ' ')
             .replace(new RegExp(`\\b${innEsc}\\b`, 'g'), ' ')
             .replace(/\s+/g, ' ')
             .trim();
@@ -368,6 +372,7 @@ export function extractQuestionFromAppealBody(text, inn, kpp, phones) {
     if (kpp) {
         const kppEsc = kpp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         joined = joined
+            .replace(new RegExp(`(?:КПП|кпп)\\s*[:№]?\\s*${kppEsc}`, 'g'), ' ')
             .replace(new RegExp(`\\b${kppEsc}\\b`, 'g'), ' ')
             .replace(/\s+/g, ' ')
             .trim();
@@ -377,6 +382,7 @@ export function extractQuestionFromAppealBody(text, inn, kpp, phones) {
         joined = joined.replace(new RegExp(`\\b${pe}\\b`, 'g'), ' ');
         joined = joined.replace(new RegExp(`\\b8${p.slice(1)}\\b`), ' ');
     }
+    joined = joined.replace(/^[\s,;:.\-–—]+/, '');
     joined = joined.replace(/\s+/g, ' ').trim();
     return joined.slice(0, 4000);
 }

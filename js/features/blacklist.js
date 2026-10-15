@@ -1130,40 +1130,76 @@ export async function deleteBlacklistEntry(entryId) {
  * Показывает предупреждение о черном списке
  */
 export function showBlacklistWarning() {
-    if (State.currentBlacklistWarningOverlay) {
-        State.currentBlacklistWarningOverlay.remove();
-        State.currentBlacklistWarningOverlay = null;
-    }
+    // повторный вызов (двойной клик, повторная активация вкладки) не плодит экраны и обработчики
+    document.querySelectorAll('#blacklistWarningOverlay').forEach((el) => (el._dismiss ? el._dismiss() : el.remove()));
+    State.currentBlacklistWarningOverlay = null;
 
+    const prevFocus = document.activeElement;
     const overlay = document.createElement('div');
     overlay.id = 'blacklistWarningOverlay';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'blacklistWarningTitle');
+    // z выше палитры команд и модалок (z-[100]): иначе они открывались «под» предупреждением невидимыми
     overlay.className =
-        'fixed inset-0 bg-red-700 dark:bg-red-800 text-white p-8 flex flex-col items-center justify-center text-center z-[100]';
+        'fixed inset-0 bg-red-700 dark:bg-red-800 text-white p-8 flex flex-col items-center justify-center text-center z-[200]';
     overlay.innerHTML = `
         <div class="max-w-2xl">
-            <i class="fas fa-exclamation-triangle fa-3x mb-6 text-yellow-300"></i>
-            <h1 class="text-3xl font-bold mb-4">ВНИМАНИЕ!</h1>
+            <i class="fas fa-exclamation-triangle fa-3x mb-6 text-yellow-300" aria-hidden="true"></i>
+            <h1 id="blacklistWarningTitle" class="text-3xl font-bold mb-4">ВНИМАНИЕ!</h1>
             <p class="text-lg mb-3">Раздел "Черный список клиентов-жаб" предназначен для использования с особой осторожностью.</p>
             <p class="text-lg mb-6">Не рекомендуется к использованию, если вы не руководитель группы, ведущий специалист или старший технический специалист!</p>
             <p class="text-base mb-8">Используйте крайне осторожно, внимательно и избирательно! НЕ ЗЛОУПОТРЕБЛЯТЬ!</p>
-            <button id="acceptBlacklistWarningBtn" class="px-8 py-3 bg-yellow-400 hover:bg-yellow-500 text-red-800 font-bold rounded-lg shadow-lg transition-colors">
-                Я понимаю и принимаю риски
-            </button>
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <button id="declineBlacklistWarningBtn" type="button" class="px-6 py-3 bg-transparent hover:bg-white/10 text-white font-semibold rounded-lg border border-white/60 transition-colors">
+                    Назад
+                </button>
+                <button id="acceptBlacklistWarningBtn" type="button" class="px-8 py-3 bg-yellow-400 hover:bg-yellow-500 text-red-800 font-bold rounded-lg shadow-lg transition-colors">
+                    Я понимаю и принимаю риски
+                </button>
+            </div>
         </div>
     `;
     document.body.appendChild(overlay);
     State.currentBlacklistWarningOverlay = overlay;
     document.body.classList.add('overflow-hidden');
 
-    const acceptBtn = overlay.querySelector('#acceptBlacklistWarningBtn');
-    acceptBtn.addEventListener('click', () => {
+    const onKey = (e) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            dismiss();
+            if (prevFocus && prevFocus.isConnected) prevFocus.focus?.({ preventScroll: true });
+        } else if (e.ctrlKey || e.altKey || e.metaKey) {
+            // пока открыт экран предупреждения, горячие клавиши (Ctrl+K и т. п.) не открывают окна под ним
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        } else if (e.key === 'Tab') {
+            // фокус не уходит под экран предупреждения
+            const btns = [...overlay.querySelectorAll('button')];
+            const i = btns.indexOf(document.activeElement);
+            e.preventDefault();
+            btns[(i + (e.shiftKey ? btns.length - 1 : 1)) % btns.length]?.focus();
+        }
+    };
+    function dismiss() {
+        document.removeEventListener('keydown', onKey, true);
         overlay.remove();
-        State.currentBlacklistWarningOverlay = null;
-        if (deps.getVisibleModals?.().length === 0) {
+        if (State.currentBlacklistWarningOverlay === overlay) State.currentBlacklistWarningOverlay = null;
+        if ((deps.getVisibleModals?.() || []).length === 0) {
             document.body.classList.remove('overflow-hidden');
         }
+    }
+    overlay._dismiss = dismiss;
+    document.addEventListener('keydown', onKey, true);
+
+    overlay.querySelector('#declineBlacklistWarningBtn').addEventListener('click', () => dismiss());
+    const acceptBtn = overlay.querySelector('#acceptBlacklistWarningBtn');
+    acceptBtn.addEventListener('click', () => {
+        dismiss();
         deps.setActiveTab?.('blacklistedClients', true);
     });
+    acceptBtn.focus({ preventScroll: true });
 }
 
 // ============================================================================

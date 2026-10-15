@@ -1808,7 +1808,7 @@ export function initGoogleDocSections() {
                          </div>
                     </div>
                     <div class="relative mb-4 flex-shrink-0">
-                        <input type="text" id="${section.id}-search-input" placeholder="Поиск по разделу..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
+                        <input type="text" id="${section.id}-search-input" aria-label="Поиск по разделу" placeholder="Поиск по разделу..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
                         <button id="${section.id}-search-clear-btn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700 hidden" title="Очистить поиск">
                             <i class="fas fa-times"></i>
                         </button>

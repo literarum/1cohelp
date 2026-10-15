@@ -975,7 +975,7 @@ export function renderSedoTypesContent(data, isEditing, searchQuery = '') {
         const searchContainer = document.createElement('div');
         searchContainer.className = 'relative mb-4 flex-shrink-0';
         searchContainer.innerHTML = `
-            <input type="text" id="sedoSearchInput" placeholder="Поиск по разделу СЭДО..." 
+            <input type="text" id="sedoSearchInput" aria-label="Поиск по разделу СЭДО" placeholder="Поиск по разделу СЭДО..." 
                    class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
             <button id="clearSedoSearchBtn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700 hidden" title="Очистить поиск">
                 <i class="fas fa-times"></i>

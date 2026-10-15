@@ -919,6 +919,7 @@ export async function addToSearchIndex(
     weight = 1,
     originalRefDetails = null,
 ) {
+    invalidateGlobalSemanticCorpus(); // данные меняются — семантический корпус глобального поиска собрать заново
     if (!State.db) {
         console.warn(`[addToSearchIndex V2] DB not ready. Word: ${word}, Type: ${type}, ID: ${id}`);
         return Promise.resolve();
@@ -1082,6 +1083,7 @@ export async function addToSearchIndex(
  * Удаляет элемент из поискового индекса
  */
 export async function removeFromSearchIndex(itemId, itemType) {
+    invalidateGlobalSemanticCorpus(); // данные меняются — семантический корпус глобального поиска собрать заново
     return removeManyFromSearchIndex(itemType, [itemId]);
 }
 
@@ -1093,6 +1095,7 @@ export async function removeFromSearchIndex(itemId, itemType) {
  * @param {Iterable<string|number>} itemIds
  */
 export async function removeManyFromSearchIndex(itemType, itemIds, opts = {}) {
+    invalidateGlobalSemanticCorpus(); // данные меняются — семантический корпус глобального поиска собрать заново
     if (!State.db) {
         return;
     }
@@ -1245,6 +1248,7 @@ async function removeAnalyticsRecordFromIndexByTokens(oldItemData) {
  * @param {(item: object) => object} [prepare] подготовка записи (например добавить _folderNameForIndex)
  */
 export async function bulkAddToSearchIndex(storeName, items, prepare = null) {
+    invalidateGlobalSemanticCorpus(); // данные меняются — семантический корпус глобального поиска собрать заново
     if (!State.db || !Array.isArray(items) || items.length === 0) return;
     const batch = new Map();
     const weights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
@@ -1330,6 +1334,7 @@ export async function updateSearchIndex(
     operation,
     oldItemData = null,
 ) {
+    invalidateGlobalSemanticCorpus(); // данные меняются — семантический корпус глобального поиска собрать заново
     const LOG_PREFIX_USI = `[updateSearchIndex V4 - Google Docs Logic]`;
 
     if (storeName === 'shablony') {
@@ -1739,6 +1744,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
  * Очищает и перестраивает поисковый индекс
  */
 export async function cleanAndRebuildSearchIndex() {
+    invalidateGlobalSemanticCorpus(); // данные меняются — семантический корпус глобального поиска собрать заново
     console.log('[cleanAndRebuildSearchIndex] Начало очистки и перестроения индекса...');
     try {
         await clearIndexedDBStore('searchIndex');
@@ -2621,6 +2627,20 @@ export async function performSearch(query) {
         );
         if (isStale()) return;
         limitedResults = semanticPass.results;
+        try {
+            if (localStorage.getItem('copilotDebug') === '1') {
+                window.__copilotLastSearch = limitedResults.map((r) => ({
+                    title: r.title,
+                    type: r.type,
+                    score: r.score,
+                    exact: !!r.isExactTitleMatch,
+                    phrase: !!r.isPhraseInContentMatch,
+                    semantic: !!r.semantic,
+                }));
+            }
+        } catch {
+            /* отладка недоступна */
+        }
         if (semanticPass.suggestion) limitedResults.suggestion = semanticPass.suggestion;
         const endTime = performance.now();
         const executionTime = endTime - startTime;

@@ -548,7 +548,9 @@ export class XmlDoc {
             processingInstructions: this.piCount,
             attributes: this.attrCount,
             maxDepth: this.maxDepth,
-            distinctNames: this.names.length,
+            // только имена элементов: общий словарь names содержит и имена атрибутов (было 4 тега → «12»)
+            distinctNames: byName.size,
+            distinctAllNames: this.names.length,
             distinctPaths: this.pathName.length - 1,
             rootName: root > 0 ? this.name(root) : '',
             rootLocalName: root > 0 ? this.localName(root) : '',
