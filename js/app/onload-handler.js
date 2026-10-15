@@ -55,8 +55,36 @@ export function registerOnloadHandler() {
             }
         }
 
-        const minDisplayTime = 5040;
-        const minDisplayTimePromise = new Promise((resolve) => setTimeout(resolve, minDisplayTime));
+        // Заставка показывается минимум ~5 с ради анимации, но готовое приложение не должно держать
+        // пользователя: клик/касание/любая клавиша пропускают ожидание и эффект выхода,
+        // а при «уменьшении движения» минимального времени нет вовсе.
+        const reducedMotion = (() => {
+            try {
+                return (
+                    document.documentElement.getAttribute('data-motion') === 'reduce' ||
+                    !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+                );
+            } catch {
+                return false;
+            }
+        })();
+        let overlaySkipped = reducedMotion;
+        let resolveSkip = null;
+        const skipPromise = new Promise((resolve) => {
+            resolveSkip = resolve;
+        });
+        const onSkip = (e) => {
+            if (e && e.type === 'keydown' && ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
+            overlaySkipped = true;
+            resolveSkip?.();
+        };
+        window.addEventListener('pointerdown', onSkip, { capture: true });
+        window.addEventListener('keydown', onSkip, { capture: true });
+        const minDisplayTime = reducedMotion ? 0 : 5040;
+        const minDisplayTimePromise = Promise.race([
+            new Promise((resolve) => setTimeout(resolve, minDisplayTime)),
+            skipPromise,
+        ]);
         let appInitSuccessfully = false;
 
         const appLoadPromise = Promise.resolve(deps.appInit?.())
@@ -68,6 +96,14 @@ export function registerOnloadHandler() {
                 console.error('appInit rejected in window.onload wrapper:', err);
                 appInitSuccessfully = false;
             });
+
+        appLoadPromise.then(() => {
+            if (overlaySkipped) return;
+            const lt = document.getElementById('loadingText');
+            if (lt && deps.loadingOverlayManager?.overlayElement) {
+                lt.textContent = 'Готово · нажмите, чтобы продолжить';
+            }
+        });
 
         Promise.all([minDisplayTimePromise, appLoadPromise])
             .then(async () => {
@@ -85,8 +121,11 @@ export function registerOnloadHandler() {
                 }
                 await new Promise((r) => setTimeout(r, 100));
 
-                if (deps.loadingOverlayManager?.runExitEffect) {
-                    await deps.loadingOverlayManager.runExitEffect();
+                window.removeEventListener('pointerdown', onSkip, { capture: true });
+                window.removeEventListener('keydown', onSkip, { capture: true });
+                if (deps.loadingOverlayManager?.runExitEffect && !overlaySkipped) {
+                    // эффект выхода тоже можно пропустить
+                    await Promise.race([deps.loadingOverlayManager.runExitEffect(), skipPromise]);
                     console.log('[window.onload Promise.all.then] Эффект выхода сферы завершён.');
                 }
 
