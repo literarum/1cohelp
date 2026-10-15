@@ -37,6 +37,7 @@ export function getOrCreateModal() {
             <input
               type="text"
               id="commandPaletteInput"
+              aria-label="Поиск команд"
               class="w-full px-4 py-3 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-base"
               placeholder="Поиск: алгоритмы, вкладки, действия… @действие @вкладка — фильтр по типу"
               autocomplete="off"
@@ -64,7 +65,7 @@ export function renderResults(results) {
     const countEl = modalEl?.querySelector('#commandPaletteCount');
     if (countEl)
         countEl.textContent =
-            results.length === 0 ? 'Нет результатов' : `Показано ${results.length}`;
+            results.length === 0 ? '' : `Показано ${results.length}`; // пустой случай уже показан в списке
     if (!listEl) return;
     listEl.innerHTML = '';
     if (results.length === 0) {
