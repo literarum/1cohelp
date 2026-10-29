@@ -145,6 +145,8 @@ let bmHadItems = false;
 let bmFilterSeq = 0;
 /** Текущий отрисованный (отфильтрованный) список — для «выбрать все». */
 let bmCurrentList = [];
+let bmSemanticScope = '';
+let bmSemanticOnly = false;
 
 const bmCollator = new Intl.Collator('ru');
 const bmSearchBlobCache = new WeakMap();
@@ -977,7 +979,7 @@ function buildBookmarkNode(bookmark, folderMap, mode) {
  * Рендерит закладки в контейнере (виртуализированно: в DOM только видимые карточки).
  * @param {object[]} bookmarks
  * @param {Object} folderMap
- * @param {{ keepScroll?: boolean, total?: number, filtered?: boolean }} [ropts]
+ * @param {{ keepScroll?: boolean, total?: number, filtered?: boolean, semanticItems?: Set<object> }} [ropts]
  */
 export async function renderBookmarks(bookmarks, folderMap = {}, ropts = {}) {
     let container = document.getElementById('bookmarksContainer');
@@ -1031,7 +1033,20 @@ export async function renderBookmarks(bookmarks, folderMap = {}, ropts = {}) {
     container.textContent = '';
     bmGrid = createVirtualGrid({
         container,
-        renderItem: (bm, _i, mode) => buildBookmarkNode(bm, folderMap, mode),
+        renderItem: (bm, _i, mode) => {
+            const node = buildBookmarkNode(bm, folderMap, mode);
+            if (node && ropts.semanticItems) {
+                const semantic = ropts.semanticItems.has(bm);
+                node.dataset.searchMatch = semantic ? 'semantic' : 'exact';
+                if (semantic) {
+                    const badge = document.createElement('span');
+                    badge.className = 'bookmark-search-match';
+                    badge.textContent = 'Близко по смыслу';
+                    node.querySelector('h3')?.insertAdjacentElement('afterend', badge);
+                }
+            }
+            return node;
+        },
         getViewMode: () => (container.dataset.view === 'list' ? 'list' : 'cards'),
         estimateRowHeight: (m) => (m === 'list' ? 84 : 200),
     });
@@ -1385,7 +1400,7 @@ export function getCurrentBookmarkFormState(form) {
  * Фильтрует и отображает закладки по поисковому запросу и папке.
  * Данные берутся из кэша; запрос, продолжающий предыдущий, сужает прежний результат;
  * устаревшие вызовы отбрасываются.
- * @param {Event|{keepScroll?: boolean, force?: boolean}} [arg]
+ * @param {Event|{keepScroll?: boolean, force?: boolean, semanticOnly?: boolean}} [arg]
  */
 export async function filterBookmarks(arg) {
     const opts = arg && typeof arg === 'object' && !('target' in arg) ? arg : {};
@@ -1403,6 +1418,12 @@ export async function filterBookmarks(arg) {
     const { textQuery, tagFilters } = parseSearchQueryTagsAndText(rawSearch);
     const searchValue = textQuery.toLowerCase();
     const selectedFolderValue = folderFilter.value;
+    const semanticScope = JSON.stringify([rawSearch, selectedFolderValue]);
+    if (bmSemanticScope !== semanticScope) {
+        bmSemanticScope = semanticScope;
+        bmSemanticOnly = false;
+    }
+    if (opts.semanticOnly !== undefined) bmSemanticOnly = !!opts.semanticOnly;
     const sortState = GlobalState.currentBookmarksSort || {
         criteria: 'date',
         direction: 'asc',
@@ -1466,25 +1487,38 @@ export async function filterBookmarks(arg) {
                     suggestion: ranked.suggestion,
                     semantic: Math.max(0, ranked.items.length - ranked.exactCount),
                     total: ranked.items.length,
+                    semanticItems: ranked.semanticItems,
                 };
             }
             sortedToDisplay = searchValue ? list : sortBookmarksList(list, folderMap, sortState);
             bmCache.result = { baseKey, search: searchValue, list: sortedToDisplay, info: searchInfo };
         }
         if (prev && prev.baseKey === baseKey && prev.search === searchValue) searchInfo = prev.info || null;
+        if (!searchInfo?.semantic) bmSemanticOnly = false;
         renderSearchHint(
             'bookmarkSearchHint',
             document.getElementById('bookmarksContainer'),
             document.getElementById('bookmarkSearchInput'),
-            searchValue ? searchInfo : null,
+            searchValue && searchInfo ? {
+                ...searchInfo,
+                semanticOnly: bmSemanticOnly,
+                onSemanticToggle: async () => {
+                    await filterBookmarks({ semanticOnly: !bmSemanticOnly });
+                    document.querySelector('#bookmarkSearchHint .search-hint-semantic')?.focus();
+                },
+            } : null,
         );
 
         if (seq !== bmFilterSeq) return;
         const filtered = !!searchValue || tagFilters.length > 0 || selectedFolderValue !== '';
+        if (bmSemanticOnly && searchInfo?.semanticItems) {
+            sortedToDisplay = sortedToDisplay.filter((bm) => searchInfo.semanticItems.has(bm));
+        }
         await renderBookmarks(sortedToDisplay, folderMap, {
             keepScroll: !!opts.keepScroll,
             total: allBookmarks.filter((bm) => bm.folder !== ARCHIVE_FOLDER_ID).length,
             filtered,
+            semanticItems: searchInfo?.semanticItems,
         });
 
         if (typeof window.ensureBookmarksScroll === 'function') {

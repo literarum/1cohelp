@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(__dirname, '../../..');
-const indexHtmlPath = join(repoRoot, 'site/index.html');
-const baseCssPath = join(repoRoot, 'site/css/base/base.css');
-const headerTemplatePath = join(repoRoot, 'site/templates/components/header.html');
+const repoRoot = join(__dirname, '../..');
+const indexHtmlPath = join(repoRoot, 'index.html');
+const baseCssPath = join(repoRoot, 'css/base/base.css');
+const headerTemplatePath = join(repoRoot, 'templates/components/header.html');
 
 /**
  * Регрессия: перенос кнопок в шапке и обрезка UI из-за overflow на внешнем кластере.

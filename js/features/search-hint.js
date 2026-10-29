@@ -13,7 +13,7 @@ function esc(s) {
  * @param {string} hintId id элемента подсказки
  * @param {HTMLElement|null} beforeEl перед каким элементом вставить
  * @param {HTMLInputElement|null} input поле поиска (для подстановки исправленного запроса)
- * @param {{ suggestion?: string|null, semantic?: number, total?: number }|null} info null — скрыть
+ * @param {{ suggestion?: string|null, semantic?: number, total?: number, semanticOnly?: boolean, onSemanticToggle?: function }|null} info null — скрыть
  */
 export function renderSearchHint(hintId, beforeEl, input, info) {
     if (typeof document === 'undefined') return;
@@ -30,6 +30,9 @@ export function renderSearchHint(hintId, beforeEl, input, info) {
                 ? 'Точных совпадений нет — показаны близкие по смыслу'
                 : `Ещё ${info.semantic} — близкие по смыслу (синонимы, опечатки, контекст)`,
         );
+        if (typeof info.onSemanticToggle === 'function') {
+            parts.push(`<button type="button" class="search-hint-semantic" aria-pressed="${!!info.semanticOnly}">${info.semanticOnly ? 'Показать все результаты' : `Показать только близкие (${info.semantic})`}</button>`);
+        }
     }
     if (!parts.length || !beforeEl || !beforeEl.parentNode) {
         if (el) el.remove();
@@ -41,6 +44,11 @@ export function renderSearchHint(hintId, beforeEl, input, info) {
         el.className = 'search-hint';
         el.setAttribute('role', 'status');
         el.addEventListener('click', (e) => {
+            const semanticButton = e.target.closest && e.target.closest('.search-hint-semantic');
+            if (semanticButton) {
+                el.onSemanticToggle?.();
+                return;
+            }
             const b = e.target.closest && e.target.closest('.search-hint-apply');
             if (!b || !input) return;
             input.value = b.dataset.q || '';
@@ -48,6 +56,7 @@ export function renderSearchHint(hintId, beforeEl, input, info) {
             input.focus();
         });
     }
+    el.onSemanticToggle = info?.onSemanticToggle;
     el.innerHTML = parts.join('<span class="search-hint-sep"> · </span>');
     if (el.nextSibling !== beforeEl) beforeEl.parentNode.insertBefore(el, beforeEl);
 }

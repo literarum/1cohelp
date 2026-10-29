@@ -569,18 +569,12 @@ html.dark #engineeringCockpitModal .engineering-cockpit-content::-webkit-scrollb
     color: var(--color-text-primary);
 }
 
-.cockpit-logrow--error {
-    border-left-color: #ef4444;
-}
 .cockpit-logrow--error .cockpit-logrow__lvl {
     background: #ef4444;
     color: #fff;
 }
 .cockpit-logrow--error .cockpit-logrow__msg {
     color: #ef4444;
-}
-.cockpit-logrow--warn {
-    border-left-color: #f59e0b;
 }
 .cockpit-logrow--warn .cockpit-logrow__lvl {
     background: #f59e0b;

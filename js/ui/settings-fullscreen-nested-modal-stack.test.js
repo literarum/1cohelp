@@ -12,9 +12,13 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MODALS_CSS_PATH = join(__dirname, '../../css/components/modals.css');
+const CUSTOMIZATION_CSS_PATH = join(__dirname, '../../css/components/customization-studio.css');
 
 function injectModalsCss() {
-    const css = readFileSync(MODALS_CSS_PATH, 'utf8');
+    // main.css composes both modules; the studio owns its overlay stacking rule.
+    const css = [MODALS_CSS_PATH, CUSTOMIZATION_CSS_PATH]
+        .map((path) => readFileSync(path, 'utf8'))
+        .join('\n');
     const style = document.createElement('style');
     style.setAttribute('data-test', 'modals-css');
     style.textContent = css;

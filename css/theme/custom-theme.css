@@ -676,7 +676,6 @@ body.custom-background-active
         .bg-red-50
     ) {
     background-color: var(--color-surface-2) !important;
-    border-left-width: 4px;
 }
 
 body.custom-background-active

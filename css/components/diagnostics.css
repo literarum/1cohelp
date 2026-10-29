@@ -527,14 +527,7 @@
     background: var(--dx-surface);
     margin-bottom: 8px;
     overflow: hidden;
-    border-left-width: 4px;
     transition: box-shadow 0.18s ease;
-}
-.dx-card--error {
-    border-left-color: var(--dx-err);
-}
-.dx-card--warn {
-    border-left-color: var(--dx-warn);
 }
 .dx-card:hover {
     box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.35);

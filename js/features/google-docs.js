@@ -82,7 +82,7 @@ export function setGoogleScriptUrl(value) {
     } catch {
         return false;
     }
-    googleDocNetworkFailedAt = 0;
+    googleDocFailures.clear();
     return true;
 }
 
@@ -94,7 +94,7 @@ function sleep(ms) {
 export class GoogleDocsError extends Error {
     /**
      * @param {string} message
-     * @param {{ kind?: string, status?: number|null, attempts?: number, chain?: string, url?: string, durationMs?: number }} [info]
+     * @param {{ kind?: string, status?: number|null, attempts?: number, chain?: string, url?: string, durationMs?: number, deferred?: boolean, retryAt?: number }} [info]
      */
     constructor(message, info = {}) {
         super(message);
@@ -105,6 +105,8 @@ export class GoogleDocsError extends Error {
         this.chain = info.chain || '';
         this.url = info.url || '';
         this.durationMs = info.durationMs ?? null;
+        this.deferred = Boolean(info.deferred);
+        this.retryAt = info.retryAt ?? null;
     }
 }
 
@@ -135,6 +137,8 @@ export function buildGoogleDocsErrorInfo(error) {
         chain: error?.chain || '',
         url: error?.url || '',
         durationMs: error?.durationMs ?? null,
+        deferred: Boolean(error?.deferred),
+        retryAt: error?.retryAt ?? null,
     };
 }
 
@@ -150,56 +154,57 @@ function normalizeNetworkError(errorLike) {
     const raw = errorLike.message || String(errorLike);
     const msg = String(raw);
     return isLikelyTransientNetworkError(msg)
-        ? 'Не удалось загрузить документ. Проверьте подключение к интернету и повторите попытку.'
+        ? 'Не удалось получить документ из Google Docs. Возможна сетевая блокировка или недоступность развёртывания Apps Script. Повторите позже или откройте «Диагностику».'
         : msg;
 }
 
 async function requestJsonViaFetch(requestUrl, timeoutMs) {
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    let timedOut = false;
     let timeoutId = null;
     const timeoutError = new Promise((_, reject) => {
         timeoutId = setTimeout(
-            () =>
+            () => {
+                timedOut = true;
                 reject(
                     new GoogleDocsError('Превышено время ожидания загрузки документа.', {
                         kind: 'timeout',
                     }),
-                ),
+                );
+                controller?.abort();
+            },
             timeoutMs,
         );
     });
-    let response;
+    const readResponse = async () => {
+        const response = await fetch(requestUrl, controller ? { signal: controller.signal } : undefined);
+        if (!response?.ok) {
+            throw new GoogleDocsError(`Ошибка загрузки: статус ${response?.status ?? 'unknown'}`, {
+                kind: 'http', status: response?.status ?? null,
+            });
+        }
+        if (typeof response.text !== 'function' && typeof response.json === 'function') {
+            try {
+                return await response.json();
+            } catch (err) {
+                throw classifyNonJsonBody('', err, response);
+            }
+        }
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (err) {
+            throw classifyNonJsonBody(text, err, response);
+        }
+    };
     try {
-        response = await Promise.race([fetch(requestUrl), timeoutError]);
+        return await Promise.race([readResponse(), timeoutError]);
     } catch (err) {
+        if (timedOut) throw new GoogleDocsError('Превышено время ожидания загрузки документа.', { kind: 'timeout' });
         if (err instanceof GoogleDocsError) throw err;
         throw new GoogleDocsError(err?.message || String(err), { kind: 'network' });
     } finally {
         if (timeoutId) clearTimeout(timeoutId);
-    }
-    if (!response?.ok) {
-        throw new GoogleDocsError(`Ошибка загрузки: статус ${response?.status ?? 'unknown'}`, {
-            kind: 'http',
-            status: response?.status ?? null,
-        });
-    }
-    // Транспорты/подмены без text() (только json()) остаются совместимыми: читаем как раньше.
-    if (typeof response.text !== 'function' && typeof response.json === 'function') {
-        try {
-            return await response.json();
-        } catch (err) {
-            throw classifyNonJsonBody('', err, response);
-        }
-    }
-    let text = '';
-    try {
-        text = await response.text();
-    } catch (err) {
-        throw new GoogleDocsError(`Ошибка чтения ответа: ${err?.message || String(err)}`, { kind: 'network' });
-    }
-    try {
-        return JSON.parse(text);
-    } catch (err) {
-        throw classifyNonJsonBody(text, err, response);
     }
 }
 
@@ -211,7 +216,8 @@ export function classifyNonJsonBody(text, err, response) {
     const head = String(text || '').slice(0, 4000);
     const isHtml = /^\s*<(!doctype|html|head|body|\?xml)/i.test(head) || /<title>/i.test(head);
     if (!isHtml) {
-        return new GoogleDocsError(`Ошибка разбора JSON: ${err?.message || String(err)}`, { kind: 'parse' });
+        // JSON.parse exceptions can contain excerpts of the document response.
+        return new GoogleDocsError('Ошибка разбора JSON: сервер вернул некорректные данные.', { kind: 'parse' });
     }
     const low = head.toLowerCase();
     let reason = 'html';
@@ -231,50 +237,10 @@ export function classifyNonJsonBody(text, err, response) {
     return new GoogleDocsError(text2, { kind: reason });
 }
 
-function requestJsonViaXhr(requestUrl, timeoutMs) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', requestUrl, true);
-        xhr.timeout = timeoutMs;
-        xhr.responseType = 'text';
-
-        xhr.onload = () => {
-            if (xhr.status < 200 || xhr.status >= 300) {
-                reject(
-                    new GoogleDocsError(`Ошибка загрузки: статус ${xhr.status}`, {
-                        kind: 'http',
-                        status: xhr.status,
-                    }),
-                );
-                return;
-            }
-            try {
-                resolve(JSON.parse(xhr.responseText || '[]'));
-            } catch (error) {
-                reject(
-                    new GoogleDocsError(`Ошибка разбора JSON: ${error.message || String(error)}`, {
-                        kind: 'parse',
-                    }),
-                );
-            }
-        };
-        xhr.onerror = () =>
-            reject(new GoogleDocsError('Ошибка сети при загрузке документа.', { kind: 'network' }));
-        xhr.ontimeout = () =>
-            reject(
-                new GoogleDocsError('Превышено время ожидания загрузки документа.', {
-                    kind: 'timeout',
-                }),
-            );
-        xhr.onabort = () =>
-            reject(new GoogleDocsError('Запрос загрузки документа был прерван.', { kind: 'network' }));
-        xhr.send();
-    });
-}
-
-/** После полного провала сети повторные запросы в течение окна не отправляем (иначе ~10 запросов на каждую загрузку/вкладку). */
+/** Повторные автоматические запросы к недоступному развёртыванию откладываем, ручной retry доступен всегда. */
 const GOOGLE_DOC_NEGATIVE_CACHE_MS = 30000;
-let googleDocNetworkFailedAt = 0;
+const GOOGLE_DOC_MAX_COOLDOWN_MS = 30 * 60 * 1000;
+const googleDocFailures = new Map();
 
 function sanitizeUrlForReport(requestUrl) {
     try {
@@ -289,10 +255,12 @@ async function requestGoogleDocJson(
     requestUrl,
     { force = false, retryDelays = GOOGLE_DOC_RETRY_DELAYS_MS } = {},
 ) {
-    if (!force && googleDocNetworkFailedAt && Date.now() - googleDocNetworkFailedAt < GOOGLE_DOC_NEGATIVE_CACHE_MS) {
+    const endpoint = sanitizeUrlForReport(requestUrl);
+    const previousFailure = googleDocFailures.get(endpoint);
+    if (!force && previousFailure && Date.now() < previousFailure.retryAt) {
         throw new GoogleDocsError(
-            'Сеть недоступна: повторный запрос отложен (недавний сбой). Нажмите «Повторить».',
-            { kind: 'network', url: sanitizeUrlForReport(requestUrl) },
+            `${previousFailure.error.message} Повторный запрос отложен после недавнего сбоя. Нажмите «Повторить».`,
+            { ...buildGoogleDocsErrorInfo(previousFailure.error), attempts: 0, deferred: true, retryAt: previousFailure.retryAt },
         );
     }
     const errors = [];
@@ -304,7 +272,7 @@ async function requestGoogleDocJson(
         attempts += 1;
         try {
             const json = await requestJsonViaFetch(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
-            googleDocNetworkFailedAt = 0;
+            googleDocFailures.delete(endpoint);
             return json;
         } catch (error) {
             lastFetchError = error;
@@ -314,6 +282,9 @@ async function requestGoogleDocJson(
             if (error?.kind === 'http' && !(st >= 500 || st === 429)) break;
             // ответ получен, но это не данные (страница входа / не найдено / квота / не JSON) — повторы бессмысленны
             if (['auth', 'notfound', 'quota', 'html', 'parse'].includes(error?.kind)) break;
+            // Failed to fetch не отличает потерю сети от отказа CORS. XHR и немедленный
+            // повтор не обходят ту же политику браузера; проверку зондами запускает пользователь.
+            if (error?.kind === 'network') break;
             const hasMoreAttempts = attempt < retryDelays.length;
             if (!hasMoreAttempts) break;
             // экспоненциальная пауза внутри цикла (+ небольшой джиттер)
@@ -321,38 +292,21 @@ async function requestGoogleDocJson(
         }
     }
 
-    // XHR — запасной транспорт только при сетевых сбоях (HTTP-ответ уже получен fetch-ем)
-    let finalError = lastFetchError;
-    if (!lastFetchError || lastFetchError.kind === 'network' || lastFetchError.kind === 'timeout') {
-        attempts += 1;
-        try {
-            const json = await requestJsonViaXhr(requestUrl, GOOGLE_DOC_REQUEST_TIMEOUT_MS);
-            googleDocNetworkFailedAt = 0;
-            return json;
-        } catch (error) {
-            finalError = lastFetchError || error;
-            errors.push(`xhr:${error?.message || String(error)}`);
-        }
-    }
-    if (!finalError || finalError.kind === 'network' || finalError.kind === 'timeout') {
-        googleDocNetworkFailedAt = Date.now();
-    }
+    const finalError = lastFetchError;
     const chain = errors.map((e) => e.replace(/\s+/g, ' ').trim()).join(' | ');
-    // «Failed to fetch» бывает и при блокировке сети, и когда Google ответил без CORS-заголовков
-    // (удалённое/закрытое развёртывание, страница входа). no-cors-запрос различает эти случаи.
-    let refinedKind = finalError?.kind || 'network';
-    if (refinedKind === 'network' && typeof fetch === 'function') {
-        const reachable = await probeReachable(requestUrl);
-        if (reachable === true) refinedKind = 'cors';
-    }
-    throw new GoogleDocsError(`${normalizeNetworkError(finalError)} [chain=${chain}]`, {
-        kind: refinedKind,
+    const count = (previousFailure?.count || 0) + 1;
+    const retryAt = Date.now() + Math.min(GOOGLE_DOC_MAX_COOLDOWN_MS, GOOGLE_DOC_NEGATIVE_CACHE_MS * 2 ** Math.min(count - 1, 6));
+    const error = new GoogleDocsError(`${normalizeNetworkError(finalError)} [chain=${chain}]`, {
+        kind: finalError?.kind || 'network',
         status: finalError?.status ?? null,
         attempts,
         chain,
         url: sanitizeUrlForReport(requestUrl),
         durationMs: Date.now() - startedAt,
+        retryAt,
     });
+    googleDocFailures.set(endpoint, { count, retryAt, error });
+    throw error;
 }
 
 /** true — сервер ответил (даже непрозрачным ответом); false — сеть/блокировка; null — не удалось определить. */
@@ -381,13 +335,21 @@ export async function testGoogleScriptConnection(url = getGoogleScriptUrl()) {
     }
     try {
         const json = await requestJsonViaFetch(requestUrl, 15000);
-        const ok = Array.isArray(json) || (json && !json.error);
+        const items = Array.isArray(json) ? json : Array.isArray(json?.content) ? json.content : null;
+        const item = items?.length === 1 ? items[0] : json?.[SHABLONY_DOC_ID];
+        const failure = json?.error ? json : item?.status === 'error' || item?.error ? item : null;
+        const data = Array.isArray(item) ? item : item?.content?.data ?? item?.data ?? item?.content ?? item?.paragraphs;
+        const ok = !failure && item != null &&
+            (item.docId == null || item.docId === SHABLONY_DOC_ID) &&
+            (item.status == null || item.status === 'success') && Array.isArray(data);
         return {
             ok,
-            kind: ok ? 'ok' : 'server',
+            kind: ok ? 'ok' : failure ? 'server' : 'format',
             ms: Math.round(performance.now() - t0),
-            title: ok ? 'Подключение работает' : 'Скрипт ответил ошибкой',
-            hint: ok ? 'Скрипт вернул данные.' : String(json?.message || 'Проверьте код скрипта и доступ к документу.'),
+            title: ok ? 'Подключение работает' : failure ? 'Скрипт ответил ошибкой' : 'Неверный формат ответа',
+            hint: ok ? 'Скрипт вернул данные.' : failure
+                ? String(failure.message || 'Проверьте код скрипта и доступ к документу.')
+                : 'Скрипт не вернул данные запрошенного документа. Проверьте код веб-приложения.',
         };
     } catch (error) {
         let kind = error?.kind || 'network';
@@ -471,7 +433,7 @@ export function getOriginalShablonyData() {
 const GOOGLE_DOC_SECTIONS = [
     {
         id: 'shablony',
-        docId: '1YIAViw2kOVh4UzLw8VjNns0PHD29lHLr_QaQs3jCGX4',
+        docId: SHABLONY_DOC_ID,
         title: 'Шаблоны',
     },
 ];
@@ -551,17 +513,9 @@ export async function fetchGoogleDocs(docIds, force = false, options = {}) {
 
     try {
         const results = await requestGoogleDocJson(requestUrl, {
-            force,
+            force: force && !options.background,
             retryDelays: options.retryDelays || GOOGLE_DOC_RETRY_DELAYS_MS,
         });
-        console.log(
-            '[fetchGoogleDocs] Получен ответ от API:',
-            results,
-            'Тип:',
-            typeof results,
-            'Является массивом:',
-            Array.isArray(results),
-        );
         if (results && results.error) {
             throw new GoogleDocsError(`Ошибка от сервера: ${results.message}`, { kind: 'server' });
         }
@@ -593,12 +547,6 @@ export async function fetchGoogleDocs(docIds, force = false, options = {}) {
                             ? { service: 'google-docs', kind: 'server' }
                             : undefined,
                 };
-                console.log(
-                    `[fetchGoogleDocs] Обработан элемент ${index}:`,
-                    result,
-                    'Извлечённые данные:',
-                    data,
-                );
                 return result;
             });
         }
@@ -650,7 +598,7 @@ export async function fetchGoogleDocs(docIds, force = false, options = {}) {
             });
         }
 
-        console.error('Неожиданный формат ответа от API:', results);
+        console.error('Неожиданный формат ответа от API Google Docs.');
         return docIds.map((id) => ({
             docId: id,
             data: [],
@@ -660,7 +608,9 @@ export async function fetchGoogleDocs(docIds, force = false, options = {}) {
     } catch (error) {
         const message = error?.message || String(error);
         const isNetworkError = /интернет|сеть|fetch|failed|network|socket|err_/i.test(message);
-        if (isNetworkError) {
+        if (error?.deferred) {
+            // Первичный сбой уже записан; отложенная попытка не создаёт новый сетевой журнал.
+        } else if (isNetworkError) {
             console.warn(`Ошибка при загрузке документов: ${message}`);
         } else {
             console.error(`Ошибка при загрузке документов: ${message}`);
@@ -706,7 +656,6 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
             if (!Array.isArray(rawData) || rawData.length === 0) {
                 console.warn(
                     '[renderGoogleDocContent] Шаблоны: данные пусты или неверный формат.',
-                    result,
                 );
                 container.innerHTML =
                     '<p class="p-4 text-center text-gray-500">Шаблоны не найдены.</p>';
@@ -714,7 +663,7 @@ export function renderGoogleDocContent(results, container, parentContainerId) {
             }
             const flatData = normalizeShablonyData(rawData);
             originalShablonyData = flatData;
-            if (result.docId) {
+            if (result.docId && result.status !== 'cached') {
                 saveGoogleDocCache(result.docId, flatData);
             }
             renderStyledParagraphs(container, flatData);
@@ -776,7 +725,7 @@ export function normalizeShablonyData(rawData) {
 
     const markers = ['', '⏩ ', '➧ ', '▸ '];
 
-    if (first && typeof first === 'object' && !Array.isArray(first)) {
+    if (first && typeof first === 'object' && !Array.isArray(first) && !('text' in first)) {
         const out = [];
         const headingKeyHints = [
             'heading',
@@ -888,7 +837,10 @@ export function parseShablonyContent(data) {
 
     data.forEach((p) => {
         const trimmedP = normalizeBrokenEntities(p).trim();
-        if (trimmedP === '') return;
+        if (trimmedP === '') {
+            if (currentBlock) currentBlock.content += '\n';
+            return;
+        }
 
         const level = getHeaderLevel(trimmedP);
 
@@ -903,7 +855,8 @@ export function parseShablonyContent(data) {
                 level: level,
                 originalIndex: blocks.length,
             };
-        } else if (currentBlock) {
+        } else {
+            if (!currentBlock) currentBlock = { title: 'Без категории', content: '', level: 1, originalIndex: blocks.length };
             currentBlock.content += trimmedP + '\n';
         }
     });
@@ -949,7 +902,7 @@ function flattenShablonyBlocksToLines(blocks) {
         const content = block.content || '';
         for (const line of content.split('\n')) {
             const t = normalizeBrokenEntities(String(line)).trim();
-            if (t) out.push(t);
+            out.push(t);
         }
     }
     return out;
@@ -981,6 +934,15 @@ export const __googleDocsInternals = {
     filterShablonyDataByQuery,
     flattenShablonyBlocksToLines,
 };
+
+function copyTemplateBlock(block) {
+    if (!block || typeof window.copyToClipboard !== 'function') return;
+    const text = Array.from(block.children)
+        .filter(child => !child.hasAttribute('data-copy-template'))
+        .map(child => child.innerText ?? child.textContent ?? '')
+        .join('\n');
+    if (text.trim()) window.copyToClipboard(text, 'Содержимое шаблона скопировано!');
+}
 
 /**
  * Render styled paragraphs for Shablony (из старого проекта)
@@ -1033,7 +995,10 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
                     line.trim().startsWith('➧') ||
                     line.trim().startsWith('▸')),
         );
-        if (hasHeaders) return data;
+        if (hasHeaders) {
+            const firstContent = data.find(line => String(line || '').trim());
+            return firstContent && !/^[⏩➧▸]/u.test(String(firstContent).trim()) ? ['⏩ Без категории', ...data] : data;
+        }
         const plain = data.map((line) => (line == null ? '' : String(line).trim())).filter(Boolean);
         if (!plain.length) return data;
         return ['➧ Шаблоны', ...plain];
@@ -1064,7 +1029,16 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
 
     normalizedData.forEach((p) => {
         const trimmedP = normalizeBrokenEntities(p).trim();
-        if (trimmedP === '') return;
+        if (trimmedP === '') {
+            if (currentBlockWrapper) {
+                const spacer = document.createElement('div');
+                spacer.dataset.templateSpacer = '';
+                spacer.className = 'h-3';
+                spacer.setAttribute('aria-hidden', 'true');
+                currentBlockWrapper.appendChild(spacer);
+            }
+            return;
+        }
 
         let level = 0;
         if (trimmedP.startsWith('⏩')) level = 1;
@@ -1088,6 +1062,16 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
             header.innerHTML = highlight(trimmedP.slice(1).trim());
             header.style.color = 'var(--color-text-primary, #e5e7eb)';
             currentBlockWrapper.appendChild(header);
+            if (level === 2) {
+                const copyButton = document.createElement('button');
+                copyButton.type = 'button';
+                copyButton.dataset.copyTemplate = '';
+                copyButton.className = 'px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 focus-visible:ring-2 focus-visible:ring-primary';
+                copyButton.textContent = 'Скопировать';
+                copyButton.setAttribute('aria-label', `Скопировать шаблон «${header.textContent}»`);
+                copyButton.addEventListener('click', () => copyTemplateBlock(copyButton.parentElement));
+                currentBlockWrapper.appendChild(copyButton);
+            }
             fragment.appendChild(currentBlockWrapper);
         } else if (currentBlockWrapper) {
             if (
@@ -1095,8 +1079,8 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
                 trimmedP.startsWith('* ') ||
                 trimmedP.startsWith('- ')
             ) {
-                let list = currentBlockWrapper.querySelector('ul');
-                if (!list) {
+                let list = currentBlockWrapper.lastElementChild;
+                if (!list || list.tagName !== 'UL') {
                     list = document.createElement('ul');
                     list.className = 'list-disc list-inside space-y-1 mb-2 pl-4';
                     currentBlockWrapper.appendChild(list);
@@ -1235,7 +1219,7 @@ function describeErrorShort(info) {
         case 'parse':
             return 'Сервер вернул данные в неожиданном формате.';
         case 'cors':
-            return 'Google отвечает, но скрипт недоступен браузеру (удалён или закрыт для «Всех»).';
+            return 'Ответ Google недоступен браузеру: возможен отказ CORS или ограничение доступа к скрипту.';
         case 'auth':
             return 'Google просит войти в аккаунт: скрипт не опубликован для «Всех».';
         case 'notfound':
@@ -1510,6 +1494,7 @@ export function syncGoogleDocsNow(opts = {}) {
             let thrown = null;
             try {
                 results = await fetchGoogleDocs([docId], force, {
+                    background,
                     retryDelays: background
                         ? GOOGLE_DOC_BACKGROUND_RETRY_DELAYS_MS
                         : GOOGLE_DOC_RETRY_DELAYS_MS,
@@ -1534,16 +1519,34 @@ export function syncGoogleDocsNow(opts = {}) {
                         attempts: errItem?.errorInfo?.attempts ?? null,
                         chain: errItem?.errorInfo?.chain || '',
                         url: errItem?.errorInfo?.url || '',
+                        deferred: errItem?.errorInfo?.deferred,
+                        retryAt: errItem?.errorInfo?.retryAt,
                     });
                 }
                 // Пустой, но успешный ответ — не сбой связи
                 if (!thrown && !errItem && Array.isArray(results)) {
-                    gdocsConnection.status = prevStatus === 'syncing' ? 'ok' : prevStatus;
+                    originalShablonyData = [];
+                    const emptyContainer = document.getElementById(containerId);
+                    if (emptyContainer) {
+                        renderStyledParagraphs(emptyContainer, []);
+                        updateGoogleDocStatusMessage(containerId, { visible: false, message: '' });
+                    }
+                    try { localStorage.removeItem(getGoogleDocCacheKey(docId)); } catch { /* storage may be unavailable */ }
+                    lastRenderedSignature = dataSignature(results);
+                    await updateShablonySearchIndex(docId, results);
+                    State.googleDocTimestamps = State.googleDocTimestamps || new Map();
+                    State.googleDocTimestamps.set(docId, Date.now());
+                    updateRefreshButtonTimestamps();
                     recordSyncSuccess({ reason });
-                    return { ok: true, changed: false, empty: true };
+                    return { ok: true, changed: true, empty: true };
                 }
                 const cached = loadGoogleDocCacheEntry(docId);
-                recordSyncFailure(error, { reason, usingCache: Boolean(cached) });
+                if (error.deferred && prevStatus === 'error') {
+                    gdocsConnection.status = prevStatus;
+                    emitConnection();
+                } else {
+                    recordSyncFailure(error, { reason, usingCache: Boolean(cached) });
+                }
                 return {
                     ok: false,
                     error,
@@ -1809,7 +1812,7 @@ export function initGoogleDocSections() {
                     </div>
                     <div class="relative mb-4 flex-shrink-0">
                         <input type="text" id="${section.id}-search-input" aria-label="Поиск по разделу" placeholder="Поиск по разделу..." class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-gray-100">
-                        <button id="${section.id}-search-clear-btn" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white-700 hidden" title="Очистить поиск">
+                        <button type="button" id="${section.id}-search-clear-btn" aria-label="Очистить поиск по шаблонам" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hidden" title="Очистить поиск">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -1854,17 +1857,14 @@ export function initGoogleDocSections() {
                 const docContainer = document.getElementById(`doc-content-${section.id}`);
                 if (docContainer && typeof window.copyToClipboard === 'function') {
                     docContainer.addEventListener('click', (event) => {
-                        const block = event.target.closest('.shablony-block');
+                        const block = event.target.closest('.copyable-block');
                         if (!block) return;
 
-                        if (event.target.closest('a')) {
+                        if (event.target.closest('a, button') || window.getSelection()?.toString()) {
                             return;
                         }
 
-                        const textToCopy = block.innerText;
-                        if (textToCopy) {
-                            window.copyToClipboard(textToCopy, 'Содержимое шаблона скопировано!');
-                        }
+                        copyTemplateBlock(block);
                     });
                 }
                 if (docContainer) {

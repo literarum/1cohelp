@@ -28,6 +28,12 @@ describe('diagnostics-core: слои', () => {
 });
 
 describe('diagnostics-core: диагноз Google Docs', () => {
+    it.each(['cors', 'auth', 'notfound', 'html', 'quota', 'blocked', 'future-kind'])('always explains %s without an undefined reason', (kind) => {
+        const diagnosis = diagnoseIssue({ title: 'Google Docs', message: 'External failure', errorInfo: { kind } }, { env: envOnline });
+        expect(diagnosis.cause).toEqual(expect.any(String));
+        expect(diagnosis.cause.length).toBeGreaterThan(0);
+        expect(diagnosis.cause).not.toContain('undefined');
+    });
     it('офлайн: очевидная причина', () => {
         const d = diagnoseIssue(
             { title: 'Google Docs / Шаблоны', message: 'Нет подключения', errorInfo: { kind: 'offline', service: 'google-docs' } },

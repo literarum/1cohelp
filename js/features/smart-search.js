@@ -126,30 +126,32 @@ export function createMatcher(query) {
  * @param {string} query
  * @param {(item:T)=>Array<string|{text:string,weight?:number}>} getFields
  * @param {{ cacheKey?: string, limit?: number }} [opts] cacheKey — имя корпуса для кэша индекса
- * @returns {{ items: T[], soft: boolean, suggestion: string|null, why: Map<T,string[]>, exactCount: number }}
+ * @returns {{ items: T[], soft: boolean, suggestion: string|null, why: Map<T,string[]>, exactCount: number, semanticItems: Set<T> }}
  */
 export function rankItems(items, query, getFields, opts = {}) {
-    const empty = { items, soft: false, suggestion: null, why: new Map(), exactCount: items.length };
+    const empty = { items, soft: false, suggestion: null, why: new Map(), exactCount: items.length, semanticItems: new Set() };
     if (!query || !String(query).trim()) return empty;
     try {
         const docs = items.map((it, i) => ({ id: i, fields: getFields(it) }));
         const index = opts.cacheKey ? getSemanticIndex(opts.cacheKey, docs) : new SemanticIndex(docs);
         const res = index.search(query, { limit: opts.limit || Math.max(items.length, 1) });
         const why = new Map();
+        const semanticItems = new Set();
         let exactCount = 0;
         const out = res.hits.map((h) => {
             const it = items[h.id];
             if (h.why.length) why.set(it, h.why);
             if (h.exact) exactCount++;
+            else semanticItems.add(it);
             return it;
         });
-        return { items: out, soft: res.soft, suggestion: res.suggestion || null, why, exactCount };
+        return { items: out, soft: res.soft, suggestion: res.suggestion || null, why, exactCount, semanticItems };
     } catch (e) {
         console.error('rankItems: семантический поиск недоступен, используется простой', e);
         const m = createMatcher(query);
         if (m.empty) return empty;
         const kept = items.filter((it) => m.score(getFields(it), 'all') > 0);
-        return { items: kept, soft: false, suggestion: null, why: new Map(), exactCount: kept.length };
+        return { items: kept, soft: false, suggestion: null, why: new Map(), exactCount: kept.length, semanticItems: new Set() };
     }
 }
 

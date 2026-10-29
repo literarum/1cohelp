@@ -57,6 +57,17 @@ describe('smart-search', () => {
         expect(createMatcher('').empty).toBe(true);
     });
 
+    it('сохраняет классификацию каждого близкого совпадения отдельно от точных', () => {
+        const exact = { t: 'ЭЦП руководителя' };
+        const semantic = { t: 'Установка сертификата' };
+        const result = rankItems([exact, semantic], 'эцп', (item) => [item.t]);
+        expect(result.items).toContain(exact);
+        expect(result.items).toContain(semantic);
+        expect(result.exactCount).toBe(1);
+        expect(result.semanticItems).toEqual(new Set([semantic]));
+        expect(rankItems([exact], '', (item) => [item.t]).semanticItems.size).toBe(0);
+    });
+
     it('мусорные запросы ничего не находят', () => {
         const items = [{ t: 'Подпись' }];
         expect(rankItems(items, 'зщ', (x) => [x.t]).items).toEqual([]);

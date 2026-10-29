@@ -71,8 +71,8 @@ html.dark
     #appCustomizationModal .p-content.overflow-y-auto.flex-1,
     #engineeringCockpitModal .engineering-cockpit-content
 )::-webkit-scrollbar {
-    width: 4px !important;
-    height: 4px !important;
+    width: 8px !important;
+    height: 8px !important;
 }
 
 :is(

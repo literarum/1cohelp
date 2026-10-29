@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const cssUrl = new URL('../../css/components/modals.css', import.meta.url);
-async function loadCss() {
-    if (typeof window !== 'undefined' && typeof fetch === 'function' && cssUrl.protocol.startsWith('http')) {
-        return (await fetch(cssUrl)).text();
-    }
-    const { readFileSync } = await import('node:fs');
-    return readFileSync(cssUrl, 'utf8');
-}
-const css = await loadCss();
+const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../../css/components/modals.css'),
+    'utf8',
+);
 
 describe('полноэкранный режим модалок', () => {
     it('перебивает общий лимит .modal-inner-container (920px / 90vh)', () => {

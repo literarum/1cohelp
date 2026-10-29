@@ -479,7 +479,7 @@ class VirtualTree {
         });
         if (index !== undefined) row.style.height = ROW_H + 'px';
         const depth = Math.min(doc.depth[n], 40);
-        row.style.paddingLeft = 6 + depth * 14 + 'px';
+        row.style.paddingLeft = `min(${6 + depth * 14}px, 35%)`;
         const hasKids = doc.first[n] >= 0;
         if (k === NODE_KIND.ELEMENT) {
             row.setAttribute('aria-expanded', hasKids ? (this.expanded[n] ? 'true' : 'false') : 'false');
@@ -562,6 +562,68 @@ export function createExplorerView(ctx) {
     const { doc, meta = {}, requisites, sign, findings, notify } = ctx;
     const root = h('div', { class: 'xa-result' });
     const disposers = [];
+    let fullscreen = null;
+    let fullscreenAnchor = null;
+    let savedBodyOverflow = '';
+    let expandButton;
+    function setExpanded(expanded) {
+        const label = expanded ? 'Обычный вид' : 'На весь экран';
+        expandButton?.setAttribute('aria-expanded', String(expanded));
+        expandButton?.setAttribute('aria-label', label);
+        if (expandButton) {
+            expandButton.querySelector('span').textContent = label;
+            expandButton.querySelector('i').className = `fas ${expanded ? 'fa-compress' : 'fa-expand'}`;
+        }
+    }
+
+    function leaveFullscreen() {
+        if (!fullscreen) return;
+        const dialog = fullscreen;
+        fullscreen = null;
+        if (fullscreenAnchor?.isConnected) fullscreenAnchor.replaceWith(root);
+        else root.remove();
+        fullscreenAnchor = null;
+        if (dialog.open) dialog.close();
+        dialog.remove();
+        document.body.style.overflow = savedBodyOverflow;
+        setExpanded(false);
+        if (expandButton?.isConnected) expandButton.focus({ preventScroll: true });
+    }
+
+    function enterFullscreen() {
+        if (fullscreen || !root.isConnected) return;
+        const dialog = h('dialog', { class: 'xa-fullscreen-dialog', 'aria-label': 'Анализатор XML — полный экран' });
+        if (typeof dialog.showModal !== 'function') {
+            say('Этот браузер не поддерживает разворачивание рабочей области', 'warning');
+            return;
+        }
+        fullscreenAnchor = document.createComment('XML workspace');
+        root.before(fullscreenAnchor);
+        const close = button('Вернуться', { icon: 'fa-compress', title: 'Вернуться к обычному просмотру (Esc)', onclick: leaveFullscreen });
+        dialog.append(h('div', { class: 'xa-fullscreen-bar' }, h('span', { text: 'Анализатор XML' }), close), root);
+        document.body.appendChild(dialog);
+        fullscreen = dialog;
+        savedBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        dialog.addEventListener('cancel', (event) => { event.preventDefault(); leaveFullscreen(); });
+        dialog.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                leaveFullscreen();
+            }
+        });
+        dialog.addEventListener('close', leaveFullscreen);
+        try {
+            dialog.showModal();
+            setExpanded(true);
+            close.focus({ preventScroll: true });
+        } catch (error) {
+            leaveFullscreen();
+            say(`Не удалось развернуть рабочую область: ${error.message}`, 'error');
+        }
+    }
+    disposers.push(leaveFullscreen);
 
     const say = (m, t = 'success') => notify && notify(m, t);
     const copy = async (text, okMsg = 'Скопировано') => {
@@ -651,10 +713,11 @@ export function createExplorerView(ctx) {
         panels.appendChild(panel);
     }
     tablist.addEventListener('keydown', (e) => {
-        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
         const ids = tabs.map((t) => t.id);
         let i = ids.indexOf(active);
-        i = (i + (e.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length;
+        i = e.key === 'Home' ? 0 : e.key === 'End' ? ids.length - 1 :
+            (i + (e.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length;
         activate(ids[i], { focus: true });
         e.preventDefault();
     });
@@ -670,6 +733,10 @@ export function createExplorerView(ctx) {
         }
         if (meta.encodingUsed) chips.push(['fa-font', meta.encodingUsed]);
         const actions = h('div', { class: 'xa-actions' });
+        expandButton = button('На весь экран', { icon: 'fa-expand', onclick: () => fullscreen ? leaveFullscreen() : enterFullscreen() });
+        expandButton.setAttribute('data-xa-expand', '');
+        expandButton.setAttribute('aria-expanded', 'false');
+        actions.appendChild(expandButton);
         if (doc) {
             actions.appendChild(button('Копировать сводку', { icon: 'fa-copy', title: 'Скопировать текстовую сводку анализа для тикета', onclick: () => copy(textReport(), 'Сводка скопирована — вставьте её в тикет') }));
             actions.appendChild(button('JSON', { icon: 'fa-file-code', title: 'Скачать документ как JSON', onclick: exportJson }));
@@ -1018,8 +1085,9 @@ export function createExplorerView(ctx) {
                             'div',
                             { class: 'xa-attr' + (selAttr === a.name ? ' xa-attr-sel' : '') },
                             h('button', { type: 'button', class: 'xa-attr-name xa-mono', title: 'Показать путь к атрибуту', onclick: () => { selAttr = a.name; pathCode.textContent = doc.pathOf(n, a.name); } , text: a.name }),
-                            h('span', { class: 'xa-attr-val xa-mono', text: a.value.length > 2000 ? a.value.slice(0, 2000) + '…' : a.value }),
-                            chk && (chk.status === 'ok' || chk.status === 'error') && (kind !== 'date' && kind !== 'amount') ? badge(chk.status === 'ok' ? '✓' : '✗', chk.status, chk.note) : null,
+                            h('span', { class: 'xa-attr-val xa-mono' },
+                                a.value.length > 2000 ? a.value.slice(0, 2000) + '…' : a.value,
+                                chk && (chk.status === 'ok' || chk.status === 'error') && (kind !== 'date' && kind !== 'amount') ? [' ', badge(chk.status === 'ok' ? '✓' : '✗', chk.status, chk.note)] : null),
                             button('', { icon: 'fa-copy', title: 'Копировать значение', cls: 'xa-btn-icon', onclick: () => copy(a.value) }),
                         ),
                     );
@@ -1290,14 +1358,19 @@ export function createExplorerView(ctx) {
     function certCard(c) {
         const st = certValidityState(c.validity);
         const lvl = st.state === 'valid' ? 'ok' : st.state === 'soon' ? 'warn' : st.state === 'unknown' ? 'info' : 'error';
-        const body = h('div', { class: 'xa-stats' });
+        const body = h('div', { class: 'xa-cert-body' });
         const s = c.subject || {};
         const idv = (k, kind) => {
             if (!s[k]) return null;
             const chk = checkRequisite(kind, s[k]);
             return h('div', { class: 'xa-kv' }, h('span', { class: 'xa-k', text: REQUISITE_LABELS[kind] || k }), h('span', { class: 'xa-v xa-mono' }, s[k], ' ', chk.status === 'ok' ? badge('корректно', 'ok', chk.note) : chk.status === 'error' ? badge('ошибка', 'error', chk.note) : null));
         };
-        [
+        const section = (title, rows) => {
+            const fields = rows.filter(Boolean);
+            if (fields.length) body.appendChild(h('section', { class: 'xa-cert-section' },
+                h('h4', { class: 'xa-cert-section-title', text: title }), h('div', { class: 'xa-stats' }, fields)));
+        };
+        section('Владелец', [
             kv('Владелец', c.ownerFio),
             kv('Организация', s.O),
             kv('Должность', s.T),
@@ -1307,13 +1380,17 @@ export function createExplorerView(ctx) {
             idv('OGRN', 'ogrn'),
             idv('OGRNIP', 'ogrn'),
             kv('Email', s.E),
+        ]);
+        section('Срок действия и издатель', [
+            kv('Действителен с', c.validity.notBefore ? new Date(c.validity.notBefore).toLocaleString('ru-RU') : ''),
+            kv('Действителен по', c.validity.notAfter ? new Date(c.validity.notAfter).toLocaleString('ru-RU') : '', { level: lvl === 'ok' ? null : lvl }),
             kv('Издатель', c.issuer && (c.issuer.CN || c.issuer.O)),
-            kv('Организация-издатель', c.issuer && c.issuer.O && c.issuer.CN ? c.issuer.O : ''),
+            kv('Организация-издатель', c.issuer?.O && c.issuer.CN && c.issuer.O !== c.issuer.CN ? c.issuer.O : ''),
+        ]);
+        section('Технические сведения', [
             kv('Серийный номер', c.serialNumber, { mono: true }),
             kv('Отпечаток SHA-1', c.thumbprint, { mono: true }),
             kv('Отпечаток SHA-256', c.thumbprintSha256, { mono: true }),
-            kv('Действителен с', c.validity.notBefore ? new Date(c.validity.notBefore).toLocaleString('ru-RU') : ''),
-            kv('Действителен по', c.validity.notAfter ? new Date(c.validity.notAfter).toLocaleString('ru-RU') : '', { level: lvl === 'ok' ? null : lvl }),
             kv('Алгоритм ключа', c.publicKeyAlgorithm && c.publicKeyAlgorithm.name),
             kv('Алгоритм подписи', c.signatureAlgorithm && c.signatureAlgorithm.name),
             kv('Использование ключа', ((c.extensions || []).find((e) => e.name === 'keyUsage') || {}).keyUsage?.join(', ')),
@@ -1321,15 +1398,15 @@ export function createExplorerView(ctx) {
             kv('Точки отзыва (CRL)', ((c.extensions || []).find((e) => e.name === 'cRLDistributionPoints') || {}).urls?.slice(0, 3).join(' ')),
             kv('Найден', c.source),
             c.selfSigned ? kv('Самоподписанный', 'да') : null,
-        ].forEach((r) => r && body.appendChild(r));
-        const acts = h('div', { class: 'xa-det-acts' });
+        ]);
+        const acts = h('div', { class: 'xa-det-acts xa-cert-actions', role: 'group', 'aria-label': 'Действия с сертификатом' });
         acts.appendChild(button('Скачать .cer', { icon: 'fa-download', onclick: () => downloadBase64(c.base64, `certificate_${c.thumbprint.slice(0, 8)}.cer`) }));
         acts.appendChild(button('Копировать PEM', { icon: 'fa-copy', onclick: () => copy(certToPem(c.base64), 'Сертификат (PEM) скопирован') }));
         acts.appendChild(button('Копировать отпечаток', { icon: 'fa-fingerprint', onclick: () => copy(c.thumbprint, 'Отпечаток скопирован') }));
         if (doc && c.node) acts.appendChild(button('В дереве', { icon: 'fa-location-crosshairs', onclick: () => locate(c.node) }));
         if (ctx.showCertificate) acts.appendChild(button('Подробнее', { icon: 'fa-circle-info', onclick: () => ctx.showCertificate(c) }));
         body.appendChild(acts);
-        return card(c.ownerFio || 'Сертификат', 'fa-certificate', body, { cls: `xa-card-${lvl}`, actions: badge(st.label, lvl) });
+        return card(c.ownerFio || 'Сертификат', 'fa-certificate', body, { cls: `xa-cert-card xa-card-${lvl}`, actions: badge(st.label, lvl) });
     }
 
     function downloadBase64(b64, name) {
@@ -1343,7 +1420,18 @@ export function createExplorerView(ctx) {
         const wrap = h('div', { class: 'xa-compare' });
         const host = h('div', { class: 'xa-cmp-host' });
         const select = h('select', { class: 'xa-input xa-select', 'aria-label': 'Документ для сравнения' });
-        const bar = h('div', { class: 'xa-cmp-bar' }, h('span', { class: 'xa-muted', text: 'Сравнить с:' }), select, button('Загрузить второй файл', { icon: 'fa-upload', onclick: () => ctx.requestSecondFile && ctx.requestSecondFile() }));
+        const upload = button('Загрузить второй XML', { icon: 'fa-upload', onclick: () => ctx.requestSecondFile && ctx.requestSecondFile() });
+        const bar = h('div', { class: 'xa-cmp-bar' }, h('label', { class: 'xa-cmp-field' }, h('span', { class: 'xa-cmp-label', text: 'Документ для сравнения' }), select), upload);
+        let diffTimer = 0;
+        disposers.push(() => clearTimeout(diffTimer));
+        function showEmpty() {
+            clearTimeout(diffTimer);
+            delete host.dataset.done;
+            host.replaceChildren(h('div', { class: 'xa-cmp-empty' },
+                h('i', { class: 'fas fa-code-compare', 'aria-hidden': 'true' }),
+                h('h3', { text: 'Сравните два документа' }),
+                h('p', { text: others.length ? 'Выберите документ в списке выше — здесь появятся изменения структуры и значений.' : 'Загрузите второй XML — изменения структуры и значений появятся здесь.' })));
+        }
         function refreshOptions() {
             const others = (ctx.getOtherDocs ? ctx.getOtherDocs() : []).filter((d) => d.doc !== doc);
             select.replaceChildren(h('option', { value: '', text: others.length ? 'Выберите документ…' : 'Нет других загруженных документов' }), ...others.map((d) => h('option', { value: d.id, text: d.name })));
@@ -1354,20 +1442,24 @@ export function createExplorerView(ctx) {
         select.addEventListener('change', () => {
             const d = others.find((x) => x.id === select.value);
             if (d) runDiff(d);
+            else showEmpty();
         });
         panelHooks.compare = () => {
             const prev = select.value;
             others = refreshOptions();
-            if (prev && others.some((o) => o.id === prev)) select.value = prev;
+            if (!others.length) showEmpty();
+            else if (prev && others.some((o) => o.id === prev)) select.value = prev;
             else if (others.length === 1 && !host.dataset.done) {
                 select.value = others[0].id;
                 runDiff(others[0]);
             }
+            else if (prev) showEmpty();
         };
         function runDiff(other) {
             host.dataset.done = '1';
+            clearTimeout(diffTimer);
             host.replaceChildren(h('p', { class: 'xa-empty', text: 'Сравнение…' }));
-            setTimeout(() => {
+            diffTimer = setTimeout(() => {
                 let diff;
                 try {
                     diff = diffDocs(doc, other.doc);
@@ -1427,7 +1519,7 @@ export function createExplorerView(ctx) {
             return h('div', null, h('p', { class: 'xa-hint', text: `«${meta.fileName || 'Документ'}» (было) → «${other.name}» (стало)${diff.capped ? '. Документы очень большие: сравнены первые 300 000 элементов.' : ''}` }), summary, filterBar, list);
         }
         wrap.append(bar, host);
-        if (!others.length) host.appendChild(h('p', { class: 'xa-empty', text: 'Загрузите второй XML (кнопка выше или перетащите несколько файлов сразу) — будут показаны отличия по структуре и значениям.' }));
+        if (others.length !== 1) showEmpty();
         return wrap;
     }
 
@@ -1441,6 +1533,10 @@ export function createExplorerView(ctx) {
 
     return {
         element: root,
+        mount(container) {
+            // Re-presenting a session must move its return location, not the live dialog content.
+            container.appendChild(fullscreen ? fullscreenAnchor : root);
+        },
         activate,
         destroy() {
             disposers.forEach((d) => d());

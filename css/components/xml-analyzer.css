@@ -19,6 +19,7 @@
     --xa-text: var(--color-text-primary, #111827);
     color: var(--xa-text);
     min-width: 0;
+    container: xml-result / inline-size;
     animation: xa-fade-in 220ms ease-out both;
 }
 html.dark .xa-result {
@@ -145,12 +146,14 @@ html.dark .xa-result {
 
 /* Вкладки */
 .xa-tabs {
-    display: flex;
-    gap: 0.25rem;
-    overflow-x: auto;
-    border-bottom: 1px solid var(--xa-border);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding: 0.35rem;
+    border: 1px solid var(--xa-border);
+    border-radius: 0.75rem;
+    background: var(--xa-bg);
     margin-bottom: 0.75rem;
-    scrollbar-width: thin;
 }
 .xa-tab {
     display: inline-flex;
@@ -159,12 +162,15 @@ html.dark .xa-result {
     padding: 0.5rem 0.55rem;
     font-size: 0.85rem;
     font-weight: 600;
-    white-space: nowrap;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.35;
     color: var(--xa-muted);
     background: transparent;
     border: 0;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
+    border-radius: 0.45rem;
+    min-height: 2.75rem;
     cursor: pointer;
     transition: color 140ms, border-color 140ms, background-color 140ms;
 }
@@ -174,7 +180,16 @@ html.dark .xa-result {
 }
 .xa-tab-active {
     color: var(--color-primary, #9933ff);
-    border-bottom-color: var(--color-primary, #9933ff);
+    background: var(--xa-card);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--xa-text) 10%, transparent);
+}
+.xa-tab-label { min-width: 0; white-space: normal; }
+.xa-tab > i, .xa-tab-count { flex-shrink: 0; }
+@container xml-result (min-width: 32rem) {
+    .xa-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container xml-result (min-width: 65rem) {
+    .xa-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 .xa-tab-count {
     font-size: 0.7rem;
@@ -213,13 +228,13 @@ html.dark .xa-result {
     margin-bottom: 0;
 }
 .xa-card-ok {
-    border-left: 4px solid var(--xa-ok);
+    border-color: var(--xa-border);
 }
 .xa-card-warn {
-    border-left: 4px solid var(--xa-warn);
+    border-color: var(--xa-border);
 }
 .xa-card-error {
-    border-left: 4px solid var(--xa-err);
+    border-color: var(--xa-border);
 }
 .xa-card-head {
     display: flex;
@@ -318,10 +333,9 @@ html.dark .xa-result {
 
 /* Ключ-значение */
 .xa-kv {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(7rem, 36%) minmax(0, 1fr);
     gap: 0.15rem 0.75rem;
-    justify-content: space-between;
     padding: 0.35rem 0;
     border-bottom: 1px dashed var(--xa-border);
     font-size: 0.875rem;
@@ -332,11 +346,11 @@ html.dark .xa-result {
 .xa-k {
     color: var(--xa-muted);
     font-weight: 600;
-    flex: 0 0 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .xa-v {
-    flex: 1 1 12rem;
-    text-align: right;
+    text-align: left;
     min-width: 0;
     overflow-wrap: anywhere;
 }
@@ -549,13 +563,13 @@ html.dark .xa-result {
 }
 .xa-split {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
     align-items: start;
 }
-@media (max-width: 900px) {
+@container xml-result (min-width: 65rem) {
     .xa-split {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     }
 }
 .xa-treepane,
@@ -567,13 +581,13 @@ html.dark .xa-result {
 }
 .xa-details {
     padding: 0.7rem 0.85rem;
-    max-height: 62vh;
-    overflow: auto;
+    overflow-wrap: anywhere;
 }
 .xa-vt {
-    height: 62vh;
+    height: clamp(18rem, 48vh, 42rem);
     min-height: 260px;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
     border-radius: 0.75rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -590,7 +604,7 @@ html.dark .xa-result {
 .xa-vt-spacer {
     position: relative;
     min-width: 100%;
-    width: max-content;
+    width: 100%;
 }
 .xa-vt-rows {
     position: absolute;
@@ -633,6 +647,8 @@ html.dark .xa-result {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1 1 0;
+    min-width: 0;
 }
 .xa-tag {
     color: var(--xa-tag);
@@ -695,8 +711,8 @@ html.dark .xa-result {
     font-weight: 700;
 }
 .xa-attr {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(6rem, 36%) minmax(0, 1fr) 2.25rem;
     gap: 0.25rem 0.5rem;
     align-items: center;
     padding: 0.25rem 0.3rem;
@@ -713,6 +729,9 @@ html.dark .xa-result {
     color: var(--xa-attr);
     cursor: pointer;
     font-weight: 600;
+    min-width: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
 }
 .xa-attr-val {
     flex: 1 1 8rem;
@@ -734,10 +753,16 @@ html.dark .xa-result {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .xa-det-acts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.6rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+.xa-det-acts > .xa-btn {
+    justify-content: center;
+    padding: 0.55rem 0.65rem;
+    min-height: 2.5rem;
+    background: var(--xa-bg);
 }
 .xa-blob {
     margin-top: 0.5rem;
@@ -747,13 +772,13 @@ html.dark .xa-result {
 /* Структура и таблицы */
 .xa-structure {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
     align-items: start;
 }
-@media (max-width: 900px) {
+@container xml-result (min-width: 65rem) {
     .xa-structure {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(15rem, 1fr) minmax(0, 2.4fr);
     }
 }
 .xa-paths-pane {
@@ -764,7 +789,7 @@ html.dark .xa-result {
     min-width: 0;
 }
 .xa-paths {
-    max-height: 60vh;
+    max-height: 22rem;
     overflow: auto;
     margin-top: 0.4rem;
 }
@@ -893,11 +918,25 @@ html.dark .xa-result {
 
 /* Сравнение */
 .xa-cmp-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    margin-bottom: 0.7rem;
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border: 1px solid var(--xa-border);
+    border-radius: 0.75rem;
+    align-items: end;
+    margin-bottom: 1rem;
+    background: var(--xa-card);
+}
+.xa-cmp-field { display: grid; gap: 0.5rem; min-width: 0; }
+.xa-cmp-label { font-weight: 600; font-size: 0.8125rem; }
+.xa-cmp-bar .xa-select { width: 100%; min-width: 0; }
+.xa-cmp-bar > .xa-btn { justify-content: center; min-height: 2.5rem; }
+.xa-cmp-empty { padding: 1.5rem; text-align: center; color: var(--xa-muted); }
+.xa-cmp-empty > i { font-size: 1.6rem; color: var(--color-primary); }
+.xa-cmp-empty h3 { margin: 0.75rem 0 0.4rem; color: var(--xa-text); font-weight: 600; }
+.xa-cmp-empty p { margin: 0; font-size: 0.875rem; line-height: 1.6; }
+@container xml-result (min-width: 45rem) {
+    .xa-cmp-bar { grid-template-columns: minmax(0, 1fr) auto; }
 }
 .xa-cmp-sum,
 .xa-cmp-filters {
@@ -966,9 +1005,8 @@ html.dark .xa-result {
 
 /* Общие блоки страницы анализатора (замена tailwind-классов в шаблонах) */
 .xa-info-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(8rem, 32%) minmax(0, 1fr);
     align-items: flex-start;
     gap: 0.15rem 1rem;
     padding: 0.45rem 0;
@@ -977,13 +1015,14 @@ html.dark .xa-result {
 .xa-info-row .info-key {
     font-weight: 700;
     color: var(--color-text-secondary, #4b5563);
-    flex: 0 0 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
     padding-right: 0;
 }
 .xa-info-row .info-value {
     flex: 1 1 14rem;
     min-width: 0;
-    text-align: right;
+    text-align: left;
     overflow-wrap: anywhere;
 }
 .xa-info-row .info-value.xa-mono-val {
@@ -1171,4 +1210,79 @@ html.dark .xa-result {
 
 .xml-analyzer-shell {
     position: relative;
+}
+
+/* Certificate sections use the same surfaces and spacing as the rest of the app. */
+.xa-cert-section + .xa-cert-section { margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--xa-border); }
+.xa-cert-section-title { margin: 0 0 0.35rem; font-size: 0.9rem; font-weight: 700; }
+.xa-cert-card .xa-card-head { padding-bottom: 0.75rem; border-bottom: 1px solid var(--xa-border); }
+.xa-cert-actions { padding-top: 0.9rem; border-top: 1px solid var(--xa-border); }
+.xa-cert-card .xa-v { line-height: 1.65; }
+.xa-cert-card .xa-kv { grid-template-columns: minmax(7rem, min(36%, 15rem)) minmax(0, 1fr); }
+.xa-cert-card .xa-badge { margin-block: 0.15rem; }
+.xa-topnames .xa-chip { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.xa-path > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.xa-details .xa-kv, .xa-details .xa-attr { padding-block: 0.5rem; }
+.xa-attr .xa-btn-icon { grid-column: 3; width: 2.25rem; min-height: 2.25rem; justify-self: end; }
+.xa-diff-a, .xa-diff-b { padding: 0.35rem 0.5rem; margin-top: 0.3rem; border-radius: 0.35rem; background: var(--xa-bg); }
+.xa-diff-path { display: block; overflow-wrap: anywhere; }
+.xa-cmp-filters .xa-input { flex: 1 1 12rem; min-width: 0; }
+.xa-badge { max-width: 100%; white-space: normal; }
+
+/* A native top-layer dialog avoids clipping by the two-column analyzer shell. */
+.xa-fullscreen-dialog {
+    --xa-border: var(--color-border);
+    --xa-card: var(--color-surface-2);
+    --xa-text: var(--color-text-primary);
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+}
+.xa-fullscreen-dialog[open] { display: flex; flex-direction: column; }
+.xa-fullscreen-bar { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface-2); font-weight: 600; }
+.xa-fullscreen-dialog > .xa-result { flex: 1 1 auto; min-height: 0; padding: 1.25rem; overflow: auto; }
+.xa-fullscreen-dialog .xa-vt { height: 58vh; }
+.xa-fullscreen-dialog .xa-paths { max-height: 58vh; }
+.xa-fullscreen-dialog::backdrop { background: var(--color-background); }
+
+#xmlAnalyzerCertModalOverlay {
+    width: 100vw; max-width: none; height: 100dvh; max-height: none;
+    margin: 0; border: 0; color: var(--color-text-primary);
+    background: transparent;
+}
+#xmlAnalyzerCertModalOverlay::backdrop { background: color-mix(in srgb, var(--color-background) 65%, transparent); backdrop-filter: blur(4px); }
+#xmlAnalyzerCertModal {
+    width: min(64rem, 100%);
+    max-width: 64rem;
+    max-height: calc(100dvh - 2rem);
+    min-width: 0;
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius, 0.85rem);
+    box-shadow: var(--shadow-overlay);
+    overflow: hidden;
+}
+#xmlAnalyzerCertModal > header { padding: 1rem 1.25rem; border-color: var(--color-border); gap: 1rem; background: var(--color-surface-1); }
+#xmlAnalyzerModalClose { flex-shrink: 0; border: 1px solid var(--color-border); border-radius: 0.5rem; color: var(--color-text-secondary); }
+#xmlAnalyzerModalContent { min-height: 0; padding: 1.25rem; }
+.xa-cert-properties { display: grid; gap: 1rem; font-size: 0.875rem; }
+.xa-cert-property-section { border: 1px solid var(--color-border); border-radius: 0.65rem; overflow: hidden; }
+.xa-cert-property-section > summary { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.8rem 1rem; background: var(--color-surface-1); font-weight: 600; cursor: pointer; list-style: none; }
+.xa-cert-property-section > summary::-webkit-details-marker { display: none; }
+.xa-cert-property-section > summary::after { content: '⌄'; flex-shrink: 0; transition: rotate 120ms; }
+.xa-cert-property-section[open] > summary::after { rotate: 180deg; }
+.xa-cert-property-content { padding: 0.25rem 1rem; }
+@media (max-width: 520px) {
+    .xa-fullscreen-dialog > .xa-result { padding: 0.75rem; }
+    .xa-fullscreen-bar { padding: 0.65rem 0.75rem; }
+    #xmlAnalyzerModalContent { padding: 0.75rem; }
+    .xa-cert-property-content { padding-inline: 0.75rem; }
+    .xa-info-row { grid-template-columns: minmax(0, 1fr); gap: 0.3rem; }
 }

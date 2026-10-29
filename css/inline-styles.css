@@ -22,8 +22,8 @@ html:not(.dark) body {
 html:not(.dark)::-webkit-scrollbar,
 html:not(.dark) body::-webkit-scrollbar,
 html:not(.dark) *::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
 }
 html:not(.dark)::-webkit-scrollbar-track,
 html:not(.dark) body::-webkit-scrollbar-track,
@@ -52,8 +52,8 @@ html.dark body {
 html.dark::-webkit-scrollbar,
 html.dark body::-webkit-scrollbar,
 html.dark *::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
 }
 html.dark::-webkit-scrollbar-track,
 html.dark body::-webkit-scrollbar-track,

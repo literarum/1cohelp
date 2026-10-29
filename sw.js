@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20261001pwa-sync';
+const ASSET_QUERY_VERSION = '20261028-ui-repair';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20261001pwa-sync';
-const VERSION = `20261015-v19`;
+const MAIN_CSS_QUERY_VERSION = '20261028-ui-repair';
+const VERSION = `20261028-ui-repair`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**

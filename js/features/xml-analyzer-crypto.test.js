@@ -12,14 +12,7 @@ describe('xml-analyzer-crypto', () => {
         const n = readDer(new Uint8Array([0x30, 0x03, 0x02, 0x01, 0x05]), 0);
         expect(n.tag).toBe(0x30);
     });
-    it('мусор вместо сертификата не приводит к исключению', () => {
-        let ok = true;
-        try {
-            const r = parseCertificateBase64('AAAA');
-            ok = r === null || r === undefined || typeof r === 'object';
-        } catch {
-            ok = true;
-        }
-        expect(ok).toBe(true);
+    it('отклоняет мусор вместо сертификата контролируемой асинхронной ошибкой', async () => {
+        await expect(parseCertificateBase64('AAAA')).rejects.toThrow('Данные не похожи на сертификат');
     });
 });

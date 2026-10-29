@@ -15,7 +15,7 @@ describe('google-docs transport compatibility', () => {
         vi.restoreAllMocks();
     });
 
-    it('uses plain fetch URL call for Google Docs endpoint', async () => {
+    it('uses a simple fetch with cancellation and no preflight-inducing options', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => [
@@ -35,7 +35,8 @@ describe('google-docs transport compatibility', () => {
         expect(fetchMock).toHaveBeenCalled();
         const [requestUrl, requestOptions] = fetchMock.mock.calls[0];
         expect(requestUrl).toContain('https://script.google.com/macros/s/');
-        expect(requestOptions).toBeUndefined();
+        expect(requestOptions.signal).toBeInstanceOf(AbortSignal);
+        expect(Object.keys(requestOptions)).toEqual(['signal']);
         expect(result[0].data).toEqual(['A']);
     });
 

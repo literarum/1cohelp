@@ -195,7 +195,15 @@ class ReportAnalyzerApp {
                 if (e.target === this.modalOverlay) this.hideCertificateDetails();
             });
             this.modalOverlay.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') this.hideCertificateDetails();
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.hideCertificateDetails();
+                }
+            });
+            this.modalOverlay.addEventListener('cancel', (e) => {
+                e.preventDefault();
+                this.hideCertificateDetails();
             });
         }
     }
@@ -707,7 +715,9 @@ class ReportAnalyzerApp {
     _presentRecord(rec) {
         if (!rec.view) return;
         this.certificates = rec.certs || new Map();
-        const wrapper = h('div', { class: 'xa-session' }, this._buildDocBar(), rec.view.element);
+        const wrapper = h('div', { class: 'xa-session' }, this._buildDocBar());
+        if (rec.view.mount) rec.view.mount(wrapper);
+        else wrapper.appendChild(rec.view.element);
         this.outputArea.replaceChildren(wrapper);
         if (this.placeholder) this.placeholder.style.display = 'none';
         const mainElement = this.root.querySelector('.xml-analyzer-shell');
@@ -1456,7 +1466,7 @@ class ReportAnalyzerApp {
         }
 
         const container = document.createElement('div');
-        container.className = 'space-y-4 text-sm';
+        container.className = 'xa-cert-properties';
 
         const formatDate = (dateValue) => {
             if (!dateValue) return 'Не указана';
@@ -1488,21 +1498,14 @@ class ReportAnalyzerApp {
             if (!fields || fields.length === 0) return null;
 
             const details = document.createElement('details');
+            details.className = 'xa-cert-property-section';
             details.open = isOpen;
 
             const summary = document.createElement('summary');
-            summary.className =
-                'font-bold text-lg mb-2 text-slate-800 dark:text-slate-100 cursor-pointer list-none';
-            summary.innerHTML = `<span class="flex items-center gap-2">${this.sanitizeText(title)} <svg class="w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></span>`;
-            summary.onclick = (e) => {
-                e.preventDefault();
-                details.open = !details.open;
-                summary.querySelector('svg').classList.toggle('rotate-180', details.open);
-            };
+            summary.textContent = title;
 
             const contentDiv = document.createElement('div');
-            contentDiv.className =
-                'pl-4 border-l-2 border-slate-300 dark:border-slate-700 space-y-1';
+            contentDiv.className = 'xa-cert-property-content';
 
             fields.forEach((fieldFragment) => {
                 if (fieldFragment.hasChildNodes()) {
@@ -1520,7 +1523,7 @@ class ReportAnalyzerApp {
 
         // Секция "Общая информация"
         const generalFields = [
-            this.createField('Отпечаток (SHA-1)', cert.thumbprint),
+            this.createField('Отпечаток (SHA-1)', cert.thumbprint, 'default', { mono: true }),
             this.createField(
                 'Серийный номер',
                 cert.serialNumber.replace(/(.{2})/g, '$1:').slice(0, -1),
@@ -1557,12 +1560,17 @@ class ReportAnalyzerApp {
 
         this.modalOverlay.classList.remove('hidden');
         this.modalOverlay.classList.add('flex');
+        this._certPreviousFocus = document.activeElement;
+        if (typeof this.modalOverlay.showModal === 'function' && !this.modalOverlay.open) this.modalOverlay.showModal();
+        this.modalCloseBtn?.focus({ preventScroll: true });
     }
 
     hideCertificateDetails() {
+        if (this.modalOverlay.open && typeof this.modalOverlay.close === 'function') this.modalOverlay.close();
         this.modalOverlay.classList.add('hidden');
         this.modalOverlay.classList.remove('flex');
         this.modalContentTarget.innerHTML = '';
+        if (this._certPreviousFocus?.isConnected) this._certPreviousFocus.focus({ preventScroll: true });
     }
 
     async handleExportAllCerts() {

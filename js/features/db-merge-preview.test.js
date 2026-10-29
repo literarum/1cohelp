@@ -1,7 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { renderMergeAttachmentPreview } from './db-merge.js';
 
 describe('renderMergeAttachmentPreview', () => {
+    let createObjectURL;
+    let revokeObjectURL;
+    beforeEach(() => {
+        // jsdom omits the native blob-URL API; keep rendering and cleanup real.
+        let nextUrl = 0;
+        createObjectURL = vi.fn(() => `blob:merge-preview/${nextUrl++}`);
+        revokeObjectURL = vi.fn();
+        vi.stubGlobal('URL', class extends URL {
+            static createObjectURL = createObjectURL;
+            static revokeObjectURL = revokeObjectURL;
+        });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
     it('ничего не рисует без вложений', () => {
         const host = document.createElement('div');
         renderMergeAttachmentPreview(host, [{ storeName: 'screenshots', importOnly: [] }]);
@@ -21,7 +35,12 @@ describe('renderMergeAttachmentPreview', () => {
         expect(host.textContent).toContain('и ещё 6');
         expect(host.textContent).toContain('a.pdf');
         expect(host.textContent).toContain('2.0 КБ');
+        expect(createObjectURL).toHaveBeenCalledTimes(24);
+        expect(revokeObjectURL).not.toHaveBeenCalled();
         release();
+        expect(revokeObjectURL.mock.calls.map(([url]) => url)).toEqual(
+            createObjectURL.mock.results.map(({ value }) => value),
+        );
     });
 
     it('«Просмотр» PDF встраивает и убирает iframe, освобождая URL', () => {
@@ -33,9 +52,18 @@ describe('renderMergeAttachmentPreview', () => {
         btn.click();
         expect(host.querySelectorAll('iframe').length).toBe(1);
         expect(btn.textContent).toBe('Скрыть');
+        expect(btn.getAttribute('aria-expanded')).toBe('true');
+        expect(createObjectURL).toHaveBeenCalledTimes(1);
+        expect(createObjectURL.mock.calls[0][0].type).toBe('application/pdf');
+        expect(host.querySelector('iframe').getAttribute('src')).toBe(
+            createObjectURL.mock.results[0].value,
+        );
         btn.click();
         expect(host.querySelectorAll('iframe').length).toBe(0);
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
         release();
+        expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+        expect(revokeObjectURL).toHaveBeenCalledWith(createObjectURL.mock.results[0].value);
     });
 
     it('битый base64 не ломает превью', () => {

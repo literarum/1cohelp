@@ -336,12 +336,8 @@
     margin-top: 8px;
     padding: 8px 10px;
     border-radius: var(--border-radius, 10px);
-    border-left: 3px solid var(--color-border, #d1d5db);
     background: color-mix(in srgb, var(--color-text-secondary, #6b7280) 8%, transparent);
     font-size: 0.8125rem;
 }
-.gs-status[data-kind='ok'] { border-left-color: #16a34a; }
-.gs-status[data-kind='error'] { border-left-color: #dc2626; }
-.gs-status[data-kind='busy'] { border-left-color: var(--color-primary, #9933ff); }
 .gs-status__title { font-weight: 700; }
 .gs-status__hint { margin-top: 2px; color: var(--color-text-secondary, #6b7280); line-height: 1.4; }

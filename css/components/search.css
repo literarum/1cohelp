@@ -28,15 +28,11 @@
 
 /* Подсветка точного совпадения */
 .exact-match-highlight {
-    border-left: 4px solid var(--exact-match-border-color-light) !important;
-    padding-left: calc(0.75rem - 4px);
+    /* The visible “Совпадение” badge carries this state. */
+    border-left-width: 0 !important;
     background-color: transparent !important;
 }
 
-.dark .exact-match-highlight,
-.dark .exact-match-highlight-dark {
-    border-left-color: var(--exact-match-border-color-dark) !important;
-}
 
 .exact-match-highlight:hover {
     background-color: rgba(0, 0, 0, 0.03) !important;
