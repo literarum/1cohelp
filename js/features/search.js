@@ -4395,6 +4395,7 @@ export async function handleSearchResultClick(result) {
  * Инициализирует поисковую систему
  */
 export function initSearchSystem() {
+    window.__copilotSearchStartup?.initialize();
     const searchInput = document.getElementById('searchInput');
     const searchResultsContainer = document.getElementById('searchResults');
     const clearSearchBtn = document.getElementById('clearSearchInputBtn');

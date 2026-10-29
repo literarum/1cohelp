@@ -1,231 +1,106 @@
-/* =================================================================== */
-/*    СКРОЛЛБАР (Scrollbar)                                           */
-/* =================================================================== */
+/* One scrollbar policy for the page and every nested scrolling surface.
+   Important declarations in this layer also beat old unlayered component
+   overrides (including hidden menu bars and the 12px analytics file list). */
+@layer app-scrollbars {
+    html {
+        --app-scrollbar-track: var(--override-scrollbar-track-light, var(--color-surface-2));
+        --app-scrollbar-thumb: var(--override-scrollbar-thumb-light, var(--color-border-interactive));
+        --app-scrollbar-thumb-hover: var(--color-text-secondary);
+        color-scheme: light;
+    }
+    html.dark {
+        --app-scrollbar-track: var(--override-scrollbar-track-dark, var(--color-surface-2));
+        --app-scrollbar-thumb: var(--override-scrollbar-thumb-dark, var(--color-border-interactive));
+        color-scheme: dark;
+    }
 
-/* ----------------------------------- */
-/*       2.2. Кастомный скроллбар      */
-/* ----------------------------------- */
-:is(
-    .custom-scrollbar,
     html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-) {
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-light);
-}
+    html * {
+        /* Firefox uses the themed native thin fallback. */
+        scrollbar-width: thin !important;
+        scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track) !important;
+    }
 
-html.dark
-    :is(
-        .custom-scrollbar,
+    @supports selector(::-webkit-scrollbar) {
         html,
-        #searchResults,
-        .modal-content-area-fullscreen-scroll,
-        #algorithmSteps,
-        #hotkeysModal .p-6.overflow-y-auto.flex-1,
-        #reglamentModal .modal-content-area,
-        #reglamentDetailModal #reglamentDetailContent,
-        #extLinkModal .modal-content-area,
-        #cibLinkModal .modal-content-area,
-        #bookmarkModal .p-content.overflow-y-auto.flex-1,
-        #bookmarkDetailModal #bookmarkDetailOuterContent,
-        #addModal .p-content.overflow-y-auto.flex-1,
-        #editModal .p-content.overflow-y-auto.flex-1,
-        #customizeUIModal .p-content.overflow-y-auto.flex-1,
-        #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-        #engineeringCockpitModal .engineering-cockpit-content
-    ) {
-    scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-track-color-dark);
+        html * {
+            /* In Chromium either non-auto standard property suppresses the
+               custom pseudo-elements, including their arrow buttons. */
+            scrollbar-width: auto !important;
+            scrollbar-color: auto !important;
+        }
+    }
+
+    html::-webkit-scrollbar,
+    html *::-webkit-scrollbar {
+        display: block !important;
+        width: 8px !important;
+        height: 8px !important;
+    }
+    html::-webkit-scrollbar-track,
+    html *::-webkit-scrollbar-track,
+    html::-webkit-scrollbar-corner,
+    html *::-webkit-scrollbar-corner {
+        background: var(--app-scrollbar-track) !important;
+    }
+    html::-webkit-scrollbar-thumb,
+    html *::-webkit-scrollbar-thumb {
+        background: var(--app-scrollbar-thumb) !important;
+        border: 1px solid var(--app-scrollbar-track) !important;
+        border-radius: 999px !important;
+        background-clip: padding-box !important;
+        min-height: 24px !important;
+        min-width: 24px !important;
+    }
+    html::-webkit-scrollbar-thumb:hover,
+    html *::-webkit-scrollbar-thumb:hover {
+        background-color: var(--app-scrollbar-thumb-hover) !important;
+    }
+
+    html::-webkit-scrollbar-button,
+    html *::-webkit-scrollbar-button {
+        display: none !important;
+    }
+    html::-webkit-scrollbar-button:single-button,
+    html *::-webkit-scrollbar-button:single-button {
+        display: block !important;
+        width: 8px !important;
+        height: 12px !important;
+        border: 0 !important;
+        background-color: var(--app-scrollbar-track) !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        background-size: 6px 4px !important;
+    }
+    html::-webkit-scrollbar-button:single-button:hover,
+    html *::-webkit-scrollbar-button:single-button:hover {
+        background-color: var(--color-hover-subtle) !important;
+    }
+    html::-webkit-scrollbar-button:single-button:vertical:decrement,
+    html *::-webkit-scrollbar-button:single-button:vertical:decrement {
+        background-image: conic-gradient(from 135deg at 50% 0%, var(--color-text-secondary) 0deg 90deg, transparent 90deg) !important;
+    }
+    html::-webkit-scrollbar-button:single-button:vertical:increment,
+    html *::-webkit-scrollbar-button:single-button:vertical:increment {
+        background-image: conic-gradient(from -45deg at 50% 100%, var(--color-text-secondary) 0deg 90deg, transparent 90deg) !important;
+    }
+    html::-webkit-scrollbar-button:single-button:horizontal,
+    html *::-webkit-scrollbar-button:single-button:horizontal {
+        width: 12px !important;
+        height: 8px !important;
+        background-size: 4px 6px !important;
+    }
+    html::-webkit-scrollbar-button:single-button:horizontal:decrement,
+    html *::-webkit-scrollbar-button:single-button:horizontal:decrement {
+        background-image: conic-gradient(from 45deg at 0% 50%, var(--color-text-secondary) 0deg 90deg, transparent 90deg) !important;
+    }
+    html::-webkit-scrollbar-button:single-button:horizontal:increment,
+    html *::-webkit-scrollbar-button:single-button:horizontal:increment {
+        background-image: conic-gradient(from 225deg at 100% 50%, var(--color-text-secondary) 0deg 90deg, transparent 90deg) !important;
+    }
 }
 
-:is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkModal .modal-content-area,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-)::-webkit-scrollbar {
-    width: 8px !important;
-    height: 8px !important;
-}
-
-:is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-)::-webkit-scrollbar-track {
-    background-color: var(--scrollbar-track-color-light);
-    border-radius: 15px;
-}
-
-html.dark
-    :is(
-        .custom-scrollbar,
-        html,
-        #searchResults,
-        .modal-content-area-fullscreen-scroll,
-        #algorithmSteps,
-        #hotkeysModal .p-6.overflow-y-auto.flex-1,
-        #reglamentModal .modal-content-area,
-        #reglamentDetailModal #reglamentDetailContent,
-        #extLinkModal .modal-content-area,
-        #cibLinkModal .modal-content-area,
-        #bookmarkModal .p-content.overflow-y-auto.flex-1,
-        #bookmarkDetailModal #bookmarkDetailOuterContent,
-        #addModal .p-content.overflow-y-auto.flex-1,
-        #editModal .p-content.overflow-y-auto.flex-1,
-        #customizeUIModal .p-content.overflow-y-auto.flex-1,
-        #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-        #engineeringCockpitModal .engineering-cockpit-content
-    )::-webkit-scrollbar-track {
-    background-color: var(--scrollbar-track-color-dark);
-}
-
-:is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-    #engineeringCockpitModal .engineering-cockpit-content
-)::-webkit-scrollbar-thumb {
-    background-color: var(
-        --scrollbar-thumb-bg,
-        var(--override-scrollbar-thumb-dark, var(--color-border-interactive))
-    ) !important;
-    border-radius: 15px;
-    border: 1px solid transparent !important;
-    background-clip: content-box !important;
-}
-
-:is(
-        .custom-scrollbar,
-        html,
-        #searchResults,
-        .modal-content-area-fullscreen-scroll,
-        #algorithmSteps,
-        #hotkeysModal .p-6.overflow-y-auto.flex-1,
-        #reglamentModal .modal-content-area,
-        #reglamentDetailModal #reglamentDetailContent,
-        #extLinkModal .modal-content-area,
-        #cibLinkModal .modal-content-area,
-        #bookmarkModal .p-content.overflow-y-auto.flex-1,
-        #bookmarkDetailModal #bookmarkDetailOuterContent,
-        #addModal .p-content.overflow-y-auto.flex-1,
-        #editModal .p-content.overflow-y-auto.flex-1,
-        #customizeUIModal .p-content.overflow-y-auto.flex-1,
-        #appCustomizationModal .p-content.overflow-y-auto.flex-1,
-        #engineeringCockpitModal .engineering-cockpit-content
-    )::-webkit-scrollbar-thumb:hover {
-    background-color: var(
-        --scrollbar-thumb-hover-bg,
-        var(--color-hover-subtle, var(--override-scrollbar-thumb-dark, var(--color-border)))
-    ) !important;
-}
-
-:is(
-    .custom-scrollbar,
-    html,
-    #searchResults,
-    .modal-content-area-fullscreen-scroll,
-    #algorithmSteps,
-    #hotkeysModal .p-6.overflow-y-auto.flex-1,
-    #reglamentModal .modal-content-area,
-    #reglamentDetailModal #reglamentDetailContent,
-    #extLinkModal .modal-content-area,
-    #cibLinkModal .modal-content-area,
-    #bookmarkModal .p-content.overflow-y-auto.flex-1,
-    #bookmarkDetailModal #bookmarkDetailOuterContent,
-    #addModal .p-content.overflow-y-auto.flex-1,
-    #editModal .p-content.overflow-y-auto.flex-1,
-    #customizeUIModal .p-content.overflow-y-auto.flex-1,
-    #appCustomizationModal .p-content.overflow-y-auto.flex-1
-)::-webkit-scrollbar-corner {
-    background: transparent;
-}
-
-/* Toast-элементы внутри контейнера должны получать клики (контейнер имеет pointer-events:none) */
+/* Toast children still receive clicks through their pass-through stack. */
 #notification-container > * {
     pointer-events: auto;
-}
-
-#important-notifications-container.custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-}
-
-#important-notifications-container.custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 4px;
-}
-
-#important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
-}
-
-#important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.5);
-}
-
-.dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.dark #important-notifications-container.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
 }

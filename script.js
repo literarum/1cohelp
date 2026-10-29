@@ -3512,7 +3512,7 @@ function initUnsavedChangesRegistry() {
         typeof hasChanges === 'function' ? hasChanges('add') : false,
     );
     registerModalDirtyCheck('customizeUIModal', () => Boolean(State && State.isUISettingsDirty));
-    // Студия оформления сохраняется автоматически — «несохранённых изменений» у неё не бывает.
+    // Студия оформления откатывает предпросмотр при закрытии без явного сохранения.
     registerModalDirtyCheck('appCustomizationModal', () => false);
     registerModalDirtyCheck('bookmarkModal', (modal) => {
         try {

@@ -1,12 +1,11 @@
 'use strict';
 
 /**
- * «Студия оформления» — окно кастомизации с живым предпросмотром и автосохранением.
+ * «Студия оформления» — окно кастомизации с живым предпросмотром до явного сохранения.
  *
  * Принципы:
  *  • Любое изменение видно сразу во всём приложении (панель стоит сбоку/снизу и не закрывает приложение).
- *  • Никакой кнопки «Сохранить»: изменения сохраняются сами через ~0,6 с после последнего движения.
- *    Вместо неё — «Отменить изменения» (откат к состоянию на момент открытия) и «Готово».
+ *  • Только «Сохранить» записывает изменения; закрытие и отмена восстанавливают состояние открытия.
  *  • Применение — не чаще одного раза за кадр (rAF), тяжёлые блоки пропускаются, если не менялись.
  *  • Независимость от окна «Настройки»: студия пишет только ключи оформления и не трогает порядок вкладок и т. п.
  *
@@ -21,7 +20,13 @@ import {
     clampBorderRadiusPx,
     BORDER_RADIUS_SLIDER_MAX,
 } from '../config.js';
-import { applyPreviewSettings, applyPreviewSettingsCoalesced } from './preview-settings.js';
+import { applyPreviewSettings, applyPreviewSettingsCoalesced, cancelPreviewSettingsFrame } from './preview-settings.js';
+import { setTheme } from '../components/theme.js';
+import {
+    beginBackgroundImagePreview, restoreBackgroundImagePreview, endBackgroundImagePreview,
+    commitBackgroundImagePreview, acceptBackgroundImagePreview, rollbackBackgroundImageCommit,
+    clearBackgroundImagePreview,
+} from '../features/background-image.js';
 import {
     initColorPicker,
     setColorPickerStateFromHex,
@@ -34,6 +39,9 @@ import {
     remountFontSettings,
     FONT_DEFAULTS,
     sanitizeFontSettings,
+    beginFontSettingsPreview,
+    commitFontSettingsPreview,
+    endFontSettingsPreview,
 } from './font-settings.js';
 import {
     applyMotionMode,
@@ -59,6 +67,7 @@ export const STUDIO_KEYS = Object.freeze([
     'borderRadius',
     'contentDensity',
     'motionMode',
+    'staticHeader',
 ]);
 
 /** Готовые акценты. Первый — стандартный цвет приложения. */
@@ -211,6 +220,7 @@ export function defaultAppearance() {
         borderRadius: DEFAULT_BORDER_RADIUS_PX,
         contentDensity: 3,
         motionMode: 'auto',
+        staticHeader: false,
     };
 }
 
@@ -244,6 +254,7 @@ export function pickAppearance(src) {
     const d = Number(s.contentDensity);
     out.contentDensity = Number.isFinite(d) ? Math.max(0, Math.min(6, Math.round(d))) : def.contentDensity;
     out.motionMode = sanitizeMotionMode(s.motionMode);
+    out.staticHeader = s.staticHeader === true;
     return out;
 }
 
@@ -270,6 +281,7 @@ export function applyLookToAppearance(current, look) {
         borderRadius: def.borderRadius,
         contentDensity: def.contentDensity,
         motionMode: cur.motionMode,
+        staticHeader: cur.staticHeader,
     };
     return pickAppearance({ ...base, ...(look?.appearance || {}) });
 }
@@ -307,7 +319,6 @@ export function describeMotion(mode, level) {
 // Контроллер (DOM)
 // ---------------------------------------------------------------------------
 
-const PERSIST_DELAY_MS = 600;
 const PANE_STORAGE_KEY = 'ac.studio.pane';
 const PANE_IDS = ['look', 'colors', 'fonts', 'shape', 'bg', 'motion', 'profiles'];
 
@@ -339,7 +350,9 @@ function createController(root) {
 
     let snapshot = null;
     let snapshotFonts = null;
-    let persistTimer = 0;
+    let previewSnapshot = null;
+    let dirtyBeforeOpen = false;
+    let sessionGeneration = 0;
     let persisting = null;
     let wasOpen = false;
     let activePane = 'look';
@@ -378,6 +391,7 @@ function createController(root) {
         cps.borderRadius = app.borderRadius;
         cps.contentDensity = app.contentDensity;
         cps.motionMode = app.motionMode;
+        cps.staticHeader = app.staticHeader;
         return cps;
     }
 
@@ -387,8 +401,8 @@ function createController(root) {
         statusEl.dataset.state = state;
         const map = {
             saved: ['Сохранено', 'fa-circle-check'],
-            pending: ['Сохраняется…', 'fa-circle-notch fa-spin'],
-            error: ['Не сохранилось — повторить', 'fa-triangle-exclamation'],
+            pending: ['Не сохранено', 'fa-circle'],
+            error: ['Не сохранилось — нажмите «Сохранить», чтобы повторить', 'fa-triangle-exclamation'],
         };
         const [text, icon] = map[state] || map.saved;
         if (statusText) statusText.textContent = text;
@@ -400,7 +414,7 @@ function createController(root) {
     // ----- Применение и сохранение ---------------------------------------
     function applyNow() {
         const cps = ensureCps();
-        return applyPreviewSettings(cps);
+        return applyPreviewSettings(cps, { preview: true });
     }
 
     function applyFrame() {
@@ -409,23 +423,19 @@ function createController(root) {
 
     function markChanged() {
         setStatus('pending');
-        clearTimeout(persistTimer);
-        persistTimer = setTimeout(() => void persistNow(), PERSIST_DELAY_MS);
+        State.isUISettingsDirty = true;
     }
 
     async function persistNow() {
-        clearTimeout(persistTimer);
-        persistTimer = 0;
-        if (persisting) {
-            await persisting.catch(() => {});
-        }
+        if (persisting) return persisting;
+        if (!wasOpen) return false;
+        sessionGeneration++;
         persisting = (async () => {
             const app = readAppearance();
             const saved = pickAppearance(State.userPreferences);
-            if (State.userPreferences && appearanceEqual(app, saved)) {
-                setStatus('saved');
-                return true;
-            }
+            const previousPreferences = JSON.parse(JSON.stringify(State.userPreferences || {}));
+            let preferencesWritten = false;
+            root.inert = true;
             State.userPreferences = { ...(State.userPreferences || {}), ...app };
             if (!app.isBackgroundCustom) {
                 delete State.userPreferences.backgroundColor;
@@ -434,15 +444,34 @@ function createController(root) {
             if (!app.isTextCustom) delete State.userPreferences.customTextColor;
             let ok = false;
             try {
-                ok = await saveUserPreferences();
+                if (!appearanceEqual(app, saved)) {
+                    ok = await saveUserPreferences();
+                    preferencesWritten = ok;
+                } else ok = true;
+                if (ok) {
+                    await commitBackgroundImagePreview();
+                    ok = commitFontSettingsPreview();
+                }
             } catch (e) {
+                ok = false;
                 console.warn('[customization-studio] save failed', e);
             }
             if (!ok) {
+                State.userPreferences = previousPreferences;
+                if (preferencesWritten) await saveUserPreferences();
+                try { await rollbackBackgroundImageCommit(); } catch (e) {
+                    console.warn('[customization-studio] background rollback failed', e);
+                }
                 setStatus('error');
                 return false;
             }
+            acceptBackgroundImagePreview();
+            setTheme(app.theme);
+            applyMotionMode(app.motionMode);
             syncOriginalAfterSave(app);
+            snapshot = app;
+            snapshotFonts = loadFontSettings();
+            previewSnapshot = JSON.parse(JSON.stringify(ensureCps()));
             setStatus('saved');
             return true;
         })();
@@ -450,6 +479,7 @@ function createController(root) {
             return await persisting;
         } finally {
             persisting = null;
+            root.inert = false;
         }
     }
 
@@ -462,18 +492,9 @@ function createController(root) {
             }
             if (!app.isTextCustom) delete State.originalUISettings.customTextColor;
         }
-        const settings = document.getElementById('customizeUIModal');
-        const settingsOpen = settings && !settings.classList.contains('hidden');
-        if (!settingsOpen) State.isUISettingsDirty = false;
-        else {
-            // окно «Настройки» открыто под студией: «грязным» оно остаётся только из-за своих полей
-            Promise.all([import('./ui-settings-modal.js'), import('../utils/helpers.js')])
-                .then(([m, h]) => {
-                    const cur = m.getSettingsFromModal?.();
-                    if (cur) State.isUISettingsDirty = !h.deepEqual(State.originalUISettings, cur);
-                })
-                .catch(() => {});
-        }
+        const staticHeaderControl = document.querySelector('#customizeUIModal #toggleStaticHeader');
+        if (staticHeaderControl) staticHeaderControl.checked = app.staticHeader;
+        State.isUISettingsDirty = dirtyBeforeOpen;
     }
 
     // ----- Синхронизация контролов ---------------------------------------
@@ -702,19 +723,39 @@ function createController(root) {
     }
 
     async function revertAll() {
+        sessionGeneration++;
+        if (persisting) await persisting;
         if (!snapshot) return;
-        const themeChanged = snapshot.theme !== readAppearance().theme;
-        writeAppearance(snapshot);
-        if (themeChanged) void withThemeTransition(() => applyNow()).then(() => syncPicker());
-        else applyNow();
+        cancelPreviewSettingsFrame();
+        State.currentPreviewSettings = JSON.parse(JSON.stringify(previewSnapshot));
+        applyNow();
+        // Restore the saved auto-mode subscription without writing a draft during rollback.
+        const theme = readAppearance().theme;
+        setTheme(theme, { preview: true, persistSystemChanges: theme === State.userPreferences?.theme });
         if (snapshotFonts) {
             applyFontSettings(snapshotFonts);
             saveFontSettings(snapshotFonts);
             remountFontSettings();
         }
+        restoreBackgroundImagePreview();
         syncAll();
-        setStatus('pending');
-        await persistNow();
+        State.isUISettingsDirty = dirtyBeforeOpen;
+        setStatus('saved');
+    }
+
+    function applyProfile({ appearance, fonts, replace, sessionToken }) {
+        if (!wasOpen || (sessionToken != null && sessionToken !== sessionGeneration)) return false;
+        writeAppearance(pickAppearance({ ...(replace ? defaultAppearance() : readAppearance()), ...(appearance || {}) }));
+        if (replace && !appearance) clearBackgroundImagePreview();
+        if (fonts) {
+            applyFontSettings(fonts);
+            saveFontSettings(fonts);
+            remountFontSettings();
+        }
+        applyNow();
+        syncAll();
+        markChanged();
+        return true;
     }
 
     const DEMO_CAPTIONS = {
@@ -760,7 +801,6 @@ function createController(root) {
         } else if (t.name === 'motionMode') {
             const next = { ...readAppearance(), motionMode: sanitizeMotionMode(t.value) };
             writeAppearance(next);
-            applyMotionMode(next.motionMode);
             applyNow();
             syncMotion(next);
             markChanged();
@@ -822,8 +862,7 @@ function createController(root) {
             return;
         }
         if (t.closest('#acStatus') && statusEl?.dataset.state === 'error') {
-            setStatus('pending');
-            void persistNow();
+            $('#appCustomizationSaveBtn')?.focus();
         }
     }
 
@@ -857,17 +896,23 @@ function createController(root) {
     root.addEventListener('input', onInput);
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', onTabKeydown);
+    root.addEventListener('customization-preview-change', markChanged);
     ['pointerup', 'keyup', 'change', 'input'].forEach((ev) => root.addEventListener(ev, onPickerActivity));
 
     // ----- Открытие / закрытие ---------------------------------------------
     function onOpen() {
         if (wasOpen) return;
         wasOpen = true;
+        sessionGeneration++;
         renderSwatches();
         renderLooks();
         ensureCps();
         snapshot = readAppearance();
+        previewSnapshot = JSON.parse(JSON.stringify(ensureCps()));
+        dirtyBeforeOpen = State.isUISettingsDirty;
         snapshotFonts = loadFontSettings();
+        beginFontSettingsPreview();
+        beginBackgroundImagePreview();
         document.body.classList.add('ac-studio-open');
         let pane = 'look';
         try {
@@ -886,13 +931,15 @@ function createController(root) {
         offMotion = onMotionChange(() => syncMotion(readAppearance()));
     }
 
-    function onClose() {
+    async function onClose() {
         if (!wasOpen) return;
         wasOpen = false;
+        await revertAll();
+        endFontSettingsPreview();
+        endBackgroundImagePreview();
         document.body.classList.remove('ac-studio-open');
         if (offMotion) offMotion();
         offMotion = null;
-        if (persistTimer) void persistNow();
     }
 
     const observer = new MutationObserver(() => {
@@ -909,21 +956,27 @@ function createController(root) {
         applyLook,
         setAccent,
         resetPane,
+        applyProfile,
         revertAll,
         persistNow,
+        discard: revertAll,
         markChanged,
         syncAll,
         getActivePane: () => activePane,
+        isOpen: () => wasOpen,
+        isSaving: () => Boolean(persisting),
+        getSessionToken: () => sessionGeneration,
         destroy() {
             observer.disconnect();
             root.removeEventListener('change', onChange);
             root.removeEventListener('input', onInput);
             root.removeEventListener('click', onClick);
             root.removeEventListener('keydown', onTabKeydown);
+            root.removeEventListener('customization-preview-change', markChanged);
             ['pointerup', 'keyup', 'change', 'input'].forEach((ev) =>
                 root.removeEventListener(ev, onPickerActivity),
             );
-            clearTimeout(persistTimer);
+            onClose();
             controller = null;
             if (typeof window !== 'undefined' && window.__copilotCustomizationStudio === api) {
                 delete window.__copilotCustomizationStudio;

@@ -30,6 +30,8 @@ export const MONO_FONTS = [
 
 export const FONT_DEFAULTS = Object.freeze({ ui: 'default', mono: 'default', scale: 100, line: 100 });
 
+let previewSettings = null;
+
 const clamp = (n, lo, hi, d) => {
     const v = Number(n);
     return Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d;
@@ -47,6 +49,7 @@ export function sanitizeFontSettings(raw) {
 }
 
 export function loadFontSettings() {
+    if (previewSettings) return { ...previewSettings };
     try {
         const raw = window.localStorage.getItem(FONT_STORAGE_KEY);
         return sanitizeFontSettings(raw ? JSON.parse(raw) : null);
@@ -56,11 +59,33 @@ export function loadFontSettings() {
 }
 
 export function saveFontSettings(s) {
+    if (previewSettings) {
+        previewSettings = sanitizeFontSettings(s);
+        document.getElementById('appCustomizationModal')?.dispatchEvent(new Event('customization-preview-change'));
+        return;
+    }
+    writeFontSettings(s);
+}
+
+function writeFontSettings(s) {
     try {
         window.localStorage.setItem(FONT_STORAGE_KEY, JSON.stringify(sanitizeFontSettings(s)));
+        return true;
     } catch {
-        /* хранилище недоступно — настройки действуют до перезагрузки */
+        return false;
     }
+}
+
+export function beginFontSettingsPreview() {
+    previewSettings = loadFontSettings();
+}
+
+export function commitFontSettingsPreview() {
+    return !previewSettings || writeFontSettings(previewSettings);
+}
+
+export function endFontSettingsPreview() {
+    previewSettings = null;
 }
 
 export function applyFontSettings(settings) {
@@ -85,7 +110,7 @@ function buildSection(state, onChange) {
         list.map((f) => `<option value="${f.id}"${f.id === cur ? ' selected' : ''}>${f.label}</option>`).join('');
     sec.innerHTML = `
         <h3 id="acm-fonts-heading" class="app-customization-section-title ac-title">Шрифты</h3>
-        <p class="app-customization-section-hint ac-hint">Применяется сразу и сохраняется в этом браузере. Только системные шрифты — работает офлайн.</p>
+        <p class="app-customization-section-hint ac-hint">Предпросмотр применяется сразу. Нажмите «Сохранить», чтобы оставить изменения. Только системные шрифты — работает офлайн.</p>
         <div class="fs-grid">
             <label class="fs-field"><span>Шрифт интерфейса</span><select data-fs="ui">${opts(UI_FONTS, state.ui)}</select></label>
             <label class="fs-field"><span>Моноширинный (код, логи)</span><select data-fs="mono">${opts(MONO_FONTS, state.mono)}</select></label>

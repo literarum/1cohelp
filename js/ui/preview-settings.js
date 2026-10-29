@@ -90,6 +90,7 @@ function memoFor(root) {
 
 let coalescedPending = null;
 let coalescedRaf = 0;
+let coalescedResolve = null;
 
 /**
  * Версия applyPreviewSettings для частых событий (drag, input): не чаще одного применения за кадр,
@@ -98,20 +99,35 @@ let coalescedRaf = 0;
  * @returns {Promise<void>} резолвится после применения кадра
  */
 export function applyPreviewSettingsCoalesced(settings) {
-    coalescedPending = settings;
+    coalescedPending = { settings, preview: document.body.classList.contains('ac-studio-open') };
     if (coalescedRaf) return coalescedPending && Promise.resolve();
     return new Promise((resolve) => {
+        coalescedResolve = resolve;
         const run = () => {
             coalescedRaf = 0;
+            coalescedResolve = null;
             const next = coalescedPending;
             coalescedPending = null;
-            Promise.resolve(applyPreviewSettings(next)).finally(resolve);
+            Promise.resolve(applyPreviewSettings(next.settings, { preview: next.preview })).finally(resolve);
         };
         coalescedRaf =
             typeof requestAnimationFrame === 'function'
                 ? requestAnimationFrame(run)
                 : setTimeout(run, 16);
     });
+}
+
+/** Discard a queued drag frame before a preview session is rolled back. */
+export function cancelPreviewSettingsFrame() {
+    if (coalescedRaf) {
+        if (typeof requestAnimationFrame === 'function') {
+            if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(coalescedRaf);
+        } else clearTimeout(coalescedRaf);
+    }
+    coalescedRaf = 0;
+    coalescedPending = null;
+    coalescedResolve?.();
+    coalescedResolve = null;
 }
 
 /** Отключает ResizeObserver фиксированной шапки (перед повторным включением или выключением). */
@@ -152,13 +168,14 @@ const STATIC_HEADER_SCROLL_BUFFER_PX = 8;
  * Применяет настройки UI для предпросмотра
  * @param {Object} settings - Объект с настройками UI
  */
-export async function applyPreviewSettings(settings) {
+export async function applyPreviewSettings(settings, options = {}) {
     if (typeof settings !== 'object' || settings === null) {
         settings = JSON.parse(JSON.stringify(DEFAULT_UI_SETTINGS));
     }
     const root = document.documentElement;
     const { style } = root;
     const body = document.body;
+    const previewOnly = options.preview ?? body.classList.contains('ac-studio-open');
 
     let primaryRaw =
         settings?.primaryColor || (DEFAULT_UI_SETTINGS && DEFAULT_UI_SETTINGS.primaryColor);
@@ -383,7 +400,7 @@ export async function applyPreviewSettings(settings) {
         !!root.dataset.theme;
     if (!themeInSync) {
         memo.themeMode = themeMode;
-        setTheme(themeMode);
+        setTheme(themeMode, { preview: previewOnly });
     }
 
     const fontSizePercent = Number.isFinite(settings?.fontSize) ? settings.fontSize : 80;
@@ -455,7 +472,7 @@ export async function applyPreviewSettings(settings) {
         const motionMode = sanitizeMotionMode(settings.motionMode);
         if (memo.motionMode !== motionMode) {
             memo.motionMode = motionMode;
-            applyMotionMode(motionMode);
+            applyMotionMode(motionMode, { persistMirror: !previewOnly });
         }
     }
 

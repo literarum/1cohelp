@@ -40,7 +40,7 @@ const GOOGLE_DOC_RETRY_DELAYS_MS = [250, 900, 1800];
 /** Для фонового цикла: меньше попыток, экспоненциальная пауза внутри цикла (штатный интервал не меняется). */
 export const GOOGLE_DOC_BACKGROUND_RETRY_DELAYS_MS = [1500, 4500];
 const DEFAULT_GOOGLE_SCRIPT_URL =
-    'https://script.google.com/macros/s/AKfycby5ak0hPZF7_YJnhqYD8g1M2Ck6grzq11mpKqPFIWaX9_phJe5H_97cXmnClXKg1Nrl/exec';
+    'https://script.google.com/macros/s/AKfycbwiIAQyofB2cPtJEL0V_eqz3kuv7ll1rS1BxQkZOKKVrEH4hOVr2zumn5DYGpO6oHjVgg/exec';
 const GOOGLE_SCRIPT_URL_KEY = 'copilot1co:gdocs-script-url';
 
 /** Допустимый адрес развёртывания Apps Script: только script.google.com (защита от подмены адреса). */
@@ -721,7 +721,9 @@ function renderParagraphs(container, data) {
 export function normalizeShablonyData(rawData) {
     if (!Array.isArray(rawData) || rawData.length === 0) return rawData;
     const first = rawData[0];
-    if (typeof first === 'string') return rawData;
+    // Docs uses U+000B for soft breaks inside a paragraph. Keep the same line
+    // boundaries for rendering, search and copying, including blank lines.
+    if (typeof first === 'string') return rawData.flatMap(line => String(line).split(/\r\n?|\n|\u000b/));
 
     const markers = ['', '⏩ ', '➧ ', '▸ '];
 
@@ -938,7 +940,6 @@ export const __googleDocsInternals = {
 function copyTemplateBlock(block) {
     if (!block || typeof window.copyToClipboard !== 'function') return;
     const text = Array.from(block.children)
-        .filter(child => !child.hasAttribute('data-copy-template'))
         .map(child => child.innerText ?? child.textContent ?? '')
         .join('\n');
     if (text.trim()) window.copyToClipboard(text, 'Содержимое шаблона скопировано!');
@@ -1022,6 +1023,17 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
             );
             wrapper.title = 'Нажмите, чтобы скопировать содержимое шаблона в буфер обмена';
             wrapper.style.cursor = 'pointer';
+            wrapper.tabIndex = 0;
+            wrapper.setAttribute('role', 'button');
+            wrapper.addEventListener('click', event => {
+                if (event.target.closest('a, button') || window.getSelection()?.toString()) return;
+                copyTemplateBlock(wrapper);
+            });
+            wrapper.addEventListener('keydown', event => {
+                if (event.target !== wrapper || !['Enter', ' '].includes(event.key)) return;
+                event.preventDefault();
+                copyTemplateBlock(wrapper);
+            });
         }
 
         return wrapper;
@@ -1063,14 +1075,7 @@ function renderStyledParagraphs(container, data, searchQuery = '') {
             header.style.color = 'var(--color-text-primary, #e5e7eb)';
             currentBlockWrapper.appendChild(header);
             if (level === 2) {
-                const copyButton = document.createElement('button');
-                copyButton.type = 'button';
-                copyButton.dataset.copyTemplate = '';
-                copyButton.className = 'px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 focus-visible:ring-2 focus-visible:ring-primary';
-                copyButton.textContent = 'Скопировать';
-                copyButton.setAttribute('aria-label', `Скопировать шаблон «${header.textContent}»`);
-                copyButton.addEventListener('click', () => copyTemplateBlock(copyButton.parentElement));
-                currentBlockWrapper.appendChild(copyButton);
+                currentBlockWrapper.setAttribute('aria-label', `Копировать шаблон «${header.textContent}»`);
             }
             fragment.appendChild(currentBlockWrapper);
         } else if (currentBlockWrapper) {
@@ -1855,18 +1860,6 @@ export function initGoogleDocSections() {
 
             if (section.id === 'shablony') {
                 const docContainer = document.getElementById(`doc-content-${section.id}`);
-                if (docContainer && typeof window.copyToClipboard === 'function') {
-                    docContainer.addEventListener('click', (event) => {
-                        const block = event.target.closest('.copyable-block');
-                        if (!block) return;
-
-                        if (event.target.closest('a, button') || window.getSelection()?.toString()) {
-                            return;
-                        }
-
-                        copyTemplateBlock(block);
-                    });
-                }
                 if (docContainer) {
                     docContainer.style.color = 'var(--color-text-primary, #e5e7eb)';
                     docContainer.style.minHeight = '18rem';

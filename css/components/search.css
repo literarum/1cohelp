@@ -5,6 +5,13 @@
 /* ----------------------------------- */
 /*      2.4. Результаты поиска         */
 /* ----------------------------------- */
+/* Press effects replace transform. Keep the clear control's vertical
+   positioning independent so it stays centered while pressed. */
+#clearLinkSearchInputBtn {
+    translate: 0 -50%;
+    transform: none;
+}
+
 #searchResults {
     transition:
         opacity 150ms ease-out,

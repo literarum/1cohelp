@@ -5,8 +5,7 @@
  *
  * Профиль = внешний вид из userPreferences (тема, цвета, скругления, плотность, фиксированная шапка)
  * + настройки шрифтов (localStorage). Импорт проходит строгую проверку схемы и санитизацию,
- * применение — через сохранение в IndexedDB и перезагрузку страницы (единственный способ гарантированно
- * пройти весь штатный конвейер применения оформления).
+ * применение внутри студии меняет только предпросмотр до общей кнопки «Сохранить».
  *
  * Чистые функции (buildAppearanceProfile / parseAppearanceProfile / PRESETS) не зависят от DOM.
  */
@@ -122,8 +121,15 @@ async function getDeps() {
     return { State, saveUserPreferences: prefsMod.saveUserPreferences, NotificationService: notif.NotificationService, showAppConfirm: confirmMod.showAppConfirm };
 }
 
-async function applyAndReload({ appearance, fonts, replace }) {
+async function applyAndReload({ appearance, fonts, replace, sessionToken }, { emergency = false } = {}) {
     const { State, saveUserPreferences, NotificationService } = await getDeps();
+    if (!emergency) {
+        const studio = window.__copilotCustomizationStudio;
+        if (!studio?.isOpen?.()) return;
+        if (studio.applyProfile({ appearance, fonts, replace, sessionToken }) !== true) return;
+        NotificationService.add('Профиль применён для предпросмотра. Нажмите «Сохранить», чтобы оставить изменения.', 'info');
+        return;
+    }
     if (!State.userPreferences) State.userPreferences = {};
     if (replace) APPEARANCE_KEYS.forEach((k) => delete State.userPreferences[k]);
     Object.assign(State.userPreferences, appearance || {});
@@ -173,6 +179,7 @@ function buildSection() {
         <p class="ap-note">Аварийный сброс, если интерфейс не открывается: добавьте к адресу <code>?resetUi=1</code>.</p>`;
 
     sec.addEventListener('click', async (e) => {
+        const sessionToken = window.__copilotCustomizationStudio?.getSessionToken?.();
         const t = e.target instanceof Element ? e.target : null;
         if (!t) return;
         try {
@@ -183,16 +190,16 @@ function buildSection() {
                 const { showAppConfirm } = await getDeps();
                 const ok = await showAppConfirm({
                     title: `Пресет «${preset.label}»`,
-                    message: 'Текущее оформление будет заменено, страница перезагрузится. Продолжить?',
+                    message: 'Предпросмотр оформления будет заменён. Изменения сохранятся только по кнопке «Сохранить». Продолжить?',
                     confirmText: 'Применить',
                 });
-                if (ok) await applyAndReload({ appearance: preset.appearance, fonts: preset.fonts, replace: true });
+                if (ok) await applyAndReload({ appearance: preset.appearance, fonts: preset.fonts, replace: true, sessionToken });
                 return;
             }
             const act = t.closest('[data-ap]')?.getAttribute('data-ap');
             if (act === 'export') {
                 const { State } = await getDeps();
-                const profile = buildAppearanceProfile(State.userPreferences || {}, loadFontSettings());
+                const profile = buildAppearanceProfile(State.currentPreviewSettings || State.userPreferences || {}, loadFontSettings());
                 download(`copilot-appearance-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(profile, null, 2));
             } else if (act === 'import') {
                 sec.querySelector('[data-ap-file]').click();
@@ -200,11 +207,11 @@ function buildSection() {
                 const { showAppConfirm } = await getDeps();
                 const ok = await showAppConfirm({
                     title: 'Сбросить всё оформление?',
-                    message: 'Тема, цвета, скругления, плотность и шрифты вернутся к исходным. Данные (закладки, заметки и т. д.) не затрагиваются.',
+                    message: 'Предпросмотр темы, цветов, скруглений, плотности и шрифтов вернётся к исходным. Нажмите «Сохранить», чтобы оставить сброс. Данные (закладки, заметки и т. д.) не затрагиваются.',
                     confirmText: 'Сбросить',
                     confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
                 });
-                if (ok) await applyAndReload({ appearance: null, fonts: { ...FONT_DEFAULTS }, replace: true });
+                if (ok) await applyAndReload({ appearance: null, fonts: { ...FONT_DEFAULTS }, replace: true, sessionToken });
             }
         } catch (err) {
             console.warn('[appearance-profile]', err);
@@ -212,6 +219,7 @@ function buildSection() {
     });
 
     sec.querySelector('[data-ap-file]').addEventListener('change', async (e) => {
+        const sessionToken = window.__copilotCustomizationStudio?.getSessionToken?.();
         const input = e.target;
         const file = input.files && input.files[0];
         input.value = '';
@@ -229,10 +237,10 @@ function buildSection() {
         const keys = Object.keys(res.appearance).length;
         const ok = await showAppConfirm({
             title: 'Применить профиль оформления?',
-            message: `Параметров оформления: ${keys}, шрифты: ${res.fonts.ui}/${res.fonts.mono}, ${res.fonts.scale}%.${res.fixes.length ? ` Исправлено некорректных значений: ${res.fixes.length}.` : ''} Страница перезагрузится.`,
+            message: `Параметров оформления: ${keys}, шрифты: ${res.fonts.ui}/${res.fonts.mono}, ${res.fonts.scale}%.${res.fixes.length ? ` Исправлено некорректных значений: ${res.fixes.length}.` : ''} Изменения сохранятся только по кнопке «Сохранить».`,
             confirmText: 'Применить',
         });
-        if (ok) await applyAndReload({ appearance: res.appearance, fonts: res.fonts, replace: true });
+        if (ok) await applyAndReload({ appearance: res.appearance, fonts: res.fonts, replace: true, sessionToken });
     });
     return sec;
 }
@@ -263,7 +271,7 @@ async function runEmergencyReset() {
         /* ignore */
     }
     if (!(State.db && State.userPreferences)) return;
-    await applyAndReload({ appearance: null, fonts: { ...FONT_DEFAULTS }, replace: true });
+    await applyAndReload({ appearance: null, fonts: { ...FONT_DEFAULTS }, replace: true }, { emergency: true });
 }
 
 export function initAppearanceProfile() {

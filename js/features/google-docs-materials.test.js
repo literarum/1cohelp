@@ -43,6 +43,21 @@ describe('Google Docs supplied audit regressions', () => {
         expect(block.querySelectorAll('ul')).toHaveLength(2);
         expect([...block.querySelectorAll('p, li')].map(e => e.textContent)).toEqual(['First', 'Middle', 'Second']);
     });
+    it('preserves Google Docs soft line breaks in rendered text, search and copying', () => {
+        const data = ['➧ Template', 'First\u000b\u000bSecond\nThird\r\nFourth'];
+        const flat = docs.normalizeShablonyData(data);
+        expect(flat).toEqual(['➧ Template', 'First', '', 'Second', 'Third', 'Fourth']);
+        expect(docs.parseShablonyContent(flat)[0].content).toBe('First\n\nSecond\nThird\nFourth');
+        const copy = vi.fn();
+        window.copyToClipboard = copy;
+        docs.renderGoogleDocContent(docResult(data), document.getElementById('doc-content-shablony'), 'doc-content-shablony');
+        expect([...document.querySelectorAll('.shablony-block p')].map(e => e.textContent))
+            .toEqual(['First', 'Second', 'Third', 'Fourth']);
+        expect(document.querySelector('[data-template-spacer]')).not.toBeNull();
+        document.querySelector('.copyable-block').click();
+        expect(copy).toHaveBeenCalledWith('Template\nFirst\n\nSecond\nThird\nFourth', expect.any(String));
+        expect(docs.filterShablonyDataByQuery(flat, 'Second')).toEqual(flat);
+    });
     it('rendering cached content preserves its original timestamp', () => {
         const cacheKey = 'copilot1co:gdoc-cache:synthetic-doc';
         localStorage.setItem(cacheKey, JSON.stringify({ ts: 123, data: ['➧ Title', 'Cached'] }));
@@ -77,16 +92,33 @@ describe('Google Docs supplied audit regressions', () => {
         expect(result[0].errorInfo.kind).toBe('timeout');
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
-    it('provides a native copy button and excludes controls from copied template text', () => {
+    it('copies through the template itself without displaying separate copy buttons', () => {
         const copy = vi.fn();
         window.copyToClipboard = copy;
         docs.renderGoogleDocContent(docResult(['⏩ Category', '➧ Template', 'Synthetic body']), document.getElementById('doc-content-shablony'), 'doc-content-shablony');
-        const button = document.querySelector('.copyable-block button[data-copy-template]');
-        expect(button).not.toBeNull();
-        expect(button.type).toBe('button');
-        button.click();
+        const block = document.querySelector('.copyable-block');
+        expect(block.querySelector('button')).toBeNull();
+        expect(document.querySelector('[data-copy-template]')).toBeNull();
+        expect(block.tabIndex).toBe(0);
+        block.click();
         expect(copy).toHaveBeenCalledWith('Template\nSynthetic body', expect.any(String));
+        copy.mockClear();
+        block.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        expect(copy).toHaveBeenCalledWith('Template\nSynthetic body', expect.any(String));
+        copy.mockClear();
+        block.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+        expect(copy).toHaveBeenCalledTimes(1);
         expect(document.querySelector('.shablony-block:not(.copyable-block) button')).toBeNull();
+    });
+    it('keeps template links independent from click-to-copy', () => {
+        const copy = vi.fn();
+        window.copyToClipboard = copy;
+        docs.renderGoogleDocContent(docResult(['➧ Template', 'https://example.test/help']), document.getElementById('doc-content-shablony'), 'doc-content-shablony');
+        const link = document.querySelector('.copyable-block a');
+        link.addEventListener('click', e => e.preventDefault());
+        link.click();
+        link.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        expect(copy).not.toHaveBeenCalled();
     });
     it('never logs raw template content or API objects', async () => {
         const secretFixture = 'Synthetic marker for no-content logging';

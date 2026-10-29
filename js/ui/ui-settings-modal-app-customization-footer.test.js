@@ -8,7 +8,7 @@ import {
     setUISettingsModalInitDependencies,
 } from './ui-settings-modal-init.js';
 
-describe('app customization modal footer (готово / крестик)', () => {
+describe('app customization modal footer (сохранить / крестик)', () => {
     let saveSpy;
     let updatePreviewSpy;
     let closeAnimatedSpy;
@@ -90,7 +90,7 @@ describe('app customization modal footer (готово / крестик)', () =>
         delete window.__copilotCustomizationStudio;
     });
 
-    it('«Готово»: досохраняет хвост через студию и закрывает окно без вопросов', async () => {
+    it('«Сохранить»: явно сохраняет через студию и закрывает окно после успеха', async () => {
         const persistNow = vi.fn().mockResolvedValue(true);
         window.__copilotCustomizationStudio = { persistNow };
         testState.isUISettingsDirty = true;
@@ -105,26 +105,37 @@ describe('app customization modal footer (готово / крестик)', () =>
         expect(revertSpy).not.toHaveBeenCalled();
     });
 
-    it('Крестик: автосохранённое не откатывается, диалога нет', async () => {
+    it('Крестик: откатывает предпросмотр без сохранения и без диалога', async () => {
         const persistNow = vi.fn().mockResolvedValue(true);
-        window.__copilotCustomizationStudio = { persistNow };
+        const discard = vi.fn().mockResolvedValue(undefined);
+        window.__copilotCustomizationStudio = { persistNow, discard };
         testState.isUISettingsDirty = true;
         document.getElementById('closeAppCustomizationModalBtn').click();
         await settle();
         expect(closeAnimatedSpy).toHaveBeenCalled();
-        expect(persistNow).toHaveBeenCalled();
+        expect(persistNow).not.toHaveBeenCalled();
+        expect(discard).toHaveBeenCalled();
         expect(showUnsavedSpy).not.toHaveBeenCalled();
         expect(revertSpy).not.toHaveBeenCalled();
     });
 
-    it('Окно закрывается, даже если студия не загружена или досохранение упало', async () => {
+    it('Крестик закрывает окно и при ошибке отката студии', async () => {
         window.__copilotCustomizationStudio = {
-            persistNow: vi.fn().mockRejectedValue(new Error('boom')),
+            discard: vi.fn().mockRejectedValue(new Error('boom')),
         };
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         document.getElementById('closeAppCustomizationModalBtn').click();
         await settle();
         expect(closeAnimatedSpy).toHaveBeenCalled();
         warn.mockRestore();
+    });
+
+    it('Ошибка сохранения не закрывает окно и не запускает откат', async () => {
+        const discard = vi.fn();
+        window.__copilotCustomizationStudio = { persistNow: vi.fn().mockResolvedValue(false), discard };
+        document.getElementById('appCustomizationSaveBtn').click();
+        await settle();
+        expect(closeAnimatedSpy).not.toHaveBeenCalled();
+        expect(discard).not.toHaveBeenCalled();
     });
 });

@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20261028-ui-repair';
+const ASSET_QUERY_VERSION = '20261029-ux-refine';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20261028-ui-repair';
-const VERSION = `20261028-ui-repair`;
+const MAIN_CSS_QUERY_VERSION = '20261029-ux-refine';
+const VERSION = `20261029-ux-refine`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
@@ -43,6 +43,7 @@ const SHELL_PRECACHE = [
     scopedAsset(`css/main.css?v=${MAIN_CSS_QUERY_VERSION}`),
     scopedAsset(`script.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset(`js/entry.js?v=${ASSET_QUERY_VERSION}`),
+    scopedAsset(`js/search-startup.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset('js/vendor-config.js'),
     scopedAsset('js/vendor-loader.js'),
     scopedAsset('manifest.webmanifest'),

@@ -132,9 +132,9 @@
     }
 }
 
-/* Keep visible keyboard focus; the former global inline reset erased even
-   the component focus styles. Mouse clicks still do not gain a ring. */
-:is(button, a[href], input, select, textarea, summary, [tabindex]):focus-visible {
+/* Commands keep keyboard focus. Text entry fields follow the requested
+   quiet appearance, including rich editors and fields inside dialogs. */
+:is(button, a[href], summary, [tabindex]):not(input, select, textarea, [contenteditable], [role='textbox']):focus-visible {
     outline: 2px solid var(--color-primary) !important;
     outline-offset: 2px !important;
 }
@@ -143,39 +143,31 @@
     outline-offset: 2px !important;
 }
 
-/* Compact arrow buttons keep their full 10px hit area. Their glyphs use the
-   theme text token instead of a fixed dark/light image. */
-@supports selector(::-webkit-scrollbar) {
-    /* Chromium ignores the scrollbar pseudo-elements when the standard
-       scrollbar-width is thin. Firefox keeps its native thin fallback. */
-    html,
-    html body,
-    html body :is(#searchResults, .custom-scrollbar, .overflow-auto, .overflow-y-auto, .overflow-y-scroll, .ext-link-dialog) {
-        scrollbar-width: auto !important;
-    }
+:is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden']),
+    textarea,
+    select,
+    [contenteditable]:not([contenteditable='false']),
+    [role='textbox']
+):is(:focus, :focus-visible) {
+    outline: none !important;
+    outline-offset: 0 !important;
+    box-shadow: none !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
 }
-*::-webkit-scrollbar-button:single-button {
-    display: block;
-    width: 10px;
-    height: 10px;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 6px 4px;
+/* Preserve validation colors while removing the primary focus-border
+   utilities that would otherwise remain after the ring is removed. */
+:is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden']),
+    textarea,
+    select
+):focus:not([aria-invalid='true'], .form-field-invalid) {
+    border-color: var(--color-border) !important;
 }
-*::-webkit-scrollbar-button:single-button:vertical:decrement {
-    background-image: conic-gradient(from -45deg at 50% 100%, var(--color-text-secondary) 0deg 90deg, transparent 90deg);
-}
-*::-webkit-scrollbar-button:single-button:vertical:increment {
-    background-image: conic-gradient(from 135deg at 50% 0%, var(--color-text-secondary) 0deg 90deg, transparent 90deg);
-}
-*::-webkit-scrollbar-button:single-button:horizontal {
-    background-size: 4px 6px;
-}
-*::-webkit-scrollbar-button:single-button:horizontal:decrement {
-    background-image: conic-gradient(from 225deg at 100% 50%, var(--color-text-secondary) 0deg 90deg, transparent 90deg);
-}
-*::-webkit-scrollbar-button:single-button:horizontal:increment {
-    background-image: conic-gradient(from 45deg at 0% 50%, var(--color-text-secondary) 0deg 90deg, transparent 90deg);
+.cockpit-search:focus-within {
+    border-color: var(--color-border);
+    box-shadow: none;
 }
 
 .search-hint-semantic button {

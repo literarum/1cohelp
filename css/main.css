@@ -15,7 +15,6 @@
 /* 3. Компоненты */
 @import url('./components/modals.css');
 @import url('./components/screenshot-attachment-field.css');
-@import url('./components/scrollbar.css');
 @import url('./components/tabs.css');
 @import url('./components/search.css');
 @import url('./components/sortable.css');
@@ -65,3 +64,5 @@
 @import url('./components/polish-v15.css');
 @import url('./components/motion-premium.css');
 @import url('./components/layout-repair.css');
+/* Shared scrollbar policy overrides per-component legacy styling. */
+@import url('./components/scrollbar.css');

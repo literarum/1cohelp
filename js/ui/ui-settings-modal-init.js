@@ -226,7 +226,7 @@ export function initUISettingsModalHandlers() {
             !openAppCustomizationModalBtn.dataset.customizationListenerAttached
         ) {
             openAppCustomizationModalBtn.addEventListener('click', () => {
-                if (appCustomizationModal.classList.contains('hidden')) {
+                if (appCustomizationModal.classList.contains('hidden') && !window.__copilotCustomizationStudio?.isSaving?.()) {
                     ensureFullscreenToggleForConfig(appCustomizationModalConfig);
                     collapseModalFullscreenIfActive(
                         'appCustomizationModal',
@@ -249,15 +249,21 @@ export function initUISettingsModalHandlers() {
             });
             openAppCustomizationModalBtn.dataset.customizationListenerAttached = 'true';
         }
-        /** Студия оформления сохраняется сама: при закрытии лишь досохраняем хвост и закрываем без вопросов. */
+        /** Only the explicit Save action commits the customization preview. */
         const getStudio = () =>
             typeof window !== 'undefined' ? window.__copilotCustomizationStudio : null;
-        const requestCloseAppCustomization = async () => {
+        const requestCloseAppCustomization = async (save = false) => {
             if (!appCustomizationModal) return;
             try {
-                await getStudio()?.persistNow?.();
+                if (save) {
+                    const ok = await getStudio()?.persistNow?.();
+                    if (ok !== true) return;
+                } else {
+                    await getStudio()?.discard?.();
+                }
             } catch (e) {
-                console.warn('[UISettingsModal] досохранение оформления не удалось', e);
+                console.warn('[UISettingsModal] действие с оформлением не удалось', e);
+                if (save) return;
             }
             collapseModalFullscreenIfActive('appCustomizationModal', appCustomizationModalConfig);
             if (typeof deps.closeAnimatedModal === 'function') {
@@ -273,9 +279,9 @@ export function initUISettingsModalHandlers() {
                 () => void requestCloseAppCustomization(),
             );
         }
-        // «Готово»: досохранить и закрыть. «Отменить изменения» обрабатывает сама студия (откат без закрытия).
+        // Cancel restores the opening snapshot in the studio without saving.
         if (appCustomizationSaveBtn && appCustomizationModal) {
-            appCustomizationSaveBtn.addEventListener('click', () => void requestCloseAppCustomization());
+            appCustomizationSaveBtn.addEventListener('click', () => void requestCloseAppCustomization(true));
         }
 
         const FONT_MIN = 80;

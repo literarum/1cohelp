@@ -11,6 +11,57 @@ let deps = {
     showAppConfirm: null,
 };
 
+let currentImage = null;
+let previewSession = null;
+
+export function beginBackgroundImagePreview() {
+    previewSession = { original: currentImage, current: currentImage, committed: false };
+}
+
+export function restoreBackgroundImagePreview() {
+    if (!previewSession) return;
+    previewSession = { original: previewSession.original, current: previewSession.original, committed: false };
+    if (previewSession.current) applyCustomBackgroundImage(previewSession.current);
+    else removeCustomBackgroundImage();
+}
+
+export function clearBackgroundImagePreview() {
+    if (!previewSession) return;
+    previewSession.current = null;
+    removeCustomBackgroundImage();
+}
+
+export function endBackgroundImagePreview() {
+    restoreBackgroundImagePreview();
+    previewSession = null;
+}
+
+export async function commitBackgroundImagePreview() {
+    if (!previewSession || previewSession.current === previewSession.original) return;
+    if (previewSession.current) {
+        await deps.saveToIndexedDB('preferences', { id: 'customBackgroundImage', value: previewSession.current });
+    } else {
+        await deps.deleteFromIndexedDB('preferences', 'customBackgroundImage');
+    }
+    previewSession.committed = true;
+}
+
+export function acceptBackgroundImagePreview() {
+    if (!previewSession) return;
+    previewSession.original = previewSession.current;
+    previewSession.committed = false;
+}
+
+export async function rollbackBackgroundImageCommit() {
+    if (!previewSession?.committed) return;
+    if (previewSession.original) {
+        await deps.saveToIndexedDB('preferences', { id: 'customBackgroundImage', value: previewSession.original });
+    } else {
+        await deps.deleteFromIndexedDB('preferences', 'customBackgroundImage');
+    }
+    previewSession.committed = false;
+}
+
 /**
  * Установка зависимостей модуля
  * @param {Object} dependencies - объект с зависимостями
@@ -25,6 +76,7 @@ export function setBackgroundImageDependencies(dependencies) {
  */
 export function applyCustomBackgroundImage(dataUrl) {
     if (dataUrl && typeof dataUrl === 'string') {
+        currentImage = dataUrl;
         document.documentElement.style.setProperty('--custom-background-image', `url(${dataUrl})`);
         document.body.classList.add('custom-bg-image-active');
 
@@ -48,6 +100,7 @@ export function applyCustomBackgroundImage(dataUrl) {
  * Удалить пользовательское фоновое изображение
  */
 export function removeCustomBackgroundImage() {
+    currentImage = null;
     document.documentElement.style.removeProperty('--custom-background-image');
     document.body.classList.remove('custom-bg-image-active');
 
@@ -86,6 +139,7 @@ export function setupBackgroundImageControls() {
     uploadBtn.addEventListener('click', () => fileInput.click());
 
     removeBtn.addEventListener('click', async () => {
+        const session = previewSession;
         const confirmed = deps.showAppConfirm
             ? await deps.showAppConfirm({
                   title: 'Удаление фонового изображения',
@@ -96,10 +150,15 @@ export function setupBackgroundImageControls() {
               })
             : confirm('Вы уверены, что хотите удалить фоновое изображение?');
         if (confirmed) {
+            if (session && session !== previewSession) return;
             try {
-                await deps.deleteFromIndexedDB('preferences', 'customBackgroundImage');
+                if (session) {
+                    session.current = null;
+                    document.getElementById('appCustomizationModal')?.dispatchEvent(new Event('customization-preview-change'));
+                }
+                else await deps.deleteFromIndexedDB('preferences', 'customBackgroundImage');
                 removeCustomBackgroundImage();
-                deps.showNotification('Фоновое изображение удалено.', 'info');
+                deps.showNotification(session ? 'Фон убран в предпросмотре. Нажмите «Сохранить», чтобы оставить изменение.' : 'Фоновое изображение удалено.', 'info');
             } catch (error) {
                 console.error('Ошибка при удалении фонового изображения из DB:', error);
                 deps.showNotification('Ошибка при удалении фона.', 'error');
@@ -108,6 +167,7 @@ export function setupBackgroundImageControls() {
     });
 
     fileInput.addEventListener('change', async (event) => {
+        const session = previewSession;
         const file = event.target.files[0];
         if (!file) return;
 
@@ -130,12 +190,17 @@ export function setupBackgroundImageControls() {
             reader.onloadend = async () => {
                 const dataUrl = reader.result;
                 try {
-                    await deps.saveToIndexedDB('preferences', {
+                    if (session && session !== previewSession) return;
+                    if (session) {
+                        session.current = dataUrl;
+                        document.getElementById('appCustomizationModal')?.dispatchEvent(new Event('customization-preview-change'));
+                    }
+                    else await deps.saveToIndexedDB('preferences', {
                         id: 'customBackgroundImage',
                         value: dataUrl,
                     });
                     applyCustomBackgroundImage(dataUrl);
-                    deps.showNotification('Фоновое изображение успешно установлено.', 'success');
+                    deps.showNotification(session ? 'Предпросмотр фона готов. Нажмите «Сохранить», чтобы оставить изменение.' : 'Фоновое изображение успешно установлено.', 'success');
                 } catch (dbError) {
                     console.error('Ошибка сохранения фона в DB:', dbError);
                     deps.showNotification('Не удалось сохранить фон.', 'error');

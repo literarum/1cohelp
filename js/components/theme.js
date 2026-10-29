@@ -125,9 +125,9 @@ function persistLoadingOverlaySnapshot(snapshot) {
     }
 }
 
-function applyLoadingOverlayTheme(isDark) {
+function applyLoadingOverlayTheme(isDark, persist = true) {
     const snapshot = buildLoadingOverlaySnapshot(!!isDark);
-    persistLoadingOverlaySnapshot(snapshot);
+    if (persist) persistLoadingOverlaySnapshot(snapshot);
     const overlayTone = snapshot?.tone === 'dark' ? 'dark' : 'light';
     if (typeof window.__applyLoadingOverlayThemeVars === 'function') {
         window.__applyLoadingOverlayThemeVars(overlayTone, snapshot);
@@ -140,7 +140,7 @@ function applyLoadingOverlayTheme(isDark) {
     }
 }
 
-export function setTheme(mode) {
+export function setTheme(mode, options = {}) {
     const root = document.documentElement;
     const apply = (isDark) => {
         root.classList.add('theme-switching');
@@ -169,8 +169,9 @@ export function setTheme(mode) {
         setTheme._mq = mq;
         setTheme._onChange = (e) => {
             apply(e.matches);
-            persistLoadingThemeHint('auto', e.matches);
-            applyLoadingOverlayTheme(e.matches);
+            const persist = !options.preview || options.persistSystemChanges === true;
+            if (persist) persistLoadingThemeHint('auto', e.matches);
+            applyLoadingOverlayTheme(e.matches, persist);
         };
         try {
             mq.addEventListener('change', setTheme._onChange);
@@ -180,10 +181,10 @@ export function setTheme(mode) {
         isDark = mq.matches;
     }
     apply(isDark);
-    persistLoadingThemeHint(mode, isDark);
-    applyLoadingOverlayTheme(isDark);
+    if (!options.preview) persistLoadingThemeHint(mode, isDark);
+    applyLoadingOverlayTheme(isDark, !options.preview);
     updateThemeToggleButtonIcons(isDark);
-    if (State.userPreferences) {
+    if (State.userPreferences && !options.preview) {
         State.userPreferences.theme = mode;
     }
 }

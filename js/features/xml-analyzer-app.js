@@ -155,7 +155,6 @@ class ReportAnalyzerApp {
         }
 
         this._initDragAndDrop();
-        this._initRecent();
 
         if (this.loadFileBtn) {
             this.loadFileBtn.addEventListener('click', () => this.openFilePicker());
@@ -241,14 +240,6 @@ class ReportAnalyzerApp {
             shell.classList.remove('xa-dragging');
             this.handleFileDrop(e);
         });
-    }
-
-    _initRecent() {
-        const view = this.root.querySelector('#xmlAnalyzerInitialView');
-        if (!view) return;
-        this._recentEl = h('div', { class: 'xa-recent', hidden: true });
-        view.appendChild(this._recentEl);
-        this._renderRecent();
     }
 
     debounce(func, delay) {
@@ -596,7 +587,6 @@ class ReportAnalyzerApp {
         const hadActive = this.isAnalysisDone && this.activeRecord;
         this.docs.push(...added);
         this._trimDocs();
-        this._rememberRecent(added);
         if (compare && hadActive) {
             this._presentRecord(this.activeRecord);
             this.showNotification(
@@ -733,83 +723,6 @@ class ReportAnalyzerApp {
         if (content) content.replaceChildren(h('span', { text: 'Анализировать' }));
         this.updateAnalyzeButtonState();
         if (rec.view.refreshCompare) rec.view.refreshCompare();
-    }
-
-    _loadRecent() {
-        try {
-            const v = JSON.parse(localStorage.getItem('xmlAnalyzerRecent') || '[]');
-            return Array.isArray(v)
-                ? v.filter((x) => x && typeof x.name === 'string').slice(0, 8)
-                : [];
-        } catch {
-            return [];
-        }
-    }
-
-    /** Запоминает только имена, размеры и тип — содержимое файлов не сохраняется. */
-    _rememberRecent(recs) {
-        try {
-            let list = this._loadRecent();
-            for (const r of recs) {
-                list = list.filter((x) => !(x.name === r.name && x.size === r.size));
-                list.unshift({ name: r.name, size: r.size, type: r.typeLabel || '', at: Date.now() });
-            }
-            localStorage.setItem('xmlAnalyzerRecent', JSON.stringify(list.slice(0, 8)));
-        } catch {
-            // хранилище недоступно
-        }
-        this._renderRecent();
-    }
-
-    _renderRecent() {
-        const host = this._recentEl;
-        if (!host) return;
-        const list = this._loadRecent();
-        if (!list.length) {
-            host.hidden = true;
-            host.replaceChildren();
-            return;
-        }
-        host.hidden = false;
-        host.replaceChildren(
-            h(
-                'div',
-                { class: 'xa-recent-title' },
-                h('span', { text: 'Недавно открывали' }),
-                h('button', {
-                    type: 'button',
-                    class: 'xa-link-btn',
-                    onclick: () => {
-                        try {
-                            localStorage.removeItem('xmlAnalyzerRecent');
-                        } catch {
-                            // ignore
-                        }
-                        this._renderRecent();
-                    },
-                    text: 'очистить',
-                }),
-            ),
-            h(
-                'div',
-                { class: 'xa-recent-list' },
-                list.map((x) =>
-                    h('button', {
-                        type: 'button',
-                        class: 'xa-recent-item',
-                        title: `${x.name}${x.type ? ' · ' + x.type : ''} · ${fmtSize(x.size || 0)} · ${new Date(x.at).toLocaleString('ru-RU')}\nСодержимое файлов не хранится: выберите файл снова.`,
-                        onclick: () => {
-                            this.showNotification(
-                                `Выберите файл «${x.name}» — содержимое не хранится в приложении.`,
-                                'success',
-                            );
-                            this.openFilePicker();
-                        },
-                        text: x.name,
-                    }),
-                ),
-            ),
-        );
     }
 
     // ---------- Разбор документа ----------
