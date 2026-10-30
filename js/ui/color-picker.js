@@ -9,7 +9,8 @@ import { deriveThemeBackgroundPairFromHex } from './preview-settings.js';
 import {
     normalizeHex6,
     normalizeColorToHex,
-    evaluatePrimaryOnWhiteText,
+    readableTextColor,
+    contrastRatio,
     evaluateTextOnNeutral,
 } from './color-settings-engine.js';
 
@@ -301,43 +302,25 @@ function updateColorAccessibilityHint() {
     const target = State?.uiModalState?.currentColorTarget || 'elements';
 
     if (target === 'background') {
-        const dark = effectiveThemeIsDark(State?.currentPreviewSettings);
-        const hsl = pickerHsl;
-        if (dark && hsl.l > 55) {
-            el.textContent =
-                'Светлый фон в тёмной теме: текст интерфейса светлый и на нём плохо читается. Светлый фон лучше выбрать в светлой теме — для тёмной он подберётся автоматически.';
-        } else if (!dark && hsl.l < 45) {
-            el.textContent =
-                'Тёмный фон в светлой теме: текст интерфейса тёмный и на нём плохо читается. Тёмный фон лучше выбрать в тёмной теме — для светлой он подберётся автоматически.';
-        } else {
-            el.textContent =
-                'Для фона палитра текста и панелей пересчитывается автоматически; парный фон другой темы подбирается сам.';
-        }
+        el.textContent = 'Панели и автоматический цвет текста подбираются под выбранный фон. Свой цвет текста сохраняется; его читаемость можно проверить в разделе «Текст». Фон другой темы подбирается автоматически.';
         return;
     }
     if (target === 'elements') {
-        const { ratio, meetsUiNonTextAA, meetsNormalTextAA } = evaluatePrimaryOnWhiteText(hex);
+        const foreground = readableTextColor([hex]);
+        const ratio = contrastRatio(foreground, hex);
         const r = ratio.toFixed(2);
-        if (!meetsUiNonTextAA) {
-            el.textContent = `Контраст белого текста на акценте: ${r}:1 — ниже 3:1 (ориентир WCAG для графики и крупных элементов UI). Сделайте оттенок темнее или насыщеннее.`;
-        } else if (!meetsNormalTextAA) {
-            el.textContent = `Контраст белого текста на акценте: ${r}:1 — для мелкого текста на кнопках желательно ≥ 4.5:1.`;
-        } else {
-            el.textContent = `Контраст белого текста на акценте: ${r}:1 — хороший запас читаемости.`;
-        }
+        el.textContent = `Надписи на акцентных кнопках: ${foreground === '#ffffff' ? 'белые' : 'чёрные'}, контраст ${r}:1. Цвет надписей подбирается автоматически для читаемости.`;
         return;
     }
     if (target === 'text') {
-        const onLight = evaluateTextOnNeutral(hex, '#f9fafb');
-        const onDark = evaluateTextOnNeutral(hex, '#12121f');
-        const lightOk = onLight.meetsNormalTextAA;
-        const darkOk = onDark.meetsNormalTextAA;
-        if (!lightOk || !darkOk) {
-            el.textContent = `Контраст на нейтрали: светлая тема ${onLight.ratio.toFixed(2)}:1, тёмная ${onDark.ratio.toFixed(2)}:1. Для основного текста целевой минимум 4.5:1 в обеих темах.`;
-        } else {
-            const worst = Math.min(onLight.ratio, onDark.ratio);
-            el.textContent = `Контраст на нейтрали: не хуже ${worst.toFixed(2)}:1 — укладывается в AA для обычного текста.`;
+        const backgrounds = ['--color-background', '--color-surface-1', '--color-surface-2', '--color-input-bg']
+            .map(sampleBackgroundCssVarToHex).filter(Boolean);
+        if (!backgrounds.length) {
+            el.textContent = 'Выбранный цвет применяется к основному тексту. Проверьте его читаемость на фоне и панелях текущей темы.';
+            return;
         }
+        const worst = Math.min(...backgrounds.map(bg => evaluateTextOnNeutral(hex, bg).ratio));
+        el.textContent = `Контраст в текущей теме: не хуже ${worst.toFixed(2)}:1. ${worst >= 4.5 ? 'Достаточно для обычного текста.' : 'Для обычного текста нужно ≥ 4.5:1 — выберите более контрастный цвет.'} При смене темы проверьте цвет снова.`;
     }
 }
 
@@ -613,56 +596,25 @@ function updateDualThemePreviewStrip() {
     const defaultTextLight = '#111827';
     const defaultTextDark = '#ffffff';
 
-    if (target === 'background' && hexToHsl && hslToHex && adjustHsl) {
-        const baseRaw =
-            prev.isBackgroundCustom && prev.backgroundColor
-                ? prev.backgroundColor
-                : resolveHexForCustomizationTarget(prev, {
-                      uiModalState: { currentColorTarget: 'background' },
-                  });
-        const base = normalizeColorToHex(baseRaw) || DEFAULT_HEX;
-        const activeTheme = activeUiThemeKeyForBackground(prev);
-        const { light: bgL, dark: bgD } = deriveThemeBackgroundPairFromHex(
-            base,
-            hexToHsl,
-            hslToHex,
-            adjustHsl,
-            { activeTheme: backgroundAnchorFor(prev) },
-        );
-        lightEl.style.backgroundColor = bgL;
-        darkEl.style.backgroundColor = bgD;
-        lightEl.style.color = defaultTextLight;
-        darkEl.style.color = defaultTextDark;
-        for (const el of [lightEl, darkEl]) {
-            const strip = el.querySelector('[data-role="accent"]');
-            if (strip) strip.style.opacity = '0';
-        }
-    } else if (target === 'text') {
-        const tc =
-            prev.isTextCustom && prev.customTextColor
-                ? prev.customTextColor
-                : effectiveThemeIsDark(prev)
-                  ? defaultTextDark
-                  : defaultTextLight;
-        lightEl.style.backgroundColor = neutralLight;
-        darkEl.style.backgroundColor = neutralDark;
-        lightEl.style.color = tc;
-        darkEl.style.color = tc;
-        for (const el of [lightEl, darkEl]) {
-            const strip = el.querySelector('[data-role="accent"]');
-            if (strip) strip.style.opacity = '0';
-        }
-    } else {
-        lightEl.style.backgroundColor = neutralLight;
-        darkEl.style.backgroundColor = neutralDark;
-        lightEl.style.color = defaultTextLight;
-        darkEl.style.color = defaultTextDark;
-        for (const el of [lightEl, darkEl]) {
-            const strip = el.querySelector('[data-role="accent"]');
-            if (strip) {
-                strip.style.opacity = '1';
-                strip.style.backgroundColor = primary;
-            }
+    let backgrounds = { light: neutralLight, dark: neutralDark };
+    const base = prev.isBackgroundCustom && normalizeColorToHex(prev.backgroundColor);
+    if (base && hexToHsl && hslToHex && adjustHsl) {
+        backgrounds = deriveThemeBackgroundPairFromHex(base, hexToHsl, hslToHex, adjustHsl, {
+            activeTheme: backgroundAnchorFor(prev),
+        });
+    }
+    const customText = prev.isTextCustom && normalizeColorToHex(prev.customTextColor);
+    for (const [theme, el] of [['light', lightEl], ['dark', darkEl]]) {
+        const bg = backgrounds[theme];
+        const style = document.documentElement.style;
+        const appliedBg = normalizeColorToHex(style.getPropertyValue(`--override-background-${theme}`));
+        const appliedText = appliedBg === bg && normalizeColorToHex(style.getPropertyValue(`--override-text-primary-${theme}`));
+        el.style.backgroundColor = bg;
+        el.style.color = customText || appliedText || readableTextColor([bg], theme === 'dark' ? defaultTextDark : defaultTextLight);
+        const strip = el.querySelector('[data-role="accent"]');
+        if (strip) {
+            strip.style.opacity = target === 'elements' ? '1' : '0';
+            strip.style.backgroundColor = primary;
         }
     }
 

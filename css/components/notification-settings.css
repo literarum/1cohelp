@@ -144,7 +144,7 @@
 .ns-btn--primary {
     background: var(--color-primary, #9933ff);
     border-color: var(--color-primary, #9933ff);
-    color: #fff;
+    color: var(--color-text-on-primary, #fff);
 }
 .ns-btn--icon {
     width: 36px;
@@ -329,7 +329,7 @@
 .gs-btn--primary {
     background: var(--color-primary, #9933ff);
     border-color: var(--color-primary, #9933ff);
-    color: #fff;
+    color: var(--color-text-on-primary, #fff);
 }
 .gs-status:empty { display: none; }
 .gs-status {

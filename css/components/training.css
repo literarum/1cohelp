@@ -510,12 +510,13 @@
 
 .training-mentor-panel .training-mentor-btn--primary {
     background-color: var(--color-primary, #9933ff);
-    color: #fff;
+    color: var(--color-text-on-primary, #fff);
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.07);
 }
 
 .training-mentor-panel .training-mentor-btn--primary:hover {
-    filter: brightness(1.09);
+    background-color: var(--color-secondary);
+    filter: none;
     box-shadow:
         0 6px 20px -6px color-mix(in srgb, var(--color-primary, #9933ff) 50%, transparent),
         0 2px 8px -2px color-mix(in srgb, var(--color-primary, #9933ff) 35%, transparent);
@@ -524,7 +525,8 @@
 
 .training-mentor-panel .training-mentor-btn--primary:active {
     transform: translateY(0);
-    filter: brightness(0.95);
+    background-color: var(--color-secondary);
+    filter: none;
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 

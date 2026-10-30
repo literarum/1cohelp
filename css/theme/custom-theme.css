@@ -102,29 +102,8 @@ body.custom-background-active {
     background-color: var(--color-background) !important;
 }
 
-body.custom-background-active
+body:is(.custom-background-active, .custom-text-active)
     :is(
-        h1:not(.text-primary),
-        h2,
-        h3,
-        h4,
-        h5,
-        h6,
-        p:not(.text-primary),
-        span:not(.text-primary),
-        a,
-        button,
-        li,
-        dt,
-        dd,
-        strong,
-        em,
-        small,
-        mark,
-        blockquote,
-        code,
-        kbd,
-        pre,
         .text-gray-900,
         .text-gray-800,
         .text-gray-700,
@@ -133,13 +112,17 @@ body.custom-background-active
         .dark\:text-gray-200,
         .dark\:text-gray-300,
         .card-title-text
-    ) {
+    ):not(.bg-primary):not(.bg-primary *) {
     color: var(--color-text-primary) !important;
 }
 
-body.custom-background-active
-    :is(.text-gray-600, .text-gray-500, .dark\:text-gray-300, .dark\:text-gray-400) {
+body:is(.custom-background-active, .custom-text-active)
+    :is(.text-gray-600, .text-gray-500, .dark\:text-gray-300, .dark\:text-gray-400):not(.bg-primary):not(.bg-primary *) {
     color: var(--color-text-secondary) !important;
+}
+
+body.custom-text-active {
+    color: var(--color-text-primary);
 }
 
 /* --- ФОНЫ И ПОВЕРХНОСТИ (КОРРЕКТНАЯ ДВУХСЛОЙНАЯ СИСТЕМА) --- */
@@ -280,10 +263,7 @@ body.custom-background-active
         #editMainBtn,
         #dbMergeStartBtn,
         #dbMergeSelectFileBtn,
-        button.bg-primary,
-        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
-                .tab-btn
-            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+        button.bg-primary
     ) {
     background-color: var(--color-primary);
     color: var(--color-text-on-primary) !important;
@@ -316,10 +296,7 @@ body.custom-background-active
         #editMainBtn,
         #dbMergeStartBtn,
         #dbMergeSelectFileBtn,
-        button.bg-primary,
-        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
-                .tab-btn
-            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+        button.bg-primary
     )
     > * {
     color: var(--color-text-on-primary) !important;
@@ -348,10 +325,7 @@ body.custom-background-active
         #editMainBtn,
         #dbMergeStartBtn,
         #dbMergeSelectFileBtn,
-        button.bg-primary,
-        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
-                .tab-btn
-            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+        button.bg-primary
     ):hover {
     background-color: var(--color-primary) !important;
     color: var(--color-text-on-primary) !important;
@@ -414,7 +388,11 @@ body.custom-background-active
 }
 
 #confirmAndClearDataBtn {
-    background-color: red;
+    background-color: #dc2626;
+    color: #ffffff !important;
+}
+#confirmAndClearDataBtn:hover {
+    background-color: #b91c1c;
 }
 
 body.custom-background-active
@@ -439,10 +417,7 @@ body.custom-background-active
         #editMainBtn,
         #dbMergeStartBtn,
         #dbMergeSelectFileBtn,
-        button.bg-primary,
-        button:not([class*='bg-gray']):not([class*='bg-red']):not([class*='bg-transparent']):not(
-                .tab-btn
-            ):not(.view-toggle):not(#timerDisplay button):not(.btn-destructive)
+        button.bg-primary
     ):hover
     > * {
     color: var(--color-text-on-primary) !important;
@@ -479,7 +454,7 @@ body.custom-background-active .btn-destructive:hover {
 
 .btn-destructive-all,
 .btn-destructive-all > * {
-    color: var(--color-text-on-primary) !important;
+    color: var(--color-red-text) !important;
     border: none !important;
 }
 
@@ -548,11 +523,11 @@ body.custom-background-active
 }
 body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn {
     background-color: var(--color-red-text) !important;
-    color: var(--color-text-on-primary) !important;
+    color: #ffffff !important;
     border-color: var(--color-red-text) !important;
 }
 body.custom-background-active #confirmClearDataModal #confirmAndClearDataBtn:hover {
-    background-color: var(--color-red-solid) !important;
+    background-color: #b91c1c !important;
     border-color: var(--color-red-text) !important;
 }
 body.custom-background-active #confirmClearDataModal #cancelClearDataBtn {

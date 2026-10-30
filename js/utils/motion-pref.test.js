@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 'use strict';
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     MOTION_MODES,
     MOTION_STORAGE_KEY,
@@ -12,6 +12,7 @@ import {
     isReducedMotion,
     isRichMotion,
     onMotionChange,
+    withThemeTransition,
 } from './motion-pref.js';
 
 describe('motion-pref', () => {
@@ -29,6 +30,24 @@ describe('motion-pref', () => {
         expect(sanitizeMotionMode('turbo')).toBe('auto');
         expect(sanitizeMotionMode(undefined)).toBe('auto');
         expect(sanitizeMotionMode(5)).toBe('auto');
+    });
+
+    it('applies a theme immediately even if native transition never runs its callback', async () => {
+        applyMotionMode('auto');
+        const native = document.startViewTransition;
+        document.startViewTransition = vi.fn(() => ({ updateCallbackDone: new Promise(() => {}) }));
+        try {
+            const change = vi.fn(() => document.documentElement.classList.add('dark'));
+            const applied = withThemeTransition(change);
+            expect(change).toHaveBeenCalledTimes(1);
+            expect(document.documentElement.classList.contains('dark')).toBe(true);
+            await applied;
+        } finally { document.startViewTransition = native; }
+    });
+
+    it('reports change errors instead of swallowing them as animation failures', async () => {
+        const failure = new Error('theme application failed');
+        await expect(withThemeTransition(() => { throw failure; })).rejects.toBe(failure);
     });
 
     it('resolveMotionLevel: система просит меньше движения — уважаем в auto и calm', () => {

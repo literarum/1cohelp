@@ -15,6 +15,7 @@ import {
     setUISettingsModalDependencies,
 } from './ui-settings-modal.js';
 import { deriveThemeBackgroundPairFromHex } from './preview-settings.js';
+import { contrastRatio, normalizeColorToHex } from './color-settings-engine.js';
 
 /** jsdom сериализует присвоенный hex в rgb(); сравниваем канонически. */
 function styleBackgroundToHex6(el) {
@@ -188,6 +189,17 @@ describe('color-picker + customization populate', () => {
         );
         expect(styleBackgroundToHex6(lightEl)).toBe(l.toLowerCase());
         expect(styleBackgroundToHex6(darkEl)).toBe(d.toLowerCase());
+    });
+
+    it('dual-theme samples keep automatic text readable even on an opposite-tone anchor', () => {
+        mountPickerDom();
+        State.uiModalState.currentColorTarget = 'background';
+        State.currentPreviewSettings = { themeMode: 'dark', backgroundColor: '#ffffff', isBackgroundCustom: true };
+        setColorPickerStateFromHex('#ffffff');
+        for (const id of ['customization-preview-light', 'customization-preview-dark']) {
+            const el = document.getElementById(id);
+            expect(contrastRatio(normalizeColorToHex(el.style.color), styleBackgroundToHex6(el))).toBeGreaterThanOrEqual(4.5);
+        }
     });
 
     it('populateCustomizationModalControls: при themeMode=auto выбирает реально активную тему документа', () => {

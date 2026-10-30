@@ -131,20 +131,13 @@ export function initMotionPref() {
 }
 
 /**
- * Плавная смена темы через View Transitions API (если доступен и разрешены эффекты).
- * Всегда вызывает `change`, даже если API недоступен.
- * @param {() => void} change
+ * Применяет тему сразу и возвращает завершение изменения независимо от анимации.
+ * @param {() => unknown | Promise<unknown>} change
  */
 export function withThemeTransition(change) {
-    try {
-        if (isRichMotion() && typeof document.startViewTransition === 'function') {
-            const t = document.startViewTransition(change);
-            // промис: «изменение применено» — чтобы вызывающий мог обновить зависящие от него контролы
-            return Promise.resolve(t && t.updateCallbackDone).catch(() => {});
-        }
-    } catch {
-        /* упадём на обычную смену */
-    }
+    // Apply the setting immediately. Native snapshot scheduling can defer or
+    // reject its callback; appearance must not depend on an optional animation.
+    // Existing CSS transitions still honor the selected motion preference.
     try {
         return Promise.resolve(change());
     } catch (e) {

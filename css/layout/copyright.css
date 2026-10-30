@@ -96,15 +96,7 @@ html.dark,
     --color-primary-hover: var(--color-secondary);
 }
 
-@supports (color: color-mix(in srgb, white, black)) {
-    :root:not(.dark) {
-        --color-primary-hover: color-mix(in srgb, var(--color-primary) 80%, black);
-    }
-    html.dark,
-    :root.dark {
-        --color-primary-hover: color-mix(in srgb, var(--color-primary) 80%, white);
-    }
-}
+/* The generated secondary preserves contrast with primary button text. */
 
 html:not(.dark) [class~='bg-primary']:hover,
 html.dark [class~='bg-primary']:hover {

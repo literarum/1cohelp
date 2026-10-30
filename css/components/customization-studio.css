@@ -956,7 +956,7 @@ html.dark .ac-status[data-state='error'] {
 .ac-choice-card:has(.ac-choice-input:checked) .ac-choice-check {
     background: var(--color-primary, #9933ff);
     border-color: var(--color-primary, #9933ff);
-    color: #fff;
+    color: var(--color-text-on-primary, #fff);
 }
 
 /* Демонстрация движения */
@@ -1063,7 +1063,7 @@ html[data-motion='reduce'] .ac-pane:not([hidden]) {
 .ac-motion-stage__toast i { color: #22c55e; margin-right: 0.3rem; }
 .ac-motion-stage__pop {
     grid-area: pop; justify-self: end; align-self: end;
-    padding: 0.5rem 1rem; font-size: 0.78rem; font-weight: 600; color: #fff;
+    padding: 0.5rem 1rem; font-size: 0.78rem; font-weight: 600; color: var(--color-text-on-primary, #fff);
     border-radius: calc(var(--border-radius, 8px) * 1.5);
     background: var(--color-primary, #9933ff);
     box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary, #9933ff) 40%, transparent);

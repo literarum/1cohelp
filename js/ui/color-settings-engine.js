@@ -65,6 +65,28 @@ export function contrastRatio(hexA, hexB) {
     return (light + 0.05) / (dark + 0.05);
 }
 
+/** Keep a preferred text tone when readable; otherwise use the strongest neutral. */
+export function readableTextColor(backgrounds, preferred) {
+    const score = (color) => Math.min(...backgrounds.map(bg => contrastRatio(color, bg)));
+    if (preferred && score(preferred) >= 4.5) return preferred;
+    return score('#000000') > score('#ffffff') ? '#000000' : '#ffffff';
+}
+
+/** Preserve a generated surface where possible, moving toward a known readable anchor. */
+export function readableSurfaceColor(surface, foreground, anchor) {
+    if (contrastRatio(foreground, surface) >= 4.5) return surface;
+    for (let step = 1; step <= 20; step++) {
+        const mix = step / 20;
+        const channel = (offset) => Math.round(
+            parseInt(surface.slice(offset, offset + 2), 16) * (1 - mix) +
+            parseInt(anchor.slice(offset, offset + 2), 16) * mix,
+        ).toString(16).padStart(2, '0');
+        const candidate = `#${channel(1)}${channel(3)}${channel(5)}`;
+        if (contrastRatio(foreground, candidate) >= 4.5) return candidate;
+    }
+    return anchor;
+}
+
 /**
  * Акцентный цвет как фон кнопки с белым текстом (--color-text-on-primary).
  * WCAG 2.2: нетекстовые компоненты UI — обычно отсчитывают от 3:1 (non-text contrast / graphical).
@@ -145,9 +167,15 @@ export function applyPrimaryPairWithVerification(style, primaryHex, calculateSec
         }
     }
 
+    const foreground = readableTextColor([primary]);
+    // Keep the same foreground during hover. A darker hover can otherwise cross
+    // the contrast boundary for accents which need black text.
+    secondary = readableSurfaceColor(secondary, foreground, primary);
+
     const attemptApply = () => {
         style.setProperty('--color-primary', primary);
         style.setProperty('--color-secondary', secondary);
+        style.setProperty('--color-text-on-primary', foreground);
     };
 
     let attempts = 0;
@@ -157,7 +185,7 @@ export function applyPrimaryPairWithVerification(style, primaryHex, calculateSec
         attemptApply();
         const v1 = verifyRootInlineVar(style, '--color-primary', primary);
         const v2 = verifyRootInlineVar(style, '--color-secondary', secondary);
-        verified = v1.ok && v2.ok;
+        verified = v1.ok && v2.ok && verifyRootInlineVar(style, '--color-text-on-primary', foreground).ok;
     }
 
     return { primary, secondary, verified, attempts };

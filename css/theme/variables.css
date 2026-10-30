@@ -63,7 +63,7 @@
     --color-input-bg: var(--override-input-bg-light, var(--default-input-bg-light));
     --color-hover-subtle: var(--override-hover-light, var(--default-hover-subtle-light));
 
-    /* Текст на primary-фоне: всегда контрастный (белый) в обеих темах */
+    /* Initial fallback; preview-settings selects readable text for the chosen accent. */
     --color-text-on-primary: #ffffff;
 }
 

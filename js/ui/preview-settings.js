@@ -5,6 +5,9 @@ import {
     normalizeHex6,
     normalizeColorToHex,
     applyPrimaryPairWithVerification,
+    contrastRatio,
+    readableTextColor,
+    readableSurfaceColor,
 } from './color-settings-engine.js';
 import { applyBirthdayModeFromSettings } from '../features/birthday-mode.js';
 import { applyMotionMode, sanitizeMotionMode } from '../utils/motion-pref.js';
@@ -264,8 +267,12 @@ export async function applyPreviewSettings(settings, options = {}) {
         const hsl = hexToHsl(themeBgHex);
         if (!hsl) return null;
         const anchored = buildAnchoredPalette(hsl, isDarkSlot);
-        if (anchored) return anchored;
-        const isDark = isDarkSlot;
+        if (anchored && (customText || [anchored.textP, anchored.textS].every(text =>
+            [themeBgHex, anchored.surf1, anchored.surf2, anchored.input].every(bg => contrastRatio(text, bg) >= 4.5),
+        ))) return anchored;
+        // A custom background can be white in dark mode or black in light mode.
+        // Surface direction and automatic text follow the painted color, not the slot name.
+        const isDark = readableTextColor([themeBgHex]) === '#ffffff';
         const darkBoost = Math.round(hsl.l * darkRelFactor);
         const lightBoost = Math.round((100 - hsl.l) * lightRelFactor);
 
@@ -287,20 +294,29 @@ export async function applyPreviewSettings(settings, options = {}) {
             textS = hslToHex(ts.h, ts.s, tsL);
         }
 
-        const surf1 = hslToHex(
+        let surf1 = hslToHex(
             ...Object.values(adjustHsl(hsl, isDark ? -(6 + darkBoost) : 6 + lightBoost, -5)),
         );
-        const surf2 = hslToHex(
+        let surf2 = hslToHex(
             ...Object.values(adjustHsl(hsl, isDark ? -(10 + darkBoost) : 10 + lightBoost, -8)),
         );
         const borderL = isDark ? Math.min(72, hsl.l + 8) : Math.max(20, hsl.l - 22);
         const borderS = Math.max(0, Math.min(100, hsl.s - (isDark ? 18 : 10)));
         const border = hslToHex(hsl.h, borderS, borderL);
-        const input = hslToHex(...Object.values(adjustHsl(hsl, isDark ? 3 : -3, -5)));
+        let input = hslToHex(...Object.values(adjustHsl(hsl, isDark ? 3 : -3, -5)));
         const hover = hslToHex(
             ...Object.values(adjustHsl(hexToHsl(surf1), isDark ? 6 : -6, isDark ? -6 : 6)),
         );
 
+        if (!customText) {
+            const foreground = readableTextColor([themeBgHex]);
+            surf1 = readableSurfaceColor(surf1, foreground, themeBgHex);
+            surf2 = readableSurfaceColor(surf2, foreground, themeBgHex);
+            input = readableSurfaceColor(input, foreground, themeBgHex);
+            const backgrounds = [themeBgHex, surf1, surf2, input];
+            textP = readableTextColor(backgrounds, textP);
+            textS = readableTextColor(backgrounds, textS);
+        }
         return { textP, textS, surf1, surf2, border, input, hover };
     };
 
@@ -390,7 +406,14 @@ export async function applyPreviewSettings(settings, options = {}) {
             '--override-scrollbar-track-dark',
             '--override-scrollbar-thumb-dark',
         ].forEach((v) => style.removeProperty(v));
+        if (customText) {
+            for (const theme of ['light', 'dark']) {
+                style.setProperty(`--override-text-primary-${theme}`, customText);
+                style.setProperty(`--override-text-secondary-${theme}`, customText);
+            }
+        }
     }
+    body.classList.toggle('custom-text-active', !!customText);
 
     const themeMode = settings?.theme || settings?.themeMode || DEFAULT_UI_SETTINGS.themeMode;
     const expectedDark = activeTheme === 'dark';

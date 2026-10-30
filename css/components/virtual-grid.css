@@ -195,7 +195,7 @@
 .bm-tools-btn--primary {
     background: var(--color-primary, #2563eb);
     border-color: transparent;
-    color: #fff;
+    color: var(--color-text-on-primary, #fff);
 }
 .bm-tools-btn--primary:hover {
     background: var(--color-secondary, #1d4ed8);

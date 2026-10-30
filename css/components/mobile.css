@@ -547,7 +547,7 @@ html:not([data-motion='reduce']) .tab-content.swipe-nudge-prev {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--color-text-on-primary, #fff);
     background: var(--color-primary, #9933ff);
     box-shadow: 0 8px 22px -8px var(--color-primary, #9933ff);
     opacity: 0;
