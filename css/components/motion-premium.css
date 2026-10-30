@@ -172,9 +172,6 @@ html[data-motion='calm']
     animation-name: motion-fade-in;
     animation-duration: 140ms;
 }
-html[data-motion='calm'] body.motion-entering .tab-content:not(.hidden) .view-item {
-    animation: none;
-}
 html[data-motion='calm'] #appContent .view-item:hover:not(.main-algo-group) {
     transform: none;
 }

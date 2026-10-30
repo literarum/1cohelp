@@ -1,5 +1,6 @@
 'use strict';
 
+import { applyGlassMaterial } from './glass-material.js';
 import { THEME_DEFAULTS, DEFAULT_BORDER_RADIUS_PX } from '../config.js';
 import {
     normalizeHex6,
@@ -498,6 +499,8 @@ export async function applyPreviewSettings(settings, options = {}) {
             applyMotionMode(motionMode, { persistMirror: !previewOnly });
         }
     }
+
+    applyGlassMaterial(settings);
 
     const birthdayWanted = settings?.birthdayModeEnabled === true;
     if (memo.birthday !== birthdayWanted || birthdayWanted) {

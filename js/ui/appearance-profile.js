@@ -28,6 +28,9 @@ export const APPEARANCE_KEYS = [
     'contentDensity',
     'staticHeader',
     'motionMode',
+    'surfaceMaterial',
+    'glassMatte',
+    'glassRefraction',
 ];
 
 const MAX_PROFILE_BYTES = 64 * 1024;

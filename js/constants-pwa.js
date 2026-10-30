@@ -8,4 +8,4 @@
  * 3) ASSET_QUERY_VERSION в site/sw.js (precache URL)
  * При смене только логики SW (стратегии кэша) дополнительно увеличить VERSION в sw.js.
  */
-export const ASSET_QUERY_VERSION = '20261030-customization';
+export const ASSET_QUERY_VERSION = '20261030-ux-recovery';

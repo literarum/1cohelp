@@ -2,7 +2,7 @@
 <html lang="ru" style="background-color: var(--color-initial-bg)">
     <head>
         <meta charset="UTF-8" />
-        <script src="js/search-startup.js?v=20261030-customization"></script>
+        <script src="js/search-startup.js?v=20261030-ux-recovery"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
         <meta name="description" content="Copilot 1СО — локальный помощник оператора: алгоритмы, закладки, регламенты, анализатор XML и данные клиента. Работает офлайн." />
@@ -142,8 +142,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=20261030-customization"></script>
-        <script src="js/vendor-loader.js?v=20261030-customization"></script>
+        <script src="js/vendor-config.js?v=20261030-ux-recovery"></script>
+        <script src="js/vendor-loader.js?v=20261030-ux-recovery"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -209,15 +209,16 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=20261030-customization"
+            href="css/tailwind.generated.css?v=20261030-ux-recovery"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=20261030-customization" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261030-customization" />
+        <link rel="stylesheet" href="css/main.css?v=20261030-ux-recovery" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261030-ux-recovery" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
+                root.classList.add('loading-overlay-active');
                 const THEME_HINT_KEY = 'copilot.theme.hint';
                 const THEME_RESOLVED_KEY = 'copilot.theme.resolved';
                 const OVERLAY_SNAPSHOT_KEY = 'copilot.loading-overlay.snapshot';
@@ -334,6 +335,7 @@
         </script>
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
+            html.loading-overlay-active, html.loading-overlay-active body { overflow: hidden !important; overscroll-behavior: none; }
             html {
                 background-color: var(--loading-overlay-bg, #020206);
             }
@@ -3541,40 +3543,6 @@
                                             </div>
                                         </div>
 
-                                        <div
-                                            class="pt-content-sm border-t border-gray-200 dark:border-gray-600"
-                                            id="googleScriptSettingsSection"
-                                        >
-                                            <label
-                                                for="googleScriptUrlInput"
-                                                class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300"
-                                                >Подключение к Google Docs (Apps Script)</label
-                                            >
-                                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                                Адрес веб-приложения (заканчивается на <code>/exec</code>).
-                                                Нужен, если развёртывание скрипта пересоздано. Пустое поле —
-                                                встроенный адрес.
-                                            </p>
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <input
-                                                    type="url"
-                                                    id="googleScriptUrlInput"
-                                                    class="gs-url-input"
-                                                    placeholder="https://script.google.com/macros/s/…/exec"
-                                                    autocomplete="off"
-                                                    spellcheck="false"
-                                                    aria-describedby="googleScriptUrlStatus"
-                                                />
-                                            </div>
-                                            <div class="flex flex-wrap items-center gap-2 mt-2">
-                                                <button type="button" id="googleScriptTestBtn" class="gs-btn gs-btn--primary">
-                                                    <i class="fas fa-plug" aria-hidden="true"></i>Проверить подключение
-                                                </button>
-                                                <button type="button" id="googleScriptSaveBtn" class="gs-btn">Применить адрес</button>
-                                                <button type="button" id="googleScriptResetBtn" class="gs-btn">Встроенный адрес</button>
-                                            </div>
-                                            <div id="googleScriptUrlStatus" class="gs-status" role="status" aria-live="polite"></div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3714,6 +3682,20 @@
                                     </label>
                                         </div>
                                     </div>
+                                    <fieldset class="ac-group ac-material-group">
+                                        <legend class="ac-title">Материал поверхностей</legend>
+                                        <div class="ac-material-options">
+                                            <label><input type="radio" name="surfaceMaterial" value="solid" checked /><span>Обычный</span><small>Непрозрачные поверхности</small></label>
+                                            <label><input type="radio" name="surfaceMaterial" value="glass" /><span>Стекло</span><small>Свет, глубина и мягкие преломления</small></label>
+                                        </div>
+                                        <div id="acGlassControls" class="ac-glass-controls" hidden>
+                                            <label for="glassMatte">Матовость <output id="glassMatteValue" for="glassMatte">65%</output></label>
+                                            <input type="range" class="ac-range" id="glassMatte" min="0" max="100" value="65" />
+                                            <label for="glassRefraction">Преломление <output id="glassRefractionValue" for="glassRefraction">30%</output></label>
+                                            <input type="range" class="ac-range" id="glassRefraction" min="0" max="100" value="30" />
+                                            <p class="ac-hint">Эффект применяется к фону панелей; текст остаётся чётким. В браузерах без SVG-фильтра остаётся матовое стекло.</p>
+                                        </div>
+                                    </fieldset>
                                     <div class="ac-group">
                                         <h3 class="ac-title" id="acm-accent-heading">Акцентный цвет</h3>
                                         <p class="ac-hint">Цвет кнопок, ссылок и выделения. Нужен свой оттенок — откройте «Цвета».</p>
@@ -4233,6 +4215,12 @@
                                             ></span
                                         >
                                     </label>
+<label class="db-merge-scope-item"><input type="checkbox" class="db-merge-scope-checkbox" value="links" checked/><span class="db-merge-scope-label">Ссылки 1С</span></label>
+<label class="db-merge-scope-item"><input type="checkbox" class="db-merge-scope-checkbox" value="training" checked/><span class="db-merge-scope-label">Обучение и прогресс</span></label>
+<label class="db-merge-scope-item"><input type="checkbox" class="db-merge-scope-checkbox" value="blacklist" checked/><span class="db-merge-scope-label">Чёрный список</span></label>
+<label class="db-merge-scope-item"><input type="checkbox" class="db-merge-scope-checkbox" value="clientData" /><span class="db-merge-scope-label">Клиентские данные</span></label>
+<label class="db-merge-scope-item"><input type="checkbox" class="db-merge-scope-checkbox" value="preferences" /><span class="db-merge-scope-label">Настройки и оформление</span></label>
+<label class="db-merge-scope-item"><input type="checkbox" class="db-merge-scope-checkbox" value="analytics" /><span class="db-merge-scope-label">Клиентская аналитика</span></label>
                                 </div>
                                 <p
                                     id="dbMergeScopeSummary"
@@ -6269,7 +6257,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=20261030-customization"></script>
-        <script type="module" src="./js/entry.js?v=20261030-customization"></script>
+        <script type="module" src="./script.js?v=20261030-ux-recovery"></script>
+        <script type="module" src="./js/entry.js?v=20261030-ux-recovery"></script>
     </body>
 </html>

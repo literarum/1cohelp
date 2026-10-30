@@ -1284,21 +1284,6 @@ function showConnectionErrorCard(info, rawMessage, { forceShow }) {
                     );
                 },
             },
-            {
-                id: 'gdocs-settings',
-                label: 'Адрес скрипта',
-                icon: 'fa-link',
-                onClick: () => {
-                    document.getElementById('customizeUIBtn')?.click();
-                    setTimeout(() => {
-                        const f = document.getElementById('googleScriptUrlInput');
-                        if (f) {
-                            f.scrollIntoView({ block: 'center' });
-                            f.focus({ preventScroll: true });
-                        }
-                    }, 500);
-                },
-            },
         ],
         diagnostics: {
             title: 'Google Docs / Шаблоны',

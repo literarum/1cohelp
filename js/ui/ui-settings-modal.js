@@ -260,6 +260,9 @@ export function getSettingsFromModal() {
     );
 
     return {
+        surfaceMaterial: State.currentPreviewSettings.surfaceMaterial || 'solid',
+        glassMatte: State.currentPreviewSettings.glassMatte ?? 65,
+        glassRefraction: State.currentPreviewSettings.glassRefraction ?? 30,
         mainLayout: 'horizontal',
         theme: themeFromCustomization,
         primaryColor: primaryColor,

@@ -8,13 +8,14 @@ const cssRoot = join(dirname(fileURLToPath(import.meta.url)), '../../css');
 const readCss = (path) => readFileSync(join(cssRoot, path), 'utf8');
 const scrollbar = postcss.parse(readCss('components/scrollbar.css'));
 const layout = postcss.parse(readCss('components/layout-repair.css'));
+const followup = postcss.parse(readCss('components/app-polish-followup.css'));
 
 function matchingRules(sheet, element, pseudo = '') {
     const matches = [];
     sheet.walkRules((rule) => {
         if (postcss.list.comma(rule.selector).some((selector) => {
             if (pseudo && !selector.endsWith(pseudo)) return false;
-            if (!pseudo && selector.includes('::-webkit-')) return false;
+            if (!pseudo && selector.includes('::')) return false;
             const host = pseudo ? selector.slice(0, -pseudo.length) : selector;
             return element.matches(host);
         })) matches.push(rule);
@@ -63,7 +64,7 @@ describe('shared input and scrollbar styling contract', () => {
         expect(firefox.some((rule) => hasDeclaration(rule, 'scrollbar-width', 'thin'))).toBe(true);
     });
 
-    it('removes focus decoration from text fields and rich editors without removing button focus', () => {
+    it('keeps base text-field and validation styling, with the final quiet-focus layer covering commands', () => {
         document.body.innerHTML = '<input><input type="search"><input type="password"><textarea></textarea>' +
             '<select><option>One</option></select><div contenteditable="true" tabindex="0"></div>' +
             '<div role="textbox" tabindex="0"></div><button>Save</button><input type="checkbox">' +
@@ -79,6 +80,9 @@ describe('shared input and scrollbar styling contract', () => {
         const buttonRules = matchingRules(layout, button);
         expect(buttonRules.some((rule) => hasDeclaration(rule, 'outline', 'none'))).toBe(false);
         expect(buttonRules.some((rule) => hasDeclaration(rule, 'outline', '2px solid var(--color-primary)'))).toBe(true);
+        const finalButtonRules = matchingRules(followup, button);
+        expect(finalButtonRules.some(rule => hasDeclaration(rule, 'outline', 'none') && hasDeclaration(rule, 'box-shadow', 'none'))).toBe(true);
+        expect(finalButtonRules.some(rule => rule.parent.name === 'layer' && rule.parent.params === 'app-quiet-focus')).toBe(true);
         for (const control of document.querySelectorAll('input[type=checkbox], .form-field-invalid')) {
             control.focus();
             expect(matchingRules(layout, control).some((rule) =>

@@ -1,0 +1,102 @@
+/* One column of equal-width rows, regardless of the previous card grid. */
+#appContent [data-section-id][data-view='list'] {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch;
+    justify-items: stretch;
+    min-width: 0;
+}
+#appContent [data-section-id][data-view='list'] > .view-item {
+    width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    padding: .85rem 1rem !important;
+    gap: 1rem;
+}
+#appContent [data-view='list'] > .view-item > :is(.flex-grow, .p-4, .pt-10, .w-full) {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+#appContent [data-view='list'] > .view-item > .flex-grow.flex.items-center {
+    flex-direction: row !important;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+#appContent [data-view='list'] > .view-item > :is(.p-4, .pt-10):not(.flex.items-center) {
+    display: block !important;
+}
+#appContent [data-view='list'] > .view-item > :is(.absolute, [class*='-actions']) {
+    position: static !important;
+    order: 3;
+    opacity: 1 !important;
+    flex: 0 0 auto;
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+}
+#appContent [data-view='list'] > .view-item :is(h3, h4, p, a) { min-width: 0; overflow-wrap: anywhere; }
+#sedoTypesContent, #sedoTypesContent > div, #sedoTypesInfoContainer { min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
+#sedoTypesInfoContainer :is(p, li, a, h3, td) { overflow-wrap: anywhere; }
+#sedoTypesInfoContainer :is(table, pre) { max-width: 100%; }
+
+/* Each dialog owns its body scrolling; small content doesn't reserve two gutters. */
+div[role='dialog'].fixed.inset-0 .overflow-y-auto {
+    scrollbar-gutter: auto;
+    min-height: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+div[role='dialog'] :is(.modal-inner-container, .ext-link-dialog, .db-merge-dialog) { min-width: 0; box-sizing: border-box; }
+div[role='dialog'] :is(input, textarea, select) { max-width: 100%; min-width: 0; box-sizing: border-box; }
+div[role='dialog'] :is(p, label, .info-value) { overflow-wrap: anywhere; }
+div[role='dialog'] :is(pre, .overflow-x-auto) { overflow-x: auto; }
+
+#clearAllDataBtn, body.custom-background-active #clearAllDataBtn {
+    color: #fff !important;
+    background: #b91c1c !important;
+    border-color: #b91c1c !important;
+}
+#clearAllDataBtn:hover { background: #991b1b !important; }
+#clearAllDataBtn * { color: inherit !important; }
+#algorithmModal .step-execution-dimmed-step { opacity: .18; filter: grayscale(.45); }
+
+.training-seg, .dark .training-seg {
+    border-radius: var(--border-radius, 8px);
+    color: var(--color-text-secondary);
+    background: var(--color-surface-1);
+    border-color: var(--color-border);
+}
+.training-seg--active, .training-seg[aria-pressed='true'], .dark .training-seg--active, .dark .training-seg[aria-pressed='true'] {
+    color: var(--color-text-on-primary);
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    box-shadow: none;
+}
+.training-step, .dark .training-step { padding: 1.25rem; border-color: var(--color-border); background: var(--color-surface-1); }
+.training-step--done, .dark .training-step--done { border-color: var(--color-border); }
+.training-step-body { min-width: 0; overflow-wrap: anywhere; }
+
+/* Explicit product preference: quiet focus, with semantic selected/error states intact. */
+@layer app-quiet-focus {
+    :is(button, a, input, textarea, select, summary, [tabindex], [contenteditable]):is(:focus, :focus-visible),
+    :is(label, .app-toggle__track, .training-quiz-opt):has(:focus-visible),
+    :is(.ac-theme-card, .ac-choice-card, .ac-segment, .cockpit-search):focus-within,
+    input:focus-visible + .app-toggle__track {
+        outline: none !important;
+        outline-offset: 0 !important;
+        box-shadow: none !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+    }
+    input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: none !important; }
+    input[type='range']:focus-visible::-moz-range-thumb { box-shadow: none !important; }
+}
+@media (max-width: 640px) {
+    #appContent [data-section-id][data-view='list'] > .view-item { flex-wrap: wrap; gap: .75rem; }
+    #appContent [data-view='list'] > .view-item > :is(.absolute, [class*='-actions']) { width: 100%; justify-content: flex-end; padding-top: .5rem; }
+}

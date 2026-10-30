@@ -36,6 +36,7 @@ import {
 import { runLocalStorageHealthProbe } from './health-localstorage-probe.js';
 import { startDiagnosticsOverlay } from './diagnostics-ui.js';
 import { checkGoogleDocsConnection } from './google-docs.js';
+import { reportClipboardHealth } from './clipboard-health-probe.js';
 
 let deps = {};
 /** Счётчик циклов watchdog (interval) для периодического второго контура целостности данных */
@@ -1345,44 +1346,7 @@ export function initBackgroundHealthTestsSystem() {
                 }
 
                 // Тест 6.2: clipboard
-                try {
-                    if (
-                        navigator.clipboard &&
-                        typeof navigator.clipboard.writeText === 'function'
-                    ) {
-                        try {
-                            await navigator.clipboard.writeText('');
-                            report('info', 'Буфер обмена', 'Clipboard API доступен.');
-                        } catch (writeErr) {
-                            const msg = String(writeErr?.message || writeErr).toLowerCase();
-                            if (
-                                msg.includes('permission') ||
-                                msg.includes('denied') ||
-                                msg.includes('user gesture')
-                            ) {
-                                report(
-                                    'info',
-                                    'Буфер обмена',
-                                    'Clipboard API доступен. Запись требует действия пользователя (ожидаемо в фоне).',
-                                );
-                            } else {
-                                report(
-                                    'warn',
-                                    'Буфер обмена',
-                                    `Clipboard недоступен: ${writeErr?.message || writeErr}.`,
-                                );
-                            }
-                        }
-                    } else {
-                        report(
-                            'warn',
-                            'Буфер обмена',
-                            'Clipboard API недоступен (контекст или разрешения).',
-                        );
-                    }
-                } catch (err) {
-                    report('warn', 'Буфер обмена', `Clipboard недоступен: ${err.message}.`);
-                }
+                reportClipboardHealth(report);
 
                 updateHud(95);
             } catch (err) {
@@ -1921,37 +1885,7 @@ export function initBackgroundHealthTestsSystem() {
             }
 
             // Тест 6.2: clipboard
-            try {
-                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                    try {
-                        await navigator.clipboard.writeText('');
-                        report('info', 'Буфер обмена', 'Clipboard API доступен.');
-                    } catch (writeErr) {
-                        const msg = String(writeErr?.message || writeErr).toLowerCase();
-                        if (
-                            msg.includes('permission') ||
-                            msg.includes('denied') ||
-                            msg.includes('user gesture')
-                        ) {
-                            report(
-                                'info',
-                                'Буфер обмена',
-                                'Clipboard API доступен. Запись требует действия пользователя (ожидаемо в фоне).',
-                            );
-                        } else {
-                            report(
-                                'warn',
-                                'Буфер обмена',
-                                `Clipboard недоступен: ${writeErr?.message || writeErr}.`,
-                            );
-                        }
-                    }
-                } else {
-                    report('warn', 'Буфер обмена', 'Clipboard API недоступен.');
-                }
-            } catch (err) {
-                report('warn', 'Буфер обмена', `Clipboard: ${err.message}.`);
-            }
+            reportClipboardHealth(report);
 
             // Второй контур целостности данных (полный профиль; не дублирует быстрый watchdog)
             try {

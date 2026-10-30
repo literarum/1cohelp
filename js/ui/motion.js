@@ -7,24 +7,8 @@ import { isReducedMotion } from '../utils/motion-pref.js';
  * Никаких постоянных циклов: только разовые классы на короткое время.
  */
 
-const ENTER_CLASS = 'motion-entering';
-const ENTER_MS = 520;
-let enterTimer = null;
-let bound = false;
-
 export function prefersReducedMotion() {
     return isReducedMotion();
-}
-
-/** Включить каскад появления для первых видимых карточек/панели на ~0.5 с. */
-export function markContentEntering() {
-    if (prefersReducedMotion() || typeof document === 'undefined') return;
-    document.body.classList.add(ENTER_CLASS);
-    if (enterTimer) clearTimeout(enterTimer);
-    enterTimer = setTimeout(() => {
-        document.body.classList.remove(ENTER_CLASS);
-        enterTimer = null;
-    }, ENTER_MS);
 }
 
 /**
@@ -58,16 +42,5 @@ export function shakeField(el) {
     setTimeout(() => el.classList.remove('motion-field-shake'), 380);
 }
 
-export function initMotion() {
-    if (bound || typeof document === 'undefined') return;
-    bound = true;
-    document.addEventListener(
-        'click',
-        (e) => {
-            const t = e.target;
-            if (t instanceof Element && t.closest('.tab-btn')) markContentEntering();
-        },
-        true,
-    );
-}
-initMotion();
+// Tab navigation owns its opacity transition in app/tabs.js. A capture-click
+// body animation used to animate the outgoing panel and truncate card staggers.

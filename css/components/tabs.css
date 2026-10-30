@@ -129,7 +129,7 @@
 }
 
 .tab-content {
-    transition: opacity 200ms ease-in-out;
+    transition: opacity 150ms ease-in-out;
 }
 
 .tab-content.is-hiding {

@@ -26,7 +26,7 @@ export const loadingOverlayManager = {
     spawnProgress: 0,
     spawnDuration: 1500,
     spawnStartTime: 0,
-    fadeOutDuration: 500,
+    fadeOutDuration: 180,
     currentProgressValue: 0,
     exitScaleStartTime: 0,
 
@@ -79,6 +79,7 @@ export const loadingOverlayManager = {
     },
 
     createAndShow() {
+        document.documentElement.classList.add('loading-overlay-active');
         this.applyOverlayTheme(resolveThemeFromStorage());
         const existingOverlay = document.getElementById('custom-loading-overlay');
         const existingStyles = document.getElementById('custom-loading-overlay-styles');
@@ -328,6 +329,7 @@ export const loadingOverlayManager = {
                     /* #custom-loading-overlay-styles остаётся в head (ранний index + повторный показ). */
                     if (this.overlayElement === currentOverlayElement) this.overlayElement = null;
                     if (this.styleElement === currentStyleElement) this.styleElement = null;
+                    document.documentElement.classList.remove('loading-overlay-active');
                     resolve();
                 }, this.fadeOutDuration);
             } else {
@@ -344,6 +346,7 @@ export const loadingOverlayManager = {
                 }
                 this.overlayElement = null;
                 this.styleElement = null;
+                document.documentElement.classList.remove('loading-overlay-active');
                 resolve();
             }
         });

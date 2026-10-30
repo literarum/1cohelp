@@ -12,6 +12,7 @@
  * Чистые функции (ACCENTS, LOOKS, pickAppearance, appearanceEqual, applyLookToAppearance, …) не зависят от DOM.
  */
 
+import { MATERIAL_DEFAULTS, sanitizeMaterial } from './glass-material.js';
 import { State } from '../app/state.js';
 import { saveUserPreferences } from '../app/user-preferences.js';
 import {
@@ -68,6 +69,9 @@ export const STUDIO_KEYS = Object.freeze([
     'contentDensity',
     'motionMode',
     'staticHeader',
+    'surfaceMaterial',
+    'glassMatte',
+    'glassRefraction',
 ]);
 
 /** Готовые акценты. Первый — стандартный цвет приложения. */
@@ -213,6 +217,7 @@ export const LOOKS = Object.freeze([
 /** Значения оформления «по умолчанию». */
 export function defaultAppearance() {
     return {
+        ...MATERIAL_DEFAULTS,
         theme: 'dark',
         primaryColor: THEME_DEFAULTS.primary,
         isBackgroundCustom: false,
@@ -255,6 +260,7 @@ export function pickAppearance(src) {
     out.contentDensity = Number.isFinite(d) ? Math.max(0, Math.min(6, Math.round(d))) : def.contentDensity;
     out.motionMode = sanitizeMotionMode(s.motionMode);
     out.staticHeader = s.staticHeader === true;
+    Object.assign(out, sanitizeMaterial(s));
     return out;
 }
 
@@ -282,6 +288,7 @@ export function applyLookToAppearance(current, look) {
         contentDensity: def.contentDensity,
         motionMode: cur.motionMode,
         staticHeader: cur.staticHeader,
+        ...sanitizeMaterial(cur),
     };
     return pickAppearance({ ...base, ...(look?.appearance || {}) });
 }
@@ -392,6 +399,7 @@ function createController(root) {
         cps.contentDensity = app.contentDensity;
         cps.motionMode = app.motionMode;
         cps.staticHeader = app.staticHeader;
+        Object.assign(cps, sanitizeMaterial(app));
         return cps;
     }
 
@@ -568,9 +576,22 @@ function createController(root) {
         }
     }
 
+    function syncMaterial(app) {
+        $$('input[name="surfaceMaterial"]').forEach((input) => { input.checked = input.value === app.surfaceMaterial; });
+        ['glassMatte', 'glassRefraction'].forEach((key) => {
+            const input = $('#' + key);
+            if (input) { input.value = app[key]; input.disabled = app.surfaceMaterial !== 'glass'; syncRangeFill(input); }
+            const output = $('#' + key + 'Value');
+            if (output) output.textContent = app[key] + '%';
+        });
+        const controls = $('#acGlassControls');
+        if (controls) controls.hidden = app.surfaceMaterial !== 'glass';
+    }
+
     function syncAll() {
         const app = readAppearance();
         syncTheme(app);
+        syncMaterial(app);
         syncAccent(app);
         syncShapeLabels(app);
         syncMotion(app);
@@ -694,7 +715,7 @@ function createController(root) {
         const cur = readAppearance();
         let next = { ...cur };
         if (id === 'look') {
-            next = { ...cur, theme: def.theme, primaryColor: def.primaryColor };
+            next = { ...cur, theme: def.theme, primaryColor: def.primaryColor, ...MATERIAL_DEFAULTS };
         } else if (id === 'colors') {
             next = { ...cur, primaryColor: def.primaryColor, isBackgroundCustom: false, isTextCustom: false };
             delete next.backgroundColor;
@@ -798,6 +819,12 @@ function createController(root) {
             markChanged();
             // пипетка читает фактический цвет с экрана — обновляем её после того, как тема реально применена
             void withThemeTransition(() => applyNow()).then(() => syncPicker());
+        } else if (t.name === 'surfaceMaterial') {
+            const next = { ...readAppearance(), surfaceMaterial: t.value };
+            writeAppearance(next);
+            applyNow();
+            syncAll();
+            markChanged();
         } else if (t.name === 'motionMode') {
             const next = { ...readAppearance(), motionMode: sanitizeMotionMode(t.value) };
             writeAppearance(next);
@@ -811,7 +838,13 @@ function createController(root) {
     function onInput(e) {
         const t = e.target;
         if (!(t instanceof HTMLInputElement)) return;
-        if (t.id === 'borderRadiusSlider') {
+        if (t.id === 'glassMatte' || t.id === 'glassRefraction') {
+            const app = pickAppearance({ ...readAppearance(), [t.id]: t.value });
+            writeAppearance(app);
+            syncMaterial(app);
+            applyFrame();
+            markChanged();
+        } else if (t.id === 'borderRadiusSlider') {
             const app = { ...readAppearance(), borderRadius: clampBorderRadiusPx(t.value) };
             writeAppearance(app);
             syncShapeLabels(app);

@@ -11,8 +11,10 @@
  *  5) Применение MergePlan с ремаппингом ID и обновлением UI/поиска.
  */
 
+import { createMergeWorkspace } from './db-merge-transaction.js';
 import { State } from '../app/state.js';
 import { CURRENT_SCHEMA_VERSION } from '../constants.js';
+import { storeConfigs as currentStoreConfigs } from '../db/stores.js';
 import {
     clearIndexedDBStore,
     getAllFromIndexedDB,
@@ -76,6 +78,11 @@ export const CONTENT_STORES = [
     'reminders',
     'pdfFiles',
     'screenshots',
+    'links', 'clientData', 'preferences', 'blacklistedClients',
+    'trainingProgress', 'trainingSrsCards', 'trainingWeakSpots',
+    'trainingUserCurriculum', 'trainingBuiltinCurriculum', 'mentorQuizPackages',
+    'clientAnalyticsFiles', 'clientAnalyticsRecords', 'clientAnalyticsFolders',
+    'clientAnalyticsTags', 'clientAnalyticsCardMeta',
 ];
 
 const MERGE_SCOPE_TO_STORES = {
@@ -86,7 +93,15 @@ const MERGE_SCOPE_TO_STORES = {
     favorites: ['favorites'],
     reminders: ['reminders'],
     attachments: ['pdfFiles', 'screenshots'],
+    links: ['links'],
+    clientData: ['clientData'],
+    preferences: ['preferences'],
+    blacklist: ['blacklistedClients'],
+    training: ['trainingProgress', 'trainingSrsCards', 'trainingWeakSpots', 'trainingUserCurriculum', 'trainingBuiltinCurriculum', 'mentorQuizPackages'],
+    analytics: ['clientAnalyticsFiles', 'clientAnalyticsFolders', 'clientAnalyticsTags', 'clientAnalyticsRecords', 'clientAnalyticsCardMeta'],
 };
+
+const fixedKeyStore = storeName => currentStoreConfigs.some(config => config.name === storeName && !config.options.autoIncrement);
 
 function resolveStoresFromSelectedScopes(selectedScopeValues) {
     if (!Array.isArray(selectedScopeValues)) return [];
@@ -223,6 +238,7 @@ function normalizeUrl(url) {
  * надёжно сравнивать «один и тот же» объект из разных баз.
  */
 const MERGE_IDENTITY_CONFIG = {
+    links: { identityKey: record => `link|${normalizeUrl(record?.url || record?.url_full)}|${normalizeText(record?.title)}` },
     bookmarkFolders: {
         identityKey: (record) => `bookmarkFolder|${normalizeText(record?.name)}`,
     },
@@ -300,6 +316,11 @@ const MERGE_IDENTITY_CONFIG = {
         identityKey: (record) => `mentorQuizPack|${String(record?.id ?? '')}`,
     },
 };
+for (const storeName of CONTENT_STORES) {
+    if (!MERGE_IDENTITY_CONFIG[storeName]) {
+        MERGE_IDENTITY_CONFIG[storeName] = { identityKey: record => `${storeName}|${record.id === undefined ? JSON.stringify(record) : String(record.id)}` };
+    }
+}
 
 const LEGACY_EXT_LINK_CATEGORY_KEY_TO_DEFAULT_NAME = {
     docs: 'Документация',
@@ -398,6 +419,7 @@ function restoreBlobField(record, label) {
         }
         return { ...record, blob: converted };
     }
+    if (b !== undefined && !(b instanceof Blob)) throw new Error(`Некорректное вложение (${label}).`);
     return record;
 }
 
@@ -699,7 +721,7 @@ async function loadLocalDataForStores(stores) {
             result[storeName] = await getAllFromIndexedDB(storeName);
         } catch (e) {
             console.error(`[DbMerge] Ошибка чтения из хранилища ${storeName}:`, e);
-            result[storeName] = [];
+            throw new Error(`Не удалось прочитать «${storeName}». Слияние не начато.`);
         }
     }
     return result;
@@ -766,7 +788,7 @@ function buildIdentityMap(storeName, records, ctx) {
                 map.set(key, record);
             }
         } catch (e) {
-            console.warn(`[DbMerge] Не удалось посчитать identityKey для ${storeName}:`, e, record);
+            throw new Error(`Не удалось сопоставить запись раздела «${mergeStoreHumanLabel(storeName)}».`);
         }
     });
     return map;
@@ -850,20 +872,32 @@ export async function analyzeMergeData(importJsonString, options = {}) {
         throw new Error('Некорректный JSON файла слияния.');
     }
 
-    if (!parsed || typeof parsed !== 'object' || !parsed.data || !parsed.schemaVersion) {
-        throw new Error('Некорректный формат файла слияния: ожидаются поля schemaVersion и data.');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Некорректный формат файла слияния.');
+    const compatibility = await import('./import-export.js');
+    const envelope = compatibility.extractImportDataEnvelope(parsed);
+    if (!Object.keys(envelope.data).length) throw new Error('В файле нет разделов данных.');
+    for (const [name, records] of Object.entries(envelope.data)) {
+        if (!Array.isArray(records) || records.some(record => !record || typeof record !== 'object' || Array.isArray(record))) {
+            throw new Error(`Некорректные записи раздела «${name}».`);
+        }
     }
-
-    const fileSchemaVersion = String(parsed.schemaVersion);
-    if (fileSchemaVersion !== CURRENT_SCHEMA_VERSION) {
-        console.warn(
-            `[DbMerge] Версия схемы файла (${fileSchemaVersion}) отличается от версии приложения (${CURRENT_SCHEMA_VERSION}).`,
-        );
-        // Жёстко не запрещаем, так как import/export уже проверяют совместимость,
-        // но помечаем в анализе.
+    const integrity = compatibility.verifyBackupIntegrity(parsed, envelope.data);
+    const hashes = await compatibility.verifyBackupStoreHashes(parsed, envelope.data);
+    if (!integrity.ok || !hashes.ok) throw new Error('Нарушена целостность резервной копии.');
+    const fileSchemaVersion = compatibility.resolveImportSchemaVersion(parsed).schemaVersion;
+    const version = fileSchemaVersion.split('.').map(Number);
+    const appVersion = CURRENT_SCHEMA_VERSION.split('.').map(Number);
+    if (version.some(n => !Number.isFinite(n)) || version[0] > appVersion[0] || (version[0] === appVersion[0] && (version[1] || 0) > (appVersion[1] || 0))) {
+        throw new Error('Схема файла новее приложения или некорректна.');
     }
-
-    const importDataRaw = parsed.data || {};
+    if (stores.some(name => !CONTENT_STORES.includes(name))) throw new Error('Неизвестный раздел слияния.');
+    const importDataRaw = compatibility.normalizeCompatibilityData(envelope.data);
+    for (const name of stores) {
+        const key = currentStoreConfigs.find(config => config.name === name)?.options.keyPath;
+        if (fixedKeyStore(name) && name !== 'algorithms' && (importDataRaw[name] || []).some(record => record[key] === undefined || record[key] === null)) {
+            throw new Error(`Отсутствует ключ записи раздела «${mergeStoreHumanLabel(name)}».`);
+        }
+    }
 
     const localData = await loadLocalDataForStores(stores);
 
@@ -879,6 +913,7 @@ export async function analyzeMergeData(importJsonString, options = {}) {
         schemaVersion: fileSchemaVersion,
         expectedSchemaVersion: CURRENT_SCHEMA_VERSION,
         storesAnalyzed: stores,
+        baseline: localData,
         storeDiffs,
     };
 }
@@ -929,6 +964,8 @@ const MERGE_APPLICATION_ORDER = [
     'trainingUserCurriculum',
     'trainingBuiltinCurriculum',
     'mentorQuizPackages',
+    'links', 'clientData', 'preferences', 'blacklistedClients',
+    'clientAnalyticsFiles', 'clientAnalyticsFolders', 'clientAnalyticsTags', 'clientAnalyticsRecords', 'clientAnalyticsCardMeta',
 ];
 
 const MERGE_STORE_LABELS = {
@@ -948,6 +985,15 @@ const MERGE_STORE_LABELS = {
     trainingUserCurriculum: 'Учебный план пользователя',
     trainingBuiltinCurriculum: 'Встроенный учебный план',
     mentorQuizPackages: 'Пакеты квизов',
+    links: 'Ссылки 1С',
+    clientData: 'Клиентские данные',
+    preferences: 'Настройки и оформление',
+    blacklistedClients: 'Чёрный список',
+    clientAnalyticsFiles: 'Файлы клиентской аналитики',
+    clientAnalyticsFolders: 'Папки клиентской аналитики',
+    clientAnalyticsTags: 'Метки клиентской аналитики',
+    clientAnalyticsRecords: 'Записи клиентской аналитики',
+    clientAnalyticsCardMeta: 'Папки и метки карточек клиентов',
 };
 
 function mergeStoreHumanLabel(storeName) {
@@ -1021,6 +1067,10 @@ async function restoreRollbackSnapshot(snapshot, storeNames) {
 export function buildMergePlan(analysisResult, userResolutions) {
     const { storeDiffs } = analysisResult;
     const plan = {
+        baseline: analysisResult.baseline,
+        matchedIds: Object.fromEntries(storeDiffs.map(diff => [diff.storeName, [...(diff.identical || []), ...(diff.conflicts || [])]
+            .filter(pair => pair.incoming?.id !== undefined && pair.local?.id !== undefined)
+            .map(pair => [pair.incoming.id, pair.local.id])])),
         perStore: {},
     };
 
@@ -1079,6 +1129,7 @@ export function buildMergePlan(analysisResult, userResolutions) {
                 return;
             }
             if (effectiveResolution === 'both' || effectiveResolution === 'keepBoth') {
+                if (fixedKeyStore(storeName)) throw new Error('Запись с фиксированным ключом нельзя сохранить в двух экземплярах. Выберите локальную или импортируемую.');
                 // Сохраняем локальную и добавляем ещё одну копию как новую запись.
                 toInsert.push({ record: incoming });
                 return;
@@ -1438,6 +1489,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
         extLinks: new Map(),
         bookmarks: new Map(),
     };
+    for (const [name, pairs] of Object.entries(mergePlan.matchedIds || {})) idMapping[name] = new Map(pairs);
 
     const withOverlay = async (fn, label) => {
         try {
@@ -1484,7 +1536,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
 
     const touchedBookmarkIds = new Set();
     const writeAndBump = async (storeName, record, meta = {}) => {
-        const res = await saveToIndexedDB(storeName, record);
+        const res = await writeRecord(storeName, record);
         const human = mergeStoreHumanLabel(storeName);
         const { op = 'write', index, total, detail } = meta;
         let line = detail;
@@ -1506,6 +1558,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
         return res;
     };
 
+    const atomic = typeof State.db.transaction === 'function';
     const rollbackSnapshot = canCreateRollbackSnapshot
         ? await createRollbackSnapshot(storesWithChanges, ({ storeName, index, total }) => {
               bump({
@@ -1517,6 +1570,10 @@ export async function applyMergePlan(mergePlan, options = {}) {
               });
           })
         : {};
+
+    const workspace = atomic ? createMergeWorkspace(State.db, Object.fromEntries(storesWithChanges.map(name => [name, mergePlan.baseline?.[name] || rollbackSnapshot[name] || []])), currentStoreConfigs) : null;
+    const writeRecord = workspace ? workspace.put : saveToIndexedDB;
+    const readRecord = workspace ? workspace.get : getFromIndexedDB;
 
     const applyForStore = async (storeName, storePlan) => {
         if (!storePlan) return;
@@ -1538,12 +1595,8 @@ export async function applyMergePlan(mergePlan, options = {}) {
             if (normalizedType === 'algorithm') {
                 return getMappedValue(idMapping.algorithms, parentId) ?? parentId;
             }
-            return (
-                getMappedValue(idMapping.bookmarks, parentId) ??
-                getMappedValue(idMapping.extLinks, parentId) ??
-                getMappedValue(idMapping.reglaments, parentId) ??
-                parentId
-            );
+            const store = { bookmark: 'bookmarks', extlink: 'extLinks', reglament: 'reglaments' }[normalizedType];
+            return store ? getMappedValue(idMapping[store], parentId) ?? parentId : parentId;
         };
 
         if (storeName === 'algorithms') {
@@ -1698,12 +1751,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
             for (let i = 0; i < inserts.length; i++) {
                 const op = inserts[i];
                 const incoming = { ...op.record };
-                const mappedOriginalId =
-                    getMappedValue(idMapping.algorithms, incoming.originalItemId) ??
-                    getMappedValue(idMapping.bookmarks, incoming.originalItemId) ??
-                    getMappedValue(idMapping.extLinks, incoming.originalItemId) ??
-                    getMappedValue(idMapping.reglaments, incoming.originalItemId) ??
-                    incoming.originalItemId;
+                const mappedOriginalId = mapParentEntityId(incoming.itemType, incoming.originalItemId);
                 incoming.originalItemId = String(mappedOriginalId);
                 delete incoming.id;
                 await writeAndBump('favorites', incoming, {
@@ -1717,12 +1765,7 @@ export async function applyMergePlan(mergePlan, options = {}) {
                 const op = updates[i];
                 const { local, incoming } = op;
                 const updated = { ...incoming, id: local.id };
-                const mappedOriginalId =
-                    getMappedValue(idMapping.algorithms, updated.originalItemId) ??
-                    getMappedValue(idMapping.bookmarks, updated.originalItemId) ??
-                    getMappedValue(idMapping.extLinks, updated.originalItemId) ??
-                    getMappedValue(idMapping.reglaments, updated.originalItemId) ??
-                    updated.originalItemId;
+                const mappedOriginalId = mapParentEntityId(updated.itemType, updated.originalItemId);
                 updated.originalItemId = String(mappedOriginalId);
                 await writeAndBump('favorites', updated, {
                     op: 'update',
@@ -1787,46 +1830,29 @@ export async function applyMergePlan(mergePlan, options = {}) {
             return;
         }
 
-        if (storeName === 'pdfFiles') {
-            const inserts = storePlan.toInsert || [];
-            for (let i = 0; i < inserts.length; i++) {
-                const op = inserts[i];
-                const incoming = restoreBlobField({ ...op.record }, 'PDF');
-                const mappedParentId = mapParentEntityId(incoming.parentType, incoming.parentId);
-                incoming.parentId = String(mappedParentId);
-                delete incoming.id;
-                await writeAndBump('pdfFiles', incoming, {
-                    op: 'insert',
-                    index: i + 1,
-                    total: inserts.length,
-                });
-            }
-            return;
-        }
-
-        if (storeName === 'screenshots') {
-            const inserts = storePlan.toInsert || [];
+        if (storeName === 'pdfFiles' || storeName === 'screenshots') {
             const screenshotIdMap = new Map();
-            for (let i = 0; i < inserts.length; i++) {
-                const op = inserts[i];
-                const incoming = restoreBlobField({ ...op.record }, 'скриншот');
-                const mappedParentId = mapParentEntityId(incoming.parentType, incoming.parentId);
-                incoming.parentId = mappedParentId;
-                const originalShotId = incoming.id;
-                delete incoming.id;
-                const newShotId = await writeAndBump('screenshots', incoming, {
-                    op: 'insert',
-                    index: i + 1,
-                    total: inserts.length,
-                });
-                if (typeof originalShotId !== 'undefined') {
-                    screenshotIdMap.set(originalShotId, newShotId);
+            const operations = [
+                ...(storePlan.toInsert || []).map(op => ({ incoming: op.record })),
+                ...(storePlan.toUpdate || []).map(op => ({ incoming: op.incoming, local: op.local })),
+            ];
+            for (const op of operations) {
+                const incoming = restoreBlobField({ ...op.incoming }, storeName);
+                incoming.parentId = mapParentEntityId(incoming.parentType, incoming.parentId);
+                if (storeName === 'pdfFiles') {
+                    incoming.parentId = String(incoming.parentId);
+                    incoming.parentKey = `${incoming.parentType}:${incoming.parentId}`;
                 }
+                const oldId = incoming.id;
+                if (op.local) incoming.id = op.local.id;
+                else delete incoming.id;
+                const newId = await writeAndBump(storeName, incoming, { op: op.local ? 'update' : 'insert' });
+                if (storeName === 'screenshots' && oldId !== undefined) screenshotIdMap.set(oldId, newId);
             }
             // Закладки, затронутые merge, ссылаются на скриншоты по screenshotIds — перепривязываем к новым id
             if (screenshotIdMap.size > 0) {
                 for (const bookmarkId of touchedBookmarkIds) {
-                    const bm = await getFromIndexedDB('bookmarks', bookmarkId);
+                    const bm = await readRecord('bookmarks', bookmarkId);
                     if (!bm || !Array.isArray(bm.screenshotIds) || bm.screenshotIds.length === 0) {
                         continue;
                     }
@@ -1840,6 +1866,25 @@ export async function applyMergePlan(mergePlan, options = {}) {
                     );
                 }
             }
+            return;
+        }
+        // Remaining schema stores use their configured key and explicit conflict
+        // resolution. Auto-increment ids are remapped before dependent records.
+        for (const op of [...(storePlan.toInsert || []).map(item => ({ incoming: item.record })), ...(storePlan.toUpdate || [])]) {
+            let record = { ...op.incoming };
+            const originalId = record.id;
+            if (storeName === 'clientAnalyticsFiles') record = restoreBlobField(record, storeName);
+            if (op.local) record.id = op.local.id;
+            else if (!fixedKeyStore(storeName)) delete record.id;
+            const mapped = (name, value) => idMapping[name]?.get(value) ?? value;
+            if (storeName === 'clientAnalyticsRecords') record.sourceFileId = mapped('clientAnalyticsFiles', record.sourceFileId);
+            if (storeName === 'clientAnalyticsCardMeta') {
+                if (record.folderId !== undefined) record.folderId = mapped('clientAnalyticsFolders', record.folderId);
+                if (Array.isArray(record.tagIds)) record.tagIds = record.tagIds.map(id => mapped('clientAnalyticsTags', id));
+            }
+            const key = await writeAndBump(storeName, record, { op: op.local ? 'update' : 'insert' });
+            if (!idMapping[storeName]) idMapping[storeName] = new Map();
+            idMapping[storeName].set(originalId, key);
         }
     };
 
@@ -1848,10 +1893,11 @@ export async function applyMergePlan(mergePlan, options = {}) {
             for (const storeName of MERGE_APPLICATION_ORDER) {
                 await applyForStore(storeName, mergePlan.perStore[storeName]);
             }
+            await workspace?.commit();
         }, 'применение плана');
     } catch (applyError) {
         console.error('[DbMerge] Ошибка применения плана. Запуск аварийного отката...', applyError);
-        if (canCreateRollbackSnapshot) {
+        if (canCreateRollbackSnapshot && !atomic) {
             try {
                 await withOverlay(async () => {
                     await restoreRollbackSnapshot(rollbackSnapshot, storesWithChanges);

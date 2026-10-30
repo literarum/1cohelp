@@ -42,6 +42,7 @@
     html::-webkit-scrollbar-corner,
     html *::-webkit-scrollbar-corner {
         background: var(--app-scrollbar-track) !important;
+        border-radius: 999px !important;
     }
     html::-webkit-scrollbar-thumb,
     html *::-webkit-scrollbar-thumb {
@@ -68,6 +69,7 @@
         height: 12px !important;
         border: 0 !important;
         background-color: var(--app-scrollbar-track) !important;
+        border-radius: 999px !important;
         background-repeat: no-repeat !important;
         background-position: center !important;
         background-size: 6px 4px !important;

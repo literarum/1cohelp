@@ -39,6 +39,9 @@ describe('customization preview session and explicit persistence', () => {
             <span id="acStatus"><span class="ac-status-text"></span><i></i></span>
             <input id="borderRadiusSlider" type="range" min="0" max="20" value="5">
             <input id="densitySlider" type="range" min="0" max="6" value="3">
+            <input name="surfaceMaterial" type="radio" value="solid"><input name="surfaceMaterial" type="radio" value="glass">
+            <div id="acGlassControls"><input id="glassMatte" type="range" min="0" max="100"><output id="glassMatteValue"></output>
+            <input id="glassRefraction" type="range" min="0" max="100"><output id="glassRefractionValue"></output></div>
             <input type="radio" name="themeMode" value="dark" checked>
             <input type="radio" name="themeMode" value="light"><input type="radio" name="themeMode" value="auto">
             <input type="radio" name="motionMode" value="auto" checked>
@@ -123,6 +126,40 @@ describe('customization preview session and explicit persistence', () => {
         expect(State.userPreferences).toEqual(before);
         expect(localStorage.getItem(fonts.FONT_STORAGE_KEY)).toBe(fontRecord);
         for (const [key, value] of mirrors) expect(localStorage.getItem(key)).toBe(value);
+    });
+
+    it.each(['Cancel', 'X'])('glass preview discards through %s and leaves no refracting surfaces', async route => {
+        vi.stubGlobal('requestAnimationFrame', cb => setTimeout(() => cb(performance.now()), 16));
+        vi.stubGlobal('cancelAnimationFrame', id => clearTimeout(id));
+        const before = structuredClone(persisted);
+        change('input[name="surfaceMaterial"][value="glass"]', '', 'change');
+        change('#glassMatte', '88'); change('#glassRefraction', '72');
+        await settle();
+        expect(document.documentElement.dataset.surfaceMaterial).toBe('glass');
+        expect(document.documentElement.style.getPropertyValue('--glass-blur')).toBe('30.4px');
+        expect(persisted).toEqual(before);
+        if (route === 'Cancel') document.getElementById('appCustomizationCancelBtn').click();
+        else document.getElementById('closeAppCustomizationModalBtn').click();
+        await settle();
+        expect(document.documentElement.dataset.surfaceMaterial).toBe('solid');
+        expect(document.documentElement.style.getPropertyValue('--glass-filter')).toBe('');
+        expect(saveRecord).not.toHaveBeenCalled();
+    });
+
+    it('glass saves its controls explicitly and resets only in the preview', async () => {
+        change('input[name="surfaceMaterial"][value="glass"]', '', 'change');
+        change('#glassMatte', '82'); change('#glassRefraction', '57');
+        await settle();
+        document.getElementById('appCustomizationSaveBtn').click();
+        await settle();
+        expect(persisted).toMatchObject({ surfaceMaterial: 'glass', glassMatte: 82, glassRefraction: 57 });
+        document.getElementById('openAppCustomizationModalBtn').click(); await settle();
+        studio.resetPane('look'); await settle();
+        expect(document.documentElement.dataset.surfaceMaterial).toBe('solid');
+        expect(persisted.surfaceMaterial).toBe('glass');
+        document.getElementById('closeAppCustomizationModalBtn').click(); await settle();
+        expect(document.documentElement.dataset.surfaceMaterial).toBe('glass');
+        expect(State.currentPreviewSettings.glassMatte).toBe(82);
     });
 
     it.each(['Cancel', 'X', 'external hidden close'])('rolls back %s without persisting and stays reverted after deferred frames', async route => {

@@ -8,6 +8,8 @@
  * Чистая функция: не зависит от DOM и IndexedDB.
  */
 
+import { sanitizeMaterial } from '../ui/glass-material.js';
+
 const THEMES = new Set(['light', 'dark', 'auto']);
 const MOTION_MODES = new Set(['auto', 'calm', 'reduce']);
 const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -62,6 +64,8 @@ export function sanitizeUserPreferences(prefs, defaults) {
             delete out[k];
         }
     });
+    const material = sanitizeMaterial(out);
+    Object.keys(material).forEach((key) => { if (typeof out[key] !== 'undefined' || typeof def[key] !== 'undefined') fix(key, material[key]); });
     if (typeof out.motionMode !== 'undefined') fix('motionMode', MOTION_MODES.has(out.motionMode) ? out.motionMode : 'auto');
     fix('fontSize', clampNumber(out.fontSize, 40, 250, def.fontSize ?? 80));
     fix('contentDensity', clampNumber(out.contentDensity, 0, 6, def.contentDensity ?? 3, true));

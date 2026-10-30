@@ -32,6 +32,7 @@ describe('db-merge identity and diff logic', () => {
     });
 
     it('classifies identical vs conflicting records correctly for bookmarks', async () => {
+        vi.spyOn(indexedDbModule, 'getAllFromIndexedDB').mockResolvedValue([]);
         const exportPayload = {
             schemaVersion: '1.5',
             data: {
@@ -112,6 +113,7 @@ describe('db-merge identity and diff logic', () => {
     });
 
     it('analyzeMergeData does not throw for older schemaVersion (backward compatibility)', async () => {
+        vi.spyOn(indexedDbModule, 'getAllFromIndexedDB').mockResolvedValue([]);
         const oldSchemaPayload = {
             schemaVersion: '1.0',
             data: {

@@ -64,5 +64,7 @@
 @import url('./components/polish-v15.css');
 @import url('./components/motion-premium.css');
 @import url('./components/layout-repair.css');
+@import url('./components/app-polish-followup.css');
+@import url('./components/glass-material.css');
 /* Shared scrollbar policy overrides per-component legacy styling. */
 @import url('./components/scrollbar.css');

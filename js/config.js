@@ -588,6 +588,9 @@ export function clampBorderRadiusPx(value) {
 
 export function getDefaultUISettings(allPanelIdsForDefault) {
     return {
+        surfaceMaterial: 'solid',
+        glassMatte: 65,
+        glassRefraction: 30,
         primaryColor: THEME_DEFAULTS.primary,
         fontSize: 80,
         borderRadius: DEFAULT_BORDER_RADIUS_PX,

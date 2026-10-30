@@ -9,6 +9,7 @@
     "serve": "npx --yes http-server -p 8080 -c-1 ."
   },
   "devDependencies": {
+    "fake-indexeddb": "^6.2.7",
     "jsdom": "^25.0.1",
     "vitest": "^2.1.9"
   }

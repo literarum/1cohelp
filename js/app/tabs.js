@@ -552,15 +552,18 @@ export function applyPanelOrderAndVisibility(order, visibility) {
  * @param {boolean} warningJustAccepted - флаг, что предупреждение было принято
  * @param {object} [navOptions] - contextual-back: navigationSource, scrollRestore, reglamentsSnapshot
  */
+let navigationGeneration = 0;
 export async function setActiveTab(tabId, warningJustAccepted = false, navOptions = {}) {
+    const generation = ++navigationGeneration;
     const next = tabSwitchChain.then(() =>
-        setActiveTabCore(tabId, warningJustAccepted, navOptions),
+        setActiveTabCore(tabId, warningJustAccepted, navOptions, generation),
     );
     tabSwitchChain = next.catch(() => {});
     return next;
 }
 
-async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions = {}) {
+async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions = {}, generation) {
+    if (generation !== navigationGeneration) return;
     if (tabId === 'favorites' && State.currentSection === 'favorites') {
         tabId = State.sectionBeforeFavorites || 'main';
     }
@@ -678,6 +681,7 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
 
         await new Promise((resolve) => {
             setTimeout(() => {
+                if (generation !== navigationGeneration) { resolve(); return; }
                 hardHideTabPanel(previousPanel);
 
                 if (targetContent) {
@@ -685,6 +689,7 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
                     targetContent.classList.remove('hidden');
 
                     requestAnimationFrame(() => {
+                        if (generation !== navigationGeneration) return;
                         targetContent.classList.remove('is-hiding');
                     });
                 }
@@ -695,10 +700,12 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
         targetContent.classList.add('is-hiding');
         targetContent.classList.remove('hidden');
         requestAnimationFrame(() => {
+            if (generation !== navigationGeneration) return;
             targetContent.classList.remove('is-hiding');
         });
     }
 
+    if (generation !== navigationGeneration) return;
     enforceExclusiveTabContent(targetContent);
 
     if (targetContent && tabId === 'shablony') {
@@ -758,6 +765,7 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
         }
     }
 
+    if (generation !== navigationGeneration) return;
     if (targetContent) {
         document.dispatchEvent(new CustomEvent('copilot1co:tabShown', { detail: { tabId } }));
     }
