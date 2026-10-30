@@ -3,6 +3,7 @@ import { jsonToXmlString, parseXml, yieldToUi } from './xml-analyzer-model.js';
 import { buildFindings, collectRequisites } from './xml-analyzer-insights.js';
 import { analyzeBlob, base64ToBytes, findSignatures } from './xml-analyzer-crypto.js';
 import { createExplorerView, fmtSize, h } from './xml-analyzer-explorer.js';
+import { normalizeSedoPayload, renderSedoReport, renderStructuredValue } from './xml-analyzer-sedo.js';
 
 const XML_ANALYZER_ID_MAP = {
     'data-input': 'xmlAnalyzerDataInput',
@@ -754,7 +755,7 @@ class ReportAnalyzerApp {
                 const json = JSON.parse(t);
                 if (json && typeof json === 'object') {
                     rec.json = json;
-                    rec.kind = !Array.isArray(json) && Array.isArray(json.messages) ? 'sedo' : 'json';
+                    rec.kind = normalizeSedoPayload(json) ? 'sedo' : 'json';
                     xmlText = jsonToXmlString(json, Array.isArray(json) ? 'array' : 'json');
                 }
             } catch {
@@ -966,6 +967,7 @@ class ReportAnalyzerApp {
             text,
         }));
         if (extra.length) findings.unshift(...extra);
+        const domainSummaries = Array.from(reportNode?.querySelectorAll('.xa-sedo-summary') || []);
 
         rec.view = createExplorerView({
             doc,
@@ -974,6 +976,16 @@ class ReportAnalyzerApp {
             sign,
             findings,
             reportNode,
+            originalJson: rec.json,
+            domainSummary: domainSummaries.length
+                ? h('div', { class: 'xa-card-wide' }, domainSummaries.map(summary => summary.cloneNode(true)))
+                : null,
+            domainSummaryText: domainSummaries.map(summary => [
+                summary.querySelector('.xa-card-title')?.textContent,
+                ...Array.from(summary.querySelectorAll('.xa-kv'), row =>
+                    `${row.querySelector('.xa-k')?.textContent}: ${row.querySelector('.xa-v')?.textContent}`),
+                summary.querySelector('.xa-sub')?.textContent,
+            ].filter(Boolean).join('\n')).join('\n\n'),
             notify: (m, type) => this.showNotification(m, type || 'success'),
             getOtherDocs: () =>
                 this.docs
@@ -2511,6 +2523,15 @@ class ReportAnalyzerApp {
 
             const title = this.additionalInfoKeyMap[key] || key;
 
+            if (normalizeSedoPayload(value)) {
+                additionalContent.appendChild(this._createAccordion(title, renderSedoReport(value), true));
+                continue;
+            }
+            if (value && typeof value === 'object' && (!Array.isArray(value) || value.length === 0)) {
+                additionalContent.appendChild(renderStructuredValue(value, title));
+                continue;
+            }
+
             if (
                 value === null ||
                 value === undefined ||
@@ -2535,6 +2556,7 @@ class ReportAnalyzerApp {
                         subAccordionContent = undecryptedEl;
                         break;
                     default:
+                        additionalContent.appendChild(renderStructuredValue(value, title));
                         continue;
                 }
                 if (
@@ -2558,126 +2580,7 @@ class ReportAnalyzerApp {
     }
 
     renderSedoLog(data) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'space-y-4';
-
-        if (!data || !Array.isArray(data.messages)) {
-            const errorCard = document.createElement('div');
-            errorCard.className = 'content-card';
-            errorCard.innerHTML = `<h2 class="text-xl font-bold mb-2">Лог СЭДО</h2><p class="text-red-600 dark:text-red-400">Неверный формат или отсутствие массива 'messages' в JSON-логе.</p>`;
-            wrapper.appendChild(errorCard);
-            return wrapper;
-        }
-
-        const formatDate = (dateString) => {
-            if (!dateString) return '—';
-            const date = new Date(dateString);
-            if (Number.isNaN(date.getTime())) return String(dateString);
-            return date.toLocaleString('ru-RU', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            });
-        };
-
-        // --- Карточка 1: Общая информация ---
-        const messages = data.messages.filter((m) => m && typeof m === 'object');
-        const infoGrid = document.createElement('div');
-        infoGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm';
-        infoGrid.appendChild(this.createField('ID документооборота', data.id));
-        infoGrid.appendChild(this.createField('GUID', data.guid));
-        infoGrid.appendChild(this.createField('UID', data.uid));
-        infoGrid.appendChild(this.createField('Тип', data.type));
-        infoGrid.appendChild(this.createField('Рег. номер страхователя', data.insurant?.regnum));
-        infoGrid.appendChild(this.createField('Дата создания', formatDate(data.date)));
-        infoGrid.appendChild(this.createField('Дата получения', formatDate(data.received_at)));
-        infoGrid.appendChild(this.createField('Дата обработки', formatDate(data.processed_at)));
-        infoGrid.appendChild(this.createField('Дата доставки', formatDate(data.delivered_at)));
-
-        wrapper.appendChild(
-            this._createAccordion('Общая информация о документообороте', infoGrid, true),
-        );
-
-        // --- Карточка 2: Сообщения документооборота ---
-        const messagesCardContent = document.createElement('div');
-        messagesCardContent.innerHTML = `
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm border-collapse">
-                    <thead>
-                        <tr class="border-b-2 border-slate-400 dark:border-slate-600">
-                            <th class="text-left p-2">Тип</th>
-                            <th class="text-left p-2">Отправитель</th>
-                            <th class="text-left p-2">Содержание</th>
-                            <th class="text-left p-2">Временные метки (Создано / Доставлено)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sedo-table-body"></tbody>
-                </table>
-            </div>
-            <div id="sedo-raw-json-viewer" class="mt-4 hidden">
-                <h3 class="text-lg font-semibold mb-2">Полные данные сообщения:</h3>
-                <pre class="w-full p-4 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs overflow-auto max-h-96"></pre>
-            </div>`;
-
-        const tableBody = messagesCardContent.querySelector('#sedo-table-body');
-        const rowTemplate = this.getEl('sedo-row-template');
-
-        if (tableBody && rowTemplate) {
-            const ts = (m) => {
-                const t = new Date(m.date).getTime();
-                return Number.isNaN(t) ? 0 : t;
-            };
-            const MAX_ROWS = 500;
-            const sortedMessages = [...messages].sort((a, b) => ts(a) - ts(b));
-            sortedMessages.slice(0, MAX_ROWS).forEach((msg) => {
-                const clone = rowTemplate.content.cloneNode(true);
-                const row = clone.querySelector('.sedo-message-row');
-
-                row.dataset.rawJson = JSON.stringify(msg, null, 2);
-
-                const senderEl = clone.querySelector('.sedo-sender');
-                senderEl.textContent = this._raw(msg.sender_id || '—');
-                if (msg.sender_id === 'Фонд')
-                    senderEl.classList.add('text-blue-600', 'dark:text-blue-400');
-                else if (msg.sender_id === 'Страхователь')
-                    senderEl.classList.add('text-green-600', 'dark:text-green-400');
-                else senderEl.classList.add('text-purple-600', 'dark:text-purple-400');
-
-                const statusEl = clone.querySelector('.sedo-status');
-                if (msg.status) {
-                    statusEl.textContent = this._raw(msg.status);
-                    if (String(msg.status).toLowerCase().includes('ошибк')) {
-                        statusEl.classList.add('text-red-600', 'dark:text-red-400');
-                    } else {
-                        statusEl.classList.add('text-slate-500', 'dark:text-slate-400');
-                    }
-                }
-
-                clone.querySelector('.sedo-type').textContent = this._raw(msg.type || '—');
-                clone.querySelector('.sedo-title').textContent = this._raw(
-                    msg.title || 'Без заголовка',
-                );
-                clone.querySelector('.sedo-date').textContent = formatDate(msg.date);
-                clone.querySelector('.sedo-delivered-at').textContent = formatDate(
-                    msg.delivered_at,
-                );
-
-                tableBody.appendChild(clone);
-            });
-        }
-
-        wrapper.appendChild(
-            this._createAccordion(
-                `Сообщения документооборота (${messages.length} шт.${messages.length > 500 ? ', показаны первые 500' : ''})`,
-                messagesCardContent,
-                true,
-            ),
-        );
-
-        return wrapper;
+        return renderSedoReport(data);
     }
 
     renderCertificateManager() {

@@ -757,12 +757,12 @@ export function createExplorerView(ctx) {
     }
 
     function textReport() {
-        return buildTextReport({ doc, requisites, sign, findings, meta });
+        return [ctx.domainSummaryText, buildTextReport({ doc, requisites, sign, findings, meta })].filter(Boolean).join('\n\n');
     }
 
     function exportJson() {
         try {
-            const json = JSON.stringify(nodeToJson(doc, 0), null, 2);
+            const json = JSON.stringify(ctx.originalJson ?? nodeToJson(doc, 0), null, 2);
             downloadData(`${safeFileBase(meta.fileName)}.json`, json, 'application/json;charset=utf-8');
         } catch (e) {
             say(`Не удалось выгрузить JSON: ${e.message}`, 'error');
@@ -797,6 +797,7 @@ export function createExplorerView(ctx) {
 
     function buildOverview() {
         const wrap = h('div', { class: 'xa-grid' });
+        if (ctx.domainSummary?.childElementCount) wrap.appendChild(ctx.domainSummary);
         // быстрые выводы
         const list = h('ul', { class: 'xa-findings' });
         for (const f of findings) {

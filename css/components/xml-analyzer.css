@@ -1279,6 +1279,35 @@ html.dark .xa-result {
 .xa-cert-property-section > summary::after { content: '⌄'; flex-shrink: 0; transition: rotate 120ms; }
 .xa-cert-property-section[open] > summary::after { rotate: 180deg; }
 .xa-cert-property-content { padding: 0.25rem 1rem; }
+
+/* Exchange records stay readable inside either analyzer column and fullscreen. */
+.xa-sedo-report, .xa-sedo-records, .xa-sedo-messages, .xa-sedo-record > .xa-card-body { display: grid; gap: 1rem; min-width: 0; }
+.xa-sedo-report .xa-card { margin: 0; min-width: 0; }
+.xa-sedo-report .xa-card-head { border-bottom: 1px solid var(--xa-border); }
+.xa-sedo-report .xa-card-title, .xa-sedo-message-head > h4 { overflow-wrap: anywhere; }
+.xa-sedo-summary .xa-sub { margin: 0.9rem 0 0; line-height: 1.65; }
+.xa-sedo-summary .xa-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.25rem 1.5rem; }
+.xa-sedo-summary .xa-stats .xa-kv { grid-template-columns: minmax(0, 1fr) 3rem; align-items: baseline; }
+.xa-sedo-summary .xa-stats .xa-v { text-align: right; font-variant-numeric: tabular-nums; }
+.xa-sedo-types { margin-top: 0.8rem; padding-top: 0.4rem; border-top: 1px solid var(--xa-border); }
+.xa-sedo-types .xa-kv { grid-template-columns: minmax(0, 1fr) 3rem; }
+.xa-sedo-types .xa-v { text-align: right; font-variant-numeric: tabular-nums; }
+.xa-sedo-message { min-width: 0; padding: 1rem; border: 1px solid var(--xa-border); border-radius: 0.65rem; background: var(--xa-bg); }
+.xa-sedo-message-head { display: flex; flex-wrap: wrap; align-items: start; gap: 0.6rem 1rem; margin-bottom: 0.75rem; }
+.xa-sedo-message-head > h4 { flex: 1 1 14rem; margin: 0; font-family: inherit; line-height: 1.5; }
+.xa-sedo-message-head > .xa-badge { flex: 0 1 auto; }
+.xa-sedo-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.5rem; margin-block: 0.9rem; }
+.xa-sedo-stage { display: grid; align-content: start; gap: 0.4rem; min-width: 0; padding: 0.7rem; border-radius: 0.5rem; background: var(--xa-card); border: 1px solid var(--xa-border); }
+.xa-sedo-stage .xa-v { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; line-height: 1.5; }
+.xa-sedo-intervals { margin-bottom: 0.75rem; }
+.xa-sedo-errors { margin-block: 0.75rem; padding: 0.75rem; border: 1px solid var(--xa-border); border-radius: 0.5rem; }
+.xa-structured { min-width: 0; margin-block: 0.65rem; border: 1px solid var(--xa-border); border-radius: 0.5rem; }
+.xa-structured > summary { padding: 0.7rem 0.8rem; font-weight: 600; cursor: pointer; overflow-wrap: anywhere; line-height: 1.5; }
+.xa-structured-body { min-width: 0; padding: 0 0.8rem 0.6rem; }
+.xa-structured-body > .xa-structured { margin-inline: 0; }
+.xa-raw-json { max-width: 100%; max-height: 28rem; margin: 0.75rem; padding: 0.8rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.75rem; line-height: 1.6; background: var(--xa-bg); border-radius: 0.4rem; }
+.xa-sedo-source > .xa-btn { margin-inline: 0.8rem; }
+.xa-sedo-report > [data-sedo-more] { justify-self: start; }
 @media (max-width: 520px) {
     .xa-fullscreen-dialog > .xa-result { padding: 0.75rem; }
     .xa-fullscreen-bar { padding: 0.65rem 0.75rem; }
