@@ -3,6 +3,7 @@
 import { MAX_UPDATE_VISIBLE_TABS_RETRIES, SHABLONY_DOC_ID } from '../constants.js';
 import { State } from '../app/state.js';
 import { tabsConfig } from '../config.js';
+import { animateSectionEntrance, cancelSectionEntrance } from '../ui/motion.js';
 import {
     onBeforeProgrammaticSectionChange,
     applyReglamentsSnapshotIfNeeded,
@@ -27,11 +28,9 @@ let deps = {
     renderClientAnalyticsPage: null,
 };
 
-/** Очередь переключений вкладок: исключает гонки таймеров/RAF при быстрых кликах и параллельных вызовах. */
-let tabSwitchChain = Promise.resolve();
-
 function hardHideTabPanel(panel) {
     if (!panel) return;
+    cancelSectionEntrance(panel);
     panel.classList.add('hidden');
     panel.classList.remove('is-hiding');
     panel.style.removeProperty('opacity');
@@ -554,16 +553,10 @@ export function applyPanelOrderAndVisibility(order, visibility) {
  */
 let navigationGeneration = 0;
 export async function setActiveTab(tabId, warningJustAccepted = false, navOptions = {}) {
-    const generation = ++navigationGeneration;
-    const next = tabSwitchChain.then(() =>
-        setActiveTabCore(tabId, warningJustAccepted, navOptions, generation),
-    );
-    tabSwitchChain = next.catch(() => {});
-    return next;
+    return setActiveTabCore(tabId, warningJustAccepted, navOptions);
 }
 
-async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions = {}, generation) {
-    if (generation !== navigationGeneration) return;
+async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions = {}) {
     if (tabId === 'favorites' && State.currentSection === 'favorites') {
         tabId = State.sectionBeforeFavorites || 'main';
     }
@@ -584,7 +577,7 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
     const showFavoritesHeaderButton = document.getElementById('showFavoritesHeaderBtn');
     const showRemindersHeaderButton = document.getElementById('showRemindersHeaderBtn');
 
-    const FADE_DURATION = 150;
+    const FADE_DURATION = 0;
 
     console.log(`[setActiveTab v.Corrected] Активация вкладки: ${tabId}`);
 
@@ -660,6 +653,8 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
         return;
     }
 
+    const generation = ++navigationGeneration;
+
     if (navOptions?.navigationSource === NavigationSource.PROGRAMMATIC) {
         onBeforeProgrammaticSectionChange(State.currentSection, tabId);
     }
@@ -674,39 +669,8 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
             hardHideTabPanel(nonTargetVisible[i]);
         }
     }
-    const previousPanel = nonTargetVisible.length > 0 ? nonTargetVisible[0] : null;
-
-    if (previousPanel && previousPanel !== targetContent) {
-        previousPanel.classList.add('is-hiding');
-
-        await new Promise((resolve) => {
-            setTimeout(() => {
-                if (generation !== navigationGeneration) { resolve(); return; }
-                hardHideTabPanel(previousPanel);
-
-                if (targetContent) {
-                    targetContent.classList.add('is-hiding');
-                    targetContent.classList.remove('hidden');
-
-                    requestAnimationFrame(() => {
-                        if (generation !== navigationGeneration) return;
-                        targetContent.classList.remove('is-hiding');
-                    });
-                }
-                resolve();
-            }, FADE_DURATION);
-        });
-    } else if (targetContent) {
-        targetContent.classList.add('is-hiding');
-        targetContent.classList.remove('hidden');
-        requestAnimationFrame(() => {
-            if (generation !== navigationGeneration) return;
-            targetContent.classList.remove('is-hiding');
-        });
-    }
-
-    if (generation !== navigationGeneration) return;
     enforceExclusiveTabContent(targetContent);
+    const entrance = animateSectionEntrance(targetContent);
 
     if (targetContent && tabId === 'shablony') {
         setTimeout(() => {
@@ -765,6 +729,7 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
         }
     }
 
+    await entrance;
     if (generation !== navigationGeneration) return;
     if (targetContent) {
         document.dispatchEvent(new CustomEvent('copilot1co:tabShown', { detail: { tabId } }));

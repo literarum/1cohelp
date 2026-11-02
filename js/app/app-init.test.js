@@ -92,6 +92,7 @@ describe('appInit favorites wiring', () => {
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         globalThis.document = originalDocument;
         globalThis.window = originalWindow;
         globalThis.requestAnimationFrame = originalRequestAnimationFrame;
@@ -109,5 +110,34 @@ describe('appInit favorites wiring', () => {
         const favoritesContainer = globalThis.document.getElementById('favoritesContainer');
         expect(favoritesContainer.removeEventListener).toHaveBeenCalledWith('click', handler);
         expect(favoritesContainer.addEventListener).toHaveBeenCalledWith('click', handler);
+    });
+
+    it('finishes logical initialization even when browser paint callbacks do not run', async () => {
+        vi.useFakeTimers();
+        const callbacks = [];
+        globalThis.requestAnimationFrame = cb => { callbacks.push(cb); return callbacks.length; };
+        let settled = false;
+        const pending = appInit('test').then(() => { settled = true; });
+        await vi.advanceTimersByTimeAsync(500);
+        const readyWithoutPaint = settled && window.__copilotAppInitFinished === true;
+        while (callbacks.length) callbacks.shift()();
+        await pending;
+        expect(readyWithoutPaint).toBe(true);
+    });
+
+    it('does not call an unfinished database initialization ready when the paint budget expires', async () => {
+        vi.useFakeTimers();
+        globalThis.requestAnimationFrame = () => 1;
+        let openDatabase;
+        setMinimalDependencies({ initDB: () => new Promise(resolve => { openDatabase = resolve; }) });
+        let settled = false;
+        const pending = appInit('test').then(() => { settled = true; });
+        await vi.advanceTimersByTimeAsync(500);
+        expect(settled).toBe(false);
+        expect(window.__copilotAppInitFinished).toBe(false);
+        openDatabase();
+        await vi.advanceTimersByTimeAsync(500);
+        await pending;
+        expect(window.__copilotAppInitFinished).toBe(true);
     });
 });

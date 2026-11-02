@@ -1,6 +1,7 @@
 'use strict';
 
 import { getCoreService, notify } from '../core/kernel.js';
+import { waitForUiPaint } from '../utils/ui-paint.js';
 
 let deps = {
     NotificationService: null,
@@ -81,10 +82,6 @@ export function registerOnloadHandler() {
                         deps.loadingOverlayManager.updateProgress(100);
                     }
                 }
-                if (deps.loadingOverlayManager?.hideAndDestroy) {
-                    await deps.loadingOverlayManager.hideAndDestroy();
-                    console.log('[window.onload Promise.all.then] Оверлей плавно скрыт.');
-                }
 
                 document.body.style.backgroundColor = '';
 
@@ -106,8 +103,6 @@ export function registerOnloadHandler() {
                         '[window.onload Promise.all.then] Оверлей снят; интерфейс уже загружен, применён content-fading-in.',
                     );
 
-                    await new Promise((resolve) => requestAnimationFrame(resolve));
-
                     if (typeof deps.initGoogleDocSections === 'function') {
                         try {
                             deps.initGoogleDocSections();
@@ -127,7 +122,7 @@ export function registerOnloadHandler() {
                     }
                     // finishTask('app-init') вызывается в app-init.js при завершении инициализации
 
-                    requestAnimationFrame(() => {
+                    {
                         if (typeof deps.initTabClickDelegation === 'function') {
                             deps.initTabClickDelegation();
                         }
@@ -158,12 +153,18 @@ export function registerOnloadHandler() {
                                 if (typeof fn === 'function') fn();
                             }
                         }
-                    });
+                    }
                 } else {
                     console.warn(
                         '[window.onload Promise.all.then] appContent не найден после appInit. UI может быть сломан.',
                     );
                 }
+                if (deps.loadingOverlayManager?.hideAndDestroy) {
+                    await deps.loadingOverlayManager.hideAndDestroy();
+                    console.log('[window.onload Promise.all.then] Оверлей плавно скрыт.');
+                }
+
+                await waitForUiPaint({ frames: 1 });
             })
             .catch(async (error) => {
                 console.error('Критическая ошибка в Promise.all (window.onload):', error);

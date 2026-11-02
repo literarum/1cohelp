@@ -100,8 +100,23 @@
 }
 
 /* Keep overflow menu above sticky header/content layers */
-#moreTabsDropdown {
+#appContent #moreTabsDropdown {
     z-index: 80 !important;
+    width: max-content;
+    min-width: min(16rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+}
+
+#moreTabsDropdown .overflow-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    white-space: nowrap;
+}
+
+#moreTabsDropdown .overflow-dropdown-item > i {
+    flex: 0 0 1rem;
+    margin-right: 0;
 }
 
 .tab-btn:hover:not(.tab-active) {
@@ -128,12 +143,9 @@
     }
 }
 
-.tab-content {
-    transition: opacity 150ms ease-in-out;
-}
-
-.tab-content.is-hiding {
-    opacity: 0;
+.view-layout-changing > .view-item,
+.view-layout-changing > .view-item * {
+    transition: none !important;
 }
 
 /* Анализатор XML: состояния после анализа */

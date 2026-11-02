@@ -16,6 +16,7 @@ describe('loadingOverlayManager.hideAndDestroy', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+        delete window._earlySphereAnimation;
     });
 
     it('паркует оверлей в DOM вместо удаления (id для UI health)', async () => {
@@ -55,5 +56,26 @@ describe('loadingOverlayManager.hideAndDestroy', () => {
         expect(document.getElementById('progressPercentageText')).toBeTruthy();
         expect(overlay?.getAttribute('data-loading-overlay-parked')).toBe('1');
         expect(overlay?.style.display).toBe('none');
+    });
+
+    it('starts one explosion, releases input immediately, and parks only after it finishes', async () => {
+        vi.useFakeTimers();
+        document.body.innerHTML = '<div id="custom-loading-overlay"><canvas id="loadingCanvas"></canvas></div>';
+        const overlay = document.getElementById('custom-loading-overlay');
+        let finish;
+        const runner = { isRunning: true, stop: vi.fn(), finish: vi.fn(() => new Promise(r => { finish = r; })) };
+        loadingOverlayManager.overlayElement = overlay;
+        loadingOverlayManager.animationRunner = runner;
+        document.documentElement.classList.add('loading-overlay-active');
+        const first = loadingOverlayManager.hideAndDestroy();
+        const second = loadingOverlayManager.hideAndDestroy();
+        expect(runner.finish).toHaveBeenCalledTimes(1);
+        expect(overlay.style.pointerEvents).toBe('none');
+        expect(document.documentElement.classList.contains('loading-overlay-active')).toBe(false);
+        expect(overlay.style.display).not.toBe('none');
+        finish();
+        await Promise.all([first, second]);
+        expect(overlay.style.display).toBe('none');
+        expect(runner.stop).toHaveBeenCalledTimes(1);
     });
 });

@@ -1,6 +1,48 @@
 'use strict';
 
-import { isReducedMotion } from '../utils/motion-pref.js';
+import { isReducedMotion, isRichMotion } from '../utils/motion-pref.js';
+import { waitForUiPaint } from '../utils/ui-paint.js';
+
+const sectionAnimations = new WeakMap();
+
+export function cancelSectionEntrance(panel) {
+    for (const animation of sectionAnimations.get(panel) || []) animation.cancel?.();
+    sectionAnimations.delete(panel);
+}
+
+/** One animation owner, scoped to the newly visible panel; never delay showing it. */
+export function animateSectionEntrance(panel) {
+    if (!panel || isReducedMotion()) return Promise.resolve();
+    cancelSectionEntrance(panel);
+    const cards = isRichMotion()
+        ? [...panel.querySelectorAll('[data-section-id] > .view-item')].slice(0, 12)
+        : [];
+    const elements = cards.length ? cards : [panel];
+    const animations = elements.filter(el => typeof el.animate === 'function').map((el, i) =>
+        el.animate(
+            [{ opacity: 0.35, transform: isRichMotion() ? 'translateY(7px)' : 'none' },
+             { opacity: 1, transform: 'none' }],
+            { duration: isRichMotion() ? 180 : 120, delay: cards.length ? i * 12 : 0,
+              easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'backwards' },
+        ),
+    );
+    if (!animations.length) return waitForUiPaint();
+    sectionAnimations.set(panel, animations);
+    const completed = Promise.all(animations.map(animation => animation.finished)).catch(error => {
+        if (error?.name !== 'AbortError') throw error;
+    });
+    let timeout;
+    const suspended = new Promise(resolve => {
+        timeout = setTimeout(() => {
+            for (const animation of animations) animation.cancel?.();
+            resolve();
+        }, 400);
+    });
+    return Promise.race([completed, suspended]).finally(() => {
+        clearTimeout(timeout);
+        if (sectionAnimations.get(panel) === animations) sectionAnimations.delete(panel);
+    });
+}
 
 /**
  * Лёгкие вспомогательные функции анимаций (вся визуальная часть — css/components/motion.css).

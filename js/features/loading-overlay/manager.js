@@ -7,12 +7,7 @@ import {
 } from './theme-resolver.js';
 import { getThemeProfile } from './particles-config.js';
 
-const EXIT_WIND_UP_MS = 750;
-const EXIT_EXPLODE_MS = 3300;
-const EXIT_TOTAL_MS = EXIT_WIND_UP_MS + EXIT_EXPLODE_MS;
-const EXIT_SHRINK_SCALE = 0.175;
-const EXIT_MAX_SCALE = 18;
-const EXIT_GLOW_MULTIPLIER_MAX = 12;
+import { createSphereRenderer } from './sphere-renderer.js';
 
 /**
  * Менеджер оверлея загрузки. Централизованное управление показом/скрытием, темой и анимацией.
@@ -95,43 +90,15 @@ export const loadingOverlayManager = {
             this.overlayElement.removeAttribute('aria-hidden');
             this.overlayElement.removeAttribute('data-loading-overlay-parked');
 
+            this.overlayElement.classList.remove('is-exiting');
+            this._showGeneration = (this._showGeneration || 0) + 1;
+            this._hidePromise = null;
             const canvas = this.overlayElement.querySelector('#loadingCanvas');
             if (canvas) {
-                if (window._earlySphereAnimation) {
-                    if (!window._earlySphereAnimation.isRunning) {
-                        window._earlySphereAnimation.start();
-                    }
-                    this.isSpawning = false;
-                    this.spawnStartTime = performance.now();
-                    this.spawnProgress = 1;
-                    this.animationRunner = {
-                        start: function () {},
-                        stop: window._earlySphereAnimation.stop || function () {},
-                        resize: window._earlySphereAnimation.resize || function () {},
-                        isRunning: true,
-                    };
-                } else {
-                    this.isSpawning = false;
-                    this.spawnStartTime = performance.now();
-                    this.spawnProgress = 1;
-                    if (this.animationRunner) {
-                        if (this.animationRunner.isRunning) this.animationRunner.stop();
-                        if (typeof this.animationRunner.resize === 'function') {
-                            window.removeEventListener('resize', this.animationRunner.resize);
-                        }
-                    }
-                    const { startAnimation, stopAnimation, resizeHandler } =
-                        this._encapsulateAnimationScript(canvas, this);
-                    this.animationRunner = {
-                        start: startAnimation,
-                        stop: stopAnimation,
-                        resize: resizeHandler,
-                        isRunning: false,
-                    };
-                    this.animationRunner.start();
-                    this.animationRunner.isRunning = true;
-                    window.addEventListener('resize', this.animationRunner.resize);
-                }
+                this.animationRunner?.stop();
+                this.animationRunner = window._earlySphereAnimation || createSphereRenderer(canvas);
+                this.animationRunner.setTheme(this.getResolvedTheme());
+                this.animationRunner.start();
             }
             return;
         }
@@ -267,94 +234,48 @@ export const loadingOverlayManager = {
         this.spawnStartTime = performance.now();
         this.spawnProgress = 1;
 
+        this._showGeneration = (this._showGeneration || 0) + 1;
+        this._hidePromise = null;
         const canvas = this.overlayElement.querySelector('#loadingCanvas');
         if (canvas) {
-            const { startAnimation, stopAnimation, resizeHandler } =
-                this._encapsulateAnimationScript(canvas, this);
-            this.animationRunner = {
-                start: startAnimation,
-                stop: stopAnimation,
-                resize: resizeHandler,
-                isRunning: false,
-            };
+            this.animationRunner = createSphereRenderer(canvas);
+            this.animationRunner.setTheme(this.getResolvedTheme());
             this.animationRunner.start();
-            this.animationRunner.isRunning = true;
-            window.addEventListener('resize', this.animationRunner.resize);
         }
         this.updateProgress(1, 'Загрузка');
     },
 
-    async hideAndDestroy() {
-        const runnerToStop = this.animationRunner;
-        const earlyToStop =
-            window._earlySphereAnimation && window._earlySphereAnimation.isRunning
-                ? window._earlySphereAnimation
-                : null;
-        const canvas = this.overlayElement?.querySelector('#loadingCanvas');
-        const overlayPromise = new Promise((resolve) => {
-            if (this.overlayElement && document.body.contains(this.overlayElement)) {
-                this.overlayElement.style.transition = `opacity ${this.fadeOutDuration}ms ease-out`;
-                if (canvas) canvas.style.transition = `opacity ${this.fadeOutDuration}ms ease-out`;
-                this.overlayElement.style.opacity = '0';
-                if (canvas) canvas.style.opacity = '0';
-                const currentOverlayElement = this.overlayElement;
-                const currentStyleElement = this.styleElement;
-                setTimeout(() => {
-                    if (runnerToStop?.stop) {
-                        runnerToStop.stop();
-                        if (runnerToStop.resize)
-                            window.removeEventListener('resize', runnerToStop.resize);
-                        runnerToStop.isRunning = false;
-                    }
-                    if (earlyToStop?.stop) {
-                        earlyToStop.stop();
-                        if (earlyToStop.resize)
-                            window.removeEventListener('resize', earlyToStop.resize);
-                        earlyToStop.isRunning = false;
-                    }
-                    /* Парковка в DOM вместо remove: id оверлея остаются для UI health / полного аудита index. */
-                    if (document.body.contains(currentOverlayElement)) {
-                        currentOverlayElement.style.transition = '';
-                        currentOverlayElement.style.opacity = '';
-                        currentOverlayElement.style.display = 'none';
-                        currentOverlayElement.style.visibility = 'hidden';
-                        currentOverlayElement.style.pointerEvents = 'none';
-                        currentOverlayElement.setAttribute('aria-hidden', 'true');
-                        currentOverlayElement.setAttribute('data-loading-overlay-parked', '1');
-                        if (canvas) {
-                            canvas.style.transition = '';
-                            canvas.style.opacity = '';
-                        }
-                    }
-                    /* #custom-loading-overlay-styles остаётся в head (ранний index + повторный показ). */
-                    if (this.overlayElement === currentOverlayElement) this.overlayElement = null;
-                    if (this.styleElement === currentStyleElement) this.styleElement = null;
-                    document.documentElement.classList.remove('loading-overlay-active');
-                    resolve();
-                }, this.fadeOutDuration);
-            } else {
-                if (runnerToStop?.stop) {
-                    runnerToStop.stop();
-                    if (runnerToStop?.resize)
-                        window.removeEventListener('resize', runnerToStop.resize);
-                }
-                if (earlyToStop?.stop) {
-                    earlyToStop.stop();
-                    if (earlyToStop?.resize)
-                        window.removeEventListener('resize', earlyToStop.resize);
-                    earlyToStop.isRunning = false;
-                }
-                this.overlayElement = null;
-                this.styleElement = null;
-                document.documentElement.classList.remove('loading-overlay-active');
-                resolve();
+    hideAndDestroy() {
+        if (this._hidePromise) return this._hidePromise;
+        const overlay = this.overlayElement;
+        const runner = this.animationRunner;
+        const generation = this._showGeneration;
+        document.documentElement.classList.remove('loading-overlay-active');
+        if (overlay) {
+            overlay.style.pointerEvents = 'none';
+            overlay.classList.add('is-exiting');
+        }
+        const completion = runner?.finish
+            ? runner.finish()
+            : new Promise(resolve => setTimeout(resolve, this.fadeOutDuration));
+        this._hidePromise = Promise.resolve(completion).then(() => {
+            if (generation !== this._showGeneration) return;
+            runner?.stop?.();
+            if (overlay && document.body.contains(overlay)) {
+                overlay.style.display = 'none';
+                overlay.style.visibility = 'hidden';
+                overlay.setAttribute('aria-hidden', 'true');
+                overlay.setAttribute('data-loading-overlay-parked', '1');
             }
+            this.overlayElement = null;
+            this.styleElement = null;
+            this.animationRunner = null;
+            this.isSpawning = false;
+            this.spawnProgress = 0;
+            this.currentProgressValue = 0;
+            this._hidePromise = null;
         });
-        this.animationRunner = null;
-        this.isSpawning = false;
-        this.spawnProgress = 0;
-        this.currentProgressValue = 0;
-        await overlayPromise;
+        return this._hidePromise;
     },
 
     updateProgress(percentage, message = null) {
@@ -383,337 +304,6 @@ export const loadingOverlayManager = {
     },
 
     async runExitEffect() {
-        this.exitScaleStartTime = performance.now();
-        const early = window._earlySphereAnimation;
-        if (early?.setExitStartTime && early?.getExitPromise) {
-            early.setExitStartTime();
-            await early.getExitPromise();
-            return;
-        }
-        await new Promise((r) => setTimeout(r, EXIT_TOTAL_MS + 100));
-    },
-
-    _encapsulateAnimationScript(canvasElement, manager, initialState = null) {
-        let localAnimationFrameId = null;
-        const ctx = canvasElement.getContext('2d');
-        let width_anim, height_anim, centerX_anim, centerY_anim;
-        let particles_anim = [];
-        let currentTheme_anim = manager.getResolvedTheme();
-        let themeProfile_anim = manager.getThemeProfile(currentTheme_anim);
-        let globalTime_anim = initialState?.globalTime || 0;
-        let rotationX_anim = initialState?.rotationX || 0;
-        let rotationY_anim = initialState?.rotationY || 0;
-        let rotationStartTime_anim = 0;
-        const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-        const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
-        const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
-
-        function getExitScale_anim() {
-            if (!manager.exitScaleStartTime) return 1;
-            const elapsed = performance.now() - manager.exitScaleStartTime;
-            if (elapsed >= EXIT_TOTAL_MS) return EXIT_MAX_SCALE;
-            if (elapsed < EXIT_WIND_UP_MS) {
-                const t = elapsed / EXIT_WIND_UP_MS;
-                return 1 + (EXIT_SHRINK_SCALE - 1) * easeOutQuint(t);
-            }
-            const t = (elapsed - EXIT_WIND_UP_MS) / EXIT_EXPLODE_MS;
-            return EXIT_SHRINK_SCALE + (EXIT_MAX_SCALE - EXIT_SHRINK_SCALE) * easeOutQuart(t);
-        }
-        function getExitGlowMultiplier_anim() {
-            if (!manager.exitScaleStartTime) return 1;
-            const elapsed = performance.now() - manager.exitScaleStartTime;
-            if (elapsed < EXIT_WIND_UP_MS) {
-                const t = elapsed / EXIT_WIND_UP_MS;
-                return 1 + (EXIT_GLOW_MULTIPLIER_MAX - 1) * easeOutQuint(t);
-            }
-            return EXIT_GLOW_MULTIPLIER_MAX;
-        }
-
-        const profile = manager.getThemeProfile(currentTheme_anim);
-        const config_anim = {
-            particleCount: profile.particleCount ?? 2200,
-            sphereBaseRadius: 4,
-            focalLength: 250,
-            rotationSpeedX: 0.0003,
-            rotationSpeedY: 0.002,
-            breathAmplitude: 0.09,
-            breathSpeed: 0.01,
-            petalCount: 15,
-            petalStrength: 0.2,
-            baseParticleMinSize: 0.45,
-            baseParticleMaxSize: 1.1,
-            particleSizeScale: profile.particleSizeScale ?? 1,
-            colorPalette: profile.palette,
-            backgroundColor: 'rgba(0, 0, 0, 0)',
-        };
-
-        class Particle_anim {
-            constructor() {
-                const u = Math.random();
-                const v = Math.random();
-                const theta = 2 * Math.PI * u;
-                const phi = Math.acos(2 * v - 1);
-                this.baseR_factor = 0.75 + Math.random() * 0.25;
-                const petalModulation =
-                    1 +
-                    config_anim.petalStrength *
-                        Math.sin(phi) *
-                        Math.cos(
-                            config_anim.petalCount * theta +
-                                Math.PI / (Math.random() > 0.5 ? 2 : 1),
-                        );
-                const effectiveR_factor = this.baseR_factor * petalModulation;
-                this.x0 = effectiveR_factor * Math.sin(phi) * Math.cos(theta);
-                this.y0 = effectiveR_factor * Math.sin(phi) * Math.sin(theta);
-                this.z0 = effectiveR_factor * Math.cos(phi);
-                const colorData =
-                    config_anim.colorPalette[
-                        Math.floor(Math.random() * config_anim.colorPalette.length)
-                    ];
-                this.color_r = colorData[0];
-                this.color_g = colorData[1];
-                this.color_b = colorData[2];
-                this.baseAlphaMultiplier = colorData[3];
-                const sizeBase =
-                    config_anim.baseParticleMinSize +
-                    Math.random() *
-                        (config_anim.baseParticleMaxSize - config_anim.baseParticleMinSize);
-                this.baseSize = sizeBase * (config_anim.particleSizeScale ?? 1);
-                this.noiseAmp = 0.03 + Math.random() * 0.04;
-                this.noiseFreq = 0.005 + Math.random() * 0.01;
-                this.noisePhaseX = Math.random() * Math.PI * 2;
-                this.noisePhaseY = Math.random() * Math.PI * 2;
-                this.noisePhaseZ = Math.random() * Math.PI * 2;
-                this.screenX = 0;
-                this.screenY = 0;
-                this.projectedSize = 0;
-                this.alphaFactor = 0;
-                this.depth = 0;
-                this.currentDisplaySize = 0;
-            }
-            projectAndTransform(currentSphereRadius, breathPulse, spawnProgress) {
-                const timeBasedNoisePhase = globalTime_anim * this.noiseFreq;
-                const dX = Math.sin(this.noisePhaseX + timeBasedNoisePhase) * this.noiseAmp;
-                const dY = Math.cos(this.noisePhaseY + timeBasedNoisePhase) * this.noiseAmp;
-                const dZ = Math.sin(this.noisePhaseZ + timeBasedNoisePhase) * this.noiseAmp;
-                let x = this.x0 + dX;
-                let y = this.y0 + dY;
-                let z = this.z0 + dZ;
-                let tempX_rotY = x * Math.cos(rotationY_anim) - z * Math.sin(rotationY_anim);
-                let tempZ_rotY = x * Math.sin(rotationY_anim) + z * Math.cos(rotationY_anim);
-                x = tempX_rotY;
-                z = tempZ_rotY;
-                let tempY_rotX = y * Math.cos(rotationX_anim) - z * Math.sin(rotationX_anim);
-                let tempZ_rotX = y * Math.sin(rotationX_anim) + z * Math.cos(rotationX_anim);
-                y = tempY_rotX;
-                z = tempZ_rotX;
-                const exitScale = getExitScale_anim();
-                const dynamicSphereRadius =
-                    currentSphereRadius *
-                    (1 + breathPulse * config_anim.breathAmplitude) *
-                    exitScale;
-                const perspectiveFactor =
-                    config_anim.focalLength /
-                    (config_anim.focalLength - z * dynamicSphereRadius * 0.8);
-                this.screenX = centerX_anim + x * dynamicSphereRadius * perspectiveFactor;
-                this.screenY = centerY_anim + y * dynamicSphereRadius * perspectiveFactor;
-                const normalizedDepth = z;
-                this.projectedSize = Math.max(
-                    0.1,
-                    this.baseSize * perspectiveFactor * ((normalizedDepth + 1.2) / 2.2),
-                );
-                this.alphaFactor = Math.max(
-                    0.1,
-                    Math.min(1, ((normalizedDepth + 1.5) / 2.5) * this.baseAlphaMultiplier),
-                );
-                this.depth = z;
-                const easedSpawnProgress = easeOutCubic(spawnProgress);
-                this.currentDisplaySize = this.projectedSize * easedSpawnProgress;
-                if (exitScale > 1.5) {
-                    this.currentDisplaySize = Math.max(this.currentDisplaySize, 0.14);
-                }
-            }
-            draw(spawnProgress, glowMultiplier = 1) {
-                const easedSpawnProgress = easeOutCubic(spawnProgress);
-                if (this.currentDisplaySize <= 0.15) return;
-                const mainAlpha = Math.min(
-                    1,
-                    this.alphaFactor *
-                        easedSpawnProgress *
-                        glowMultiplier *
-                        (themeProfile_anim.coreAlphaScale ?? 1),
-                );
-                if (mainAlpha <= 0.02) return;
-                const mainSize = this.currentDisplaySize;
-                const useHalo = themeProfile_anim.useHalo !== false;
-                if (useHalo) {
-                    const haloSizeScale = themeProfile_anim.haloSizeScale ?? 1;
-                    const haloAlphaScale = themeProfile_anim.haloAlphaScale ?? 1;
-                    const haloLayers = [
-                        { sizeFactor: 5, alphaFactor: 0.2, innerStop: 0.05, outerStop: 0.8 },
-                        { sizeFactor: 3.5, alphaFactor: 0.28, innerStop: 0.1, outerStop: 0.75 },
-                        { sizeFactor: 2.2, alphaFactor: 0.4, innerStop: 0.15, outerStop: 0.85 },
-                    ];
-                    for (const layer of haloLayers) {
-                        const haloSize = mainSize * layer.sizeFactor * haloSizeScale;
-                        const haloAlpha = Math.min(
-                            1,
-                            mainAlpha * layer.alphaFactor * haloAlphaScale,
-                        );
-                        if (haloAlpha <= 0.01 || haloSize <= 0.2) continue;
-                        const gradient = ctx.createRadialGradient(
-                            this.screenX,
-                            this.screenY,
-                            haloSize * layer.innerStop,
-                            this.screenX,
-                            this.screenY,
-                            haloSize,
-                        );
-                        gradient.addColorStop(
-                            0,
-                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha})`,
-                        );
-                        gradient.addColorStop(
-                            layer.outerStop,
-                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${haloAlpha * 0.5})`,
-                        );
-                        gradient.addColorStop(
-                            1,
-                            `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
-                        );
-                        ctx.fillStyle = gradient;
-                        ctx.beginPath();
-                        ctx.arc(this.screenX, this.screenY, haloSize, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
-                if (useHalo) {
-                    const coreGradient = ctx.createRadialGradient(
-                        this.screenX,
-                        this.screenY,
-                        0,
-                        this.screenX,
-                        this.screenY,
-                        mainSize,
-                    );
-                    coreGradient.addColorStop(
-                        0,
-                        `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`,
-                    );
-                    coreGradient.addColorStop(
-                        1,
-                        `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, 0)`,
-                    );
-                    ctx.fillStyle = coreGradient;
-                } else {
-                    ctx.fillStyle = `rgba(${this.color_r}, ${this.color_g}, ${this.color_b}, ${mainAlpha})`;
-                }
-                ctx.beginPath();
-                ctx.arc(this.screenX, this.screenY, mainSize, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        const setupCanvas_anim = () => {
-            const dpr = window.devicePixelRatio || 1;
-            width_anim = window.innerWidth;
-            height_anim = window.innerHeight;
-            canvasElement.width = width_anim * dpr;
-            canvasElement.height = height_anim * dpr;
-            ctx.resetTransform();
-            ctx.scale(dpr, dpr);
-            centerX_anim = width_anim / 2;
-            centerY_anim = height_anim / 2;
-            config_anim.sphereBaseRadius = Math.min(width_anim, height_anim) * 0.1584;
-        };
-
-        function init_anim() {
-            setupCanvas_anim();
-            themeProfile_anim = manager.getThemeProfile(manager.getResolvedTheme());
-            config_anim.colorPalette = themeProfile_anim.palette;
-            config_anim.particleCount =
-                themeProfile_anim.particleCount ?? config_anim.particleCount;
-            config_anim.particleSizeScale = themeProfile_anim.particleSizeScale ?? 1;
-            particles_anim = [];
-            const particleCount = config_anim.particleCount;
-            for (let i = 0; i < particleCount; i++) {
-                particles_anim.push(new Particle_anim());
-            }
-        }
-
-        function animate_anim(timestamp) {
-            const nextTheme = manager.getResolvedTheme();
-            if (nextTheme !== currentTheme_anim) {
-                currentTheme_anim = nextTheme;
-                themeProfile_anim = manager.getThemeProfile(currentTheme_anim);
-                config_anim.colorPalette = themeProfile_anim.palette;
-                config_anim.particleCount =
-                    themeProfile_anim.particleCount ?? config_anim.particleCount;
-                config_anim.particleSizeScale = themeProfile_anim.particleSizeScale ?? 1;
-                particles_anim = [];
-                for (let i = 0; i < config_anim.particleCount; i++) {
-                    particles_anim.push(new Particle_anim());
-                }
-            }
-            timestamp = timestamp || performance.now();
-            if (!rotationStartTime_anim) rotationStartTime_anim = timestamp;
-            const elapsedMs = timestamp - rotationStartTime_anim;
-            rotationX_anim = elapsedMs * (config_anim.rotationSpeedX / 16);
-            rotationY_anim = elapsedMs * (config_anim.rotationSpeedY / 16);
-            globalTime_anim++;
-
-            ctx.fillStyle = config_anim.backgroundColor;
-            ctx.clearRect(0, 0, width_anim, height_anim);
-
-            let currentEffectiveSpawnProgress = 1.0;
-            if (manager.isSpawning && manager.spawnProgress < 1) {
-                const elapsedTime = performance.now() - manager.spawnStartTime;
-                manager.spawnProgress = Math.min(1, elapsedTime / manager.spawnDuration);
-                currentEffectiveSpawnProgress = manager.spawnProgress;
-            } else if (manager.spawnProgress >= 1 && manager.isSpawning) {
-                manager.isSpawning = false;
-            }
-
-            const breathPulse = Math.sin(globalTime_anim * config_anim.breathSpeed);
-            const exitGlowMultiplier = getExitGlowMultiplier_anim();
-            particles_anim.forEach((p) => {
-                p.projectAndTransform(
-                    config_anim.sphereBaseRadius,
-                    breathPulse,
-                    currentEffectiveSpawnProgress,
-                );
-            });
-            particles_anim.forEach((p) => {
-                p.draw(currentEffectiveSpawnProgress, exitGlowMultiplier);
-            });
-            localAnimationFrameId = requestAnimationFrame(animate_anim);
-        }
-
-        const resizeHandler_anim = () => {
-            if (localAnimationFrameId) {
-                cancelAnimationFrame(localAnimationFrameId);
-                localAnimationFrameId = null;
-            }
-            init_anim();
-            if (!localAnimationFrameId && manager.animationRunner?.isRunning) {
-                localAnimationFrameId = requestAnimationFrame(animate_anim);
-            }
-        };
-
-        return {
-            startAnimation: () => {
-                init_anim();
-                if (!localAnimationFrameId) {
-                    localAnimationFrameId = requestAnimationFrame(animate_anim);
-                }
-            },
-            stopAnimation: () => {
-                if (localAnimationFrameId) {
-                    cancelAnimationFrame(localAnimationFrameId);
-                    localAnimationFrameId = null;
-                }
-            },
-            resizeHandler: resizeHandler_anim,
-        };
+        await this.animationRunner?.finish?.();
     },
 };

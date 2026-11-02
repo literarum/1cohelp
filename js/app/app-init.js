@@ -9,6 +9,7 @@ import { getCoreService, notify } from '../core/kernel.js';
 import { initBackupReminderScheduler } from '../features/backup-reminder.js';
 import { initContextualBackNavigation } from '../features/contextual-back-navigation.js';
 import { tabsConfig } from '../config.js';
+import { waitForUiPaint } from '../utils/ui-paint.js';
 
 let dependencies = {};
 
@@ -847,7 +848,7 @@ export async function appInit(context = 'normal') {
             console.log(
                 '[appInit V3] Все логические операции и вызовы рендеринга завершены. Ожидание отрисовки DOM браузером...',
             );
-            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+            await waitForUiPaint();
             console.log('[appInit V3] Отрисовка DOM браузером должна была произойти.');
 
             if (

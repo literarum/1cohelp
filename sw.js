@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20261030-sfr-report';
+const ASSET_QUERY_VERSION = '20261102-ui-motion';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20261030-sfr-report';
-const VERSION = `20261030-sfr-report`;
+const MAIN_CSS_QUERY_VERSION = '20261102-ui-motion';
+const VERSION = `20261102-ui-motion`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
@@ -44,6 +44,7 @@ const SHELL_PRECACHE = [
     scopedAsset(`script.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset(`js/entry.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset(`js/search-startup.js?v=${ASSET_QUERY_VERSION}`),
+    scopedAsset('js/features/loading-overlay/sphere-renderer.js'),
     scopedAsset('js/vendor-config.js'),
     scopedAsset('js/vendor-loader.js'),
     scopedAsset('manifest.webmanifest'),

@@ -17,6 +17,9 @@ import {
 } from '../config.js';
 import { State } from '../app/state.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
+import { waitForUiPaint } from '../utils/ui-paint.js';
+
+const layoutChanges = new WeakMap();
 
 // ============================================================================
 // УТИЛИТЫ ДЛЯ РАБОТЫ С ВИДАМИ ОТОБРАЖЕНИЯ
@@ -68,8 +71,19 @@ export function applyView(container, view) {
         return;
     }
 
+    const previousView = container.dataset.view;
     container.dataset.view = view === 'list' ? 'list' : 'cards';
     const sectionId = container.dataset.sectionId;
+    if (previousView && previousView !== container.dataset.view) {
+        const token = {};
+        layoutChanges.set(container, token);
+        container.classList.add('view-layout-changing');
+        void waitForUiPaint().then(() => {
+            if (layoutChanges.get(container) !== token) return;
+            container.classList.remove('view-layout-changing');
+            layoutChanges.delete(container);
+        });
+    }
     let viewControlsContainer = null;
 
     if (sectionId === 'reglamentsContainer' || sectionId === 'reglamentCategoryGrid') {

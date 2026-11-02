@@ -15,6 +15,7 @@ import {
     filterDomAuditMissingIdsForBirthdayMode,
 } from './ui-health-surface-registry.js';
 import { runFullButtonHealthSweep } from './ui-health-button-sweep.js';
+import { waitForUiPaint } from '../utils/ui-paint.js';
 
 /** Минимальная задержка после input (debounce 300 + запас на async performSearch). */
 const INPUT_SETTLE_MS = 520;
@@ -119,13 +120,7 @@ export async function waitForUiSurfaceDomProbeReady() {
             resolve();
         }
     });
-    await new Promise((resolve) => {
-        if (typeof requestAnimationFrame !== 'function') {
-            resolve();
-            return;
-        }
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
+    await waitForUiPaint();
 }
 
 /**
@@ -368,13 +363,7 @@ export async function runFullSurfaceDomAuditAsync(report, opts = {}) {
             'Поверхность UI / DOM',
             `Первичный проход: не найдено ${missing.length} id — повтор после отложенного кадра (резервный контур).`,
         );
-        await new Promise((resolve) => {
-            if (typeof requestAnimationFrame !== 'function') {
-                resolve();
-                return;
-            }
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        });
+        await waitForUiPaint();
         missing = applyConditional(meta.allIds.filter((id) => !document.getElementById(id)));
         if (missing.length === 0) {
             r(

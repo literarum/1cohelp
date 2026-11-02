@@ -230,6 +230,18 @@ const DOC_MORE_TABS_INIT_KEY = 'tabsOverflowDocumentListener_v1';
 function attachDocumentMoreTabsListener() {
     if (document[DOC_MORE_TABS_INIT_KEY]) return;
     document.addEventListener('click', documentMoreTabsCapture, true);
+    document.addEventListener('keydown', (event) => {
+        const dropdown = document.getElementById('moreTabsDropdown');
+        if (event.key !== 'Escape' || !dropdown || dropdown.classList.contains('hidden')) return;
+        const trigger = document.getElementById('moreTabsBtn');
+        // A command palette/dialog may open above this menu without a pointer click.
+        // Its focused controls own Escape; do not intercept their close handlers.
+        if (!dropdown.contains(document.activeElement) && document.activeElement !== trigger) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        dropdown.classList.add('hidden');
+        trigger?.focus();
+    }, true);
     document[DOC_MORE_TABS_INIT_KEY] = true;
 }
 
