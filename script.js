@@ -152,6 +152,7 @@ import {
     linkify as linkifyModule,
     createBookmarkDetailUrlSectionElement,
 } from './js/utils/html.js';
+import { bookmarkDescriptionHtml } from './js/features/bookmark-rich-text.js';
 
 import {
     escapeRegExp,
@@ -3252,9 +3253,9 @@ async function showBookmarkDetailModal(bookmarkId) {
                 textContentEl.appendChild(urlSection);
             }
             const descWrap = document.createElement('div');
-            descWrap.className = 'whitespace-pre-wrap break-words text-sm font-sans mt-0';
+            descWrap.className = 'bookmark-rich-content break-words text-sm font-sans mt-0';
             descWrap.style.fontSize = '102%';
-            descWrap.innerHTML = linkifyModule(bookmark.description || 'Нет описания.');
+            descWrap.innerHTML = bookmarkDescriptionHtml(bookmark) || '<p>Нет описания.</p>';
             textContentEl.appendChild(descWrap);
 
             editButton.classList.remove('hidden');

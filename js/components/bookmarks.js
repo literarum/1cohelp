@@ -2,7 +2,9 @@
 
 import { rankItems } from '../features/smart-search.js';
 import { renderSearchHint } from '../features/search-hint.js';
-import { escapeHtml, linkify, truncateText } from '../utils/html.js';
+import { escapeHtml as escapeHtmlText, linkify, truncateText } from '../utils/html.js';
+import { bookmarkDescriptionHtml, bookmarkDescriptionState } from '../features/bookmark-rich-text.js';
+
 import {
     getAllFromIndexedDB,
     getAllFromIndexWithKeyVariants,
@@ -55,6 +57,9 @@ import {
     attachModalBackdropWheelScroll,
     syncBodyScrollLockAfterModalClose,
 } from '../ui/modals-manager.js';
+
+// These templates use the same escaped values in text and quoted attributes.
+const escapeHtml = (text) => escapeHtmlText(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // Цвета папок: палитра + произвольный #rrggbb (js/utils/folder-colors.js), отрисовка через --fc
 function getFolderBadgeStyle(colorName) {
@@ -252,7 +257,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
             </span>`;
     } else if (bookmark.folder) {
         folderBadgeHTML = `
-            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-800 text-gray-200 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${bookmark.folder} не найдена">
+            <span class="folder-badge inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap bg-gray-800 text-gray-200 dark:bg-gray-700 dark:text-gray-300" title="Папка с ID: ${escapeHtml(String(bookmark.folder))} не найдена">
                 <i class="fas fa-question-circle mr-1 opacity-75"></i>Неизв. папка
             </span>`;
     }
@@ -376,7 +381,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
 
     const safeTitle = escapeHtml(bookmark.title || 'Без названия');
     const safeDescription = escapeHtml(bookmark.description || '');
-    const descriptionLinked = linkify(bookmark.description || '');
+    const descriptionLinked = bookmarkDescriptionHtml(bookmark);
     const tagList = coerceTagsArray(bookmark.tags);
     const tagsChipsHtml =
         tagList.length > 0
@@ -393,7 +398,7 @@ export function createBookmarkElement(bookmark, folderMap = {}, viewMode = 'card
             'bookmark-item view-item group relative cursor-pointer bg-white dark:bg-gray-700 transition-shadow duration-200 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
 
         const descriptionHTML = descriptionLinked
-            ? `<p class="bookmark-description text-gray-600 dark:text-gray-300 text-sm line-clamp-3" title="${safeDescription}">${descriptionLinked}</p>`
+            ? `<div class="bookmark-description bookmark-rich-content text-gray-600 dark:text-gray-300 text-sm line-clamp-3" title="${safeDescription}">${descriptionLinked}</div>`
             : bookmark.url
               ? '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Нет описания</p>'
               : '<p class="bookmark-description text-sm mt-1 mb-2 italic text-gray-500">Текстовая заметка</p>';
@@ -1372,6 +1377,7 @@ export function getCurrentBookmarkFormState(form) {
         title: form.elements.bookmarkTitle.value.trim(),
         url: form.elements.bookmarkUrl.value.trim(),
         description: form.elements.bookmarkDescription.value.trim(),
+        descriptionHtml: bookmarkDescriptionState(form).descriptionHtml,
         folder: form.elements.bookmarkFolder.value,
         tags: form.elements.bookmarkTags ? form.elements.bookmarkTags.value.trim() : '',
         existingScreenshotIds: (form.dataset.existingScreenshotIds || '')

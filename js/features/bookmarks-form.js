@@ -11,6 +11,7 @@ import {
     shakeField,
 } from '../ui/form-helpers.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
+import { bookmarkDescriptionState } from './bookmark-rich-text.js';
 
 // ============================================================================
 // BOOKMARKS FORM SUBMIT (вынос из script.js)
@@ -88,7 +89,7 @@ export async function handleBookmarkFormSubmit(event) {
     const id = form.elements.bookmarkId.value;
     const title = form.elements.bookmarkTitle.value.trim();
     const urlRaw = form.elements.bookmarkUrl.value.trim();
-    const description = form.elements.bookmarkDescription.value.trim();
+    const { description, descriptionHtml } = bookmarkDescriptionState(form);
 
     const folderValue = form.elements.bookmarkFolder.value;
     let folder;
@@ -122,7 +123,8 @@ export async function handleBookmarkFormSubmit(event) {
         setFieldError(input, message);
         autoClearErrorOnInput(input);
         shakeField(input);
-        input.focus();
+        if (input === form.elements.bookmarkDescription && form._bookmarkEditor) form._bookmarkEditor.focus();
+        else input.focus();
     };
     ['bookmarkTitle', 'bookmarkUrl', 'bookmarkDescription'].forEach((n) =>
         clearFieldError(form.elements[n]),
@@ -178,6 +180,7 @@ export async function handleBookmarkFormSubmit(event) {
         title,
         url: url || null,
         description: description || null,
+        descriptionHtml,
         folder: folder,
     };
     if (tagsList.length > 0) newDataBase.tags = tagsList;
@@ -348,8 +351,7 @@ export async function handleBookmarkFormSubmit(event) {
         if (newDataBase.screenshotIds.length === 0) delete newDataBase.screenshotIds;
 
         console.log(
-            `[Save Bookmark v6 TX ${finalId}] Финальный объект закладки для put:`,
-            JSON.parse(JSON.stringify(newDataBase)),
+            `[Save Bookmark v6 TX ${finalId}] Запись подготовлена для сохранения.`,
         );
 
         const putBookmarkReq = bookmarksStore.put(newDataBase);

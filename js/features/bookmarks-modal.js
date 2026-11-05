@@ -15,6 +15,7 @@ import {
 import { SCREENSHOT_EDIT_FIELD } from '../ui/screenshot-attachment-field.js';
 import { formatTagsForInput } from '../features/global-tags.js';
 import { bindCtrlEnterSubmit, attachCharCounter } from '../ui/form-helpers.js';
+import { mountBookmarkRichEditor } from './bookmark-rich-editor.js';
 
 let bookmarkModalConfigGlobal = null;
 let State = null;
@@ -81,6 +82,7 @@ export async function ensureBookmarkModal() {
     }
 
     if (!modal || mustRebuildContent) {
+        modal?.querySelector('#bookmarkForm')?._bookmarkEditor?.destroy();
         if (modal && mustRebuildContent) {
             const innerModalContainer = modal.querySelector(
                 bookmarkModalConfigGlobal.innerContainerSelector,
@@ -106,7 +108,7 @@ export async function ensureBookmarkModal() {
         }
 
         modal.innerHTML = `
-            <div class="modal-inner-container bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div class="modal-inner-container bookmark-editor-modal bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
                 <div class="p-content border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex-grow mr-4 truncate" id="bookmarkModalTitle">
@@ -337,6 +339,7 @@ export async function ensureBookmarkModal() {
         tagsInput: modal.querySelector('#bookmarkTags'),
         thumbsContainer: modal.querySelector('#bookmarkScreenshotThumbnailsContainer'),
     };
+    if (elements.form) mountBookmarkRichEditor(elements.form);
 
     for (const key in elements) {
         if (key === 'tagsInput') continue;
@@ -401,6 +404,7 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
     } = modalElements;
 
     form.reset();
+    form._bookmarkEditor?.setContent();
     idInput.value = '';
     if (thumbsContainer) {
         thumbsContainer.querySelectorAll('img[data-object-url]').forEach((im) => {
@@ -453,6 +457,7 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
             titleInput.value = bookmark.title || '';
             urlInput.value = bookmark.url || '';
             descriptionInput.value = bookmark.description || '';
+            form._bookmarkEditor?.setContent(bookmark);
             folderSelect.value = bookmark.folder || '';
 
             if (!bookmark.url && descRequiredIndicator) {
@@ -493,8 +498,7 @@ export async function showAddBookmarkModal(bookmarkToEditId = null) {
     if (typeof getCurrentBookmarkFormState === 'function') {
         State.initialBookmarkFormState = getCurrentBookmarkFormState(form);
         console.log(
-            `${LOG_PREFIX} Начальное состояние формы захвачено:`,
-            JSON.parse(JSON.stringify(State.initialBookmarkFormState)),
+            `${LOG_PREFIX} Начальное состояние формы захвачено.`,
         );
     } else {
         console.warn(
@@ -594,6 +598,7 @@ export async function showEditBookmarkModal(id) {
         titleInput.value = bookmark.title || '';
         urlInput.value = bookmark.url || '';
         descriptionInput.value = bookmark.description || '';
+        form._bookmarkEditor?.setContent(bookmark);
         if (tagsInput) tagsInput.value = formatTagsForInput(bookmark.tags);
 
         if (typeof populateBookmarkFolders === 'function') {
@@ -625,8 +630,7 @@ export async function showEditBookmarkModal(id) {
             State.initialBookmarkFormState = getCurrentBookmarkFormState(form);
             form._initialState = JSON.parse(JSON.stringify(State.initialBookmarkFormState));
             console.log(
-                'Захвачено начальное состояние для EDIT bookmarkModal:',
-                form._initialState,
+                'Захвачено начальное состояние для EDIT bookmarkModal.',
             );
         } else {
             State.initialBookmarkFormState = null;

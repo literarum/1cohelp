@@ -34,6 +34,19 @@ describe('merge parity on a disposable IndexedDB database', () => {
         expect(new Set(CONTENT_STORES)).toEqual(new Set(expected));
     });
 
+    it('retains bookmark rich content on insert and resolves a formatting-only conflict', async () => {
+        const incoming = { id: 10, title: 'Formatted note', description: 'Same text', descriptionHtml: '<p><b>Same text</b></p>' };
+        const first = await analyzeMergeData(payload({ bookmarks: [incoming] }), { stores: ['bookmarks'] });
+        await applyMergePlan(buildMergePlan(first, {}));
+        const [saved] = await getAllFromIndexedDB('bookmarks');
+        expect(saved.descriptionHtml).toBe(incoming.descriptionHtml);
+        const replacement = { ...saved, descriptionHtml: '<p><i>Same text</i></p>' };
+        const second = await analyzeMergeData(payload({ bookmarks: [replacement] }), { stores: ['bookmarks'] });
+        expect(second.storeDiffs.find(diff => diff.storeName === 'bookmarks').conflicts).toHaveLength(1);
+        await applyMergePlan(buildMergePlan(second, { perStorePolicy: { bookmarks: 'preferImport' } }));
+        expect((await getAllFromIndexedDB('bookmarks'))[0]).toMatchObject({ id: saved.id, description: 'Same text', descriptionHtml: replacement.descriptionHtml });
+    });
+
     it('uses the same legacy envelope and alias compatibility as full import', async () => {
         const result = await analyzeMergeData(JSON.stringify({ externalLinks: [{ id: 1, title: 'Synthetic', url: 'https://example.test' }] }), { stores: ['extLinks'] });
         expect(result.storeDiffs[0].importOnly).toHaveLength(1);

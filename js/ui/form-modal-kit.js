@@ -61,7 +61,9 @@ export function snapshotForm(root) {
     if (!root) return '{}';
     root.querySelectorAll('input, select, textarea').forEach((el) => {
         const type = el.type;
-        if (type === 'button' || type === 'submit' || type === 'reset' || type === 'hidden') return;
+        if (type === 'button' || type === 'submit' || type === 'reset') return;
+        // Rich editors keep their document in an explicitly tracked hidden field.
+        if (type === 'hidden' && el.dataset.formSnapshot !== 'true') return;
         const key = el.id || el.name;
         if (!key) return;
         if (type === 'radio') {

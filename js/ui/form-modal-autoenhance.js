@@ -20,7 +20,8 @@ import {
 
 /** @type {Record<string, import('./form-modal-kit.js').FormModalOptions | Record<string, unknown>>} */
 export const FORM_MODAL_REGISTRY = {
-    bookmarkModal: { titleId: 'bookmarkModalTitle', icon: 'fa-bookmark', counters: { bookmarkTitle: 200 } },
+    // Bookmark data and its rich editor are populated before the modal becomes visible.
+    bookmarkModal: { titleId: 'bookmarkModalTitle', icon: 'fa-bookmark', counters: { bookmarkTitle: 200 }, baselineDelayMs: 0 },
     extLinkModal: { titleId: 'extLinkModalTitle', icon: 'fa-link' },
     cibLinkModal: { titleId: 'cibLinkModalTitle', icon: 'fa-key' },
     reglamentModal: { titleId: 'reglamentModalTitle', icon: 'fa-file-alt' },
@@ -62,9 +63,13 @@ function handleOpened(modal) {
         return;
     }
     clearTimeout(modal._kitBaselineTimer);
-    modal._kitBaselineTimer = setTimeout(() => {
-        if (isVisible(modal)) captureFormBaseline(modal);
-    }, BASELINE_DELAY_MS);
+    if (opts.baselineDelayMs === 0) {
+        captureFormBaseline(modal);
+    } else {
+        modal._kitBaselineTimer = setTimeout(() => {
+            if (isVisible(modal)) captureFormBaseline(modal);
+        }, BASELINE_DELAY_MS);
+    }
     bindRebaseline(modal, opts);
 }
 

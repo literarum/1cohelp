@@ -8,4 +8,4 @@
  * 3) ASSET_QUERY_VERSION в site/sw.js (precache URL)
  * При смене только логики SW (стратегии кэша) дополнительно увеличить VERSION в sw.js.
  */
-export const ASSET_QUERY_VERSION = '20261102-ui-motion';
+export const ASSET_QUERY_VERSION = '20261105-bookmark-formatting-5';
