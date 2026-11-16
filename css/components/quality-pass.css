@@ -118,3 +118,26 @@ td.num {
     background-color: color-mix(in srgb, var(--color-primary, #9933ff) 16%, transparent) !important;
     box-shadow: inset 3px 0 0 var(--color-primary, #9933ff);
 }
+
+/* Индикатор автосохранения заметок. */
+.client-notes-save-status {
+    display: block;
+    margin-top: 1px;
+    font-size: 0.68rem;
+    line-height: 1.1;
+    font-weight: 500;
+    opacity: 0.6;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.client-notes-save-status:empty {
+    display: none;
+}
+.client-notes-save-status[data-state='saved']::before {
+    content: '✓ ';
+    color: #22c55e;
+}
+.client-notes-save-status[data-state='error'] {
+    color: #ef4444;
+    opacity: 1;
+}

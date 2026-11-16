@@ -12,7 +12,11 @@ import {
     pickNewestNotes,
     readLocalNotesCandidates,
 } from './client-notes-guard.js';
-import { getLastSavedClientNotes, markClientNotesSaved } from './client-data.js';
+import {
+    getLastSavedClientNotes,
+    markClientNotesSaved,
+    setClientNotesSaveStatus,
+} from './client-data.js';
 
 let State = null;
 let debounce = null;
@@ -280,6 +284,7 @@ export async function initClientDataSystem() {
     );
 
     clientNotes.addEventListener('input', State.clientNotesInputHandler);
+    clientNotes.addEventListener('input', () => setClientNotesSaveStatus('dirty'));
     window.__clientNotesUnloadGuardOff?.();
     window.__clientNotesUnloadGuardOff = installClientNotesUnloadGuard(clientNotes, {
         getLastSaved: () => getLastSavedClientNotes() ?? '',

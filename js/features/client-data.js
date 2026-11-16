@@ -45,6 +45,29 @@ export function getClientData() {
 /**
  * Сохраняет данные клиента в IndexedDB или localStorage
  */
+/**
+ * Индикатор автосохранения в шапке «Информация по обращению».
+ * @param {'saved'|'dirty'|'error'|'idle'} state
+ */
+export function setClientNotesSaveStatus(state) {
+    const el = typeof document !== 'undefined' ? document.getElementById('clientNotesSaveStatus') : null;
+    if (!el) return;
+    el.dataset.state = state;
+    if (state === 'saved') {
+        const t = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        el.textContent = `Сохранено в ${t}`;
+        el.title = 'Заметки сохраняются автоматически';
+    } else if (state === 'dirty') {
+        el.textContent = 'Сохранение…';
+        el.title = '';
+    } else if (state === 'error') {
+        el.textContent = 'Ошибка сохранения';
+        el.title = 'Не удалось записать в базу; копия сохранена в браузере';
+    } else {
+        el.textContent = '';
+    }
+}
+
 /** Текст, подтверждённо записанный в БД (для защиты от потери при закрытии вкладки). */
 let lastSavedClientNotes = null;
 export function getLastSavedClientNotes() {
@@ -75,6 +98,7 @@ export async function saveClientData() {
             savedToDB = true;
             lastSavedClientNotes = clientDataToSave.notes;
             clearPendingNotes();
+            setClientNotesSaveStatus('saved');
             try {
                 localStorage.removeItem('clientData');
             } catch {
@@ -109,6 +133,7 @@ export async function saveClientData() {
             }
         } catch (error) {
             console.error('Ошибка сохранения данных клиента в IndexedDB:', error);
+            setClientNotesSaveStatus('error');
             if (deps.showNotification) {
                 deps.showNotification('Ошибка сохранения данных клиента', 'error');
             }
