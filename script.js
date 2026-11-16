@@ -1779,11 +1779,16 @@ setOnloadHandlerDependencies({
             document.addEventListener('copilot1co:tabShown', onTabShown);
         },
         () => {
-            setTimeout(() => {
-                if (shouldShowOnboardingAfterInit()) {
-                    void promptAndStartOnboardingTour();
-                }
-            }, 400);
+            // Предложение тура — только после окончания анимации загрузки, а не поверх взрыва.
+            Promise.resolve(loadingOverlayManager.whenHidden?.())
+                .catch(() => {})
+                .then(() => {
+                    setTimeout(() => {
+                        if (shouldShowOnboardingAfterInit()) {
+                            void promptAndStartOnboardingTour();
+                        }
+                    }, 600);
+                });
         },
     ],
 });

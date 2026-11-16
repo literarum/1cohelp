@@ -9,6 +9,30 @@ import { getThemeProfile } from './particles-config.js';
 
 import { createSphereRenderer } from './sphere-renderer.js';
 
+/** Минимальное время показа оверлея (мс): анимация успевает раскрыться целиком. */
+export const MIN_VISIBLE_MS = 7000;
+
+/** Подпись этапа по проценту загрузки. */
+export function phaseLabel(percent) {
+    if (percent >= 100) return 'Готово';
+    if (percent >= 85) return 'Последние штрихи';
+    if (percent >= 60) return 'Настройка интерфейса';
+    if (percent >= 35) return 'Загрузка данных';
+    if (percent >= 12) return 'Подключение базы';
+    return 'Инициализация';
+}
+
+/**
+ * Отображаемый прогресс: не обгоняет реальный и растёт не быстрее, чем течёт минимальное окно,
+ * поэтому полоса заполняется плавно и доходит до 100% к концу окна.
+ */
+export function displayedProgress(real, elapsedMs, minVisibleMs = MIN_VISIBLE_MS) {
+    const r = Math.max(0, Math.min(100, Number(real) || 0));
+    if (!(minVisibleMs > 0)) return r;
+    const cap = Math.max(0, Math.min(100, (elapsedMs / minVisibleMs) * 100));
+    return Math.min(r, cap);
+}
+
 /**
  * Менеджер оверлея загрузки. Централизованное управление показом/скрытием, темой и анимацией.
  * Интегрируется с ранним скриптом в index.html (тема и canvas) и с app-init/onload.
@@ -24,6 +48,48 @@ export const loadingOverlayManager = {
     fadeOutDuration: 180,
     currentProgressValue: 0,
     exitScaleStartTime: 0,
+    /** Минимум показа; тесты выставляют 0. */
+    minVisibleMs: MIN_VISIBLE_MS,
+    /** Момент показа (performance.now). Ранний оверлей виден с начала навигации → 0. */
+    _shownAt: 0,
+    /** Минимум для текущего показа: только запуск приложения; оверлеи операций (экспорт/импорт) — без задержки. */
+    _holdMs: MIN_VISIBLE_MS,
+    _progressFrame: null,
+
+    _startProgressTicker() {
+        if (this._progressFrame !== null || typeof requestAnimationFrame !== 'function') return;
+        const loop = () => {
+            this._progressFrame = null;
+            if (!this.overlayElement) return;
+            this._renderProgress();
+            this._progressFrame = requestAnimationFrame(loop);
+        };
+        this._progressFrame = requestAnimationFrame(loop);
+    },
+
+    _stopProgressTicker() {
+        if (this._progressFrame !== null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(this._progressFrame);
+        }
+        this._progressFrame = null;
+    },
+
+    _renderProgress() {
+        if (!this.overlayElement) return;
+        const elapsed = performance.now() - (this._shownAt || 0);
+        const shown = displayedProgress(this.currentProgressValue, elapsed, this._holdMs);
+        const bar = this.overlayElement.querySelector('#progressBarLine');
+        const pct = this.overlayElement.querySelector('#progressPercentageText');
+        const phase = this.overlayElement.querySelector('#loadingPhaseText');
+        if (bar) {
+            bar.style.width = `${shown.toFixed(1)}%`;
+            bar.parentElement?.setAttribute('aria-valuenow', String(Math.floor(shown)));
+        }
+        const rounded = `${Math.floor(shown)}%`;
+        if (pct && pct.textContent !== rounded) pct.textContent = rounded;
+        const label = phaseLabel(shown);
+        if (phase && phase.textContent !== label) phase.textContent = label;
+    },
 
     readStoredOverlaySnapshot() {
         return readStoredOverlaySnapshot();
@@ -73,14 +139,48 @@ export const loadingOverlayManager = {
         }
     },
 
+    /**
+     * Promise, который разрешается, когда оверлей полностью скрыт (после взрыва).
+     * Используется, чтобы не открывать диалоги и уведомления поверх анимации.
+     */
+    whenHidden() {
+        const visible =
+            this.overlayElement ||
+            document.documentElement.classList.contains('copilot-overlay-visible');
+        if (!visible) return Promise.resolve();
+        if (!this._hiddenWaiters) this._hiddenWaiters = [];
+        return new Promise((resolve) => this._hiddenWaiters.push(resolve));
+    },
+
+    _notifyHidden() {
+        document.documentElement.classList.remove('copilot-overlay-visible');
+        const waiters = this._hiddenWaiters || [];
+        this._hiddenWaiters = [];
+        waiters.forEach((fn) => {
+            try {
+                fn();
+            } catch {
+                /* ignore */
+            }
+        });
+        try {
+            document.dispatchEvent(new CustomEvent('copilot1co:loading-overlay-hidden'));
+        } catch {
+            /* ignore */
+        }
+    },
+
     createAndShow() {
-        document.documentElement.classList.add('loading-overlay-active');
+        document.documentElement.classList.add('loading-overlay-active', 'copilot-overlay-visible');
         this.applyOverlayTheme(resolveThemeFromStorage());
         const existingOverlay = document.getElementById('custom-loading-overlay');
         const existingStyles = document.getElementById('custom-loading-overlay-styles');
 
         if (existingOverlay) {
+            // Первый показ — это ранний оверлей из index.html, видимый с начала навигации.
+            const isFirstBootShow = !existingOverlay.hasAttribute('data-loading-overlay-parked');
             this.overlayElement = existingOverlay;
+            this.currentProgressValue = 0;
             this.styleElement = existingStyles;
             this.updateProgress(1, 'Загрузка');
             this.overlayElement.style.opacity = '1';
@@ -91,6 +191,9 @@ export const loadingOverlayManager = {
             this.overlayElement.removeAttribute('data-loading-overlay-parked');
 
             this.overlayElement.classList.remove('is-exiting');
+            this._shownAt = isFirstBootShow ? 0 : performance.now();
+            this._holdMs = isFirstBootShow ? this.minVisibleMs : 0;
+            this._startProgressTicker();
             this._showGeneration = (this._showGeneration || 0) + 1;
             this._hidePromise = null;
             const canvas = this.overlayElement.querySelector('#loadingCanvas');
@@ -121,10 +224,13 @@ export const loadingOverlayManager = {
             <canvas id="loadingCanvas"></canvas>
             <div class="loading-text" id="loadingText">Загрузка<span id="animated-dots"></span></div>
             <div class="progress-indicator-container">
-                <div class="progress-bar-line-track">
+                <div class="progress-bar-line-track" role="progressbar" aria-label="Загрузка" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                     <div class="progress-bar-line" id="progressBarLine"></div>
                 </div>
-                <div class="progress-percentage-text" id="progressPercentageText">0%</div>
+                <div class="progress-meta">
+                    <span class="loading-phase" id="loadingPhaseText">Инициализация</span>
+                    <span class="progress-percentage-text" id="progressPercentageText">0%</span>
+                </div>
             </div>
         `;
         const overlayCSS = `
@@ -236,6 +342,9 @@ export const loadingOverlayManager = {
 
         this._showGeneration = (this._showGeneration || 0) + 1;
         this._hidePromise = null;
+        this._shownAt = performance.now();
+        this._holdMs = 0;
+        this._startProgressTicker();
         const canvas = this.overlayElement.querySelector('#loadingCanvas');
         if (canvas) {
             this.animationRunner = createSphereRenderer(canvas);
@@ -250,16 +359,28 @@ export const loadingOverlayManager = {
         const overlay = this.overlayElement;
         const runner = this.animationRunner;
         const generation = this._showGeneration;
-        document.documentElement.classList.remove('loading-overlay-active');
-        if (overlay) {
-            overlay.style.pointerEvents = 'none';
-            overlay.classList.add('is-exiting');
-        }
-        const completion = runner?.finish
-            ? runner.finish()
-            : new Promise(resolve => setTimeout(resolve, this.fadeOutDuration));
+        // Загрузка завершена: реальный прогресс 100%, полоса догоняет его плавно.
+        this.currentProgressValue = 100;
+        const elapsed = performance.now() - (this._shownAt || 0);
+        const holdMs = Math.max(0, Math.min(this._holdMs || 0, this.minVisibleMs || 0) - elapsed);
+        const hold =
+            holdMs > 0 ? new Promise((resolve) => setTimeout(resolve, holdMs)) : Promise.resolve();
+        const startExit = () => {
+            if (generation !== this._showGeneration) return null;
+            this._renderProgress();
+            document.documentElement.classList.remove('loading-overlay-active');
+            if (overlay) {
+                overlay.style.pointerEvents = 'none';
+                overlay.classList.add('is-exiting');
+            }
+            return runner?.finish
+                ? runner.finish()
+                : new Promise((resolve) => setTimeout(resolve, this.fadeOutDuration));
+        };
+        const completion = holdMs > 0 ? hold.then(startExit) : startExit();
         this._hidePromise = Promise.resolve(completion).then(() => {
             if (generation !== this._showGeneration) return;
+            this._stopProgressTicker();
             runner?.stop?.();
             if (overlay && document.body.contains(overlay)) {
                 overlay.style.display = 'none';
@@ -274,19 +395,19 @@ export const loadingOverlayManager = {
             this.spawnProgress = 0;
             this.currentProgressValue = 0;
             this._hidePromise = null;
+            this._notifyHidden();
         });
         return this._hidePromise;
     },
 
     updateProgress(percentage, message = null) {
         if (!this.overlayElement) return;
-        const progressBarLine = this.overlayElement.querySelector('#progressBarLine');
-        const progressPercentageText = this.overlayElement.querySelector('#progressPercentageText');
         const loadingTextElement = this.overlayElement.querySelector('#loadingText');
         const p = Math.max(0, Math.min(100, parseFloat(percentage) || 0));
-        this.currentProgressValue = p;
-        if (progressBarLine) progressBarLine.style.width = `${p}%`;
-        if (progressPercentageText) progressPercentageText.textContent = `${Math.round(p)}%`;
+        // Прогресс не откатывается назад (стадии иногда сообщают меньшие значения).
+        this.currentProgressValue = Math.max(this.currentProgressValue || 0, p);
+        this._renderProgress();
+        this._startProgressTicker();
         if (message && loadingTextElement) {
             const animatedDotsSpan = loadingTextElement.querySelector('#animated-dots');
             const textNode = document.createTextNode(message);
