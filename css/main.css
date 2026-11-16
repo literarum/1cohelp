@@ -67,6 +67,8 @@
 @import url('./components/layout-repair.css');
 @import url('./components/app-polish-followup.css');
 @import url('./components/glass-material.css');
+/* Полировка дизайна: контраст и единообразие (theme/refinement.css). */
+@import url('./theme/refinement.css');
 /* Сквозной слой качества (доступность, печать). */
 @import url('./components/quality-pass.css');
 /* Shared scrollbar policy overrides per-component legacy styling. */

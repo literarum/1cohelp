@@ -1,0 +1,171 @@
+/*
+ * Полировка дизайна: чуть выше контраст, единые границы/тени/кнопки/поля.
+ * Принцип: «дорого, но минималистично» — тонкие волосяные границы вместо тяжёлых теней,
+ * спокойная глубина, одинаковые радиусы и фокус. Всё на токенах темы (--color-*),
+ * поэтому пользовательские цвета из студии оформления продолжают работать.
+ * Цвета исправлений контраста подобраны по замерам axe (WCAG AA 4.5:1 для мелкого текста).
+ */
+
+/* ------------------------------------------------------------------ */
+/* 1. Контраст (точечно, по замерам)                                    */
+/* ------------------------------------------------------------------ */
+
+/* Вторичный текст тёмной темы: холоднее и светлее нейтрального #b0b0b0 — гармонирует с фиолетовыми поверхностями. */
+:root {
+    --palette-dark-text-secondary: #bcc0ce;
+}
+
+/* Слоган — тот же акцент, но светлее (мелкий текст на тёмном фоне был 3,77:1). */
+html.dark body header #appSlogan.text-primary {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, #ffffff) !important;
+}
+
+/* Зелёные кнопки: emerald-600 + белый = 3,76:1 → emerald-700. */
+.bg-emerald-600 {
+    background-color: #047857 !important;
+}
+.bg-emerald-600:hover,
+.hover\:bg-emerald-700:hover {
+    background-color: #065f46 !important;
+}
+
+/* Кнопки «Повторить» / «Диагностика» в ошибке Google Docs. */
+html.dark .dark\:bg-red-800[data-retry-target],
+html.dark .dark\:bg-red-800[data-gdocs-diagnose] {
+    color: #fee2e2 !important;
+}
+html:not(.dark) .bg-red-200[data-retry-target],
+html:not(.dark) .bg-red-200[data-gdocs-diagnose] {
+    color: #7f1d1d !important;
+}
+
+/* Светлая тема: серый вторичный текст gray-500 на gray-100 был 4,39:1. */
+html:not(.dark) #appContent .text-gray-500 {
+    color: #59606c;
+}
+html:not(.dark) #appContent .text-gray-400 {
+    color: #676e7a;
+}
+/* Плейсхолдер кастомных списков (был 2,44:1 на белом из-за opacity 0.6). */
+html:not(.dark) .cs-value.cs-placeholder {
+    opacity: 1;
+    color: #636a76;
+}
+/* Строка статуса списков (виртуальная сетка). */
+html:not(.dark) .vg-status {
+    --vg-muted: #59606c;
+}
+/* Чипы папок в светлой теме: текст темнее (яркие цвета вроде зелёного давали 3:1). */
+html:not(.dark) .folder-chip {
+    color: color-mix(in srgb, var(--fc) 52%, #000);
+}
+/* Мелкий акцентный текст на светлом фоне — на тон глубже. */
+html:not(.dark) #clientAnalyticsRecordCount {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 80%, #000) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Поверхности: волосяные границы и спокойная глубина                 */
+/* ------------------------------------------------------------------ */
+:root {
+    --refine-hairline: color-mix(in srgb, var(--color-text-primary, #111827) 9%, transparent);
+    --refine-hairline-strong: color-mix(in srgb, var(--color-text-primary, #111827) 15%, transparent);
+    --refine-shadow: 0 1px 2px rgba(15, 15, 30, 0.06), 0 6px 20px -8px rgba(15, 15, 30, 0.14);
+    --refine-shadow-hover: 0 2px 4px rgba(15, 15, 30, 0.08), 0 14px 30px -12px rgba(15, 15, 30, 0.22);
+}
+html.dark {
+    --refine-hairline: color-mix(in srgb, #ffffff 7%, transparent);
+    --refine-hairline-strong: color-mix(in srgb, #ffffff 13%, transparent);
+    --refine-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+    --refine-shadow-hover: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 16px 36px -14px rgba(0, 0, 0, 0.7);
+}
+
+/* Панели разделов. */
+.tab-content > .rounded-lg.shadow-md {
+    border: 1px solid var(--refine-hairline);
+    box-shadow: var(--refine-shadow) !important;
+}
+
+/* Карточки: единая граница, мягкий подъём и акцентная кромка при наведении. */
+.algorithm-card,
+.bookmark-item,
+.cib-link-item,
+.ext-link-item,
+.reglament-item,
+.reglament-category,
+#mainAlgorithm .algorithm-step {
+    border: 1px solid var(--refine-hairline);
+    box-shadow: none;
+    transition:
+        border-color 160ms ease,
+        box-shadow 200ms ease,
+        transform 200ms ease;
+}
+.algorithm-card:hover,
+.bookmark-item:hover,
+.cib-link-item:hover,
+.ext-link-item:hover,
+.reglament-item:hover,
+.reglament-category:hover {
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 38%, var(--refine-hairline-strong));
+    box-shadow: var(--refine-shadow-hover);
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Кнопки и поля: единый ритм                                         */
+/* ------------------------------------------------------------------ */
+
+/* Акцентные кнопки: плоские, с тонким верхним бликом — «дорого» без градиентов. */
+#appContent button.bg-primary,
+.modal button.bg-primary,
+[role='dialog'] button.bg-primary {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        0 1px 2px rgba(0, 0, 0, 0.18);
+}
+#appContent button.bg-primary:hover,
+[role='dialog'] button.bg-primary:hover {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 4px 14px -4px color-mix(in srgb, var(--color-primary, #9933ff) 55%, transparent);
+}
+
+/* Поля ввода: одна толщина границы, мягкое кольцо фокуса в цвет акцента. */
+#appContent input[type='text'],
+#appContent input[type='search'],
+#appContent input:not([type]),
+#appContent textarea,
+[role='dialog'] input[type='text'],
+[role='dialog'] textarea {
+    border-color: var(--refine-hairline-strong);
+}
+#appContent input[type='text']:focus,
+#appContent input:not([type]):focus,
+#appContent textarea:focus,
+[role='dialog'] input[type='text']:focus,
+[role='dialog'] textarea:focus {
+    border-color: color-mix(in srgb, var(--color-primary, #9933ff) 70%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #9933ff) 22%, transparent);
+    outline: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. Типографика                                                        */
+/* ------------------------------------------------------------------ */
+.tab-content h2,
+[role='dialog'] h2 {
+    letter-spacing: -0.012em;
+}
+#appContent {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* Разделительная линия под вкладками — тоньше и спокойнее. */
+#appContent header nav,
+#mainTabsNav {
+    border-color: var(--refine-hairline) !important;
+}

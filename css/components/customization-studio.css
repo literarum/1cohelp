@@ -213,7 +213,7 @@ html.dark .ac-status {
 html.dark .ac-status[data-state='error'] {
     color: #fca5a5;
 }
-@container acs (max-width: 26rem) {
+@container acs (max-width: 416px) {
     .ac-status .ac-status-text {
         display: none;
     }
@@ -280,7 +280,7 @@ html.dark .ac-status[data-state='error'] {
 }
 
 /* Широкая панель (развёрнуто на весь экран): навигация слева */
-@container acs (min-width: 44rem) {
+@container acs (min-width: 704px) {
     .ac-body {
         flex-direction: row;
     }
@@ -426,7 +426,7 @@ html.dark .ac-status[data-state='error'] {
 .ac-foot-spacer {
     flex: 1 1 auto;
 }
-@container acs (max-width: 26rem) {
+@container acs (max-width: 416px) {
     .ac-foot .ac-btn span {
         font-size: 0.75rem;
     }
@@ -1005,7 +1005,7 @@ html[data-motion='calm'] .ac-motion-chip.is-playing {
 }
 
 /* Узкая шторка и мобильные: компактнее отступы */
-@container acs (max-width: 26rem) {
+@container acs (max-width: 416px) {
     .ac-panes {
         padding: 0.75rem;
     }
@@ -1085,7 +1085,7 @@ html[data-motion='reduce'] .ac-motion-stage .ac-motion-chip:hover { transform: n
 /* ---------- Узкая панель: все вкладки видны (сетка вместо скрытой прокрутки) ----------
    Пороги в px: rem зависит от масштаба интерфейса (80% → 1rem = 12,8px), и правила в rem
    переставали срабатывать при уменьшенном масштабе. */
-@container acs (max-width: 559px) {
+@container acs (max-width: 703px) {
     .ac-nav {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));

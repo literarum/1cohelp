@@ -89,7 +89,7 @@ export async function renderAlgorithmCards(section) {
         container.innerHTML = `<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">
             <i class="fas fa-folder-open text-3xl opacity-40 mb-2" aria-hidden="true"></i>
             <p class="mb-1">В разделе «${safeEscapeForEmpty(sectionName)}» пока нет алгоритмов.</p>
-            <p class="text-sm opacity-80">Нажмите «Добавить», чтобы создать первый алгоритм.</p>
+            <p class="text-sm">Нажмите «Добавить», чтобы создать первый алгоритм.</p>
         </div>`;
         if (typeof applyCurrentView === 'function') applyCurrentView(containerId);
         return;
