@@ -141,3 +141,15 @@ td.num {
     color: #ef4444;
     opacity: 1;
 }
+
+/* Описание результата поиска: две строки вместо одной (больше контекста; подсветка на месте
+   многоточия больше не рисует пустой жёлтый прямоугольник). */
+#searchResults li.search-result-item p.truncate {
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: clip;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
