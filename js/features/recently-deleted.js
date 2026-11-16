@@ -107,7 +107,8 @@ function ensureModal() {
             </div>
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
                 <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Здесь хранятся удаленные материалы. Можно восстановить или удалить окончательно.
+                    Здесь хранятся удалённые материалы. Можно восстановить или удалить окончательно.
+                    Записи старше ${RECENTLY_DELETED_MAX_AGE_DAYS} дней удаляются автоматически.
                 </p>
                 <button
                     type="button"
@@ -607,9 +608,80 @@ export function closeRecentlyDeletedModal() {
     modal.classList.add('hidden');
 }
 
+/** Срок хранения записей корзины и предельное число записей (скриншоты/PDF занимают место). */
+export const RECENTLY_DELETED_MAX_AGE_DAYS = 30;
+export const RECENTLY_DELETED_MAX_ENTRIES = 500;
+
+/**
+ * Какие записи корзины удалить: старше срока хранения и всё сверх лимита (сначала самые старые).
+ * @param {Array<{id:number, deletedAt?:string}>} entries
+ * @param {{ now?: number, maxAgeDays?: number, maxEntries?: number }} [opts]
+ * @returns {number[]} id для удаления
+ */
+export function selectRecentlyDeletedToPurge(entries, opts = {}) {
+    const now = opts.now ?? Date.now();
+    const maxAgeMs = (opts.maxAgeDays ?? RECENTLY_DELETED_MAX_AGE_DAYS) * 86400000;
+    const maxEntries = opts.maxEntries ?? RECENTLY_DELETED_MAX_ENTRIES;
+    const withTime = (entries || [])
+        .filter((e) => e && e.id != null)
+        .map((e) => {
+            const t = Date.parse(e.deletedAt || '');
+            return { id: e.id, t: Number.isFinite(t) ? t : 0 };
+        })
+        .sort((a, b) => b.t - a.t);
+    const out = [];
+    withTime.forEach((e, i) => {
+        if (now - e.t > maxAgeMs || i >= maxEntries) out.push(e.id);
+    });
+    return out;
+}
+
+/** Фоновая очистка корзины по сроку и лимиту. Читает только ключи индекса deletedAt. */
+export async function purgeRecentlyDeleted(opts = {}) {
+    const entries = await performDBOperation(RECENTLY_DELETED_STORE_NAME, 'readonly', (store) => {
+        const out = [];
+        return new Promise((resolve, reject) => {
+            const source = store.indexNames.contains('deletedAt') ? store.index('deletedAt') : null;
+            if (!source) {
+                const req = store.getAll();
+                req.onsuccess = () =>
+                    resolve((req.result || []).map((r) => ({ id: r.id, deletedAt: r.deletedAt })));
+                req.onerror = () => reject(req.error);
+                return;
+            }
+            const req = source.openKeyCursor();
+            req.onsuccess = () => {
+                const c = req.result;
+                if (!c) {
+                    resolve(out);
+                    return;
+                }
+                out.push({ id: c.primaryKey, deletedAt: c.key });
+                c.continue();
+            };
+            req.onerror = () => reject(req.error);
+        });
+    });
+    const ids = selectRecentlyDeletedToPurge(entries, opts);
+    if (ids.length === 0) return 0;
+    await performDBOperation(RECENTLY_DELETED_STORE_NAME, 'readwrite', (store) => {
+        let last = null;
+        for (const id of ids) last = store.delete(id);
+        return last;
+    });
+    console.info(`[recently-deleted] Автоочистка корзины: удалено записей — ${ids.length}.`);
+    return ids.length;
+}
+
 export function initRecentlyDeletedSystem() {
     if (typeof window !== 'undefined') {
         window.openRecentlyDeletedModal = openRecentlyDeletedModal;
         window.closeRecentlyDeletedModal = closeRecentlyDeletedModal;
+        // Не в критическом пути запуска.
+        setTimeout(() => {
+            purgeRecentlyDeleted().catch((e) =>
+                console.warn('[recently-deleted] автоочистка не удалась:', e),
+            );
+        }, 20000);
     }
 }
