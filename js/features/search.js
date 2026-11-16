@@ -4264,6 +4264,26 @@ export function renderSearchResults(results, query) {
                 iconClass = 'fa-file-invoice';
                 typeText = 'Шаблоны';
                 break;
+            case 'clientAnalyticsRecord':
+                iconClass = 'fa-address-card';
+                typeText = 'База клиентов';
+                break;
+            case 'blacklistedClient':
+                iconClass = 'fa-user-secret';
+                typeText = 'Чёрный список';
+                break;
+            case 'extLinkCategory':
+                iconClass = 'fa-folder';
+                typeText = 'Категория ресурсов';
+                break;
+            case 'preference':
+                iconClass = 'fa-cog';
+                typeText = 'Настройки';
+                break;
+            default:
+                // Технические имена хранилищ пользователю не показываем.
+                if (/^[a-z]+[A-Z]/.test(typeText)) typeText = 'Запись';
+                break;
         }
 
         const titleContainer = document.createElement('div');

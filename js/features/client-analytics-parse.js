@@ -564,3 +564,15 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
 
     return results;
 }
+
+/**
+ * Телефон для показа: 79031234567 → +7 (903) 123-45-67. Нераспознанное возвращается как есть.
+ * @param {string} phone
+ */
+export function formatRussianPhoneForDisplay(phone) {
+    const digits = String(phone ?? '').replace(/\D/g, '');
+    if (digits.length === 11 && (digits[0] === '7' || digits[0] === '8')) {
+        return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9)}`;
+    }
+    return String(phone ?? '');
+}
