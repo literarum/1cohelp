@@ -30,6 +30,8 @@ try {
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
 window.exportEncryptedBackup = () =>
     import('./js/features/backup-actions.js').then((m) => m.exportEncryptedBackup());
+window.openAutoBackupManager = () =>
+    import('./js/features/auto-backup-ui.js').then((m) => m.openAutoBackupManager());
 window.openStorageOverview = () =>
     import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
 window.openRequisitesCheck = (text) =>

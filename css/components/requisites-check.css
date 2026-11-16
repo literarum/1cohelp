@@ -102,3 +102,9 @@
 .bp-field span { opacity: 0.75; }
 .bp-error { margin: 0; min-height: 1em; font-size: 0.78rem; color: #ef4444; }
 .bp-primary { background: var(--color-primary, #8b5cf6); border-color: transparent; color: var(--color-text-on-primary, #fff); }
+.ab-settings { gap: 0.55rem; }
+.ab-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.82rem; }
+.ab-row span { opacity: 0.8; }
+.ab-row select { background: transparent; color: inherit; border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+.ab-row input[type='checkbox'] { width: 1.05rem; height: 1.05rem; accent-color: var(--color-primary, #8b5cf6); }
+.ab-h { margin: 0; font-size: 0.85rem; font-weight: 700; }

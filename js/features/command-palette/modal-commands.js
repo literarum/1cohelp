@@ -156,6 +156,14 @@ const MODAL_REGISTRY = [
         run: () => tryWindowFn('exportEncryptedBackup'),
     },
     {
+        key: 'autoBackupManager',
+        label: 'Автобэкап: настройки и восстановление',
+        subtitle: 'Интервал, число копий, сжатие, шифрование; восстановить базу из любой копии',
+        score: 0.92,
+        keywords: ['автобэкап', 'бэкап', 'резерв', 'копия', 'восстанов', 'откат', 'restore', 'backup', 'настрой'],
+        run: () => tryWindowFn('openAutoBackupManager'),
+    },
+    {
         key: 'autoBackupConfigure',
         label: 'Автобэкап: выбрать папку и включить',
         subtitle: 'Резервная копия базы раз в сутки в выбранную папку, хранятся последние 14',

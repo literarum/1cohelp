@@ -179,9 +179,9 @@ export async function openStorageOverview() {
             );
             render(root, await collectStorageOverview());
         } else if (action === 'autobackup') {
-            const m = await import('./auto-backup.js');
-            await m.configureAutoBackup();
-            render(root, await collectStorageOverview());
+            close();
+            const m = await import('./auto-backup-ui.js');
+            await m.openAutoBackupManager();
         } else if (action === 'export') {
             close();
             document.getElementById('exportDataBtn')?.click();
