@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20261116-quality-pass-3';
+const ASSET_QUERY_VERSION = '20261116-cosmic-overlay';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20261116-quality-pass-3';
-const VERSION = `20261116-quality-pass-3`;
+const MAIN_CSS_QUERY_VERSION = '20261116-cosmic-overlay';
+const VERSION = `20261116-cosmic-overlay`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
