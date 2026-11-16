@@ -4861,12 +4861,7 @@ export function initSearchSystem() {
         }
     }
 
-    document.addEventListener('keydown', (event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
-            event.preventDefault();
-            if (searchInput) searchInput.focus();
-        }
-    });
+    // Ctrl/Cmd+K обрабатывает палитра команд (hotkeys-handler.js); фокус в поиск — Alt+F.
 
     console.log(
         '[initSearchSystem] Search system initialized (v5.2 - query variable fix verified, Esc handler removed).',
