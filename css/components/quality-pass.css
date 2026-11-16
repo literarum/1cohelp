@@ -1,0 +1,103 @@
+/*
+ * Сквозной слой качества: доступность (контраст, фокус), печать, мелкие UX-дефекты.
+ * Подключается последним в main.css.
+ */
+
+/* --- Контраст: основной цвет на тёмном фоне (WCAG AA 4.5:1 для мелкого текста) --- */
+html.dark #appSlogan,
+html.dark .tab-btn.tab-active,
+html.dark .tab-btn.tab-active > *,
+html.dark .tab-btn.tab-active i,
+html.dark .tab-btn.tab-active svg {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, #ffffff) !important;
+}
+
+/* Ссылки внутри текста отличимы не только цветом. */
+#app-copyright a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* --- Видимый фокус клавиатуры для всех интерактивных элементов --- */
+:where(button, a[href], [role='button'], [role='tab'], [role='menuitem'], summary, label[tabindex]):focus-visible {
+    outline: 2px solid var(--color-primary, #9933ff);
+    outline-offset: 2px;
+}
+
+/* Файловые «кнопки»-лейблы получают фокус с клавиатуры. */
+label[data-file-trigger] {
+    cursor: pointer;
+}
+
+/* Скрытые поля выбора файла не должны перехватывать фокус. */
+input[type='file'].hidden {
+    display: none !important;
+}
+
+/* --- Числа в счётчиках/таблицах не «прыгают» при обновлении --- */
+.tabular-nums,
+#timerDisplay,
+[data-count],
+td.num {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Длинные слова/URL не ломают карточки. */
+.card-title-text,
+.bookmark-item h3,
+.link-item a {
+    overflow-wrap: anywhere;
+}
+
+/* --- Уважение к настройке «уменьшить движение» --- */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* --- Печать: только содержимое, без хрома приложения --- */
+@media print {
+    header,
+    nav,
+    #app-copyright,
+    #scrollNavButtons,
+    .scroll-nav-buttons,
+    .notification-container,
+    #notification-container,
+    #custom-loading-overlay,
+    .fixed:not([role='dialog']):not(.modal),
+    button {
+        display: none !important;
+    }
+    html,
+    body {
+        background: #fff !important;
+        color: #000 !important;
+    }
+    * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+        backdrop-filter: none !important;
+    }
+    a[href^='http']::after {
+        content: ' (' attr(href) ')';
+        font-size: 0.8em;
+        word-break: break-all;
+    }
+    .tab-content:not(.hidden) {
+        display: block !important;
+    }
+    pre,
+    blockquote,
+    li,
+    .algorithm-step,
+    .step {
+        break-inside: avoid;
+    }
+}

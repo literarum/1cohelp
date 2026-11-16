@@ -1302,7 +1302,7 @@ export async function renderTrainingPage() {
 
     const segHtml = SEGMENTS.map(
         (s) =>
-            `<button type="button" data-training-segment="${s.id}" class="training-seg ${segment === s.id ? 'training-seg--active' : ''}" aria-pressed="${segment === s.id}"><i class="fas ${s.icon} mr-1.5" aria-hidden="true"></i>${escapeHtml(s.label)}</button>`,
+            `<button type="button" id="training-seg-${s.id}" data-training-segment="${s.id}" class="training-seg ${segment === s.id ? 'training-seg--active' : ''}" role="tab" aria-selected="${segment === s.id}" tabindex="${segment === s.id ? 0 : -1}"><i class="fas ${s.icon} mr-1.5" aria-hidden="true"></i>${escapeHtml(s.label)}</button>`,
     ).join('');
 
     let body = '';

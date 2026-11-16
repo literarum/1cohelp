@@ -67,5 +67,7 @@
 @import url('./components/layout-repair.css');
 @import url('./components/app-polish-followup.css');
 @import url('./components/glass-material.css');
+/* Сквозной слой качества (доступность, печать). */
+@import url('./components/quality-pass.css');
 /* Shared scrollbar policy overrides per-component legacy styling. */
 @import url('./components/scrollbar.css');

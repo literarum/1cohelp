@@ -9,6 +9,12 @@ import { initAppearanceProfile } from './js/ui/appearance-profile.js';
 import { initCustomizationStudio } from './js/ui/customization-studio.js';
 import { initModalChoreographer } from './js/ui/modal-choreographer.js';
 import { initFormModalAutoEnhance } from './js/ui/form-modal-autoenhance.js';
+import { initA11yKeyboard } from './js/ui/a11y-keyboard.js';
+try {
+    initA11yKeyboard();
+} catch (e) {
+    console.warn('[a11y-keyboard] init failed', e);
+}
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
 window.openRequisitesCheck = (text) =>
     import('./js/features/requisites-check.js').then((m) => m.openRequisitesCheck(text));
