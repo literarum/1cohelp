@@ -749,6 +749,9 @@ function createController(root) {
         if (!snapshot) return;
         cancelPreviewSettingsFrame();
         State.currentPreviewSettings = JSON.parse(JSON.stringify(previewSnapshot));
+        // Снимок предпросмотра мог не содержать часть ключей (например, motionMode) — тогда откат
+        // их не применял, и режим движения оставался изменённым. Записываем полный набор оформления.
+        writeAppearance(snapshot);
         applyNow();
         // Restore the saved auto-mode subscription without writing a draft during rollback.
         const theme = readAppearance().theme;

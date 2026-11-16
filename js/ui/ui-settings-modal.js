@@ -145,7 +145,11 @@ export function populateModalControls(settings) {
 
     const showBlacklistWarningToggle = modal.querySelector('#toggleBlacklistWarning');
     if (showBlacklistWarningToggle) {
-        showBlacklistWarningToggle.checked = settings.showBlacklistUsageWarning ?? false;
+        // Умолчание приложения — предупреждение включено (state.js, user-preferences.js).
+        // Раньше «Сбросить настройки» молча выключало защитное предупреждение.
+        const fallback = State?.userPreferences?.showBlacklistUsageWarning;
+        showBlacklistWarningToggle.checked =
+            settings.showBlacklistUsageWarning ?? (typeof fallback === 'boolean' ? fallback : true);
     }
 
     const disableForcedBackupToggle = modal.querySelector('#toggleDisableForcedBackup');
@@ -318,6 +322,12 @@ export function updatePreviewSettingsFromModal() {
  * Восстанавливает originalUISettings в UI и сбрасывает флаг dirty.
  */
 export async function revertUISettingsOnDiscard() {
+    try {
+        const bg = await import('../features/background-image.js');
+        bg.cancelStagedBackgroundImageRemoval();
+    } catch (err) {
+        console.warn('[ui-settings] не удалось вернуть фон', err);
+    }
     if (!State || !State.originalUISettings) return;
     State.currentPreviewSettings = JSON.parse(JSON.stringify(State.originalUISettings));
     State.isUISettingsDirty = false;
@@ -342,14 +352,12 @@ export async function resetUISettingsInModal() {
     document.body.classList.remove('custom-background-active');
 
     try {
-        if (typeof deleteFromIndexedDB === 'function') {
-            await deleteFromIndexedDB('preferences', 'customBackgroundImage');
-        }
-        if (typeof removeCustomBackgroundImage === 'function') {
-            removeCustomBackgroundImage();
-        }
+        // Только предпросмотр: из базы картинка удаляется по «Сохранить», «Отмена» её возвращает.
+        // Раньше фон удалялся из IndexedDB сразу — отмена сброса уже не могла его вернуть.
+        const bg = await import('../features/background-image.js');
+        bg.stageBackgroundImageRemoval();
     } catch (err) {
-        console.error('Не удалось удалить фон при сбросе настроек:', err);
+        console.error('Не удалось скрыть фон при сбросе настроек:', err);
     }
 
     State.isUISettingsDirty = true;

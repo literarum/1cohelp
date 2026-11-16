@@ -192,7 +192,10 @@ export const loadingOverlayManager = {
 
             this.overlayElement.classList.remove('is-exiting');
             this._shownAt = isFirstBootShow ? 0 : performance.now();
-            this._holdMs = isFirstBootShow ? this.minVisibleMs : 0;
+            this._holdMs =
+                isFirstBootShow && !(typeof window !== 'undefined' && window.__COPILOT_TEST_FAST_OVERLAY__)
+                    ? this.minVisibleMs
+                    : 0;
             this._startProgressTicker();
             this._showGeneration = (this._showGeneration || 0) + 1;
             this._hidePromise = null;

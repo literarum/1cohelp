@@ -83,3 +83,22 @@ describe('applyPreviewSettings custom background', () => {
         expect(document.documentElement.classList.contains('birthday-mode')).toBe(true);
     });
 });
+
+describe('applyPreviewSettings: последний пишущий побеждает', () => {
+    it('прямое применение отменяет отложенный кадр со старым снимком', async () => {
+        const mod = await import('./preview-settings.js');
+        let rafCb = null;
+        vi.stubGlobal('requestAnimationFrame', (cb) => {
+            rafCb = cb;
+            return 1;
+        });
+        vi.stubGlobal('cancelAnimationFrame', () => {
+            rafCb = null;
+        });
+        void mod.applyPreviewSettingsCoalesced({ primaryColor: '#ec4899', theme: 'dark' });
+        await mod.applyPreviewSettings({ primaryColor: '#9933ff', theme: 'dark' }, { preview: true });
+        expect(rafCb).toBeNull();
+        expect(document.documentElement.style.getPropertyValue('--color-primary').toLowerCase()).toBe('#9933ff');
+        vi.unstubAllGlobals();
+    });
+});

@@ -14,6 +14,35 @@ let deps = {
 let currentImage = null;
 let previewSession = null;
 
+/** Текущее фоновое изображение (data URL) или null. */
+export function getCurrentBackgroundImage() {
+    return currentImage;
+}
+
+/**
+ * Отложенное удаление фона из окна «Настройки»: картинка скрывается сразу (предпросмотр),
+ * а из базы удаляется только по «Сохранить». «Отмена» возвращает её.
+ */
+let pendingRemoval = null;
+export function stageBackgroundImageRemoval() {
+    if (currentImage) pendingRemoval = { image: currentImage };
+    removeCustomBackgroundImage();
+}
+export function hasStagedBackgroundImageRemoval() {
+    return pendingRemoval !== null;
+}
+export async function commitStagedBackgroundImageRemoval() {
+    if (!pendingRemoval) return;
+    pendingRemoval = null;
+    await deps.deleteFromIndexedDB?.('preferences', 'customBackgroundImage');
+}
+export function cancelStagedBackgroundImageRemoval() {
+    if (!pendingRemoval) return;
+    const { image } = pendingRemoval;
+    pendingRemoval = null;
+    if (image) applyCustomBackgroundImage(image);
+}
+
 export function beginBackgroundImagePreview() {
     previewSession = { original: currentImage, current: currentImage, committed: false };
 }
