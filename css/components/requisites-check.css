@@ -98,3 +98,7 @@
 .so-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .so-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .so-note { margin: 0; font-size: 0.72rem; opacity: 0.6; }
+.bp-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; }
+.bp-field span { opacity: 0.75; }
+.bp-error { margin: 0; min-height: 1em; font-size: 0.78rem; color: #ef4444; }
+.bp-primary { background: var(--color-primary, #8b5cf6); border-color: transparent; color: var(--color-text-on-primary, #fff); }

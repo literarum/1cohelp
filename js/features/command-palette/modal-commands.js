@@ -148,6 +148,14 @@ const MODAL_REGISTRY = [
         run: () => tryWindowFn('openStorageOverview'),
     },
     {
+        key: 'encryptedExport',
+        label: 'Экспорт базы с паролем',
+        subtitle: 'Сжатая зашифрованная копия (AES-256): ИНН и заметки не читаются без пароля',
+        score: 0.9,
+        keywords: ['шифр', 'пароль', 'зашифр', 'экспорт', 'бэкап', 'резерв', 'защищ', 'encrypt'],
+        run: () => tryWindowFn('exportEncryptedBackup'),
+    },
+    {
         key: 'autoBackupConfigure',
         label: 'Автобэкап: выбрать папку и включить',
         subtitle: 'Резервная копия базы раз в сутки в выбранную папку, хранятся последние 14',

@@ -2818,7 +2818,9 @@ export function openDbMergeModal() {
         fileInfoEl.textContent = `Файл: ${file.name} (${(file.size / 1024).toFixed(1)} КБ)`;
         analysisPlaceholder.textContent = 'Выполняется анализ структуры и дублей…';
 
-        const text = await file.text();
+        const { unwrapBackupText } = await import('./backup-envelope.js');
+        const text = await unwrapBackupText(await file.text());
+        if (text === null) throw new Error('Слияние отменено: пароль не введён.');
         const selectedStores = getSelectedStores();
         if (selectedStores.length === 0) {
             throw new Error('DbMergeScopeEmpty');
