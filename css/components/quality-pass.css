@@ -249,3 +249,122 @@ html.dark .notes-inn-warn {
 #mainAlgorithm .algorithm-step .mc-toggle:focus-visible {
     opacity: 1 !important;
 }
+
+/* ---- Режим демонстрации экрана: персональные данные размыты ---- */
+html.privacy-mode #clientNotes,
+html.privacy-mode #clientNotesInnWarnings,
+html.privacy-mode #clientAnalyticsContent .grid,
+html.privacy-mode #clientAnalyticsContent [data-vg-index],
+html.privacy-mode #blacklistedClientsContent table,
+html.privacy-mode #blacklistedClientsContent .blacklist-entry,
+html.privacy-mode #appealArchiveModal .aa-list,
+html.privacy-mode #searchResults li p,
+html.privacy-mode .notes-popup-textarea {
+    filter: blur(7px);
+    user-select: none;
+}
+.privacy-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 0.75rem;
+    transform: translateX(-50%);
+    z-index: 200001;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(251, 191, 36, 0.6);
+    background: rgba(30, 20, 0, 0.88);
+    color: #fde68a;
+    font-size: 0.75rem;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Экран блокировки ---- */
+#appLockScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 300000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-background, #12121f) 70%, transparent);
+    backdrop-filter: blur(22px) saturate(1.2);
+}
+html.app-locked #notification-container {
+    visibility: hidden;
+}
+.lock-card {
+    width: min(22rem, calc(100vw - 2rem));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1.75rem 1.5rem;
+    border-radius: 1.25rem;
+    background: var(--color-surface-2, #1f1b33);
+    color: var(--color-text-primary, #fff);
+    border: 1px solid var(--refine-hairline, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6);
+    text-align: center;
+}
+.lock-icon {
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 18%, transparent);
+    color: var(--color-primary, #9933ff);
+    font-size: 1.15rem;
+}
+.lock-card h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.lock-sub {
+    margin: 0;
+    font-size: 0.8rem;
+    opacity: 0.75;
+}
+.lock-pin {
+    width: 100%;
+    text-align: center;
+    font-size: 1.4rem;
+    letter-spacing: 0.4em;
+    padding: 0.55rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--refine-hairline-strong, rgba(255, 255, 255, 0.15));
+    background: var(--color-input-bg, transparent);
+    color: inherit;
+}
+.lock-pin:focus {
+    outline: none;
+    border-color: var(--color-primary, #9933ff);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #9933ff) 25%, transparent);
+}
+.lock-err {
+    margin: 0;
+    min-height: 1em;
+    font-size: 0.78rem;
+    color: #ef4444;
+}
+.lock-btn {
+    width: 100%;
+    padding: 0.6rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: var(--color-primary, #9933ff);
+    color: var(--color-text-on-primary, #fff);
+    font-weight: 600;
+    cursor: pointer;
+}
+.lock-link {
+    background: none;
+    border: 0;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary, #aaa);
+    cursor: pointer;
+    text-decoration: underline;
+}

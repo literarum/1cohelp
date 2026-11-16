@@ -32,6 +32,16 @@ window.exportEncryptedBackup = () =>
     import('./js/features/backup-actions.js').then((m) => m.exportEncryptedBackup());
 window.openAutoBackupManager = () =>
     import('./js/features/auto-backup-ui.js').then((m) => m.openAutoBackupManager());
+for (const [name, fn] of [
+    ['togglePrivacyMode', 'togglePrivacyMode'],
+    ['lockAppNow', 'lockAppNow'],
+    ['openLockSettings', 'openLockSettings'],
+    ['disableAppLock', 'disableAppLock'],
+]) {
+    if (typeof window[name] !== 'function') {
+        window[name] = () => import('./js/features/privacy.js').then(() => window[fn]?.());
+    }
+}
 window.openStorageOverview = () =>
     import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
 window.openRequisitesCheck = (text) =>
