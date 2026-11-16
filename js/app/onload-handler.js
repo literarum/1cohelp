@@ -165,6 +165,9 @@ export function registerOnloadHandler() {
                 }
 
                 await waitForUiPaint({ frames: 1 });
+                import('../features/storage-guard.js')
+                    .then((m) => m.initStorageGuard())
+                    .catch((e) => console.warn('[storage-guard] init failed', e));
             })
             .catch(async (error) => {
                 console.error('Критическая ошибка в Promise.all (window.onload):', error);
