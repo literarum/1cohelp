@@ -1080,6 +1080,132 @@ export async function addToSearchIndex(
 }
 
 /**
+ * Нормализует слово для индекса; null — слово не индексируется (пустое, слишком длинное/короткое).
+ * @param {unknown} word
+ * @returns {string|null}
+ */
+function normalizeWordForIndex(word) {
+    if (!word || typeof word !== 'string' || word.trim() === '') return null;
+    const normalizedWord = word.toLowerCase().replace(/ё/g, 'е');
+    if (normalizedWord.length > 50) return null;
+    if (normalizedWord.length < MIN_TOKEN_LEN_FOR_INDEX && !isExceptionShortToken(normalizedWord)) {
+        return null;
+    }
+    return normalizedWord;
+}
+
+/** Собирает ссылку (ref) индекса в едином формате для точечной и пакетной записи. */
+function buildSearchIndexRef(type, id, field, weight, originalRefDetails) {
+    const ref = {
+        type: type,
+        id: String(id),
+        field: field || 'unknown',
+        weight: Math.max(0.1, Math.min(10, parseFloat(weight) || 1)),
+        store: type,
+    };
+    if (originalRefDetails && typeof originalRefDetails === 'object') {
+        if (typeof originalRefDetails.tableIndex === 'number')
+            ref.tableIndex = originalRefDetails.tableIndex;
+        if (typeof originalRefDetails.rowIndex === 'number')
+            ref.rowIndex = originalRefDetails.rowIndex;
+        if (typeof originalRefDetails.stepIndex === 'number')
+            ref.stepIndex = originalRefDetails.stepIndex;
+        if (originalRefDetails.blockIndex !== undefined)
+            ref.blockIndex = originalRefDetails.blockIndex;
+        if (originalRefDetails.title) ref.title = originalRefDetails.title;
+        if (originalRefDetails.description) ref.description = originalRefDetails.description;
+        if (originalRefDetails.field) ref.field = originalRefDetails.field;
+    }
+    return ref;
+}
+
+function isSameSearchIndexRef(a, b) {
+    return (
+        a.id === b.id &&
+        a.type === b.type &&
+        a.field === b.field &&
+        a.tableIndex === b.tableIndex &&
+        a.rowIndex === b.rowIndex &&
+        a.stepIndex === b.stepIndex &&
+        a.blockIndex === b.blockIndex
+    );
+}
+
+/**
+ * Пакетная запись токенов одного элемента в индекс ОДНОЙ транзакцией.
+ * Раньше на каждый токен открывалась отдельная readwrite-транзакция: сохранение одной
+ * ссылки занимало секунды, а первый запуск приложения — около минуты.
+ * @param {Array<{word:string,type:string,id:string|number,field?:string,weight?:number,details?:object}>} entries
+ * @returns {Promise<void>}
+ */
+export async function addManyToSearchIndex(entries) {
+    if (!Array.isArray(entries) || entries.length === 0) return;
+    invalidateGlobalSemanticCorpus();
+    if (!State.db || typeof State.db.transaction !== 'function') {
+        console.warn('[addManyToSearchIndex] DB not ready.');
+        return;
+    }
+    /** @type {Map<string, object[]>} */
+    const byWord = new Map();
+    for (const entry of entries) {
+        if (!entry || !entry.type || typeof entry.type !== 'string') continue;
+        if (entry.id === undefined || entry.id === null) continue;
+        const word = normalizeWordForIndex(entry.word);
+        if (!word) continue;
+        const ref = buildSearchIndexRef(
+            entry.type,
+            entry.id,
+            entry.field,
+            entry.weight,
+            entry.details,
+        );
+        let refs = byWord.get(word);
+        if (!refs) {
+            refs = [];
+            byWord.set(word, refs);
+        }
+        if (!refs.some((r) => isSameSearchIndexRef(r, ref))) refs.push(ref);
+    }
+    if (byWord.size === 0) return;
+
+    await new Promise((resolve, reject) => {
+        let tx;
+        try {
+            tx = State.db.transaction(['searchIndex'], 'readwrite', { durability: 'relaxed' });
+        } catch {
+            try {
+                tx = State.db.transaction(['searchIndex'], 'readwrite');
+            } catch (txError) {
+                reject(txError);
+                return;
+            }
+        }
+        const store = tx.objectStore('searchIndex');
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target?.error || new Error('Transaction error'));
+        tx.onabort = (e) => reject(e.target?.error || new Error('Transaction aborted'));
+        for (const [word, newRefs] of byWord) {
+            const getRequest = store.get(word);
+            getRequest.onsuccess = () => {
+                const existing = getRequest.result;
+                if (!existing || !Array.isArray(existing.refs)) {
+                    store.put({ word, refs: newRefs.slice(0, MAX_REFS_PER_WORD) });
+                    return;
+                }
+                let changed = false;
+                for (const ref of newRefs) {
+                    if (existing.refs.length >= MAX_REFS_PER_WORD) break;
+                    if (existing.refs.some((r) => isSameSearchIndexRef(r, ref))) continue;
+                    existing.refs.push(ref);
+                    changed = true;
+                }
+                if (changed) store.put(existing);
+            };
+        }
+    });
+}
+
+/**
  * Удаляет элемент из поискового индекса
  */
 export async function removeFromSearchIndex(itemId, itemType) {
@@ -1541,7 +1667,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
             return;
         }
 
-        const promises = [];
+        const pendingEntries = [];
         for (const [fieldKey, textContent] of Object.entries(textsByField)) {
             if (!textContent || typeof textContent !== 'string' || textContent.trim() === '')
                 continue;
@@ -1560,12 +1686,17 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
             };
 
             for (const token of tokens) {
-                promises.push(
-                    addToSearchIndex(token, storeName, docId, fieldKey, fieldWeight, refDetails),
-                );
+                pendingEntries.push({
+                    word: token,
+                    type: storeName,
+                    id: docId,
+                    field: fieldKey,
+                    weight: fieldWeight,
+                    details: refDetails,
+                });
             }
         }
-        await Promise.all(promises);
+        await addManyToSearchIndex(pendingEntries);
         return;
     }
 
@@ -1590,7 +1721,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         return;
     }
 
-    const promises = [];
+    const pendingEntries = [];
 
     for (const [fieldKeyFromGetText, textContent] of Object.entries(textsByField)) {
         if (!textContent || typeof textContent !== 'string' || textContent.trim() === '') {
@@ -1713,21 +1844,19 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         }
 
         for (const token of tokens) {
-            promises.push(
-                addToSearchIndex(
-                    token,
-                    storeName,
-                    indexableId,
-                    refDetails.field,
-                    fieldWeight,
-                    refDetails,
-                ),
-            );
+            pendingEntries.push({
+                word: token,
+                type: storeName,
+                id: indexableId,
+                field: refDetails.field,
+                weight: fieldWeight,
+                details: refDetails,
+            });
         }
     }
 
     try {
-        await Promise.all(promises);
+        await addManyToSearchIndex(pendingEntries);
     } catch (error) {
         console.error(
             `${LOG_PREFIX_USI_ITEM} Ошибка при массовом добавлении токенов для ${storeName} ID: ${indexableId}:`,

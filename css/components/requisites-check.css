@@ -75,18 +75,3 @@
     .rq-modal, .rq-card, .rq-item { animation: none; }
 }
 
-/* Калькулятор НДС (vc-*) */
-.vc-card { width: min(28rem, 100%); }
-.vc-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.vc-chip { padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.4); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s, color 0.15s; }
-.vc-chip:hover { background: rgba(139, 92, 246, 0.14); }
-.vc-chip.is-active { background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: transparent; color: #fff; }
-.vc-chip:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
-.vc-amount { font-size: 1.15rem; font-weight: 600; min-height: 0; resize: none; }
-.vc-note { margin: 0; font-size: 0.72rem; opacity: 0.65; }
-.vc-result { display: flex; flex-direction: column; gap: 0.35rem; }
-.vc-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 0.75rem; border: 1px solid rgba(127, 127, 127, 0.25); animation: rq-item-in 0.2s ease both; }
-.vc-row span { flex: 1 1 auto; font-size: 0.8rem; opacity: 0.75; }
-.vc-row strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
-.vc-row--total { border-color: rgba(139, 92, 246, 0.5); background: rgba(139, 92, 246, 0.08); }
-.vc-row .is-copied { color: #16a34a; opacity: 1; }

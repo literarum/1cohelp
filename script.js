@@ -12,7 +12,6 @@ import { initFormModalAutoEnhance } from './js/ui/form-modal-autoenhance.js';
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
 window.openRequisitesCheck = (text) =>
     import('./js/features/requisites-check.js').then((m) => m.openRequisitesCheck(text));
-window.openVatCalc = () => import('./js/features/vat-calc-ui.js').then((m) => m.openVatCalc());
 try {
     initFontSettings();
 } catch (e) {
@@ -1174,7 +1173,7 @@ let algorithms = {
     webReg: [],
 };
 
-// loadingOverlayManager теперь импортируется из js/ui/loading-overlay-manager.js
+// loadingOverlayManager импортируется из js/features/loading-overlay/index.js
 
 // Устанавливаем loadingOverlayManager для ExportService
 setLoadingOverlayManager(loadingOverlayManager);

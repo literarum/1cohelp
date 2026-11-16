@@ -323,7 +323,7 @@ export function createStepElementHTML(stepNumber, isMainAlgorithm, includeScreen
         ? `
     <div class="mt-2 step-numbers-mode-hide">
         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Пример / Список (опционально)</label>
-        <textarea class="step-example ${commonTextareaClasses}" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2"></textarea>
+        <textarea class="step-example ${commonTextareaClasses}" aria-label="Пример или список" rows="4" placeholder="Пример: Текст примера...\nИЛИ\n- Элемент списка 1\n- Элемент списка 2"></textarea>
         <p class="text-xs text-gray-500 mt-1">Для списка используйте дефис (-) или звездочку (*) в начале каждой строки. Первая строка без дефиса/звездочки будет вступлением.</p>
     </div>
 `

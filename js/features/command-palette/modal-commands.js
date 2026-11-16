@@ -156,14 +156,6 @@ const MODAL_REGISTRY = [
         run: () => tryWindowFn('openRequisitesCheck'),
     },
     {
-        key: 'vatCalc',
-        label: 'Калькулятор НДС',
-        subtitle: 'Выделить НДС из суммы или начислить: 22%, 20%, 10%, 7%, 5%, 0%',
-        score: 0.9,
-        keywords: ['ндс', 'налог', 'калькулятор', 'ставка', 'vat', 'сумма', 'выделить'],
-        run: () => tryWindowFn('openVatCalc'),
-    },
-    {
         key: 'engineeringCockpit',
         label: 'Машинное отделение (инженерный режим)',
         subtitle: 'Скрытая диагностика приложения',
