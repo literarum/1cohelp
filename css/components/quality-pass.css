@@ -101,3 +101,20 @@ td.num {
         break-inside: avoid;
     }
 }
+
+/* --- Глобальный поиск: список результатов шире поля ввода на десктопе ---
+   Поле в шапке ~14rem: заголовки переносились в 4 строки, метка раздела обрезалась. */
+@media (min-width: 768px) {
+    #searchResults {
+        width: max(100%, min(34rem, calc(100vw - 2rem))) !important;
+        max-width: calc(100vw - 2rem) !important;
+        right: auto !important;
+        max-height: min(32rem, calc(100vh - 120px - var(--safe-area-top, 0px) - var(--safe-area-bottom, 0px)));
+    }
+}
+
+/* Результат поиска, выбранный стрелками. */
+#searchResults li.search-result-item.is-kb-active {
+    background-color: color-mix(in srgb, var(--color-primary, #9933ff) 16%, transparent) !important;
+    box-shadow: inset 3px 0 0 var(--color-primary, #9933ff);
+}

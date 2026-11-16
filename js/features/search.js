@@ -32,6 +32,8 @@ import {
 } from '../utils/html.js';
 
 import { formatExampleForTextarea, getSectionName } from '../utils/helpers.js';
+import { findBestMatchingStep, formatStepLabel } from './search-step-match.js';
+import { attachSearchResultsKeyboard } from './search-results-keyboard.js';
 
 import { State } from '../app/state.js';
 
@@ -3631,6 +3633,23 @@ async function processSearchResults(
             result.highlightTerm = normalizedQuery;
             result.query = originalQuery;
 
+            // Алгоритм: показать совпавший шаг, а не первый шаг алгоритма.
+            if (
+                (result.type === 'main' || result.type === 'algorithm') &&
+                Array.isArray(group.itemData?.steps)
+            ) {
+                const stepMatch = findBestMatchingStep(group.itemData.steps, originalQuery);
+                if (stepMatch) {
+                    result.stepIndex = stepMatch.index;
+                    result.stepLabel = formatStepLabel(stepMatch);
+                    const prefix =
+                        result.type === 'algorithm' && /^\[[^\]]+\] /.test(result.description || '')
+                            ? (result.description.match(/^\[[^\]]+\] /) || [''])[0]
+                            : '';
+                    result.description = `${prefix}${result.stepLabel}${stepMatch.snippet ? ` — ${stepMatch.snippet}` : ''}`;
+                }
+            }
+
             const lowerOriginalQuery = originalQuery.toLowerCase();
 
             if (
@@ -4320,6 +4339,16 @@ export async function handleSearchResultClick(result) {
             case 'main': {
                 const algoId = result.type === 'main' ? 'main' : result.id;
                 const algoSection = result.section;
+                const targetStep = Number.isInteger(result.stepIndex) ? result.stepIndex : null;
+                // Главный алгоритм открыт на главной вкладке: ведём прямо к шагу.
+                if (algoId === 'main' && targetStep !== null) {
+                    const found = await tryScrollAndHighlight(
+                        'main',
+                        `#mainAlgorithm .algorithm-step[data-step-index="${targetStep}"]`,
+                        result.highlightTerm || result.title,
+                    );
+                    if (found?.elementFound) break;
+                }
                 if (algoId !== 'main') {
                     await tryScrollAndHighlight(
                         algoSection,
@@ -4331,7 +4360,20 @@ export async function handleSearchResultClick(result) {
                     algoId === 'main'
                         ? algorithms?.main
                         : algorithms?.[algoSection]?.find((a) => String(a.id) === String(algoId));
-                if (algoData && showAlgorithmDetail) showAlgorithmDetail(algoData, algoSection);
+                if (algoData && showAlgorithmDetail) {
+                    await showAlgorithmDetail(algoData, algoSection);
+                    if (targetStep !== null) {
+                        setTimeout(() => {
+                            const stepEl = document.querySelector(
+                                `#algorithmSteps [data-step-index="${targetStep}"]`,
+                            );
+                            if (stepEl) {
+                                stepEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                highlightElement?.(stepEl, result.highlightTerm || result.title);
+                            }
+                        }, 260);
+                    }
+                }
                 break;
             }
             case 'bookmark':
@@ -4657,6 +4699,7 @@ export function initSearchSystem() {
     });
 
     searchInput.addEventListener('input', handleInput);
+    attachSearchResultsKeyboard(searchInput, searchResultsContainer);
 
     searchInput.addEventListener('keydown', async (event) => {
         if (event.key !== 'Enter') return;

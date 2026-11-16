@@ -331,6 +331,13 @@ export async function renderMainAlgorithm() {
     const groupMetaById = new Map(groups.map((g) => [g.id, g]));
 
     function buildStepElement(step, index) {
+        const el = buildStepElementInner(step, index);
+        // Якорь для перехода из поиска к конкретному шагу.
+        el?.setAttribute?.('data-step-index', String(index));
+        return el;
+    }
+
+    function buildStepElementInner(step, index) {
         if (!step || typeof step !== 'object') {
             const errorDiv = document.createElement('div');
             errorDiv.className =
