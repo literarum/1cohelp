@@ -168,6 +168,14 @@ export function registerOnloadHandler() {
                 import('../features/storage-guard.js')
                     .then((m) => m.initStorageGuard())
                     .catch((e) => console.warn('[storage-guard] init failed', e));
+                Promise.all([import('./deep-link.js'), import('../config.js')])
+                    .then(([dl, cfg]) =>
+                        dl.applyDeepLinkOnStartup({
+                            setActiveTab: window.setActiveTab,
+                            knownTabs: cfg.tabsConfig.map((t) => t.id),
+                        }),
+                    )
+                    .catch((e) => console.warn('[deep-link] failed', e));
                 import('../features/auto-backup.js')
                     .then((m) => m.initAutoBackupScheduler())
                     .catch((e) => console.warn('[auto-backup] init failed', e));
