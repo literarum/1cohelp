@@ -6,6 +6,8 @@
  */
 
 import { State } from '../app/state.js';
+import { localFileTimestamp } from '../utils/datetime.js';
+import { clearPendingNotes } from './client-notes-guard.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
 import { refreshClientDataHistoryToolbar } from '../history/modal-entity-history.js';
@@ -43,6 +45,15 @@ export function getClientData() {
 /**
  * Сохраняет данные клиента в IndexedDB или localStorage
  */
+/** Текст, подтверждённо записанный в БД (для защиты от потери при закрытии вкладки). */
+let lastSavedClientNotes = null;
+export function getLastSavedClientNotes() {
+    return lastSavedClientNotes;
+}
+export function markClientNotesSaved(notes) {
+    lastSavedClientNotes = typeof notes === 'string' ? notes : '';
+}
+
 export async function saveClientData() {
     const clientDataToSave = getClientData();
     let oldData = null;
@@ -62,6 +73,13 @@ export async function saveClientData() {
             }
             console.log('Client data saved to IndexedDB (integrity check passed)');
             savedToDB = true;
+            lastSavedClientNotes = clientDataToSave.notes;
+            clearPendingNotes();
+            try {
+                localStorage.removeItem('clientData');
+            } catch {
+                /* резервная копия больше не нужна */
+            }
 
             if (oldData !== null && oldData !== undefined) {
                 try {
@@ -137,9 +155,7 @@ export async function exportClientDataToTxt() {
         return;
     }
 
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-    const filename = `Обращение_1С_${timestamp}.txt`;
+    const filename = `Обращение_1С_${localFileTimestamp(new Date())}.txt`;
     const blob = new Blob([notes], { type: 'text/plain;charset=utf-8' });
 
     if (window.showSaveFilePicker) {

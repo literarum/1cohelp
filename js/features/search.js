@@ -1208,6 +1208,100 @@ export async function addManyToSearchIndex(entries) {
 }
 
 /**
+ * Набор токенов элемента по полям (как их пишет индексатор).
+ * @returns {Map<string, Set<string>>} поле → токены
+ */
+function collectItemTokensByField(storeName, item) {
+    const out = new Map();
+    if (!item || typeof item !== 'object') return out;
+    for (const [field, text] of Object.entries(getTextForItem(storeName, item))) {
+        if (typeof text !== 'string' || !text.trim()) continue;
+        const set = new Set();
+        for (const t of tokenizeNormalized(text)) {
+            const w = normalizeWordForIndex(t);
+            if (w) set.add(w);
+        }
+        if (set.size) out.set(field, set);
+    }
+    return out;
+}
+
+/**
+ * Обновление индекса по разнице токенов «было → стало» для одного элемента без вложенных
+ * ссылок (заметки клиента). Полный проход курсором по всему индексу на каждое автосохранение
+ * заметок заметно тормозил ввод на больших базах.
+ * @returns {Promise<boolean>} false — применить нельзя (вызывающий делает полный путь)
+ */
+export async function updateIndexByTokenDiff(storeName, id, oldItem, newItem) {
+    if (!State.db || !oldItem || !newItem) return false;
+    const weights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
+    const before = collectItemTokensByField(storeName, oldItem);
+    const after = collectItemTokensByField(storeName, newItem);
+    const refId = String(id);
+    /** @type {Map<string, Set<string>>} слово → поля, из которых ссылку убрать */
+    const toRemove = new Map();
+    const toAdd = [];
+    const fields = new Set([...before.keys(), ...after.keys()]);
+    for (const field of fields) {
+        const was = before.get(field) || new Set();
+        const now = after.get(field) || new Set();
+        for (const w of was) {
+            if (!now.has(w)) {
+                if (!toRemove.has(w)) toRemove.set(w, new Set());
+                toRemove.get(w).add(field);
+            }
+        }
+        for (const w of now) {
+            if (!was.has(w)) {
+                toAdd.push({
+                    word: w,
+                    type: storeName,
+                    id: refId,
+                    field,
+                    weight: weights[field] || 1.0,
+                    details: { field },
+                });
+            }
+        }
+    }
+    try {
+        if (toRemove.size > 0) {
+            await new Promise((resolve, reject) => {
+                const tx = State.db.transaction('searchIndex', 'readwrite');
+                const store = tx.objectStore('searchIndex');
+                tx.oncomplete = resolve;
+                tx.onerror = (e) => reject(e.target.error);
+                tx.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
+                for (const [word, fieldsToDrop] of toRemove) {
+                    const req = store.get(word);
+                    req.onsuccess = () => {
+                        const entry = req.result;
+                        if (!entry || !Array.isArray(entry.refs)) return;
+                        const kept = entry.refs.filter(
+                            (r) =>
+                                !(
+                                    r.type === storeName &&
+                                    String(r.id) === refId &&
+                                    fieldsToDrop.has(r.field)
+                                ),
+                        );
+                        if (kept.length === entry.refs.length) return;
+                        if (kept.length === 0) store.delete(word);
+                        else store.put({ ...entry, refs: kept });
+                    };
+                }
+            });
+        }
+        await addManyToSearchIndex(toAdd);
+        invalidateGlobalSemanticCorpus();
+        return true;
+    } catch (e) {
+        console.warn('[search] точечное обновление индекса не удалось, полный путь:', e);
+        return false;
+    }
+}
+
+/**
  * Удаляет элемент из поискового индекса
  */
 export async function removeFromSearchIndex(itemId, itemType) {
@@ -1543,6 +1637,15 @@ export async function updateSearchIndex(
     }
 
     try {
+        if (
+            operation === 'update' &&
+            storeName === 'clientData' &&
+            oldItemData &&
+            newItemData &&
+            (await updateIndexByTokenDiff(storeName, refItemId, oldItemData, newItemData))
+        ) {
+            return;
+        }
         if (operation === 'delete') {
             if (
                 storeName === 'clientAnalyticsRecords' &&

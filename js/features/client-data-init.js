@@ -7,6 +7,12 @@
 
 import { confirmCriticalDeletion } from '../ui/critical-confirm.js';
 import { buildClientNotesInputCompositeHandler } from './client-notes-input-debounce.js';
+import {
+    installClientNotesUnloadGuard,
+    pickNewestNotes,
+    readLocalNotesCandidates,
+} from './client-notes-guard.js';
+import { getLastSavedClientNotes, markClientNotesSaved } from './client-data.js';
 
 let State = null;
 let debounce = null;
@@ -274,6 +280,11 @@ export async function initClientDataSystem() {
     );
 
     clientNotes.addEventListener('input', State.clientNotesInputHandler);
+    window.__clientNotesUnloadGuardOff?.();
+    window.__clientNotesUnloadGuardOff = installClientNotesUnloadGuard(clientNotes, {
+        getLastSaved: () => getLastSavedClientNotes() ?? '',
+        save: () => (typeof saveClientData === 'function' ? saveClientData() : Promise.resolve()),
+    });
     console.log(
         `${LOG_PREFIX} Обработчик 'input': отдельный debounce для ЧС по ИНН и для автосохранения.`,
     );
@@ -405,26 +416,23 @@ export async function initClientDataSystem() {
 
     try {
         console.log(`${LOG_PREFIX} Загрузка начальных данных для clientNotes...`);
-        let clientDataNotesValue = '';
+        let clientDataFromDB = null;
         if (State.db) {
-            const clientDataFromDB = await getFromIndexedDB('clientData', 'current');
-            if (clientDataFromDB && clientDataFromDB.notes) {
-                clientDataNotesValue = clientDataFromDB.notes;
-            }
-        } else {
-            const localData = localStorage.getItem('clientData');
-            if (localData) {
-                try {
-                    clientDataNotesValue = JSON.parse(localData).notes || '';
-                } catch (e) {
-                    console.warn(
-                        '[initClientDataSystem] Ошибка парсинга clientData из localStorage:',
-                        e,
-                    );
-                }
-            }
+            clientDataFromDB = await getFromIndexedDB('clientData', 'current');
         }
-        clientNotes.value = clientDataNotesValue;
+        // Локальные копии (ожидающая при закрытии вкладки / резервная при сбое БД) побеждают,
+        // если они свежее записи в БД.
+        const picked = pickNewestNotes(clientDataFromDB, readLocalNotesCandidates());
+        clientNotes.value = picked.notes;
+        markClientNotesSaved(clientDataFromDB?.notes ?? '');
+        if (picked.restored && State.db && typeof saveClientData === 'function') {
+            await saveClientData();
+            window.NotificationService?.add?.(
+                'Восстановлены заметки, которые не успели сохраниться при прошлом закрытии вкладки.',
+                'info',
+                { duration: 6000 },
+            );
+        }
         console.log(`${LOG_PREFIX} Данные загружены. clientNotes.value установлен.`);
 
         applyClientNotesFontSize();
