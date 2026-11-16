@@ -10,11 +10,23 @@ import { initCustomizationStudio } from './js/ui/customization-studio.js';
 import { initModalChoreographer } from './js/ui/modal-choreographer.js';
 import { initFormModalAutoEnhance } from './js/ui/form-modal-autoenhance.js';
 import { initA11yKeyboard } from './js/ui/a11y-keyboard.js';
+import { initThemeColorMeta } from './js/ui/theme-color-meta.js';
 try {
     initA11yKeyboard();
 } catch (e) {
     console.warn('[a11y-keyboard] init failed', e);
 }
+(function bootThemeColorMeta() {
+    const run = () => {
+        try {
+            initThemeColorMeta();
+        } catch (e) {
+            console.warn('[theme-color-meta] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
 window.openStorageOverview = () =>
     import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
