@@ -168,6 +168,9 @@ export function registerOnloadHandler() {
                 import('../features/storage-guard.js')
                     .then((m) => m.initStorageGuard())
                     .catch((e) => console.warn('[storage-guard] init failed', e));
+                import('../features/auto-backup.js')
+                    .then((m) => m.initAutoBackupScheduler())
+                    .catch((e) => console.warn('[auto-backup] init failed', e));
             })
             .catch(async (error) => {
                 console.error('Критическая ошибка в Promise.all (window.onload):', error);

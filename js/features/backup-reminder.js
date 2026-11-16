@@ -319,6 +319,19 @@ function _presentBackupReminderToast(opts = {}) {
                     if (btn && typeof btn.click === 'function') btn.click();
                 },
             },
+            ...(typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'
+                ? [
+                      {
+                          id: 'enable-auto-backup',
+                          label: 'Включить автобэкап',
+                          onClick: () => {
+                              _markLastShown(Date.now());
+                              NS.dismissImportant(BACKUP_REMINDER_TOAST_ID);
+                              void import('./auto-backup.js').then((m) => m.configureAutoBackup());
+                          },
+                      },
+                  ]
+                : []),
             {
                 id: 'defer-reminder',
                 label: 'Отложить',
@@ -374,10 +387,19 @@ function _presentBackupReminderToast(opts = {}) {
     });
 }
 
+/** Автобэкап (auto-backup.js) отметил успешную копию недавно — ручное напоминание не нужно. */
+export const STORAGE_KEY_AUTO_BACKUP_LAST_OK = 'copilot_auto_backup_last_ok_v1';
+export function isAutoBackupFresh(now, lastOkMs, intervalMs = BACKUP_REMINDER_INTERVAL_MS) {
+    // Автокопия делается раз в сутки: считаем её свежей двое суток (запас на выходные/офлайн).
+    const window = Math.max(intervalMs, 48 * 60 * 60 * 1000);
+    return Number.isFinite(lastOkMs) && lastOkMs > 0 && now - lastOkMs < window;
+}
+
 function _maybeShow() {
     _purgeExpiredDeferIfAny();
     const now = Date.now();
     if (isBackupReminderSuppressedByDefer(now, readDeferUntilMs())) return;
+    if (isAutoBackupFresh(now, _readNum(STORAGE_KEY_AUTO_BACKUP_LAST_OK))) return;
     _presentBackupReminderToast({ forceInterval: false });
 }
 

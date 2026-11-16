@@ -2523,7 +2523,9 @@ export async function exportAllData(options = {}) {
         }
 
         const now = new Date();
-        const timestamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+        const pad2 = (n) => String(n).padStart(2, '0');
+        // Локальное время: в UTC имя файла «отставало» от часов пользователя (МСК −3 ч).
+        const timestamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(now.getMinutes())}-${pad2(now.getSeconds())}`;
         const exportFileName = `${
             isForcedBackupMode ? '1C_Support_Guide_Backup_' : '1C_Support_Guide_Export_'
         }${timestamp}.json`;
