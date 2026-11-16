@@ -16,6 +16,8 @@ try {
     console.warn('[a11y-keyboard] init failed', e);
 }
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
+window.openStorageOverview = () =>
+    import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
 window.openRequisitesCheck = (text) =>
     import('./js/features/requisites-check.js').then((m) => m.openRequisitesCheck(text));
 try {

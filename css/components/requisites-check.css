@@ -75,3 +75,26 @@
     .rq-modal, .rq-card, .rq-item { animation: none; }
 }
 
+
+/* Общие «чипы»-кнопки модальных окон (rq-*) */
+.vc-chip { padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.4); background: transparent; color: inherit; cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.vc-chip:hover { background: rgba(139, 92, 246, 0.14); }
+.vc-chip:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+
+/* «Данные и хранилище» (so-*) */
+.so-card { width: min(34rem, 100%); }
+.so-block { display: flex; flex-direction: column; gap: 0.45rem; }
+.so-row { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.82rem; }
+.so-row span { opacity: 0.7; }
+.so-row strong { text-align: right; font-weight: 600; }
+.so-ok { color: #16a34a; }
+.so-warn { color: #d97706; }
+.so-meter { height: 0.45rem; border-radius: 999px; background: rgba(127, 127, 127, 0.2); overflow: hidden; }
+.so-meter span { display: block; height: 100%; background: linear-gradient(90deg, #8b5cf6, #6366f1); }
+.so-meter span.is-warn { background: #ef4444; }
+.so-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.so-table th, .so-table td { padding: 0.32rem 0.4rem; border-bottom: 1px solid rgba(127, 127, 127, 0.18); text-align: left; }
+.so-table th { font-weight: 600; opacity: 0.7; }
+.so-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.so-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.so-note { margin: 0; font-size: 0.72rem; opacity: 0.6; }

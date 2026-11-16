@@ -140,6 +140,14 @@ const MODAL_REGISTRY = [
         runAsync: openHealthReportFlow,
     },
     {
+        key: 'storageOverview',
+        label: 'Данные и хранилище',
+        subtitle: 'Сколько места занято, объём скриншотов и PDF, защита от удаления, автобэкап',
+        score: 0.9,
+        keywords: ['хранилищ', 'место', 'память', 'объем', 'объём', 'квота', 'данные', 'размер', 'storage', 'диск'],
+        run: () => tryWindowFn('openStorageOverview'),
+    },
+    {
         key: 'autoBackupConfigure',
         label: 'Автобэкап: выбрать папку и включить',
         subtitle: 'Резервная копия базы раз в сутки в выбранную папку, хранятся последние 14',
