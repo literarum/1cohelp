@@ -106,6 +106,12 @@ export async function saveUISettings() {
         State.originalUISettings = JSON.parse(JSON.stringify(State.userPreferences));
         State.currentPreviewSettings = JSON.parse(JSON.stringify(State.userPreferences));
         State.isUISettingsDirty = false;
+        try {
+            const bg = await import('../features/background-image.js');
+            await bg.commitStagedBackgroundImageRemoval();
+        } catch (err) {
+            console.warn('[ui-settings] не удалось удалить фон после сброса', err);
+        }
 
         if (typeof applyPreviewSettings === 'function') {
             await applyPreviewSettings(State.userPreferences);

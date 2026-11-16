@@ -7,6 +7,7 @@
  */
 
 import { escapeHtml } from '../utils/html.js';
+import { localFileTimestamp } from '../utils/datetime.js';
 import {
     DIAGNOSTIC_LAYERS,
     DIAGNOSTIC_LAYER_ORDER,
@@ -579,7 +580,7 @@ function wireReport(body) {
         if (a === 'copy') {
             toast((await copyText(buildSupportText())) ? 'Отчёт скопирован — вставьте его в обращение в поддержку.' : 'Не удалось скопировать отчёт.', 'info');
         } else if (a === 'download') {
-            downloadText(buildSupportText(), `copilot-diagnostic-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`);
+            downloadText(buildSupportText(), `copilot-diagnostic-${localFileTimestamp(new Date())}.txt`);
         } else if (a === 'rerun') {
             runDiagnosticsFlow();
         } else if (a === 'recheck') {

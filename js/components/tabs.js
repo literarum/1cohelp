@@ -604,6 +604,17 @@ async function setActiveTabCore(tabId, warningJustAccepted = false, navOptions =
         return;
     }
 
+    // Переход в другой раздел (палитра, горячие клавиши, мобильное меню) снимает экран
+    // предупреждения ЧС: иначе он оставался поверх любого раздела.
+    if (tabId !== 'blacklistedClients') {
+        const bw = document.getElementById('blacklistWarningOverlay');
+        if (bw) {
+            if (typeof bw._dismiss === 'function') bw._dismiss();
+            else bw.remove();
+            State.currentBlacklistWarningOverlay = null;
+        }
+    }
+
     if (
         tabId === 'blacklistedClients' &&
         State.userPreferences.showBlacklistUsageWarning &&

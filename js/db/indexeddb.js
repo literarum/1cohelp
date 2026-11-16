@@ -8,6 +8,7 @@ import {
 } from '../constants.js';
 import { storeConfigs } from './stores.js';
 import { State } from '../app/state.js';
+import { announceStoreWrite } from '../features/storage-guard.js';
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ
@@ -309,6 +310,11 @@ export function initDB() {
 const storeWriteVersions = new Map();
 function bumpStoreVersion(storeName) {
     storeWriteVersions.set(storeName, (storeWriteVersions.get(storeName) || 0) + 1);
+    try {
+        announceStoreWrite(storeName);
+    } catch {
+        /* межвкладочное оповещение не должно мешать записи */
+    }
 }
 /** Версия хранилища: растёт после каждой завершённой записи через performDBOperation. */
 export function getStoreVersion(storeName) {

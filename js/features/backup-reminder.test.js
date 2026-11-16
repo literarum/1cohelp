@@ -32,3 +32,14 @@ describe('shouldShowBackupReminder', () => {
         expect(shouldShowBackupReminder(last + interval, 0, last, true, interval)).toBe(true);
     });
 });
+
+import { isAutoBackupFresh } from './backup-reminder.js';
+describe('backup-reminder: автобэкап подавляет напоминание', () => {
+    it('isAutoBackupFresh', () => {
+        const now = Date.parse('2026-11-16T12:00:00Z');
+        expect(isAutoBackupFresh(now, now - 3600e3)).toBe(true);
+        expect(isAutoBackupFresh(now, now - 72 * 3600e3)).toBe(false);
+        expect(isAutoBackupFresh(now, NaN)).toBe(false);
+        expect(isAutoBackupFresh(now, 0)).toBe(false);
+    });
+});

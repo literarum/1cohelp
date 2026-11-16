@@ -213,7 +213,7 @@ html.dark .ac-status {
 html.dark .ac-status[data-state='error'] {
     color: #fca5a5;
 }
-@container acs (max-width: 26rem) {
+@container acs (max-width: 416px) {
     .ac-status .ac-status-text {
         display: none;
     }
@@ -280,7 +280,7 @@ html.dark .ac-status[data-state='error'] {
 }
 
 /* Широкая панель (развёрнуто на весь экран): навигация слева */
-@container acs (min-width: 44rem) {
+@container acs (min-width: 704px) {
     .ac-body {
         flex-direction: row;
     }
@@ -426,7 +426,7 @@ html.dark .ac-status[data-state='error'] {
 .ac-foot-spacer {
     flex: 1 1 auto;
 }
-@container acs (max-width: 26rem) {
+@container acs (max-width: 416px) {
     .ac-foot .ac-btn span {
         font-size: 0.75rem;
     }
@@ -1005,7 +1005,7 @@ html[data-motion='calm'] .ac-motion-chip.is-playing {
 }
 
 /* Узкая шторка и мобильные: компактнее отступы */
-@container acs (max-width: 26rem) {
+@container acs (max-width: 416px) {
     .ac-panes {
         padding: 0.75rem;
     }
@@ -1081,3 +1081,58 @@ html[data-motion='calm'] .ac-motion-stage [data-demo].is-playing,
 html[data-motion='calm'] .ac-motion-stage .ac-motion-chip.is-playing { animation: motion-fade-in 220ms ease both; animation-delay: 0ms; }
 html[data-motion='calm'] .ac-motion-stage .ac-motion-chip:hover { transform: none; }
 html[data-motion='reduce'] .ac-motion-stage .ac-motion-chip:hover { transform: none; }
+
+/* ---------- Узкая панель: все вкладки видны (сетка вместо скрытой прокрутки) ----------
+   Пороги в px: rem зависит от масштаба интерфейса (80% → 1rem = 12,8px), и правила в rem
+   переставали срабатывать при уменьшенном масштабе. */
+@container acs (max-width: 703px) {
+    .ac-nav {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.25rem;
+        overflow: visible;
+    }
+    .ac-tab {
+        justify-content: center;
+        min-width: 0;
+        padding: 0.5rem 0.35rem;
+        font-size: 0.75rem;
+        gap: 0.35rem;
+    }
+    .ac-tab span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+/* Подвал: кнопки не переносят строки и не выталкивают друг друга за край. */
+.ac-foot {
+    min-width: 0;
+}
+.ac-foot .ac-btn {
+    white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 1;
+}
+.ac-foot .ac-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ac-foot #appCustomizationSaveBtn {
+    flex-shrink: 0;
+}
+@container acs (max-width: 440px) {
+    .ac-foot {
+        gap: 0.25rem;
+        padding: 0.625rem 0.75rem;
+    }
+    #acResetPaneBtn span {
+        display: none;
+    }
+    #appCustomizationCancelBtn span {
+        font-size: 0;
+    }
+    #appCustomizationCancelBtn span::after {
+        content: 'Отменить';
+        font-size: 0.75rem;
+    }
+}

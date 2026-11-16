@@ -6,6 +6,8 @@
  */
 
 import { State } from '../app/state.js';
+import { localFileTimestamp } from '../utils/datetime.js';
+import { clearPendingNotes } from './client-notes-guard.js';
 import { getFromIndexedDB, saveToIndexedDB } from '../db/indexeddb.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
 import { refreshClientDataHistoryToolbar } from '../history/modal-entity-history.js';
@@ -43,6 +45,38 @@ export function getClientData() {
 /**
  * Сохраняет данные клиента в IndexedDB или localStorage
  */
+/**
+ * Индикатор автосохранения в шапке «Информация по обращению».
+ * @param {'saved'|'dirty'|'error'|'idle'} state
+ */
+export function setClientNotesSaveStatus(state) {
+    const el = typeof document !== 'undefined' ? document.getElementById('clientNotesSaveStatus') : null;
+    if (!el) return;
+    el.dataset.state = state;
+    if (state === 'saved') {
+        const t = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        el.textContent = `Сохранено в ${t}`;
+        el.title = 'Заметки сохраняются автоматически';
+    } else if (state === 'dirty') {
+        el.textContent = 'Сохранение…';
+        el.title = '';
+    } else if (state === 'error') {
+        el.textContent = 'Ошибка сохранения';
+        el.title = 'Не удалось записать в базу; копия сохранена в браузере';
+    } else {
+        el.textContent = '';
+    }
+}
+
+/** Текст, подтверждённо записанный в БД (для защиты от потери при закрытии вкладки). */
+let lastSavedClientNotes = null;
+export function getLastSavedClientNotes() {
+    return lastSavedClientNotes;
+}
+export function markClientNotesSaved(notes) {
+    lastSavedClientNotes = typeof notes === 'string' ? notes : '';
+}
+
 export async function saveClientData() {
     const clientDataToSave = getClientData();
     let oldData = null;
@@ -62,6 +96,14 @@ export async function saveClientData() {
             }
             console.log('Client data saved to IndexedDB (integrity check passed)');
             savedToDB = true;
+            lastSavedClientNotes = clientDataToSave.notes;
+            clearPendingNotes();
+            setClientNotesSaveStatus('saved');
+            try {
+                localStorage.removeItem('clientData');
+            } catch {
+                /* резервная копия больше не нужна */
+            }
 
             if (oldData !== null && oldData !== undefined) {
                 try {
@@ -91,6 +133,7 @@ export async function saveClientData() {
             }
         } catch (error) {
             console.error('Ошибка сохранения данных клиента в IndexedDB:', error);
+            setClientNotesSaveStatus('error');
             if (deps.showNotification) {
                 deps.showNotification('Ошибка сохранения данных клиента', 'error');
             }
@@ -137,9 +180,7 @@ export async function exportClientDataToTxt() {
         return;
     }
 
-    const now = new Date();
-    const timestamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-    const filename = `Обращение_1С_${timestamp}.txt`;
+    const filename = `Обращение_1С_${localFileTimestamp(new Date())}.txt`;
     const blob = new Blob([notes], { type: 'text/plain;charset=utf-8' });
 
     if (window.showSaveFilePicker) {

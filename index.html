@@ -2,7 +2,9 @@
 <html lang="ru" style="background-color: var(--color-initial-bg)">
     <head>
         <meta charset="UTF-8" />
-        <script src="js/search-startup.js?v=20261105-bookmark-formatting-5"></script>
+        <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'" />
+        <meta name="referrer" content="strict-origin-when-cross-origin" />
+        <script src="js/search-startup.js?v=20261116-cosmic-overlay"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
         <meta name="description" content="Copilot 1СО — локальный помощник оператора: алгоритмы, закладки, регламенты, анализатор XML и данные клиента. Работает офлайн." />
@@ -142,8 +144,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=20261105-bookmark-formatting-5"></script>
-        <script src="js/vendor-loader.js?v=20261105-bookmark-formatting-5"></script>
+        <script src="js/vendor-config.js?v=20261116-cosmic-overlay"></script>
+        <script src="js/vendor-loader.js?v=20261116-cosmic-overlay"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -209,16 +211,20 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=20261105-bookmark-formatting-5"
+            href="css/tailwind.generated.css?v=20261116-cosmic-overlay"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=20261105-bookmark-formatting-5" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261105-bookmark-formatting-5" />
+        <link rel="stylesheet" href="css/main.css?v=20261116-cosmic-overlay" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261116-cosmic-overlay" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
-                root.classList.add('loading-overlay-active');
+                root.classList.add('loading-overlay-active', 'copilot-overlay-visible');
+                // Страховка: уведомления не должны остаться скрытыми, если загрузка оборвалась.
+                setTimeout(function () {
+                    root.classList.remove('copilot-overlay-visible');
+                }, 45000);
                 const THEME_HINT_KEY = 'copilot.theme.hint';
                 const THEME_RESOLVED_KEY = 'copilot.theme.resolved';
                 const OVERLAY_SNAPSHOT_KEY = 'copilot.loading-overlay.snapshot';
@@ -336,6 +342,11 @@
         <!-- Оверлей загрузки: стили в head, чтобы экран был сразу с оверлеем, без белой вспышки -->
         <style id="custom-loading-overlay-styles">
             html.loading-overlay-active, html.loading-overlay-active body { overflow: hidden !important; overscroll-behavior: none; }
+            /* Пока идёт анимация загрузки, уведомления придерживаются и появляются после неё. */
+            #notification-container { transition: opacity 400ms ease 150ms; }
+            html.copilot-overlay-visible #notification-container,
+            html.copilot-overlay-visible #bg-status-hud { opacity: 0; visibility: hidden; transition: none; }
+            #bg-status-hud { transition: opacity 400ms ease 150ms; }
             html {
                 background-color: var(--loading-overlay-bg, #020206);
             }
@@ -404,33 +415,28 @@
             }
             #custom-loading-overlay .loading-text {
                 position: absolute;
-                bottom: 12%;
+                bottom: calc(9% + 3.4rem);
                 left: 50%;
                 transform: translateX(-50%);
                 max-width: 90%;
-                padding: 0 clamp(1rem, 5vw, 1.25rem);
+                padding: 0 1rem;
                 box-sizing: border-box;
-                font-size: clamp(1rem, 4vw, 1.25rem);
-                letter-spacing: 1px;
+                font-size: clamp(0.72rem, 2.6vw, 0.82rem);
+                font-weight: 500;
+                letter-spacing: 0.34em;
+                text-transform: uppercase;
                 line-height: 1.4;
-                font-weight: 600;
-                z-index: 10;
-                background: var(
-                    --loading-overlay-text-gradient,
-                    linear-gradient(120deg, #8a2be2, #4b0082, rgb(80, 0, 186), #4b0082, #8a2be2)
-                );
-                background-size: 250% 100%;
-                -webkit-background-clip: text;
-                background-clip: text;
-                -webkit-text-fill-color: transparent;
-                text-fill-color: transparent;
-                animation: gradient-text-flow-smooth 4s linear infinite;
+                white-space: nowrap;
                 text-align: center;
+                z-index: 10;
+                color: rgba(224, 231, 255, 0.88);
+                text-shadow: 0 0 18px rgba(139, 92, 246, 0.65), 0 0 2px rgba(255, 255, 255, 0.35);
             }
             #custom-loading-overlay #animated-dots {
                 display: inline-block;
-                min-width: 25px;
+                min-width: 1.6em;
                 text-align: left;
+                letter-spacing: 0.12em;
             }
             #custom-loading-overlay #animated-dots::before {
                 content: '.';
@@ -438,67 +444,73 @@
             }
             #custom-loading-overlay .progress-indicator-container {
                 position: absolute;
-                bottom: 5%;
+                bottom: 9%;
                 left: 50%;
                 transform: translateX(-50%);
-                width: min(280px, calc(100vw - 2rem));
-                max-width: 90%;
+                width: min(340px, calc(100vw - 3rem));
                 display: flex;
                 flex-direction: column;
-                align-items: center;
+                align-items: stretch;
+                gap: 0.7rem;
                 z-index: 10;
             }
             #custom-loading-overlay .progress-bar-line-track {
+                position: relative;
                 width: 100%;
-                height: 6px;
-                background-color: var(--loading-overlay-track-bg, rgba(138, 43, 226, 0.15));
-                border-radius: 3px;
-                margin-bottom: 8px;
-                overflow: hidden;
-                box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+                height: 2px;
+                border-radius: 2px;
+                background: rgba(148, 163, 184, 0.16);
+                overflow: visible;
             }
             #custom-loading-overlay .progress-bar-line {
+                position: relative;
                 width: 0%;
                 height: 100%;
-                background: var(
-                    --loading-overlay-progress-gradient,
-                    linear-gradient(90deg, #8a2be2, #a020f0, #4b0082, #a020f0, #8a2be2)
-                );
-                background-size: 300% 100%;
-                border-radius: 3px;
-                transition: width 0.25s ease-out;
-                animation: progress-gradient-flow 2s linear infinite;
+                border-radius: 2px;
+                background: linear-gradient(90deg, #3b82f6 0%, #6366f1 30%, #a855f7 62%, #ec4899 100%);
+                box-shadow: 0 0 10px rgba(168, 85, 247, 0.75), 0 0 22px rgba(99, 102, 241, 0.4);
+                transition: width 0.18s linear;
             }
-            @keyframes progress-gradient-flow {
-                0% {
-                    background-position: 0% center;
-                }
-                100% {
-                    background-position: -300% center;
-                }
+            /* «Голова» полосы — яркая точка со свечением. */
+            #custom-loading-overlay .progress-bar-line::after {
+                content: '';
+                position: absolute;
+                right: -3px;
+                top: 50%;
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                transform: translateY(-50%);
+                background: #fff;
+                box-shadow: 0 0 6px 2px rgba(236, 72, 153, 0.9), 0 0 16px 4px rgba(168, 85, 247, 0.6);
+            }
+            #custom-loading-overlay .progress-meta {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                font-size: 0.68rem;
+                font-weight: 500;
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+                color: rgba(199, 210, 254, 0.62);
             }
             #custom-loading-overlay .progress-percentage-text {
-                font-size: clamp(0.75rem, 3vw, 0.875rem);
-                font-weight: 600;
-                letter-spacing: 0.5px;
-                background: var(
-                    --loading-overlay-percent-gradient,
-                    linear-gradient(120deg, #9333ea, #c084fc, #9333ea)
-                );
-                background-size: 200% 100%;
-                -webkit-background-clip: text;
-                background-clip: text;
-                -webkit-text-fill-color: transparent;
-                text-fill-color: transparent;
-                animation: gradient-text-flow-smooth 3s linear infinite;
+                font-variant-numeric: tabular-nums;
+                color: rgba(237, 233, 254, 0.92);
+                letter-spacing: 0.08em;
             }
-            @keyframes gradient-text-flow-smooth {
-                0% {
-                    background-position: 0% center;
-                }
-                100% {
-                    background-position: -250% center;
-                }
+            html[data-loading-overlay-theme='light'] #custom-loading-overlay .loading-text {
+                color: #312e81;
+                text-shadow: 0 0 14px rgba(139, 92, 246, 0.25);
+            }
+            html[data-loading-overlay-theme='light'] #custom-loading-overlay .progress-bar-line-track {
+                background: rgba(67, 56, 202, 0.14);
+            }
+            html[data-loading-overlay-theme='light'] #custom-loading-overlay .progress-meta {
+                color: rgba(49, 46, 129, 0.62);
+            }
+            html[data-loading-overlay-theme='light'] #custom-loading-overlay .progress-percentage-text {
+                color: #312e81;
             }
             @keyframes ellipsis-content-for-span {
                 0% {
@@ -514,9 +526,10 @@
                     content: '.';
                 }
             }
+            /* Фон держится во время сжатия и гаснет в момент вспышки — приложение проявляется сквозь взрыв. */
             #custom-loading-overlay.is-exiting {
                 background-color: transparent !important;
-                transition: background-color 180ms ease-out;
+                transition: background-color 900ms cubic-bezier(0.22, 1, 0.36, 1) 520ms;
                 pointer-events: none;
             }
             #custom-loading-overlay.is-exiting::before,
@@ -552,10 +565,20 @@
                 Загрузка<span id="animated-dots"></span>
             </div>
             <div class="progress-indicator-container">
-                <div class="progress-bar-line-track">
+                <div
+                    class="progress-bar-line-track"
+                    role="progressbar"
+                    aria-label="Загрузка приложения"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                >
                     <div class="progress-bar-line" id="progressBarLine"></div>
                 </div>
-                <div class="progress-percentage-text" id="progressPercentageText">0%</div>
+                <div class="progress-meta">
+                    <span class="loading-phase" id="loadingPhaseText">Инициализация</span>
+                    <span class="progress-percentage-text" id="progressPercentageText">0%</span>
+                </div>
             </div>
         </div>
 
@@ -731,6 +754,9 @@
                                     autocomplete="off"
                                     name="copilotGlobalSearch"
                                     placeholder="Поиск..."
+                                    aria-label="Поиск по приложению"
+                                    spellcheck="false"
+                                    enterkeyhint="search"
                                     title="Фильтр по тегам: добавьте #тег к запросу (несколько тегов — все должны совпасть)"
                                     class="w-full pl-10 pr-20 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary text-base text-gray-900 dark:text-gray-100"
                                 />
@@ -1165,6 +1191,12 @@
                                     class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0"
                                 >
                                     Информация по обращению
+                                    <span
+                                        id="clientNotesSaveStatus"
+                                        class="client-notes-save-status"
+                                        role="status"
+                                        aria-live="polite"
+                                    ></span>
                                 </h2>
                                 <div
                                     id="clientNotesActions"
@@ -1751,6 +1783,9 @@
                                 class="client-analytics-upload-label inline-flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-md transition shadow-sm focus-within:outline-none focus-within:ring-2 focus-within:ring-white/50"
                                 title="Загрузить .txt для разбора (ИНН, КПП, телефоны)"
                                 aria-label="Загрузить файл заметок: выберите один или несколько .txt"
+                                role="button"
+                                tabindex="0"
+                                data-file-trigger
                             >
                                 <i class="fas fa-file-download text-base opacity-95" aria-hidden="true"></i>
                                 <span class="whitespace-nowrap">Загрузить файл заметок</span>
@@ -1775,6 +1810,9 @@
                                 class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-primary transition-colors cursor-pointer inline-flex items-center justify-center"
                                 title="Импорт JSON раздела"
                                 aria-label="Импорт JSON раздела"
+                                role="button"
+                                tabindex="0"
+                                data-file-trigger
                             >
                                 <i class="fas fa-download" aria-hidden="true"></i>
                                 <input
@@ -3133,7 +3171,7 @@
                         <div class="ac-body">
                             <nav class="ac-nav" role="tablist" aria-label="Разделы оформления">
                         <button type="button" role="tab" class="ac-tab" id="ac-tab-look" data-pane="look" aria-controls="ac-pane-look" aria-selected="true" tabindex="0">
-                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Оформление</span>
+                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Облик</span>
                         </button>
                         <button type="button" role="tab" class="ac-tab" id="ac-tab-colors" data-pane="colors" aria-controls="ac-pane-colors" aria-selected="false" tabindex="-1">
                             <i class="fas fa-droplet" aria-hidden="true"></i><span>Цвета</span>
@@ -5714,7 +5752,7 @@
                 class="hover:underline"
                 >нажать сюда</a
             >
-            для репорта об ошибках и предложений по усовершенстованию
+            для сообщений об ошибках и предложений по усовершенствованию
         </div>
 
         <script type="module">
@@ -5754,7 +5792,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=20261105-bookmark-formatting-5"></script>
-        <script type="module" src="./js/entry.js?v=20261105-bookmark-formatting-5"></script>
+        <script type="module" src="./script.js?v=20261116-cosmic-overlay"></script>
+        <script type="module" src="./js/entry.js?v=20261116-cosmic-overlay"></script>
     </body>
 </html>

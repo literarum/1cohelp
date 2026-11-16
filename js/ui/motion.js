@@ -84,5 +84,5 @@ export function shakeField(el) {
     setTimeout(() => el.classList.remove('motion-field-shake'), 380);
 }
 
-// Tab navigation owns its opacity transition in app/tabs.js. A capture-click
+// Tab navigation owns its opacity transition in components/tabs.js. A capture-click
 // body animation used to animate the outgoing panel and truncate card staggers.

@@ -32,6 +32,8 @@ import {
 } from '../utils/html.js';
 
 import { formatExampleForTextarea, getSectionName } from '../utils/helpers.js';
+import { findBestMatchingStep, formatStepLabel } from './search-step-match.js';
+import { attachSearchResultsKeyboard } from './search-results-keyboard.js';
 
 import { State } from '../app/state.js';
 
@@ -1080,6 +1082,226 @@ export async function addToSearchIndex(
 }
 
 /**
+ * Нормализует слово для индекса; null — слово не индексируется (пустое, слишком длинное/короткое).
+ * @param {unknown} word
+ * @returns {string|null}
+ */
+function normalizeWordForIndex(word) {
+    if (!word || typeof word !== 'string' || word.trim() === '') return null;
+    const normalizedWord = word.toLowerCase().replace(/ё/g, 'е');
+    if (normalizedWord.length > 50) return null;
+    if (normalizedWord.length < MIN_TOKEN_LEN_FOR_INDEX && !isExceptionShortToken(normalizedWord)) {
+        return null;
+    }
+    return normalizedWord;
+}
+
+/** Собирает ссылку (ref) индекса в едином формате для точечной и пакетной записи. */
+function buildSearchIndexRef(type, id, field, weight, originalRefDetails) {
+    const ref = {
+        type: type,
+        id: String(id),
+        field: field || 'unknown',
+        weight: Math.max(0.1, Math.min(10, parseFloat(weight) || 1)),
+        store: type,
+    };
+    if (originalRefDetails && typeof originalRefDetails === 'object') {
+        if (typeof originalRefDetails.tableIndex === 'number')
+            ref.tableIndex = originalRefDetails.tableIndex;
+        if (typeof originalRefDetails.rowIndex === 'number')
+            ref.rowIndex = originalRefDetails.rowIndex;
+        if (typeof originalRefDetails.stepIndex === 'number')
+            ref.stepIndex = originalRefDetails.stepIndex;
+        if (originalRefDetails.blockIndex !== undefined)
+            ref.blockIndex = originalRefDetails.blockIndex;
+        if (originalRefDetails.title) ref.title = originalRefDetails.title;
+        if (originalRefDetails.description) ref.description = originalRefDetails.description;
+        if (originalRefDetails.field) ref.field = originalRefDetails.field;
+    }
+    return ref;
+}
+
+function isSameSearchIndexRef(a, b) {
+    return (
+        a.id === b.id &&
+        a.type === b.type &&
+        a.field === b.field &&
+        a.tableIndex === b.tableIndex &&
+        a.rowIndex === b.rowIndex &&
+        a.stepIndex === b.stepIndex &&
+        a.blockIndex === b.blockIndex
+    );
+}
+
+/**
+ * Пакетная запись токенов одного элемента в индекс ОДНОЙ транзакцией.
+ * Раньше на каждый токен открывалась отдельная readwrite-транзакция: сохранение одной
+ * ссылки занимало секунды, а первый запуск приложения — около минуты.
+ * @param {Array<{word:string,type:string,id:string|number,field?:string,weight?:number,details?:object}>} entries
+ * @returns {Promise<void>}
+ */
+export async function addManyToSearchIndex(entries) {
+    if (!Array.isArray(entries) || entries.length === 0) return;
+    invalidateGlobalSemanticCorpus();
+    if (!State.db || typeof State.db.transaction !== 'function') {
+        console.warn('[addManyToSearchIndex] DB not ready.');
+        return;
+    }
+    /** @type {Map<string, object[]>} */
+    const byWord = new Map();
+    for (const entry of entries) {
+        if (!entry || !entry.type || typeof entry.type !== 'string') continue;
+        if (entry.id === undefined || entry.id === null) continue;
+        const word = normalizeWordForIndex(entry.word);
+        if (!word) continue;
+        const ref = buildSearchIndexRef(
+            entry.type,
+            entry.id,
+            entry.field,
+            entry.weight,
+            entry.details,
+        );
+        let refs = byWord.get(word);
+        if (!refs) {
+            refs = [];
+            byWord.set(word, refs);
+        }
+        if (!refs.some((r) => isSameSearchIndexRef(r, ref))) refs.push(ref);
+    }
+    if (byWord.size === 0) return;
+
+    await new Promise((resolve, reject) => {
+        let tx;
+        try {
+            tx = State.db.transaction(['searchIndex'], 'readwrite', { durability: 'relaxed' });
+        } catch {
+            try {
+                tx = State.db.transaction(['searchIndex'], 'readwrite');
+            } catch (txError) {
+                reject(txError);
+                return;
+            }
+        }
+        const store = tx.objectStore('searchIndex');
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target?.error || new Error('Transaction error'));
+        tx.onabort = (e) => reject(e.target?.error || new Error('Transaction aborted'));
+        for (const [word, newRefs] of byWord) {
+            const getRequest = store.get(word);
+            getRequest.onsuccess = () => {
+                const existing = getRequest.result;
+                if (!existing || !Array.isArray(existing.refs)) {
+                    store.put({ word, refs: newRefs.slice(0, MAX_REFS_PER_WORD) });
+                    return;
+                }
+                let changed = false;
+                for (const ref of newRefs) {
+                    if (existing.refs.length >= MAX_REFS_PER_WORD) break;
+                    if (existing.refs.some((r) => isSameSearchIndexRef(r, ref))) continue;
+                    existing.refs.push(ref);
+                    changed = true;
+                }
+                if (changed) store.put(existing);
+            };
+        }
+    });
+}
+
+/**
+ * Набор токенов элемента по полям (как их пишет индексатор).
+ * @returns {Map<string, Set<string>>} поле → токены
+ */
+function collectItemTokensByField(storeName, item) {
+    const out = new Map();
+    if (!item || typeof item !== 'object') return out;
+    for (const [field, text] of Object.entries(getTextForItem(storeName, item))) {
+        if (typeof text !== 'string' || !text.trim()) continue;
+        const set = new Set();
+        for (const t of tokenizeNormalized(text)) {
+            const w = normalizeWordForIndex(t);
+            if (w) set.add(w);
+        }
+        if (set.size) out.set(field, set);
+    }
+    return out;
+}
+
+/**
+ * Обновление индекса по разнице токенов «было → стало» для одного элемента без вложенных
+ * ссылок (заметки клиента). Полный проход курсором по всему индексу на каждое автосохранение
+ * заметок заметно тормозил ввод на больших базах.
+ * @returns {Promise<boolean>} false — применить нельзя (вызывающий делает полный путь)
+ */
+export async function updateIndexByTokenDiff(storeName, id, oldItem, newItem) {
+    if (!State.db || !oldItem || !newItem) return false;
+    const weights = FIELD_WEIGHTS[storeName] || FIELD_WEIGHTS.default;
+    const before = collectItemTokensByField(storeName, oldItem);
+    const after = collectItemTokensByField(storeName, newItem);
+    const refId = String(id);
+    /** @type {Map<string, Set<string>>} слово → поля, из которых ссылку убрать */
+    const toRemove = new Map();
+    const toAdd = [];
+    const fields = new Set([...before.keys(), ...after.keys()]);
+    for (const field of fields) {
+        const was = before.get(field) || new Set();
+        const now = after.get(field) || new Set();
+        for (const w of was) {
+            if (!now.has(w)) {
+                if (!toRemove.has(w)) toRemove.set(w, new Set());
+                toRemove.get(w).add(field);
+            }
+        }
+        for (const w of now) {
+            if (!was.has(w)) {
+                toAdd.push({
+                    word: w,
+                    type: storeName,
+                    id: refId,
+                    field,
+                    weight: weights[field] || 1.0,
+                    details: { field },
+                });
+            }
+        }
+    }
+    try {
+        if (toRemove.size > 0) {
+            await new Promise((resolve, reject) => {
+                const tx = State.db.transaction('searchIndex', 'readwrite');
+                const store = tx.objectStore('searchIndex');
+                tx.oncomplete = resolve;
+                tx.onerror = (e) => reject(e.target.error);
+                tx.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
+                for (const [word, fieldsToDrop] of toRemove) {
+                    const req = store.get(word);
+                    req.onsuccess = () => {
+                        const entry = req.result;
+                        if (!entry || !Array.isArray(entry.refs)) return;
+                        const kept = entry.refs.filter(
+                            (r) =>
+                                !(
+                                    r.type === storeName &&
+                                    String(r.id) === refId &&
+                                    fieldsToDrop.has(r.field)
+                                ),
+                        );
+                        if (kept.length === entry.refs.length) return;
+                        if (kept.length === 0) store.delete(word);
+                        else store.put({ ...entry, refs: kept });
+                    };
+                }
+            });
+        }
+        await addManyToSearchIndex(toAdd);
+        invalidateGlobalSemanticCorpus();
+        return true;
+    } catch (e) {
+        console.warn('[search] точечное обновление индекса не удалось, полный путь:', e);
+        return false;
+    }
+}
+
+/**
  * Удаляет элемент из поискового индекса
  */
 export async function removeFromSearchIndex(itemId, itemType) {
@@ -1415,6 +1637,15 @@ export async function updateSearchIndex(
     }
 
     try {
+        if (
+            operation === 'update' &&
+            storeName === 'clientData' &&
+            oldItemData &&
+            newItemData &&
+            (await updateIndexByTokenDiff(storeName, refItemId, oldItemData, newItemData))
+        ) {
+            return;
+        }
         if (operation === 'delete') {
             if (
                 storeName === 'clientAnalyticsRecords' &&
@@ -1541,7 +1772,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
             return;
         }
 
-        const promises = [];
+        const pendingEntries = [];
         for (const [fieldKey, textContent] of Object.entries(textsByField)) {
             if (!textContent || typeof textContent !== 'string' || textContent.trim() === '')
                 continue;
@@ -1560,12 +1791,17 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
             };
 
             for (const token of tokens) {
-                promises.push(
-                    addToSearchIndex(token, storeName, docId, fieldKey, fieldWeight, refDetails),
-                );
+                pendingEntries.push({
+                    word: token,
+                    type: storeName,
+                    id: docId,
+                    field: fieldKey,
+                    weight: fieldWeight,
+                    details: refDetails,
+                });
             }
         }
-        await Promise.all(promises);
+        await addManyToSearchIndex(pendingEntries);
         return;
     }
 
@@ -1590,7 +1826,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         return;
     }
 
-    const promises = [];
+    const pendingEntries = [];
 
     for (const [fieldKeyFromGetText, textContent] of Object.entries(textsByField)) {
         if (!textContent || typeof textContent !== 'string' || textContent.trim() === '') {
@@ -1713,21 +1949,19 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         }
 
         for (const token of tokens) {
-            promises.push(
-                addToSearchIndex(
-                    token,
-                    storeName,
-                    indexableId,
-                    refDetails.field,
-                    fieldWeight,
-                    refDetails,
-                ),
-            );
+            pendingEntries.push({
+                word: token,
+                type: storeName,
+                id: indexableId,
+                field: refDetails.field,
+                weight: fieldWeight,
+                details: refDetails,
+            });
         }
     }
 
     try {
-        await Promise.all(promises);
+        await addManyToSearchIndex(pendingEntries);
     } catch (error) {
         console.error(
             `${LOG_PREFIX_USI_ITEM} Ошибка при массовом добавлении токенов для ${storeName} ID: ${indexableId}:`,
@@ -3502,6 +3736,23 @@ async function processSearchResults(
             result.highlightTerm = normalizedQuery;
             result.query = originalQuery;
 
+            // Алгоритм: показать совпавший шаг, а не первый шаг алгоритма.
+            if (
+                (result.type === 'main' || result.type === 'algorithm') &&
+                Array.isArray(group.itemData?.steps)
+            ) {
+                const stepMatch = findBestMatchingStep(group.itemData.steps, originalQuery);
+                if (stepMatch) {
+                    result.stepIndex = stepMatch.index;
+                    result.stepLabel = formatStepLabel(stepMatch);
+                    const prefix =
+                        result.type === 'algorithm' && /^\[[^\]]+\] /.test(result.description || '')
+                            ? (result.description.match(/^\[[^\]]+\] /) || [''])[0]
+                            : '';
+                    result.description = `${prefix}${result.stepLabel}${stepMatch.snippet ? ` — ${stepMatch.snippet}` : ''}`;
+                }
+            }
+
             const lowerOriginalQuery = originalQuery.toLowerCase();
 
             if (
@@ -4013,6 +4264,26 @@ export function renderSearchResults(results, query) {
                 iconClass = 'fa-file-invoice';
                 typeText = 'Шаблоны';
                 break;
+            case 'clientAnalyticsRecord':
+                iconClass = 'fa-address-card';
+                typeText = 'База клиентов';
+                break;
+            case 'blacklistedClient':
+                iconClass = 'fa-user-secret';
+                typeText = 'Чёрный список';
+                break;
+            case 'extLinkCategory':
+                iconClass = 'fa-folder';
+                typeText = 'Категория ресурсов';
+                break;
+            case 'preference':
+                iconClass = 'fa-cog';
+                typeText = 'Настройки';
+                break;
+            default:
+                // Технические имена хранилищ пользователю не показываем.
+                if (/^[a-z]+[A-Z]/.test(typeText)) typeText = 'Запись';
+                break;
         }
 
         const titleContainer = document.createElement('div');
@@ -4191,6 +4462,16 @@ export async function handleSearchResultClick(result) {
             case 'main': {
                 const algoId = result.type === 'main' ? 'main' : result.id;
                 const algoSection = result.section;
+                const targetStep = Number.isInteger(result.stepIndex) ? result.stepIndex : null;
+                // Главный алгоритм открыт на главной вкладке: ведём прямо к шагу.
+                if (algoId === 'main' && targetStep !== null) {
+                    const found = await tryScrollAndHighlight(
+                        'main',
+                        `#mainAlgorithm .algorithm-step[data-step-index="${targetStep}"]`,
+                        result.highlightTerm || result.title,
+                    );
+                    if (found?.elementFound) break;
+                }
                 if (algoId !== 'main') {
                     await tryScrollAndHighlight(
                         algoSection,
@@ -4202,7 +4483,20 @@ export async function handleSearchResultClick(result) {
                     algoId === 'main'
                         ? algorithms?.main
                         : algorithms?.[algoSection]?.find((a) => String(a.id) === String(algoId));
-                if (algoData && showAlgorithmDetail) showAlgorithmDetail(algoData, algoSection);
+                if (algoData && showAlgorithmDetail) {
+                    await showAlgorithmDetail(algoData, algoSection);
+                    if (targetStep !== null) {
+                        setTimeout(() => {
+                            const stepEl = document.querySelector(
+                                `#algorithmSteps [data-step-index="${targetStep}"]`,
+                            );
+                            if (stepEl) {
+                                stepEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                highlightElement?.(stepEl, result.highlightTerm || result.title);
+                            }
+                        }, 260);
+                    }
+                }
                 break;
             }
             case 'bookmark':
@@ -4528,6 +4822,7 @@ export function initSearchSystem() {
     });
 
     searchInput.addEventListener('input', handleInput);
+    attachSearchResultsKeyboard(searchInput, searchResultsContainer);
 
     searchInput.addEventListener('keydown', async (event) => {
         if (event.key !== 'Enter') return;
@@ -4566,12 +4861,7 @@ export function initSearchSystem() {
         }
     }
 
-    document.addEventListener('keydown', (event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
-            event.preventDefault();
-            if (searchInput) searchInput.focus();
-        }
-    });
+    // Ctrl/Cmd+K обрабатывает палитра команд (hotkeys-handler.js); фокус в поиск — Alt+F.
 
     console.log(
         '[initSearchSystem] Search system initialized (v5.2 - query variable fix verified, Esc handler removed).',

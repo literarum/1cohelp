@@ -6,6 +6,7 @@
  */
 
 import { State } from '../app/state.js';
+import { localFileTimestamp } from '../utils/datetime.js';
 import {
     initDB,
     saveToIndexedDB,
@@ -2523,7 +2524,7 @@ export async function exportAllData(options = {}) {
         }
 
         const now = new Date();
-        const timestamp = now.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+        const timestamp = localFileTimestamp(now);
         const exportFileName = `${
             isForcedBackupMode ? '1C_Support_Guide_Backup_' : '1C_Support_Guide_Export_'
         }${timestamp}.json`;

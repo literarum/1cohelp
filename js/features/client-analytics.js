@@ -25,7 +25,7 @@ import {
     yieldToMain,
 } from '../db/indexeddb.js';
 import { createVirtualGrid, decorateCardForView } from '../utils/virtual-grid.js';
-import { parseTxtIntoRecords } from './client-analytics-parse.js';
+import { parseTxtIntoRecords, formatRussianPhoneForDisplay } from './client-analytics-parse.js';
 import {
     BOOKMARK_CARD_ICON_BUTTON_CLASS,
     BOOKMARK_LIST_ROW_ICON_BUTTON_CLASS,
@@ -1495,7 +1495,9 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null) 
             : bl > 0
               ? frogBlacklistBadgeHtml(bl)
               : '';
-    const phones = (rec.phones || []).length ? escapeHtml(rec.phones.join(', ')) : '—';
+    const phones = (rec.phones || []).length
+        ? escapeHtml(rec.phones.map(formatRussianPhoneForDisplay).join(', '))
+        : '—';
     const emails = (rec.emails || []).length ? escapeHtml(rec.emails.join(', ')) : '—';
     const q = escapeHtml((rec.question || '').slice(0, 280));
     const fn = escapeHtml(rec.sourceFileName || '');
@@ -1623,7 +1625,9 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
     const uniq = (key) => [...new Set(stack.records.flatMap((r) => (r && Array.isArray(r[key]) ? r[key] : [])))];
     const allPhones = uniq('phones');
     const allEmails = uniq('emails');
-    const phones = allPhones.length ? escapeHtml(allPhones.join(', ')) : '—';
+    const phones = allPhones.length
+        ? escapeHtml(allPhones.map(formatRussianPhoneForDisplay).join(', '))
+        : '—';
     const emails = allEmails.length ? escapeHtml(allEmails.join(', ')) : '—';
     const q = escapeHtml((rec.question || '').slice(0, 280));
     const fn = escapeHtml(rec.sourceFileName || '');
@@ -2129,7 +2133,9 @@ export async function showClientAnalyticsInnHistoryModal(innKey) {
             const q = escapeHtml((rec.question || '—').slice(0, 2000));
             const fn = escapeHtml(rec.sourceFileName || '—');
             const item = rec.listItemIndex != null ? escapeHtml(String(rec.listItemIndex)) : '—';
-            const phones = escapeHtml((rec.phones || []).join(', ') || '—');
+            const phones = escapeHtml(
+                (rec.phones || []).map(formatRussianPhoneForDisplay).join(', ') || '—',
+            );
             const emails = escapeHtml((rec.emails || []).join(', ') || '—');
             const kpp = escapeHtml(rec.kpp || '—');
             return `

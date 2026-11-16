@@ -112,7 +112,9 @@ export function applyPreviewSettingsCoalesced(settings) {
             coalescedResolve = null;
             const next = coalescedPending;
             coalescedPending = null;
-            Promise.resolve(applyPreviewSettings(next.settings, { preview: next.preview })).finally(resolve);
+            Promise.resolve(
+                applyPreviewSettings(next.settings, { preview: next.preview, fromCoalescedFrame: true }),
+            ).finally(resolve);
         };
         coalescedRaf =
             typeof requestAnimationFrame === 'function'
@@ -176,6 +178,9 @@ export async function applyPreviewSettings(settings, options = {}) {
     if (typeof settings !== 'object' || settings === null) {
         settings = JSON.parse(JSON.stringify(DEFAULT_UI_SETTINGS));
     }
+    // Последний пишущий побеждает: прямое применение отменяет отложенный кадр со старым снимком
+    // (иначе, например, «Вернуть стандартные цвета» перетиралось кадром пипетки).
+    if (!options.fromCoalescedFrame) cancelPreviewSettingsFrame();
     const root = document.documentElement;
     const { style } = root;
     const body = document.body;

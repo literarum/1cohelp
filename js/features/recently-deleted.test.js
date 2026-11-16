@@ -253,3 +253,21 @@ describe('recently-deleted', () => {
         expect(performDBOperation).toHaveBeenCalled();
     });
 });
+
+import { selectRecentlyDeletedToPurge } from './recently-deleted.js';
+describe('автоочистка корзины', () => {
+    it('удаляет старше срока и сверх лимита, начиная со старых', () => {
+        const now = Date.parse('2026-11-16T00:00:00Z');
+        const day = 86400000;
+        const entries = [
+            { id: 1, deletedAt: new Date(now - 40 * day).toISOString() },
+            { id: 2, deletedAt: new Date(now - 1 * day).toISOString() },
+            { id: 3, deletedAt: new Date(now - 2 * day).toISOString() },
+            { id: 4, deletedAt: new Date(now - 3 * day).toISOString() },
+            { id: 5 },
+        ];
+        expect(selectRecentlyDeletedToPurge(entries, { now }).sort()).toEqual([1, 5]);
+        expect(selectRecentlyDeletedToPurge(entries, { now, maxEntries: 2 }).sort()).toEqual([1, 4, 5]);
+        expect(selectRecentlyDeletedToPurge([], { now })).toEqual([]);
+    });
+});

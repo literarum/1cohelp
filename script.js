@@ -9,10 +9,29 @@ import { initAppearanceProfile } from './js/ui/appearance-profile.js';
 import { initCustomizationStudio } from './js/ui/customization-studio.js';
 import { initModalChoreographer } from './js/ui/modal-choreographer.js';
 import { initFormModalAutoEnhance } from './js/ui/form-modal-autoenhance.js';
+import { initA11yKeyboard } from './js/ui/a11y-keyboard.js';
+import { initThemeColorMeta } from './js/ui/theme-color-meta.js';
+try {
+    initA11yKeyboard();
+} catch (e) {
+    console.warn('[a11y-keyboard] init failed', e);
+}
+(function bootThemeColorMeta() {
+    const run = () => {
+        try {
+            initThemeColorMeta();
+        } catch (e) {
+            console.warn('[theme-color-meta] init failed', e);
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
+window.openStorageOverview = () =>
+    import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
 window.openRequisitesCheck = (text) =>
     import('./js/features/requisites-check.js').then((m) => m.openRequisitesCheck(text));
-window.openVatCalc = () => import('./js/features/vat-calc-ui.js').then((m) => m.openVatCalc());
 try {
     initFontSettings();
 } catch (e) {
@@ -1174,7 +1193,7 @@ let algorithms = {
     webReg: [],
 };
 
-// loadingOverlayManager теперь импортируется из js/ui/loading-overlay-manager.js
+// loadingOverlayManager импортируется из js/features/loading-overlay/index.js
 
 // Устанавливаем loadingOverlayManager для ExportService
 setLoadingOverlayManager(loadingOverlayManager);
@@ -1760,11 +1779,16 @@ setOnloadHandlerDependencies({
             document.addEventListener('copilot1co:tabShown', onTabShown);
         },
         () => {
-            setTimeout(() => {
-                if (shouldShowOnboardingAfterInit()) {
-                    void promptAndStartOnboardingTour();
-                }
-            }, 400);
+            // Предложение тура — только после окончания анимации загрузки, а не поверх взрыва.
+            Promise.resolve(loadingOverlayManager.whenHidden?.())
+                .catch(() => {})
+                .then(() => {
+                    setTimeout(() => {
+                        if (shouldShowOnboardingAfterInit()) {
+                            void promptAndStartOnboardingTour();
+                        }
+                    }, 600);
+                });
         },
     ],
 });

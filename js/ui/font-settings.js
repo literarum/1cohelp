@@ -123,16 +123,22 @@ function buildSection(state, onChange) {
             <code>INN 7707083893 · КПП 770701 · &lt;Файл&gt;…&lt;/Файл&gt;</code>
         </div>
         <button type="button" class="fs-reset" data-fs-reset>Сбросить шрифты</button>`;
-    sec.addEventListener('input', (e) => {
+    // Слушаем и input, и change: часть источников (кастомные списки, клавиатура, автотесты)
+    // сообщает только одно из событий. Повтор с тем же значением игнорируется.
+    const onFieldChange = (e) => {
         const key = e.target.getAttribute && e.target.getAttribute('data-fs');
         if (!key) return;
         const next = { ...state };
         next[key] = e.target.type === 'range' ? Number(e.target.value) : e.target.value;
-        Object.assign(state, sanitizeFontSettings(next));
+        const sanitized = sanitizeFontSettings(next);
+        if (sanitized[key] === state[key]) return;
+        Object.assign(state, sanitized);
         const out = sec.querySelector(`[data-fs-out="${key}"]`);
         if (out) out.textContent = state[key] + '%';
         onChange(state);
-    });
+    };
+    sec.addEventListener('input', onFieldChange);
+    sec.addEventListener('change', onFieldChange);
     sec.querySelector('[data-fs-reset]').addEventListener('click', () => {
         Object.assign(state, FONT_DEFAULTS);
         sec.querySelectorAll('[data-fs]').forEach((el) => {

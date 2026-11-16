@@ -154,3 +154,13 @@ describe('client-analytics-parse', () => {
         expect(rows[0].emails).toContain('client@firma.ru');
     });
 });
+
+import { formatRussianPhoneForDisplay } from './client-analytics-parse.js';
+describe('formatRussianPhoneForDisplay', () => {
+    it('форматирует 11 цифр и не трогает прочее', () => {
+        expect(formatRussianPhoneForDisplay('79031234567')).toBe('+7 (903) 123-45-67');
+        expect(formatRussianPhoneForDisplay('89031234567')).toBe('+7 (903) 123-45-67');
+        expect(formatRussianPhoneForDisplay('12345')).toBe('12345');
+        expect(formatRussianPhoneForDisplay(null)).toBe('');
+    });
+});

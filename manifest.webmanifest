@@ -10,7 +10,10 @@
     "orientation": "any",
     "background_color": "#12121f",
     "theme_color": "#12121f",
-    "categories": ["productivity", "utilities"],
+    "categories": [
+        "productivity",
+        "utilities"
+    ],
     "icons": [
         {
             "src": "icons/icon-48.png",
@@ -89,6 +92,68 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Главная и заметки по обращению",
+            "short_name": "Главная",
+            "url": "./index.html?tab=main",
+            "icons": [
+                {
+                    "src": "icons/icon-96.png",
+                    "sizes": "96x96",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Поиск по базе",
+            "short_name": "Поиск",
+            "url": "./index.html?action=search",
+            "icons": [
+                {
+                    "src": "icons/icon-96.png",
+                    "sizes": "96x96",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Закладки",
+            "short_name": "Закладки",
+            "url": "./index.html?tab=bookmarks",
+            "icons": [
+                {
+                    "src": "icons/icon-96.png",
+                    "sizes": "96x96",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Регламенты",
+            "short_name": "Регламенты",
+            "url": "./index.html?tab=reglaments",
+            "icons": [
+                {
+                    "src": "icons/icon-96.png",
+                    "sizes": "96x96",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Анализатор XML",
+            "short_name": "XML",
+            "url": "./index.html?tab=xmlAnalyzer",
+            "icons": [
+                {
+                    "src": "icons/icon-96.png",
+                    "sizes": "96x96",
+                    "type": "image/png"
+                }
+            ]
         }
     ]
 }

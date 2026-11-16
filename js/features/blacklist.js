@@ -6,6 +6,7 @@
  */
 
 import { State } from '../app/state.js';
+import { localFileTimestamp } from '../utils/datetime.js';
 import { wrapMatchesEscaped } from '../utils/html.js';
 
 /** Нижний регистр + ё→е (поиск без учёта ё/е) */
@@ -626,7 +627,7 @@ export async function exportBlacklistToExcel() {
         addSheet(grouped[2], 'Средний (уровень 2)');
         addSheet(grouped[3], 'Высокий (уровень 3)');
 
-        const ts = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+        const ts = localFileTimestamp(new Date());
         XLSX.writeFile(wb, `Черный_список_жаб_${ts}.xlsx`);
         deps.showNotification?.('Экспорт в Excel выполнен.', 'success');
     } catch (err) {
