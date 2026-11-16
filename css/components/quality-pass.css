@@ -153,3 +153,99 @@ td.num {
     -webkit-line-clamp: 2;
     line-clamp: 2;
 }
+
+/* Предупреждение о неверном ИНН под заметками. */
+.notes-inn-warn {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #b45309;
+}
+html.dark .notes-inn-warn {
+    color: #fbbf24;
+}
+.notes-inn-warn i {
+    margin-right: 0.25rem;
+}
+
+/* Чек-лист главного алгоритма. */
+#mainAlgorithm .algorithm-step {
+    position: relative;
+}
+.mc-toggle {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    border: 1.5px solid color-mix(in srgb, var(--color-text-primary, #111) 30%, transparent);
+    background: transparent;
+    color: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+#mainAlgorithm .algorithm-step:hover .mc-toggle,
+.mc-toggle:focus-visible,
+.mc-toggle[aria-pressed='true'] {
+    opacity: 1;
+}
+.mc-toggle:hover {
+    border-color: #22c55e;
+    color: #22c55e;
+}
+.mc-toggle[aria-pressed='true'] {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+}
+#mainAlgorithm .algorithm-step.mc-done > *:not(.mc-toggle) {
+    opacity: 0.55;
+}
+.mc-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 0.5rem;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+.mc-track {
+    flex: 1 1 auto;
+    height: 3px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--color-text-primary, #111) 12%, transparent);
+    overflow: hidden;
+}
+.mc-track span {
+    display: block;
+    height: 100%;
+    background: #16a34a;
+    transition: width 200ms ease;
+}
+.mc-reset {
+    background: none;
+    border: 0;
+    color: var(--color-primary, #9933ff);
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+@media (hover: none) {
+    .mc-toggle {
+        opacity: 1;
+    }
+}
+
+.mc-bar[hidden] {
+    display: none;
+}
+#mainAlgorithm .algorithm-step .mc-toggle[aria-pressed='true'],
+#mainAlgorithm .algorithm-step:hover .mc-toggle,
+#mainAlgorithm .algorithm-step .mc-toggle:focus-visible {
+    opacity: 1 !important;
+}

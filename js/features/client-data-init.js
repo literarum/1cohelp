@@ -449,6 +449,15 @@ export async function initClientDataSystem() {
         initTextareaHeightsPersistence();
     }
 
+    import('./appeal-archive.js')
+        .then((m) => m.initAppealArchiveButtons())
+        .catch((e) => console.warn('[appeal-archive] init failed', e));
+    import('./main-checklist.js')
+        .then((m) => m.initMainChecklist())
+        .catch((e) => console.warn('[main-checklist] init failed', e));
+    import('./notes-inn-check.js')
+        .then((m) => m.initNotesInnCheck())
+        .catch((e) => console.warn('[notes-inn-check] init failed', e));
     console.log(`${LOG_PREFIX} Инициализация системы данных клиента полностью завершена.`);
     try {
         const visibleModals = typeof getVisibleModals === 'function' ? getVisibleModals() : [];

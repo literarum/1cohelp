@@ -148,6 +148,22 @@ const MODAL_REGISTRY = [
         run: () => tryWindowFn('openStorageOverview'),
     },
     {
+        key: 'appealArchive',
+        label: 'Архив обращений',
+        subtitle: 'Прошлые заметки «Информация по обращению»: поиск по ИНН и тексту, возврат в поле',
+        score: 0.93,
+        keywords: ['архив', 'обращен', 'история', 'прошл', 'заметк', 'звонк', 'инн'],
+        run: () => tryWindowFn('openAppealArchive'),
+    },
+    {
+        key: 'newAppeal',
+        label: 'Новое обращение',
+        subtitle: 'Отправить текущие заметки в архив и очистить поле (Alt+Shift+N)',
+        score: 0.92,
+        keywords: ['новое', 'обращен', 'звонок', 'очист', 'архив', 'следующ'],
+        run: () => tryWindowFn('startNewAppeal'),
+    },
+    {
         key: 'encryptedExport',
         label: 'Экспорт базы с паролем',
         subtitle: 'Сжатая зашифрованная копия (AES-256): ИНН и заметки не читаются без пароля',

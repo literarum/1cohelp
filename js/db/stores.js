@@ -173,6 +173,12 @@ export const storeConfigs = [
         indexes: [{ name: 'sortOrder', keyPath: 'sortOrder', options: { unique: false } }],
     },
     {
+        // Архив обращений: прошлые заметки «Информация по обращению» (DB v23).
+        name: 'appealArchive',
+        options: { keyPath: 'id', autoIncrement: true },
+        indexes: [{ name: 'archivedAt', keyPath: 'archivedAt', options: { unique: false } }],
+    },
+    {
         name: 'clientAnalyticsCardMeta',
         options: { keyPath: 'id' },
         indexes: [{ name: 'folderId', keyPath: 'folderId', options: { unique: false } }],
