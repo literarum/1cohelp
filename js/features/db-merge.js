@@ -12,6 +12,7 @@
  */
 
 import { createMergeWorkspace } from './db-merge-transaction.js';
+import { localFileTimestamp } from '../utils/datetime.js';
 import { State } from '../app/state.js';
 import { CURRENT_SCHEMA_VERSION } from '../constants.js';
 import { storeConfigs as currentStoreConfigs } from '../db/stores.js';
@@ -3055,7 +3056,7 @@ export function openDbMergeModal() {
                                 );
                                 const a = document.createElement('a');
                                 a.href = url;
-                                a.download = `merge-report-${new Date().toISOString().slice(0, 10)}.txt`;
+                                a.download = `merge-report-${localFileTimestamp(new Date())}.txt`;
                                 document.body.appendChild(a);
                                 a.click();
                                 a.remove();

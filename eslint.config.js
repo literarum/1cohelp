@@ -9,7 +9,7 @@ export default [
         ignores: ['vendor/**', 'node_modules/**', 'css/**', 'downloads/**', 'files/**'],
     },
     {
-        files: ['**/*.js'],
+        files: ['**/*.js', '**/*.mjs'],
         languageOptions: {
             ecmaVersion: 2024,
             sourceType: 'module',
@@ -57,7 +57,7 @@ export default [
         },
     },
     {
-        files: ['**/*.test.js', 'vitest.config.js', 'eslint.config.js'],
+        files: ['**/*.test.js', 'vitest.config.js', 'eslint.config.js', 'scripts/**/*.mjs'],
         languageOptions: { globals: { ...globals.node, ...globals.vitest } },
     },
 ];

@@ -11,6 +11,7 @@
  */
 
 import { sanitizeUserPreferences } from '../app/user-preferences-sanitize.js';
+import { localFileTimestamp } from '../utils/datetime.js';
 import { sanitizeFontSettings, FONT_DEFAULTS, loadFontSettings, saveFontSettings } from './font-settings.js';
 
 export const PROFILE_FORMAT = 'copilot-appearance';
@@ -203,7 +204,7 @@ function buildSection() {
             if (act === 'export') {
                 const { State } = await getDeps();
                 const profile = buildAppearanceProfile(State.currentPreviewSettings || State.userPreferences || {}, loadFontSettings());
-                download(`copilot-appearance-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(profile, null, 2));
+                download(`copilot-appearance-${localFileTimestamp(new Date(), { seconds: false }).slice(0, 10)}.json`, JSON.stringify(profile, null, 2));
             } else if (act === 'import') {
                 sec.querySelector('[data-ap-file]').click();
             } else if (act === 'reset') {

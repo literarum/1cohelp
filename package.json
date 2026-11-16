@@ -7,7 +7,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "npx --yes http-server -p 8080 -c-1 .",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "bump": "node scripts/bump-version.mjs",
+    "check:version": "node scripts/bump-version.mjs --check",
+    "check": "npm run lint && npm run check:version && npm test"
   },
   "devDependencies": {
     "axe-core": "^4.14.1",
