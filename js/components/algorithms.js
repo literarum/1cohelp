@@ -51,6 +51,12 @@ export function setAlgorithmsDependencies(deps) {
 /**
  * Рендерит карточки алгоритмов для секции
  */
+const safeEscapeForEmpty = (text) =>
+    String(text ?? '').replace(
+        /[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+    );
+
 export async function renderAlgorithmCards(section) {
     if (!algorithms) {
         console.error('[renderAlgorithmCards] algorithms не инициализирован');
@@ -69,9 +75,22 @@ export async function renderAlgorithmCards(section) {
     }
     container.innerHTML = '';
 
-    if (!sectionAlgorithms || !Array.isArray(sectionAlgorithms) || sectionAlgorithms.length === 0) {
+    const hasAlgorithms = Array.isArray(sectionAlgorithms) && sectionAlgorithms.length > 0;
+    // Экспорт в PDF пустого раздела бессмыслен: кнопка неактивна, пока нет алгоритмов.
+    document.querySelectorAll(`[data-algorithm-export="${containerId}"]`).forEach((btn) => {
+        btn.disabled = !hasAlgorithms;
+        btn.title = hasAlgorithms ? '' : 'В разделе пока нет алгоритмов';
+        btn.classList.toggle('opacity-50', !hasAlgorithms);
+        btn.classList.toggle('cursor-not-allowed', !hasAlgorithms);
+    });
+
+    if (!hasAlgorithms) {
         const sectionName = getSectionName(section) || `Раздел ${section}`;
-        container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center col-span-full mb-2">В разделе "${sectionName}" пока нет алгоритмов.</p>`;
+        container.innerHTML = `<div class="col-span-full text-center py-6 text-gray-500 dark:text-gray-400">
+            <i class="fas fa-folder-open text-3xl opacity-40 mb-2" aria-hidden="true"></i>
+            <p class="mb-1">В разделе «${safeEscapeForEmpty(sectionName)}» пока нет алгоритмов.</p>
+            <p class="text-sm opacity-80">Нажмите «Добавить», чтобы создать первый алгоритм.</p>
+        </div>`;
         if (typeof applyCurrentView === 'function') applyCurrentView(containerId);
         return;
     }
