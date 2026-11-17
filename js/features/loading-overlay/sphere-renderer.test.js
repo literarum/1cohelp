@@ -7,6 +7,7 @@ import {
     computeBudget,
     createRng,
     COSMIC_PALETTE_DARK,
+    IMPLODE_END,
 } from './sphere-renderer.js';
 
 /** Контекст-заглушка: любой метод — шпион, любые свойства принимаются. */
@@ -14,6 +15,7 @@ function fakeContext() {
     const calls = { drawImage: 0, arc: 0 };
     const target = {
         createRadialGradient: () => ({ addColorStop: () => {} }),
+        createLinearGradient: () => ({ addColorStop: () => {} }),
         drawImage: () => {
             calls.drawImage += 1;
         },
@@ -94,14 +96,26 @@ describe('cosmic loading renderer', () => {
 
     it('фазы финала: сжатие → вспышка → разлёт → затухание', () => {
         expect(exitPhases(0)).toEqual({ implode: 0, flash: 0, burst: 0, fade: 0 });
-        const mid = exitPhases(0.3);
+        const mid = exitPhases(IMPLODE_END + 1e-6);
         expect(mid.implode).toBeCloseTo(1);
         expect(mid.flash).toBeCloseTo(1);
-        expect(mid.burst).toBe(0);
+        expect(mid.burst).toBeLessThan(0.001);
         const late = exitPhases(0.8);
         expect(late.burst).toBeGreaterThan(0.9);
         expect(late.flash).toBe(0);
         expect(exitPhases(1).fade).toBe(1);
+    });
+
+    it('renderAt рисует все стадии (появление, покой, сжатие, вспышка, разлёт) в обеих темах', () => {
+        renderer.start();
+        for (const theme of ['dark', 'light']) {
+            renderer.setTheme(theme);
+            for (const [t, e] of [[0.2, null], [5, null], [6, 0.15], [6, 0.29], [6, 0.45], [6, 0.8], [6, 1]]) {
+                const before = fake.calls.drawImage;
+                expect(() => renderer.renderAt(t, e)).not.toThrow();
+                expect(fake.calls.drawImage).toBeGreaterThan(before);
+            }
+        }
     });
 
     it('бюджет частиц масштабируется под экран и устройство, но не ниже порога', () => {
