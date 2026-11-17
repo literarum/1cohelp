@@ -460,6 +460,8 @@ export async function initClientDataSystem() {
         .catch((e) => console.warn('[notes-snippets] init failed', e));
     import('./notes-inn-check.js')
         .then((m) => m.initNotesInnCheck())
+        .then(() => import('./notes-inn-context.js'))
+        .then((m) => m.initNotesInnContext())
         .catch((e) => console.warn('[notes-inn-check] init failed', e));
     console.log(`${LOG_PREFIX} Инициализация системы данных клиента полностью завершена.`);
     try {

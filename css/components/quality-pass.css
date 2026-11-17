@@ -445,3 +445,27 @@ div:has(> #clientNotes) {
     padding: 0.4rem 0.55rem;
     font-size: 0.8rem;
 }
+
+/* Контекст по ИНН под заметками. */
+.notes-inn-ctx {
+    margin-top: 0.3rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--color-text-secondary, #6b7280);
+}
+.notes-inn-ctx .is-blacklisted {
+    color: #dc2626;
+    font-weight: 600;
+}
+html.dark .notes-inn-ctx .is-blacklisted {
+    color: #f87171;
+}
+.notes-inn-ctx__open {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--color-primary, #9933ff);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: inherit;
+}
