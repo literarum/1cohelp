@@ -368,3 +368,8 @@ html.app-locked #notification-container {
     cursor: pointer;
     text-decoration: underline;
 }
+
+/* Открытый список поиска важнее уведомлений: они уходят под него. */
+html.search-results-open #notification-container {
+    z-index: 10040 !important;
+}

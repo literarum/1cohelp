@@ -126,3 +126,13 @@ describe('Google Docs outage containment and recovery', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 });
+
+import { shouldShowOutageCard, QUIET_AFTER_FAILED_SESSIONS } from './google-docs.js';
+describe('Google Docs: тихий режим после повторяющихся неудач', () => {
+    it('первые запуски — карточка, после порога — только по ручному запросу', () => {
+        expect(shouldShowOutageCard(0, 'startup')).toBe(true);
+        expect(shouldShowOutageCard(QUIET_AFTER_FAILED_SESSIONS - 1, 'startup')).toBe(true);
+        expect(shouldShowOutageCard(QUIET_AFTER_FAILED_SESSIONS, 'startup')).toBe(false);
+        expect(shouldShowOutageCard(10, 'manual')).toBe(true);
+    });
+});

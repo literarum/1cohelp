@@ -1054,7 +1054,22 @@ export async function deleteAlgorithm(algorithmId, section) {
                 new Promise((resolve, reject) => {
                     console.log('[TX Delete] Запрос на запись снимка в recentlyDeleted.');
                     const putTrash = recentlyDeletedStore.put(recentlyDeletedRecord);
-                    putTrash.onsuccess = () => resolve();
+                    putTrash.onsuccess = () => {
+                        try {
+                            document.dispatchEvent(
+                                new CustomEvent('copilot1co:entity-trashed', {
+                                    detail: {
+                                        entryId: putTrash.result,
+                                        storeName: 'algorithms',
+                                        entityId: String(recentlyDeletedRecord.entityId),
+                                    },
+                                }),
+                            );
+                        } catch {
+                            /* ignore */
+                        }
+                        resolve();
+                    };
                     putTrash.onerror = (e) => {
                         console.error(
                             '[TX Delete] Ошибка записи в recentlyDeleted:',

@@ -4,7 +4,7 @@
 // BOOKMARKS DELETE (вынос из script.js)
 // ============================================================================
 
-import { buildRecentlyDeletedRecord } from './recently-deleted.js';
+import { buildRecentlyDeletedRecord, emitTrashed } from './recently-deleted.js';
 import { RECENTLY_DELETED_STORE_NAME } from '../constants.js';
 
 let State = null;
@@ -114,6 +114,7 @@ export async function deleteBookmark(id) {
                 new Promise((resolve, reject) => {
                     const req = recentlyDeletedStore.add(recentlyDeletedRecord);
                     req.onsuccess = () => {
+                        emitTrashed({ entryId: req.result, storeName: 'bookmarks', entityId: String(numericId) });
                         console.log(
                             `[deleteBookmark] Снимок закладки ${numericId} записан в recentlyDeleted (одна транзакция).`,
                         );

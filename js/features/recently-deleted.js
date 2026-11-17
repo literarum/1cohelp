@@ -335,7 +335,18 @@ export async function addRecentlyDeletedRecord({
         reason,
     });
     if (!record) return null;
-    return saveToIndexedDB(RECENTLY_DELETED_STORE_NAME, record);
+    const entryId = await saveToIndexedDB(RECENTLY_DELETED_STORE_NAME, record);
+    emitTrashed({ entryId, storeName, entityId: String(entityId) });
+    return entryId;
+}
+
+/** Сообщить об отправке записи в корзину (для «Удалено. Вернуть»). */
+export function emitTrashed(detail) {
+    try {
+        document.dispatchEvent(new CustomEvent('copilot1co:entity-trashed', { detail }));
+    } catch {
+        /* ignore */
+    }
 }
 
 let recentlyDeletedDedupeAnonSeq = 0;
@@ -673,14 +684,137 @@ export async function purgeRecentlyDeleted(opts = {}) {
     return ids.length;
 }
 
+/** Подпись для уведомления «Удалено. Вернуть» (экспорт для тестов). */
+export function describeTrashedBatch(titles) {
+    if (titles.length === 1) return `Удалено: «${titles[0]}».`;
+    return `Удалено записей: ${titles.length}.`;
+}
+
+const UNDO_USER_WINDOW_MS = 4000;
+let lastUserInputAt = 0;
+let pendingTrashed = [];
+let undoFlushTimer = null;
+
+async function flushUndoToast() {
+    undoFlushTimer = null;
+    const batch = pendingTrashed;
+    pendingTrashed = [];
+    if (!batch.length) return;
+    const titles = [];
+    for (const item of batch) {
+        try {
+            titles.push(getEntryTitle(await getFromIndexedDB(RECENTLY_DELETED_STORE_NAME, item.entryId)));
+        } catch {
+            titles.push('(без названия)');
+        }
+    }
+    const NS = window.NotificationService;
+    if (!NS?.add) return;
+    NS.add(`${describeTrashedBatch(titles)} Запись в корзине — её можно вернуть.`, 'info', {
+        id: `undo-trash-${batch[0].entryId}`,
+        duration: 8000,
+        actions: [
+            {
+                label: 'Вернуть',
+                primary: true,
+                onClick: async () => {
+                    let restored = 0;
+                    for (const item of batch) {
+                        try {
+                            await restoreRecentlyDeletedRecord(item.entryId);
+                            restored += 1;
+                        } catch (e) {
+                            console.warn('[recently-deleted] undo failed', e);
+                        }
+                    }
+                    notify(restored === batch.length ? 'Возвращено.' : `Возвращено ${restored} из ${batch.length}.`, restored ? 'success' : 'error');
+                },
+            },
+        ],
+    });
+}
+
+/** «Удалено. Вернуть»: только для удалений, сделанных пользователем (не служебных). */
+let undoInitialized = false;
+function initUndoToasts() {
+    if (undoInitialized) return;
+    undoInitialized = true;
+    const mark = () => {
+        lastUserInputAt = Date.now();
+    };
+    window.addEventListener('pointerdown', mark, { capture: true, passive: true });
+    window.addEventListener('keydown', mark, { capture: true, passive: true });
+    document.addEventListener('copilot1co:entity-trashed', (e) => {
+        const detail = e?.detail;
+        if (!detail || detail.entryId == null) return;
+        if (Date.now() - lastUserInputAt > UNDO_USER_WINDOW_MS) return;
+        const dup = pendingTrashed.some(
+            (x) => x.storeName === detail.storeName && x.entityId === detail.entityId,
+        );
+        if (!dup) pendingTrashed.push(detail);
+        clearTimeout(undoFlushTimer);
+        undoFlushTimer = setTimeout(() => void flushUndoToast(), 450);
+    });
+}
+
+/**
+ * Ключи истории правок, чьих записей больше нет (история копилась вечно после удаления).
+ * Алгоритмы («algorithm:…») и текущие заметки не трогаем — проверить их существование по ключу
+ * хранилища нельзя, поэтому консервативно оставляем.
+ * @param {string[]} historyKeys
+ * @param {Record<string, Set<string>>} existingByStore
+ */
+export function selectOrphanHistoryKeys(historyKeys, existingByStore) {
+    const out = [];
+    for (const key of historyKeys) {
+        const k = String(key);
+        const i = k.indexOf(':');
+        if (i <= 0) continue;
+        const store = k.slice(0, i);
+        const id = k.slice(i + 1);
+        if (store === 'algorithm' || (store === 'clientData' && id === 'current')) continue;
+        const existing = existingByStore[store];
+        if (!existing) continue;
+        if (!existing.has(id)) out.push(k);
+    }
+    return out;
+}
+
+export async function purgeOrphanEditHistory() {
+    const { getAllKeysFromIndexedDB } = await import('../db/indexeddb.js');
+    const { State } = await import('../app/state.js');
+    if (!State.db?.objectStoreNames.contains('entityEditHistory')) return 0;
+    const keys = await getAllKeysFromIndexedDB('entityEditHistory');
+    const stores = new Set(
+        keys.map((k) => String(k).split(':')[0]).filter((s) => State.db.objectStoreNames.contains(s)),
+    );
+    const existingByStore = {};
+    for (const store of stores) {
+        existingByStore[store] = new Set((await getAllKeysFromIndexedDB(store)).map(String));
+    }
+    const orphans = selectOrphanHistoryKeys(keys, existingByStore);
+    if (!orphans.length) return 0;
+    await performDBOperation('entityEditHistory', 'readwrite', (store) => {
+        let last = null;
+        for (const k of orphans) last = store.delete(k);
+        return last;
+    });
+    console.info(`[recently-deleted] Очищена история правок удалённых записей: ${orphans.length}.`);
+    return orphans.length;
+}
+
 export function initRecentlyDeletedSystem() {
     if (typeof window !== 'undefined') {
+        initUndoToasts();
         window.openRecentlyDeletedModal = openRecentlyDeletedModal;
         window.closeRecentlyDeletedModal = closeRecentlyDeletedModal;
         // Не в критическом пути запуска.
         setTimeout(() => {
             purgeRecentlyDeleted().catch((e) =>
                 console.warn('[recently-deleted] автоочистка не удалась:', e),
+            );
+            purgeOrphanEditHistory().catch((e) =>
+                console.warn('[recently-deleted] очистка истории правок не удалась:', e),
             );
         }, 20000);
     }

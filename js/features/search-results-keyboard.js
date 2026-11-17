@@ -54,6 +54,8 @@ export function attachSearchResultsKeyboard(input, container) {
     const syncAria = () => {
         const items = visibleItems(container);
         input.setAttribute('aria-expanded', items.length > 0 ? 'true' : 'false');
+        // Пока список открыт, уведомления уходят под него (раньше перекрывали правый край).
+        document.documentElement.classList.toggle('search-results-open', items.length > 0);
         items.forEach((li) => {
             li.setAttribute('role', 'option');
             if (!li.hasAttribute('aria-selected')) li.setAttribute('aria-selected', 'false');
@@ -97,6 +99,7 @@ export function attachSearchResultsKeyboard(input, container) {
             container.classList.add('hidden');
             setActive(-1);
             input.setAttribute('aria-expanded', 'false');
+            document.documentElement.classList.remove('search-results-open');
         }
     };
     // capture: раньше обработчика Enter для поиска ИНН в заметках.

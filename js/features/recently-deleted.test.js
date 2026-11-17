@@ -271,3 +271,20 @@ describe('автоочистка корзины', () => {
         expect(selectRecentlyDeletedToPurge([], { now })).toEqual([]);
     });
 });
+
+import { describeTrashedBatch } from './recently-deleted.js';
+describe('«Удалено. Вернуть»', () => {
+    it('подпись для одной и нескольких записей', () => {
+        expect(describeTrashedBatch(['База знаний'])).toBe('Удалено: «База знаний».');
+        expect(describeTrashedBatch(['a', 'b', 'c'])).toBe('Удалено записей: 3.');
+    });
+});
+
+import { selectOrphanHistoryKeys } from './recently-deleted.js';
+describe('очистка истории правок удалённых записей', () => {
+    it('удаляет ключи несуществующих записей, не трогает алгоритмы и текущие заметки', () => {
+        const keys = ['bookmarks:1', 'bookmarks:2', 'algorithm:main', 'algorithm:prog1', 'clientData:current', 'links:9', 'weird'];
+        const existing = { bookmarks: new Set(['1']), links: new Set(['3']), clientData: new Set() };
+        expect(selectOrphanHistoryKeys(keys, existing)).toEqual(['bookmarks:2', 'links:9']);
+    });
+});
