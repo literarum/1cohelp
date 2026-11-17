@@ -45,6 +45,7 @@ const SHELL_PRECACHE = [
     scopedAsset(`js/entry.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset(`js/search-startup.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset('js/features/loading-overlay/sphere-renderer.js'),
+    scopedAsset('js/features/loading-overlay/overlay-settings.js'),
     scopedAsset('js/vendor-config.js'),
     scopedAsset('js/vendor-loader.js'),
     scopedAsset('manifest.webmanifest'),

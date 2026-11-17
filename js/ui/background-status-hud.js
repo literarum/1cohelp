@@ -55,7 +55,8 @@ export function initBackgroundStatusHUD() {
         if (document.getElementById('bg-status-hud-styles')) return;
         const css = `
     #bg-status-hud {
-      position: fixed; right: 16px; top: 16px; z-index: 45; /* ниже модалок (z>=50), чтобы не перекрывать диалоги */
+      /* Левый нижний угол: справа сверху HUD закрывал кнопки шапки (настройки и др.) и перехватывал клики. */
+      position: fixed; left: 16px; bottom: 16px; z-index: 45; /* ниже модалок (z>=50), чтобы не перекрывать диалоги */
       width: min(440px, calc(100vw - 32px));
       max-width: calc(100vw - 32px);
       font-family: inherit;
@@ -483,7 +484,7 @@ export function initBackgroundStatusHUD() {
         const duration = 300;
         cardsToAnimate.forEach((el) => {
             el.style.transition = `transform ${duration}ms ease-out`;
-            el.style.transform = 'translateX(calc(100% + 32px))';
+            el.style.transform = 'translateX(calc(-100% - 32px))';
         });
         let ended = 0;
         const onEnd = () => {

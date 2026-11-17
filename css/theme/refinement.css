@@ -15,9 +15,20 @@
     --palette-dark-text-secondary: #bcc0ce;
 }
 
-/* Слоган — тот же акцент, но светлее (мелкий текст на тёмном фоне был 3,77:1). */
-html.dark body header #appSlogan.text-primary {
-    color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, #ffffff) !important;
+/* Акцентные надписи шапки — читаемый вариант акцента для любого образа:
+   в тёмной теме светлее, в светлой темнее (оранжевый «Рассвета» на кремовом был 2,64:1).
+   Селекторы с .custom-background-active — у образов с собственным фоном правило было сильнее. */
+html.dark body header #appSlogan.text-primary,
+html.dark body.custom-background-active header #appSlogan.text-primary {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 58%, #ffffff) !important;
+}
+html:not(.dark) body header #appSlogan.text-primary,
+html:not(.dark) body.custom-background-active header #appSlogan.text-primary {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, #000000) !important;
+}
+html:not(.dark) body header h1.text-primary,
+html:not(.dark) body.custom-background-active header h1.text-primary {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 72%, #000000) !important;
 }
 
 /* Зелёные кнопки: emerald-600 + белый = 3,76:1 → emerald-700. */
@@ -61,7 +72,7 @@ html:not(.dark) .folder-chip {
 }
 /* Мелкий акцентный текст на светлом фоне — на тон глубже. */
 html:not(.dark) #clientAnalyticsRecordCount {
-    color: color-mix(in srgb, var(--color-primary, #9933ff) 80%, #000) !important;
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 62%, #000) !important;
 }
 
 /* ------------------------------------------------------------------ */
@@ -168,4 +179,32 @@ html.dark {
 #appContent header nav,
 #mainTabsNav {
     border-color: var(--refine-hairline) !important;
+}
+
+/* Кнопка очистки заметок: нейтральная (не акцентная). Общее правило :is(#…, button.bg-primary)
+   получает вес id и перебивало её стиль — при тёмном тексте на акценте значок сливался с фоном. */
+#clientNotesActions #clearClientDataBtn {
+    background-color: var(--color-surface-2) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-primary) !important;
+    box-shadow: none !important;
+}
+#clientNotesActions #clearClientDataBtn > * {
+    color: var(--color-text-primary) !important;
+}
+#clientNotesActions #clearClientDataBtn:hover {
+    background-color: var(--color-hover-subtle) !important;
+}
+
+/* Светлые образы: название в шапке и активная вкладка — тот же акцент, но глубже. */
+html:not(.dark) #appContent #appBrandTitle,
+html:not(.dark) #appContent #appBrandTitle .app-brand-title__suffix,
+html:not(.dark) #appContent #appBrandTitle .app-brand-title__suffix > * {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 72%, #000000) !important;
+}
+html:not(.dark) .tab-btn.tab-active,
+html:not(.dark) .tab-btn.tab-active > *,
+html:not(.dark) .tab-btn.tab-active i,
+html:not(.dark) .tab-btn.tab-active svg {
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 70%, #000000) !important;
 }

@@ -14,7 +14,11 @@
  * второго нет в Safari), аддитивное смешивание не требует сортировки по глубине,
  * число частиц масштабируется под устройство, DPR ограничен.
  */
+import { readOverlaySettings, readAccentHex, accentPalette } from './overlay-settings.js';
+
 export const SPHERE_EXIT_MS = 1900;
+/** Финал «мягкое растворение» (настройка оверлея): без вспышки и ударных волн. */
+export const FADE_EXIT_MS = 900;
 
 /** Гамма: синий → индиго → фиолетовый → пурпурный → маджента (+ холодные акценты). */
 export const COSMIC_PALETTE_DARK = [
@@ -157,17 +161,33 @@ export function createSphereRenderer(canvas) {
     let stars = [];
     let sparks = [];
 
-    const palette = () => (theme === 'light' ? COSMIC_PALETTE_LIGHT : COSMIC_PALETTE_DARK);
+    let settings = readOverlaySettings();
+    let accentCache = null;
+    const palette = () => {
+        if (settings.palette === 'accent') {
+            const hex = readAccentHex();
+            if (hex) {
+                const key = `${hex}|${theme}`;
+                if (accentCache?.key !== key) accentCache = { key, colors: accentPalette(hex, theme) };
+                return accentCache.colors;
+            }
+        }
+        return theme === 'light' ? COSMIC_PALETTE_LIGHT : COSMIC_PALETTE_DARK;
+    };
+    const exitDuration = () => (reduced ? 400 : settings.finale === 'fade' ? FADE_EXIT_MS : SPHERE_EXIT_MS);
 
     function buildSprites() {
         const pal = palette();
         sprites = pal.map((color) => makeGlowSprite(color, 64, theme !== 'light'));
         whiteSprite = makeGlowSprite('#e0e7ff', 64, true);
-        bloomSprites = [
-            makeGlowSprite(theme === 'light' ? '#a78bfa' : '#6d28d9', 256, false),
-            makeGlowSprite(theme === 'light' ? '#93c5fd' : '#1d4ed8', 256, false),
-            makeGlowSprite(theme === 'light' ? '#f0abfc' : '#be185d', 256, false),
-        ];
+        bloomSprites =
+            settings.palette === 'accent' && pal !== COSMIC_PALETTE_DARK && pal !== COSMIC_PALETTE_LIGHT
+                ? [pal[5], pal[1], pal[10]].map((c) => makeGlowSprite(c, 256, false))
+                : [
+                      makeGlowSprite(theme === 'light' ? '#a78bfa' : '#6d28d9', 256, false),
+                      makeGlowSprite(theme === 'light' ? '#93c5fd' : '#1d4ed8', 256, false),
+                      makeGlowSprite(theme === 'light' ? '#f0abfc' : '#be185d', 256, false),
+                  ];
     }
 
     /** Цвет по нормированному значению 0..1 вдоль гаммы. */
@@ -328,8 +348,13 @@ export function createSphereRenderer(canvas) {
         const e =
             exitStarted === null
                 ? 0
-                : clamp01((now - exitStarted) / (reduced ? 400 : SPHERE_EXIT_MS));
-        const ph = exitStarted === null ? { implode: 0, flash: 0, burst: 0, fade: 0 } : exitPhases(e);
+                : clamp01((now - exitStarted) / exitDuration());
+        const ph =
+            exitStarted === null
+                ? { implode: 0, flash: 0, burst: 0, fade: 0 }
+                : settings.finale === 'fade' || reduced
+                  ? { implode: 0, flash: 0, burst: 0, fade: easeInOutSine(e) }
+                  : exitPhases(e);
         // Появление: частицы «собираются» из глубины первые ~1,4 с.
         const intro = reduced ? 1 : easeOutCubic(clamp01(t / 1.4));
         const alive = 1 - ph.fade;
@@ -498,6 +523,7 @@ export function createSphereRenderer(canvas) {
         isRunning: false,
         start() {
             if (api.isRunning) return;
+            settings = readOverlaySettings();
             const motion = document.documentElement.dataset.motion;
             reduced =
                 motion === 'reduce' ||
@@ -535,7 +561,7 @@ export function createSphereRenderer(canvas) {
             }
             const base = 1_000_000;
             started = base - t * (reduced ? 4000 : 1000);
-            exitStarted = exit === null ? null : base - exit * (reduced ? 400 : SPHERE_EXIT_MS);
+            exitStarted = exit === null ? null : base - exit * exitDuration();
             draw(base);
         },
         setTheme(value) {
@@ -551,7 +577,7 @@ export function createSphereRenderer(canvas) {
             exitStarted = performance.now();
             exitPromise = new Promise((resolve) => {
                 exitResolve = resolve;
-                exitTimer = setTimeout(settleExit, reduced || !ctx ? 400 : SPHERE_EXIT_MS);
+                exitTimer = setTimeout(settleExit, !ctx ? 400 : exitDuration());
             });
             return exitPromise;
         },

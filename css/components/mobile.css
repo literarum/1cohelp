@@ -169,7 +169,9 @@ html {
     #bg-status-hud {
         left: 0.5rem !important;
         right: 0.5rem !important;
-        top: max(0.5rem, env(safe-area-inset-top)) !important;
+        top: auto !important;
+        /* над нижней навигацией мобильной оболочки */
+        bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
         width: auto !important;
         max-width: none !important;
     }

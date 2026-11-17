@@ -3553,6 +3553,25 @@
                                             <span class="ac-motion-chip" id="acMotionDemoChip">Кнопка наведения</span>
                                         </div>
                                     </div>
+                                    <div class="ac-group" id="acOverlaySettings">
+                                        <h3 class="ac-title" id="acm-overlay-heading">Анимация загрузки</h3>
+                                        <p class="ac-hint">Сохраняется сразу и действует со следующего запуска.</p>
+                                        <div class="ac-overlay-opts" role="group" aria-labelledby="acm-overlay-heading">
+                                            <fieldset><legend>Длительность</legend>
+                                                <label><input type="radio" name="overlayDuration" value="full"> Полная — не меньше 7 с</label>
+                                                <label><input type="radio" name="overlayDuration" value="quick"> Быстрая — сразу после загрузки</label>
+                                            </fieldset>
+                                            <fieldset><legend>Финал</legend>
+                                                <label><input type="radio" name="overlayFinale" value="explosion"> Взрыв</label>
+                                                <label><input type="radio" name="overlayFinale" value="fade"> Мягкое растворение</label>
+                                            </fieldset>
+                                            <fieldset><legend>Цвета</legend>
+                                                <label><input type="radio" name="overlayPalette" value="cosmic"> Космос: синий → маджента</label>
+                                                <label><input type="radio" name="overlayPalette" value="accent"> Оттенки акцентного цвета</label>
+                                            </fieldset>
+                                        </div>
+                                        <button type="button" class="ac-btn" id="acOverlayPreviewBtn"><i class="fas fa-play" aria-hidden="true"></i><span>Показать сейчас</span></button>
+                                    </div>
                                 </section>
                                 <section class="ac-pane" role="tabpanel" id="ac-pane-profiles" aria-labelledby="ac-tab-profiles" data-pane="profiles" hidden>
                                     <div data-ac-mount="profiles"></div>

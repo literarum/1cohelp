@@ -16,6 +16,14 @@ try {
 } catch (e) {
     console.warn('[a11y-keyboard] init failed', e);
 }
+(function bootOverlaySettingsUI() {
+    const run = () =>
+        import('./js/features/loading-overlay/overlay-settings-ui.js')
+            .then((m) => m.initOverlaySettingsUI())
+            .catch((e) => console.warn('[overlay-settings] init failed', e));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 (function bootThemeColorMeta() {
     const run = () => {
         try {
