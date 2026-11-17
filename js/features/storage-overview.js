@@ -9,6 +9,46 @@ import { State } from '../app/state.js';
 import { performDBOperation, countInIndexedDB } from '../db/indexeddb.js';
 import { escapeHtml } from '../utils/html.js';
 import { formatBytes, evaluateQuota, ensurePersistentStorage } from './storage-guard.js';
+import { collectAlgorithmIdsFromAlgorithmsStore } from './data-integrity-pass.js';
+import { getAllKeysFromIndexedDB, getFromIndexedDB, deleteFromIndexedDB } from '../db/indexeddb.js';
+
+/**
+ * Вложение без владельца: только для известных типов (закладка/алгоритм), когда владелец точно удалён.
+ * Неизвестные типы родителя не трогаем — консервативно.
+ */
+export function isOrphanAttachment(rec, bookmarkIds, algorithmIds) {
+    const pt = rec?.parentType;
+    const pid = rec?.parentId != null ? String(rec.parentId) : '';
+    if (pt === 'bookmark') return !bookmarkIds.has(pid);
+    if (pt === 'algorithm') return !algorithmIds.has(pid);
+    return false;
+}
+
+/** Найти вложения без владельца (курсор, без загрузки всех Blob в память). */
+export async function findOrphanAttachments() {
+    const bookmarkIds = new Set((await getAllKeysFromIndexedDB('bookmarks')).map(String));
+    const algorithmIds = collectAlgorithmIdsFromAlgorithmsStore(await getFromIndexedDB('algorithms', 'all'));
+    const out = [];
+    for (const store of ['screenshots', 'pdfFiles']) {
+        if (!State.db?.objectStoreNames.contains(store)) continue;
+        await performDBOperation(store, 'readonly', (os) =>
+            new Promise((resolve, reject) => {
+                const req = os.openCursor();
+                req.onsuccess = () => {
+                    const c = req.result;
+                    if (!c) return resolve();
+                    const v = c.value;
+                    if (isOrphanAttachment(v, bookmarkIds, algorithmIds)) {
+                        out.push({ store, id: c.primaryKey, size: Number(v?.blob?.size) || 0 });
+                    }
+                    c.continue();
+                };
+                req.onerror = () => reject(req.error);
+            }),
+        );
+    }
+    return out;
+}
 
 const MODAL_ID = 'storageOverviewModal';
 
@@ -92,7 +132,13 @@ export async function collectStorageOverview() {
     } catch {
         /* модуль не загрузился */
     }
-    return { rows, quota, persisted, autoBackup };
+    let orphans = [];
+    try {
+        orphans = await findOrphanAttachments();
+    } catch (e) {
+        console.warn('[storage-overview] orphan scan failed', e);
+    }
+    return { rows, quota, persisted, autoBackup, orphans };
 }
 
 function render(root, data) {
@@ -113,12 +159,14 @@ function render(root, data) {
             ${pct == null ? '' : `<div class="so-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Заполнено хранилище"><span style="width:${pct}%" class="${q.warn ? 'is-warn' : ''}"></span></div>`}
             <div class="so-row"><span>Постоянное хранение</span><strong class="${data.persisted ? 'so-ok' : 'so-warn'}">${data.persisted === null ? 'неизвестно' : data.persisted ? 'включено — браузер не удалит данные' : 'не включено — при нехватке места браузер может удалить данные'}</strong></div>
             <div class="so-row"><span>Автобэкап</span><strong>${escapeHtml(data.autoBackup)}</strong></div>
+            ${data.orphans?.length ? `<div class="so-row"><span>Вложения без владельца</span><strong class="so-warn">${data.orphans.length} шт., ${escapeHtml(formatBytes(data.orphans.reduce((a, o) => a + o.size, 0)))}</strong></div>` : ''}
         </section>
         <table class="so-table"><thead><tr><th>Раздел</th><th class="num">Записей</th><th class="num">Объём</th></tr></thead><tbody>${tableRows}</tbody></table>
         ${hiddenCount ? `<p class="so-note">Пустые разделы скрыты: ${hiddenCount}.</p>` : ''}
         <div class="so-actions">
             ${data.persisted ? '' : '<button type="button" class="vc-chip" data-so-action="persist">Включить постоянное хранение</button>'}
             <button type="button" class="vc-chip" data-so-action="autobackup">Настроить автобэкап</button>
+            ${data.orphans?.length ? '<button type="button" class="vc-chip" data-so-action="orphans">Удалить вложения без владельца</button>' : ''}
             <button type="button" class="vc-chip" data-so-action="export">Экспорт базы</button>
             <button type="button" class="vc-chip" data-so-action="trash">Открыть корзину</button>
         </div>`;
@@ -182,6 +230,19 @@ export async function openStorageOverview() {
             close();
             const m = await import('./auto-backup-ui.js');
             await m.openAutoBackupManager();
+        } else if (action === 'orphans') {
+            const orphans = await findOrphanAttachments();
+            const { showAppConfirm } = await import('../ui/app-confirm-modal.js');
+            const ok = await showAppConfirm({
+                title: 'Удалить вложения без владельца?',
+                message: `Скриншоты и PDF, чьи закладки или алгоритмы уже удалены: ${orphans.length} шт. PDF попадут в корзину, скриншоты удаляются без возврата.`,
+                confirmText: 'Удалить',
+                cancelText: 'Отмена',
+            });
+            if (!ok) return;
+            for (const o of orphans) await deleteFromIndexedDB(o.store, o.id);
+            window.NotificationService?.add?.(`Удалено вложений: ${orphans.length}.`, 'success', { duration: 4000 });
+            render(root, await collectStorageOverview());
         } else if (action === 'export') {
             close();
             document.getElementById('exportDataBtn')?.click();
