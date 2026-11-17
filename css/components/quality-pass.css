@@ -373,3 +373,75 @@ html.app-locked #notification-container {
 html.search-results-open #notification-container {
     z-index: 10040 !important;
 }
+
+/* Быстрые фразы: выпадающий список у поля заметок. */
+div:has(> #clientNotes) {
+    position: relative;
+}
+.ns-popup {
+    position: absolute;
+    z-index: 60;
+    left: 0.75rem;
+    top: 3.25rem;
+    width: min(22rem, calc(100% - 1.5rem));
+    max-height: 16rem;
+    overflow: auto;
+    border-radius: 0.75rem;
+    border: 1px solid var(--refine-hairline-strong, rgba(127, 127, 127, 0.3));
+    background: var(--color-surface-2, #fff);
+    color: var(--color-text-primary, #111);
+    box-shadow: 0 14px 36px -12px rgba(0, 0, 0, 0.45);
+    padding: 0.3rem;
+    font-size: 0.8rem;
+}
+.ns-item {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+.ns-item b {
+    color: var(--color-primary, #9933ff);
+    font-weight: 600;
+}
+.ns-item span {
+    opacity: 0.8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ns-item.is-active,
+.ns-item:hover {
+    background: color-mix(in srgb, var(--color-primary, #9933ff) 14%, transparent);
+}
+.ns-empty {
+    padding: 0.5rem;
+    opacity: 0.75;
+}
+.ns-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.ns-row {
+    display: grid;
+    grid-template-columns: 3.2rem 7rem 1fr 2rem;
+    grid-template-rows: auto auto;
+    gap: 0.35rem;
+    align-items: start;
+}
+.ns-row textarea {
+    grid-column: 2 / 4;
+    min-height: 2.5rem;
+}
+.ns-row .ns-num {
+    font-size: 0.7rem;
+    opacity: 0.6;
+    padding-top: 0.55rem;
+}
+.ns-row input {
+    min-height: 0;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.8rem;
+}

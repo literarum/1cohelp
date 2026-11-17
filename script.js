@@ -50,6 +50,8 @@ for (const [name, fn] of [
         window[name] = () => import('./js/features/privacy.js').then(() => window[fn]?.());
     }
 }
+window.openSnippetsEditor = () =>
+    import('./js/features/notes-snippets.js').then((m) => m.openSnippetsEditor());
 window.openStorageOverview = () =>
     import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
 window.openRequisitesCheck = (text) =>

@@ -180,6 +180,14 @@ const MODAL_REGISTRY = [
         run: () => tryWindowFn('disableAppLock'),
     },
     {
+        key: 'notesSnippets',
+        label: 'Быстрые фразы для заметок',
+        subtitle: '«/ключ» или Alt+1…9 в заметках; переменные {ИНН}, {дата}, {время}',
+        score: 0.9,
+        keywords: ['фраз', 'шаблон', 'сниппет', 'snippet', 'быстр', 'заготов', 'заметк'],
+        run: () => tryWindowFn('openSnippetsEditor'),
+    },
+    {
         key: 'appealArchive',
         label: 'Архив обращений',
         subtitle: 'Прошлые заметки «Информация по обращению»: поиск по ИНН и тексту, возврат в поле',

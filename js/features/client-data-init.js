@@ -455,6 +455,9 @@ export async function initClientDataSystem() {
     import('./main-checklist.js')
         .then((m) => m.initMainChecklist())
         .catch((e) => console.warn('[main-checklist] init failed', e));
+    import('./notes-snippets.js')
+        .then((m) => m.initNotesSnippets())
+        .catch((e) => console.warn('[notes-snippets] init failed', e));
     import('./notes-inn-check.js')
         .then((m) => m.initNotesInnCheck())
         .catch((e) => console.warn('[notes-inn-check] init failed', e));
