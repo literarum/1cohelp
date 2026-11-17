@@ -42,3 +42,33 @@ describe('context-reminders-core', () => {
         expect(intentLabel('unknown', L)).toBe('Другое');
     });
 });
+
+import { nextRepeatDue, normalizeRepeat } from './context-reminders-core.js';
+
+describe('повтор напоминаний', () => {
+    const local = (y, m, d, h = 10) => new Date(y, m - 1, d, h, 0).toISOString();
+    it('каждый день и неделю — сохраняет время, пропущенные периоды не копит', () => {
+        const due = local(2026, 11, 10);
+        const now = new Date(2026, 10, 17, 9).getTime();
+        expect(nextRepeatDue(due, 'daily', now)).toBe(local(2026, 11, 17));
+        expect(nextRepeatDue(due, 'weekly', now)).toBe(local(2026, 11, 17));
+        expect(nextRepeatDue(due, 'weekly', new Date(2026, 10, 17, 11).getTime())).toBe(local(2026, 11, 24));
+    });
+    it('по будням — пропускает выходные', () => {
+        const fri = local(2026, 11, 20); // пятница
+        expect(nextRepeatDue(fri, 'weekdays', new Date(2026, 10, 20, 11).getTime())).toBe(local(2026, 11, 23));
+    });
+    it('каждый месяц — 31-е в коротком месяце становится последним днём', () => {
+        const jan31 = local(2027, 1, 31);
+        expect(nextRepeatDue(jan31, 'monthly', new Date(2027, 0, 31, 11).getTime())).toBe(local(2027, 2, 28));
+        // с якорем: после 28 февраля — снова 31-е
+        expect(nextRepeatDue(local(2027, 2, 28), 'monthly', new Date(2027, 1, 28, 11).getTime(), 31)).toBe(
+            local(2027, 3, 31),
+        );
+    });
+    it('без повтора и мусор', () => {
+        expect(nextRepeatDue(local(2026, 1, 1), 'none')).toBeNull();
+        expect(normalizeRepeat('hourly')).toBe('none');
+        expect(nextRepeatDue('bad', 'daily')).toBeNull();
+    });
+});

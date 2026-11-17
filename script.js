@@ -24,6 +24,14 @@ try {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
     else run();
 })();
+(function bootThemeSchedule() {
+    const run = () =>
+        import('./js/components/theme.js')
+            .then((m) => m.initThemeSchedule())
+            .catch((e) => console.warn('[theme-schedule] init failed', e));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 (function bootThemeColorMeta() {
     const run = () => {
         try {

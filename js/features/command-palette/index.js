@@ -168,7 +168,10 @@ export function openCommandPalette() {
         inputHandler = () => {
             const q = inputEl.value;
             const syncResults = runSearch(q, algorithms);
-            ui.renderResults(reorderByRecent(syncResults, getRecentIds()));
+            const recentIds = getRecentIds();
+            ui.renderResults(reorderByRecent(syncResults, recentIds), {
+                recentIds: q.trim() ? [] : recentIds,
+            });
             if (!q.trim()) {
                 if (globalSearchDebounceTimer) {
                     clearTimeout(globalSearchDebounceTimer);
@@ -203,7 +206,8 @@ export function openCommandPalette() {
         inputEl.addEventListener('input', inputHandler);
     }
     const initialResults = runSearch('', algorithms);
-    ui.renderResults(reorderByRecent(initialResults, getRecentIds()));
+    const recentIds = getRecentIds();
+    ui.renderResults(reorderByRecent(initialResults, recentIds), { recentIds });
     if (keydownHandler) document.removeEventListener('keydown', keydownHandler, true);
     keydownHandler = (e) => ui.onKeydown(e);
     document.addEventListener('keydown', keydownHandler, true);

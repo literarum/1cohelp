@@ -19,7 +19,8 @@ function isAnyDialogOpen() {
 
 function visibleItems(container) {
     if (!container || container.classList.contains('hidden')) return [];
-    return Array.from(container.querySelectorAll(ITEM_SELECTOR));
+    // Пункты, скрытые фильтром по разделам, при навигации пропускаются.
+    return Array.from(container.querySelectorAll(ITEM_SELECTOR)).filter((li) => !li.hidden);
 }
 
 /**

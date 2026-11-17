@@ -1,6 +1,7 @@
 'use strict';
 
 import { TYPE_LABELS } from './constants.js';
+import { hotkeyHintFor } from './hotkey-hints.js';
 
 let modalEl = null;
 let inputEl = null;
@@ -59,7 +60,11 @@ export function getOrCreateModal() {
     return modal;
 }
 
-export function renderResults(results) {
+/**
+ * @param {Array} results
+ * @param {{ recentIds?: string[] }} [opts] при пустом запросе — заголовки «Недавние» / «Все команды»
+ */
+export function renderResults(results, opts = {}) {
     currentResults = results;
     selectedIndex = 0;
     const countEl = modalEl?.querySelector('#commandPaletteCount');
@@ -73,17 +78,30 @@ export function renderResults(results) {
             '<div class="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">Нет результатов</div>';
         return;
     }
+    const recentSet = new Set(opts.recentIds || []);
+    const firstOther = results.findIndex((r) => !recentSet.has(r.id));
+    const heading = (text) => {
+        const h = document.createElement('div');
+        h.className = 'command-palette-heading';
+        h.setAttribute('role', 'presentation');
+        h.textContent = text;
+        listEl.appendChild(h);
+    };
     results.forEach((r, i) => {
+        if (recentSet.size && i === 0 && recentSet.has(r.id)) heading('Недавние');
+        if (recentSet.size && i === firstOther && firstOther > 0) heading('Все команды');
         const row = document.createElement('div');
         row.className =
             'command-palette-item flex items-center gap-3 px-4 py-2.5 cursor-pointer border-l-2 border-transparent';
         row.dataset.index = String(i);
+        const hint = hotkeyHintFor(r.id);
         row.innerHTML = `
           <span class="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">${TYPE_LABELS[r.type] || r.type}</span>
           <div class="min-w-0 flex-1">
             <div class="font-medium text-gray-900 dark:text-gray-100 truncate">${escapeHtml(r.label)}</div>
             ${r.subtitle ? `<div class="text-sm text-gray-500 dark:text-gray-400 truncate">${escapeHtml(r.subtitle)}</div>` : ''}
           </div>
+          ${hint ? `<kbd class="command-palette-kbd" title="Горячая клавиша">${escapeHtml(hint)}</kbd>` : ''}
         `;
         row.addEventListener('mouseenter', () => {
             selectedIndex = i;

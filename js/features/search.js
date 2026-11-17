@@ -6,6 +6,8 @@
  */
 
 import { expandStemsSemantically, fixKeyboardLayout } from './smart-search.js';
+import { attachSearchFilter } from './search-filter.js';
+import { editDistance } from './search-text-utils.js';
 import { semanticGlobalSearch, invalidateGlobalSemanticCorpus } from './global-semantic.js';
 import {
     DB_VERSION,
@@ -1143,6 +1145,7 @@ function isSameSearchIndexRef(a, b) {
  */
 export async function addManyToSearchIndex(entries) {
     if (!Array.isArray(entries) || entries.length === 0) return;
+    indexVocabularyCache = null;
     invalidateGlobalSemanticCorpus();
     if (!State.db || typeof State.db.transaction !== 'function') {
         console.warn('[addManyToSearchIndex] DB not ready.');
@@ -1299,6 +1302,121 @@ export async function updateIndexByTokenDiff(storeName, id, oldItem, newItem) {
     } catch (e) {
         console.warn('[search] точечное обновление индекса не удалось, полный путь:', e);
         return false;
+    }
+}
+
+/** Разделы, где правка обновляет индекс по разнице записей, а не полным проходом по индексу. */
+export const ENTRY_DIFF_STORES = new Set([
+    'algorithms',
+    'bookmarks',
+    'links',
+    'extLinks',
+    'reglaments',
+    'blacklistedClients',
+    'bookmarkFolders',
+    'extLinkCategories',
+]);
+
+/** Ключ ссылки индекса: слово + те же поля, по которым isSameSearchIndexRef считает ссылки равными. */
+function indexEntryKey(entry) {
+    const word = normalizeWordForIndex(entry.word);
+    if (!word) return null;
+    const ref = buildSearchIndexRef(entry.type, entry.id, entry.field, entry.weight, entry.details);
+    return `${word}\u0001${ref.field}\u0001${ref.tableIndex ?? ''}\u0001${ref.rowIndex ?? ''}\u0001${ref.stepIndex ?? ''}\u0001${ref.blockIndex ?? ''}`;
+}
+
+/**
+ * Разница записей индекса «было → стало» (чистая функция, для тестов и точечного обновления).
+ * @returns {{ add: object[], remove: Map<string, object[]> }|null} remove: слово → ссылки к удалению
+ */
+export function diffIndexEntries(storeName, oldItem, newItem) {
+    const before = buildIndexEntriesForItem(storeName, oldItem);
+    const after = buildIndexEntriesForItem(storeName, newItem);
+    if (!before || !after) return null;
+    const idOf = (list) => (list.length ? String(list[0].id) : null);
+    const oldId = idOf(before);
+    const newId = idOf(after);
+    // Сменился идентификатор — разница по словам неприменима.
+    if (oldId !== null && newId !== null && oldId !== newId) return null;
+    const beforeKeys = new Map();
+    for (const e of before) {
+        const k = indexEntryKey(e);
+        if (k && !beforeKeys.has(k)) beforeKeys.set(k, e);
+    }
+    const afterKeys = new Map();
+    for (const e of after) {
+        const k = indexEntryKey(e);
+        if (k && !afterKeys.has(k)) afterKeys.set(k, e);
+    }
+    const add = [];
+    for (const [k, e] of afterKeys) if (!beforeKeys.has(k)) add.push(e);
+    const remove = new Map();
+    for (const [k, e] of beforeKeys) {
+        if (afterKeys.has(k)) continue;
+        const word = normalizeWordForIndex(e.word);
+        const ref = buildSearchIndexRef(e.type, e.id, e.field, e.weight, e.details);
+        if (!remove.has(word)) remove.set(word, []);
+        remove.get(word).push(ref);
+    }
+    return { add, remove };
+}
+
+/**
+ * Точечное обновление индекса для правки записи любого раздела из ENTRY_DIFF_STORES:
+ * затрагиваются только изменившиеся слова (раньше — проход курсором по всему индексу).
+ * @returns {Promise<boolean>} false — применить нельзя (вызывающий делает полный путь)
+ */
+export async function updateIndexByEntryDiff(storeName, oldItem, newItem) {
+    if (!State.db || !oldItem || !newItem || !ENTRY_DIFF_STORES.has(storeName)) return false;
+    const diff = diffIndexEntries(storeName, oldItem, newItem);
+    if (!diff) return false;
+    try {
+        if (diff.remove.size > 0) {
+            await new Promise((resolve, reject) => {
+                const tx = State.db.transaction('searchIndex', 'readwrite');
+                const store = tx.objectStore('searchIndex');
+                tx.oncomplete = resolve;
+                tx.onerror = (e) => reject(e.target.error);
+                tx.onabort = (e) => reject(e.target.error || new Error('Transaction aborted'));
+                for (const [word, refs] of diff.remove) {
+                    const req = store.get(word);
+                    req.onsuccess = () => {
+                        const entry = req.result;
+                        if (!entry || !Array.isArray(entry.refs)) return;
+                        const kept = entry.refs.filter(
+                            (r) =>
+                                !refs.some(
+                                    (x) =>
+                                        r.type === x.type &&
+                                        String(r.id) === x.id &&
+                                        isSameSearchIndexRef({ ...r, id: String(r.id) }, x),
+                                ),
+                        );
+                        if (kept.length === entry.refs.length) return;
+                        if (kept.length === 0) store.delete(word);
+                        else store.put({ ...entry, refs: kept });
+                    };
+                }
+            });
+        }
+        await addManyToSearchIndex(diff.add);
+        invalidateGlobalSemanticCorpus();
+        return true;
+    } catch (e) {
+        console.warn('[search] точечное обновление индекса не удалось, полный путь:', e);
+        return false;
+    }
+}
+
+/** Имя папки закладки для индекса (как его подставляет updateSearchIndex). */
+async function bookmarkFolderNameForIndex(folder) {
+    if (!folder || folder === ARCHIVE_FOLDER_ID) return undefined;
+    const id = parseInt(folder, 10);
+    if (isNaN(id)) return undefined;
+    try {
+        return (await getFromIndexedDB('bookmarkFolders', id))?.name || undefined;
+    } catch {
+        return undefined;
     }
 }
 
@@ -1659,6 +1777,7 @@ export async function updateSearchIndex(
             console.log(`${LOG_PREFIX_USI} Index entries removed for ${storeName}:${refItemId}`);
         } else if (operation === 'add' || operation === 'update') {
             let dataForIndexing = { ...newItemData };
+            let oldForIndexing = oldItemData ? { ...oldItemData } : null;
             if (dataForIndexing.id === undefined && refItemId !== undefined) {
                 dataForIndexing.id = refItemId;
             }
@@ -1683,6 +1802,29 @@ export async function updateSearchIndex(
                     console.warn(
                         `${LOG_PREFIX_USI} Could not fetch folder name for bookmark ${refItemId}: ${e.message}`,
                     );
+                }
+            }
+
+            // Точечный путь для правки: только изменившиеся слова. Закладки — если ни старая,
+            // ни новая версия не в архиве (архив в индекс не попадает).
+            if (
+                operation === 'update' &&
+                oldForIndexing &&
+                ENTRY_DIFF_STORES.has(storeName) &&
+                !(
+                    storeName === 'bookmarks' &&
+                    (dataForIndexing.folder === ARCHIVE_FOLDER_ID ||
+                        oldForIndexing.folder === ARCHIVE_FOLDER_ID)
+                )
+            ) {
+                if (oldForIndexing.id === undefined) oldForIndexing.id = dataForIndexing.id;
+                if (storeName === 'bookmarks') {
+                    oldForIndexing._folderNameForIndex = await bookmarkFolderNameForIndex(
+                        oldForIndexing.folder,
+                    );
+                }
+                if (await updateIndexByEntryDiff(storeName, oldForIndexing, dataForIndexing)) {
+                    return;
                 }
             }
 
@@ -1806,10 +1948,33 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         return;
     }
 
+    const pendingEntries = buildIndexEntriesForItem(storeName, itemData);
+    if (!pendingEntries) {
+        console.warn(
+            `${LOG_PREFIX_USI_ITEM} Не удалось определить indexableId для ${storeName}, itemData:`,
+            itemData,
+        );
+        return;
+    }
+    try {
+        await addManyToSearchIndex(pendingEntries);
+    } catch (error) {
+        console.error(
+            `${LOG_PREFIX_USI_ITEM} Ошибка при массовом добавлении токенов для ${storeName} ID: ${itemData.id}:`,
+            error,
+        );
+    }
+}
+
+/**
+ * Записи индекса для элемента (без записи в БД): то же, что пишет updateSearchIndexForItem.
+ * @returns {Array<object>|null} null — у элемента нет идентификатора
+ */
+export function buildIndexEntriesForItem(storeName, itemData) {
     const textsByField = getTextForItem(storeName, itemData);
 
     if (Object.keys(textsByField).length === 0) {
-        return;
+        return [];
     }
 
     let indexableId;
@@ -1820,11 +1985,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
     } else if (itemData.id !== undefined && itemData.id !== null) {
         indexableId = String(itemData.id);
     } else {
-        console.warn(
-            `${LOG_PREFIX_USI_ITEM} Не удалось определить indexableId для ${storeName}, itemData:`,
-            itemData,
-        );
-        return;
+        return null;
     }
 
     const pendingEntries = [];
@@ -1961,14 +2122,7 @@ export async function updateSearchIndexForItem(itemData, storeName, docId = null
         }
     }
 
-    try {
-        await addManyToSearchIndex(pendingEntries);
-    } catch (error) {
-        console.error(
-            `${LOG_PREFIX_USI_ITEM} Ошибка при массовом добавлении токенов для ${storeName} ID: ${indexableId}:`,
-            error,
-        );
-    }
+    return pendingEntries;
 }
 
 // ============================================================================
@@ -2682,9 +2836,9 @@ export async function performSearch(query) {
         '<div class="p-3 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Идет поиск...</div>';
 
     const noResultsHTML = (q) =>
-        `<div class="p-3 text-center text-gray-500 dark:text-gray-400">По запросу "${escapeHtml(
+        `<div class="p-3 text-center text-gray-500 dark:text-gray-400">По запросу «${escapeHtml(
             q,
-        )}" ничего не найдено.</div>`;
+        )}» ничего не найдено.</div>`;
     const errorHTML = '<div class="p-3 text-center text-red-500">Ошибка во время поиска.</div>';
     const dbErrorHTML =
         '<div class="p-3 text-center text-red-500">Ошибка: База данных не доступна.</div>';
@@ -2791,14 +2945,10 @@ export async function performSearch(query) {
                 conjunctive: false,
             });
         }
-        if (
-            candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD &&
-            queryTokens.length >= 1 &&
-            queryTokens[0].length >= 3 &&
-            queryTokens[0].length <= 8
-        ) {
-            const variants = suggestTokenVariants(queryTokens[0], 2);
-            const existingInIndex = await findTokensThatExistInIndex(variants);
+        if (candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD && queryTokens.length >= 1) {
+            const existingInIndex = await findTokensThatExistInIndex(
+                await fuzzyQueryVariants(queryTokens),
+            );
             if (existingInIndex.length > 0) {
                 const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext, {
                     conjunctive: false,
@@ -2888,9 +3038,10 @@ export async function performSearch(query) {
             } результатов`,
         );
 
-        if (limitedResults.length === 0) {
+        if (limitedResults.length === 0 && !limitedResults.suggestion) {
             searchResultsContainer.innerHTML = noResultsHTML(query);
         } else {
+            // Пустой результат с подсказкой «Возможно, вы искали…» тоже рисует renderSearchResults.
             renderSearchResults(limitedResults, query);
         }
     } catch (error) {
@@ -2984,14 +3135,10 @@ export async function getGlobalSearchResults(query) {
                 conjunctive: false,
             });
         }
-        if (
-            candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD &&
-            queryTokens.length >= 1 &&
-            queryTokens[0].length >= 3 &&
-            queryTokens[0].length <= 8
-        ) {
-            const variants = suggestTokenVariants(queryTokens[0], 2);
-            const existingInIndex = await findTokensThatExistInIndex(variants);
+        if (candidateDocs.size < FUZZY_CANDIDATES_THRESHOLD && queryTokens.length >= 1) {
+            const existingInIndex = await findTokensThatExistInIndex(
+                await fuzzyQueryVariants(queryTokens),
+            );
             if (existingInIndex.length > 0) {
                 const fuzzyCandidates = await searchCandidates(existingInIndex, searchContext, {
                     conjunctive: false,
@@ -3030,6 +3177,70 @@ const FUZZY_SCORE_FACTOR = 0.4;
 
 /** Токены короче этого порога ищем только точным ключом `get`, без префиксного курсора */
 const MIN_QUERY_TOKEN_PREFIX_RANGE = 4;
+
+/** Словарь поискового индекса (ключи) — для исправления опечаток; кэш на 30 с. */
+let indexVocabularyCache = null;
+async function getIndexVocabulary() {
+    if (indexVocabularyCache && Date.now() - indexVocabularyCache.at < 30000) {
+        return indexVocabularyCache.keys;
+    }
+    if (!State.db) return [];
+    const keys = await new Promise((resolve) => {
+        try {
+            const req = State.db
+                .transaction(['searchIndex'], 'readonly')
+                .objectStore('searchIndex')
+                .getAllKeys();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        } catch {
+            resolve([]);
+        }
+    });
+    indexVocabularyCache = { at: Date.now(), keys };
+    return keys;
+}
+
+/**
+ * Ближайшие к токену слова словаря индекса (Дамерау — Левенштейн: 1 правка для коротких
+ * слов, 2 — от 8 букв). Сначала меньшее расстояние, затем ближе по длине, затем длиннее.
+ * @param {string} token
+ * @param {string[]} keys
+ * @param {number} [limit]
+ * @returns {string[]}
+ */
+export function nearestIndexTokens(token, keys, limit = 3) {
+    const t = String(token || '');
+    if (t.length < 4) return [];
+    const maxD = t.length >= 8 ? 2 : 1;
+    const scored = [];
+    for (const k of keys) {
+        if (typeof k !== 'string' || k === t || k.length < 4) continue;
+        if (Math.abs(k.length - t.length) > maxD) continue;
+        const d = editDistance(t, k, maxD);
+        if (d <= maxD) scored.push({ k, d, dl: Math.abs(k.length - t.length) });
+    }
+    scored.sort((a, b) => a.d - b.d || a.dl - b.dl || b.k.length - a.k.length);
+    return scored.slice(0, limit).map((x) => x.k);
+}
+
+/**
+ * Варианты слов запроса с опечаткой: ближайшие слова словаря индекса (до 3 слов запроса)
+ * + прежние замены букв. Раньше были только замены первой буквы на два символа —
+ * «отчот» не находил «отчет».
+ */
+async function fuzzyQueryVariants(queryTokens) {
+    const variants = new Set();
+    const vocabulary = await getIndexVocabulary();
+    for (const tok of queryTokens.slice(0, 3)) {
+        for (const v of nearestIndexTokens(tok, vocabulary, 3)) variants.add(v);
+    }
+    const first = queryTokens[0];
+    if (first && first.length >= 3 && first.length <= 8) {
+        for (const v of suggestTokenVariants(first, 2)) variants.add(v);
+    }
+    return [...variants];
+}
 
 /**
  * Возвращает те токены из списка, которые есть в индексе (точное совпадение ключа).
@@ -4153,13 +4364,11 @@ export function renderSearchResults(results, query) {
     if (!results || results.length === 0) {
         const noResultsMessage = document.createElement('div');
         noResultsMessage.className = 'p-3 text-center text-gray-500 dark:text-gray-400';
-        noResultsMessage.textContent = `По запросу "${escapeHtml(query)}" ничего не найдено.`;
+        noResultsMessage.textContent = `По запросу «${query}» ничего не найдено.`;
         searchResultsContainer.appendChild(noResultsMessage);
-        searchResultsContainer.classList.remove('hidden');
-        return;
     }
 
-    if (results.suggestion) {
+    if (results?.suggestion) {
         const sg = document.createElement('div');
         sg.className = 'search-suggest px-3 py-2 text-sm text-gray-600 dark:text-gray-300';
         sg.innerHTML = `Возможно, вы искали <button type="button" class="search-hint-apply">${escapeHtml(
@@ -4174,6 +4383,11 @@ export function renderSearchResults(results, query) {
             }
         });
         searchResultsContainer.appendChild(sg);
+    }
+
+    if (!results || results.length === 0) {
+        searchResultsContainer.classList.remove('hidden');
+        return;
     }
 
     const ul = document.createElement('ul');
@@ -4380,6 +4594,7 @@ export function renderSearchResults(results, query) {
     });
 
     searchResultsContainer.appendChild(ul);
+    attachSearchFilter(searchResultsContainer);
     searchResultsContainer.classList.remove('hidden');
 }
 
