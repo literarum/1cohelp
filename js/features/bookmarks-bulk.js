@@ -9,7 +9,7 @@
 import { State } from '../app/state.js';
 import { ARCHIVE_FOLDER_ID, RECENTLY_DELETED_STORE_NAME } from '../constants.js';
 import { markStoreChanged } from '../db/indexeddb.js';
-import { buildRecentlyDeletedRecord } from './recently-deleted.js';
+import { buildRecentlyDeletedRecord, emitTrashed } from './recently-deleted.js';
 import { coerceTagsArray } from './global-tags.js';
 
 const CHUNK = 400;
@@ -69,7 +69,11 @@ export async function bulkDeleteBookmarks(ids, deps = {}) {
                     payload: rec,
                     reason: 'delete_bookmark_bulk',
                 });
-                if (snapshot) rd.add(snapshot);
+                if (snapshot) {
+                    const addReq = rd.add(snapshot);
+                    addReq.onsuccess = () =>
+                        emitTrashed({ entryId: addReq.result, storeName: 'bookmarks', entityId: String(id) });
+                }
                 bm.delete(id);
                 for (const type of ['bookmark', 'bookmark_note']) {
                     const k = favIdx.getKey([type, String(id)]);

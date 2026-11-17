@@ -176,6 +176,9 @@ export function registerOnloadHandler() {
                         }),
                     )
                     .catch((e) => console.warn('[deep-link] failed', e));
+                import('../features/privacy.js')
+                    .then((m) => m.initPrivacy())
+                    .catch((e) => console.warn('[privacy] init failed', e));
                 import('../features/auto-backup.js')
                     .then((m) => m.initAutoBackupScheduler())
                     .catch((e) => console.warn('[auto-backup] init failed', e));

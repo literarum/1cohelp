@@ -9,6 +9,14 @@
 const ITEM_SELECTOR = 'li.search-result-item';
 const ACTIVE_CLASS = 'is-kb-active';
 
+function isAnyDialogOpen() {
+    return Boolean(
+        document.querySelector(
+            '[role="dialog"]:not(.hidden):not([hidden]), .modal:not(.hidden), #bookmarkDetailModal:not(.hidden)',
+        ),
+    );
+}
+
 function visibleItems(container) {
     if (!container || container.classList.contains('hidden')) return [];
     return Array.from(container.querySelectorAll(ITEM_SELECTOR));
@@ -54,6 +62,8 @@ export function attachSearchResultsKeyboard(input, container) {
     const syncAria = () => {
         const items = visibleItems(container);
         input.setAttribute('aria-expanded', items.length > 0 ? 'true' : 'false');
+        // Пока список открыт, уведомления уходят под него (раньше перекрывали правый край).
+        document.documentElement.classList.toggle('search-results-open', items.length > 0);
         items.forEach((li) => {
             li.setAttribute('role', 'option');
             if (!li.hasAttribute('aria-selected')) li.setAttribute('aria-selected', 'false');
@@ -88,15 +98,25 @@ export function attachSearchResultsKeyboard(input, container) {
         if (e.key === 'Enter' && activeIndex >= 0 && items[activeIndex]) {
             e.preventDefault();
             e.stopImmediatePropagation();
-            items[activeIndex].click();
+            const chosen = items[activeIndex];
+            // Выбор сделан: список закрываем, фокус уводим из поля — иначе Escape открытой карточки
+            // перехватывался полем поиска, и окно не закрывалось.
+            const isHistory = chosen.hasAttribute('data-sh-q');
+            chosen.click();
+            if (!isHistory) {
+                container.classList.add('hidden');
+                setActive(-1);
+                input.blur();
+            }
             return;
         }
-        if (e.key === 'Escape' && items.length > 0) {
+        if (e.key === 'Escape' && items.length > 0 && !isAnyDialogOpen()) {
             e.preventDefault();
             e.stopPropagation();
             container.classList.add('hidden');
             setActive(-1);
             input.setAttribute('aria-expanded', 'false');
+            document.documentElement.classList.remove('search-results-open');
         }
     };
     // capture: раньше обработчика Enter для поиска ИНН в заметках.

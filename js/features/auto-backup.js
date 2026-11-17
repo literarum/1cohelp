@@ -12,6 +12,7 @@
 
 import { State } from '../app/state.js';
 import { buildExportDataObjectFromDb } from './import-export.js';
+import { wrapBackup, deriveBackupKey, newSalt, PBKDF2_ITERATIONS } from './backup-envelope.js';
 
 export const AUTO_BACKUP_FILE_PREFIX = 'copilot-1co-backup_';
 export const DEFAULT_INTERVAL_HOURS = 24;
@@ -103,11 +104,14 @@ export async function getAutoBackupConfig() {
         enabled: false,
         intervalHours: DEFAULT_INTERVAL_HOURS,
         keep: DEFAULT_KEEP,
+        compress: true,
+        /** { key: CryptoKey (неизвлекаемый), salt: Uint8Array, iterations } — пароль не хранится. */
+        encryption: null,
         ...(cfg || {}),
     };
 }
 
-async function saveAutoBackupConfig(patch) {
+export async function saveAutoBackupConfig(patch) {
     const cur = await getAutoBackupConfig();
     const next = { ...cur, ...patch };
     await kv('readwrite', (s) => s.put(next, CONFIG_KEY));
@@ -166,14 +170,49 @@ async function rotateBackups(dirHandle, keep) {
  * @param {number} keep
  * @returns {Promise<string|null>} имя файла или null, если данных нет
  */
-export async function writeBackupTo(dirHandle, keep = DEFAULT_KEEP) {
+export async function writeBackupTo(dirHandle, keep = DEFAULT_KEEP, opts = {}) {
     const data = await buildExportDataObjectFromDb(State.db, { quiet: true, readMode: 'batch' });
     if (!data) return null;
-    data.backupKind = 'auto';
+    data.backupKind = opts.kind || 'auto';
     const fileName = buildBackupFileName();
-    await writeBackupFile(dirHandle, fileName, JSON.stringify(data));
+    let text = JSON.stringify(data);
+    if (opts.compress !== false || opts.encryption) {
+        text = await wrapBackup(text, {
+            compress: opts.compress !== false,
+            key: opts.encryption?.key || null,
+            salt: opts.encryption?.salt || null,
+            iterations: opts.encryption?.iterations,
+        });
+    }
+    await writeBackupFile(dirHandle, fileName, text);
     await rotateBackups(dirHandle, keep);
     return fileName;
+}
+
+/** Копии в папке, новые сверху. */
+export async function listBackupsIn(dirHandle) {
+    const out = [];
+    for await (const [name, entry] of dirHandle.entries()) {
+        if (entry.kind !== 'file' || !name.startsWith(AUTO_BACKUP_FILE_PREFIX) || !name.endsWith('.json')) continue;
+        try {
+            const f = await entry.getFile();
+            out.push({ name, size: f.size, lastModified: f.lastModified });
+        } catch {
+            out.push({ name, size: null, lastModified: null });
+        }
+    }
+    return out.sort((a, b) => (a.name < b.name ? 1 : -1));
+}
+
+/** Включить шифрование автобэкапа паролем (ключ выводится один раз и хранится неизвлекаемым). */
+export async function setAutoBackupPassword(password) {
+    const salt = newSalt();
+    const key = await deriveBackupKey(password, salt, PBKDF2_ITERATIONS);
+    await saveAutoBackupConfig({ encryption: { key, salt, iterations: PBKDF2_ITERATIONS } });
+}
+
+export async function clearAutoBackupPassword() {
+    await saveAutoBackupConfig({ encryption: null });
 }
 
 function notifier() {
@@ -200,7 +239,11 @@ export async function runAutoBackup(opts = {}) {
     }
     running = true;
     try {
-        const fileName = await writeBackupTo(cfg.dirHandle, cfg.keep);
+        const fileName = await writeBackupTo(cfg.dirHandle, cfg.keep, {
+            compress: cfg.compress !== false,
+            encryption: cfg.encryption,
+            kind: opts.kind,
+        });
         if (!fileName) return { ok: false, reason: 'no-data' };
         const now = new Date().toISOString();
         await saveAutoBackupConfig({ lastBackupAt: now, lastError: null });
@@ -300,6 +343,16 @@ export async function disableAutoBackup() {
 }
 
 /** Краткий статус для интерфейса/диагностики. */
+/** Есть ли сейчас доступ к папке (без запроса). */
+export async function hasFolderAccess(handle) {
+    return hasPermission(handle, false);
+}
+
+/** Запросить доступ к папке (вызывать из клика). */
+export async function requestFolderAccess(handle) {
+    return hasPermission(handle, true);
+}
+
 export async function describeAutoBackupStatus() {
     if (!isAutoBackupSupported()) return 'не поддерживается браузером';
     const cfg = await getAutoBackupConfig();
@@ -332,4 +385,6 @@ if (typeof window !== 'undefined') {
     window.runAutoBackupNow = () => runAutoBackup({ interactive: true });
     window.disableAutoBackup = disableAutoBackup;
     window.describeAutoBackupStatus = describeAutoBackupStatus;
+    window.openAutoBackupManager = () =>
+        import('./auto-backup-ui.js').then((m) => m.openAutoBackupManager());
 }

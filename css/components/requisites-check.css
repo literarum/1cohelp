@@ -98,3 +98,25 @@
 .so-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .so-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .so-note { margin: 0; font-size: 0.72rem; opacity: 0.6; }
+.bp-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; }
+.bp-field span { opacity: 0.75; }
+.bp-error { margin: 0; min-height: 1em; font-size: 0.78rem; color: #ef4444; }
+.bp-primary { background: var(--color-primary, #8b5cf6); border-color: transparent; color: var(--color-text-on-primary, #fff); }
+.ab-settings { gap: 0.55rem; }
+.ab-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.82rem; }
+.ab-row span { opacity: 0.8; }
+.ab-row select { background: transparent; color: inherit; border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+.ab-row input[type='checkbox'] { width: 1.05rem; height: 1.05rem; accent-color: var(--color-primary, #8b5cf6); }
+.ab-h { margin: 0; font-size: 0.85rem; font-weight: 700; }
+
+/* Архив обращений (aa-*) */
+.aa-card { width: min(46rem, 100%); }
+.aa-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.aa-item { border: 1px solid rgba(127, 127, 127, 0.25); border-radius: 0.75rem; padding: 0.6rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.aa-item .aa-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.75rem; opacity: 0.85; }
+.aa-item time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.aa-inn { padding: 0.05rem 0.45rem; border-radius: 999px; background: rgba(139, 92, 246, 0.14); font-variant-numeric: tabular-nums; }
+.aa-title { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.aa-item pre { margin: 0.4rem 0 0; white-space: pre-wrap; font: inherit; font-size: 0.8rem; max-height: 16rem; overflow: auto; }
+.aa-item summary { cursor: pointer; font-size: 0.75rem; opacity: 0.75; }
+.aa-card input[type='search'] { min-height: 0; height: auto; padding: 0.5rem 0.75rem; font-size: 0.85rem; }

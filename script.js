@@ -16,6 +16,14 @@ try {
 } catch (e) {
     console.warn('[a11y-keyboard] init failed', e);
 }
+(function bootOverlaySettingsUI() {
+    const run = () =>
+        import('./js/features/loading-overlay/overlay-settings-ui.js')
+            .then((m) => m.initOverlaySettingsUI())
+            .catch((e) => console.warn('[overlay-settings] init failed', e));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
 (function bootThemeColorMeta() {
     const run = () => {
         try {
@@ -28,6 +36,22 @@ try {
     else run();
 })();
 // Ленивая «Проверка реквизитов»: модуль грузится при первом открытии (палитра команд, контекстное меню)
+window.exportEncryptedBackup = () =>
+    import('./js/features/backup-actions.js').then((m) => m.exportEncryptedBackup());
+window.openAutoBackupManager = () =>
+    import('./js/features/auto-backup-ui.js').then((m) => m.openAutoBackupManager());
+for (const [name, fn] of [
+    ['togglePrivacyMode', 'togglePrivacyMode'],
+    ['lockAppNow', 'lockAppNow'],
+    ['openLockSettings', 'openLockSettings'],
+    ['disableAppLock', 'disableAppLock'],
+]) {
+    if (typeof window[name] !== 'function') {
+        window[name] = () => import('./js/features/privacy.js').then(() => window[fn]?.());
+    }
+}
+window.openSnippetsEditor = () =>
+    import('./js/features/notes-snippets.js').then((m) => m.openSnippetsEditor());
 window.openStorageOverview = () =>
     import('./js/features/storage-overview.js').then((m) => m.openStorageOverview());
 window.openRequisitesCheck = (text) =>

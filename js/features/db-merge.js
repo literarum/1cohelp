@@ -79,7 +79,7 @@ export const CONTENT_STORES = [
     'reminders',
     'pdfFiles',
     'screenshots',
-    'links', 'clientData', 'preferences', 'blacklistedClients',
+    'links', 'clientData', 'appealArchive', 'preferences', 'blacklistedClients',
     'trainingProgress', 'trainingSrsCards', 'trainingWeakSpots',
     'trainingUserCurriculum', 'trainingBuiltinCurriculum', 'mentorQuizPackages',
     'clientAnalyticsFiles', 'clientAnalyticsRecords', 'clientAnalyticsFolders',
@@ -95,7 +95,7 @@ const MERGE_SCOPE_TO_STORES = {
     reminders: ['reminders'],
     attachments: ['pdfFiles', 'screenshots'],
     links: ['links'],
-    clientData: ['clientData'],
+    clientData: ['clientData', 'appealArchive'],
     preferences: ['preferences'],
     blacklist: ['blacklistedClients'],
     training: ['trainingProgress', 'trainingSrsCards', 'trainingWeakSpots', 'trainingUserCurriculum', 'trainingBuiltinCurriculum', 'mentorQuizPackages'],
@@ -965,7 +965,7 @@ const MERGE_APPLICATION_ORDER = [
     'trainingUserCurriculum',
     'trainingBuiltinCurriculum',
     'mentorQuizPackages',
-    'links', 'clientData', 'preferences', 'blacklistedClients',
+    'links', 'clientData', 'appealArchive', 'preferences', 'blacklistedClients',
     'clientAnalyticsFiles', 'clientAnalyticsFolders', 'clientAnalyticsTags', 'clientAnalyticsRecords', 'clientAnalyticsCardMeta',
 ];
 
@@ -988,6 +988,7 @@ const MERGE_STORE_LABELS = {
     mentorQuizPackages: 'Пакеты квизов',
     links: 'Ссылки 1С',
     clientData: 'Клиентские данные',
+    appealArchive: 'Архив обращений',
     preferences: 'Настройки и оформление',
     blacklistedClients: 'Чёрный список',
     clientAnalyticsFiles: 'Файлы клиентской аналитики',
@@ -2818,7 +2819,9 @@ export function openDbMergeModal() {
         fileInfoEl.textContent = `Файл: ${file.name} (${(file.size / 1024).toFixed(1)} КБ)`;
         analysisPlaceholder.textContent = 'Выполняется анализ структуры и дублей…';
 
-        const text = await file.text();
+        const { unwrapBackupText } = await import('./backup-envelope.js');
+        const text = await unwrapBackupText(await file.text());
+        if (text === null) throw new Error('Слияние отменено: пароль не введён.');
         const selectedStores = getSelectedStores();
         if (selectedStores.length === 0) {
             throw new Error('DbMergeScopeEmpty');

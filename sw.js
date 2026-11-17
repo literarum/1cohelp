@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20261116-cosmic-overlay';
+const ASSET_QUERY_VERSION = '20261117-overlay-v3';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20261116-cosmic-overlay';
-const VERSION = `20261116-cosmic-overlay`;
+const MAIN_CSS_QUERY_VERSION = '20261117-overlay-v3';
+const VERSION = `20261117-overlay-v3`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**
@@ -45,6 +45,7 @@ const SHELL_PRECACHE = [
     scopedAsset(`js/entry.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset(`js/search-startup.js?v=${ASSET_QUERY_VERSION}`),
     scopedAsset('js/features/loading-overlay/sphere-renderer.js'),
+    scopedAsset('js/features/loading-overlay/overlay-settings.js'),
     scopedAsset('js/vendor-config.js'),
     scopedAsset('js/vendor-loader.js'),
     scopedAsset('manifest.webmanifest'),

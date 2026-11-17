@@ -34,6 +34,7 @@ import {
 import { formatExampleForTextarea, getSectionName } from '../utils/helpers.js';
 import { findBestMatchingStep, formatStepLabel } from './search-step-match.js';
 import { attachSearchResultsKeyboard } from './search-results-keyboard.js';
+import { attachSearchHistory, recordSearchQuery } from './search-history.js';
 
 import { State } from '../app/state.js';
 
@@ -4390,6 +4391,11 @@ export function renderSearchResults(results, query) {
  * Обрабатывает клик по результату поиска
  */
 export async function handleSearchResultClick(result) {
+    try {
+        recordSearchQuery(result?.query || document.getElementById('searchInput')?.value || '');
+    } catch {
+        /* история — необязательная */
+    }
     console.log(
         '[handleSearchResultClick V11 - Google Docs] Clicked on result:',
         JSON.parse(JSON.stringify(result)),
@@ -4823,6 +4829,7 @@ export function initSearchSystem() {
 
     searchInput.addEventListener('input', handleInput);
     attachSearchResultsKeyboard(searchInput, searchResultsContainer);
+    attachSearchHistory(searchInput, searchResultsContainer);
 
     searchInput.addEventListener('keydown', async (event) => {
         if (event.key !== 'Enter') return;

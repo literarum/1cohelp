@@ -4,7 +4,7 @@
 // БАЗА ДАННЫХ
 // ============================================================================
 export const DB_NAME = 'CopilotDB';
-export const DB_VERSION = 22;
+export const DB_VERSION = 23;
 export const CURRENT_SCHEMA_VERSION = '1.7';
 export const REMINDERS_STORE_NAME = 'reminders';
 export const FAVORITES_STORE_NAME = 'favorites';

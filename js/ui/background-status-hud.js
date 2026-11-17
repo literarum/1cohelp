@@ -55,7 +55,8 @@ export function initBackgroundStatusHUD() {
         if (document.getElementById('bg-status-hud-styles')) return;
         const css = `
     #bg-status-hud {
-      position: fixed; right: 16px; top: 16px; z-index: 45; /* ниже модалок (z>=50), чтобы не перекрывать диалоги */
+      /* Левый нижний угол: справа сверху HUD закрывал кнопки шапки (настройки и др.) и перехватывал клики. */
+      position: fixed; left: 16px; bottom: 16px; z-index: 45; /* ниже модалок (z>=50), чтобы не перекрывать диалоги */
       width: min(440px, calc(100vw - 32px));
       max-width: calc(100vw - 32px);
       font-family: inherit;
@@ -348,20 +349,9 @@ export function initBackgroundStatusHUD() {
     }
 
     function computeTopOffset() {
-        let top = 16;
-        const imp = document.getElementById('important-notifications-container');
-        if (imp && imp.children.length > 0) {
-            const s = parseInt(getComputedStyle(imp).top || '0', 10);
-            top = Math.max(top, s + imp.offsetHeight + 8);
-        }
-        const toast = document.getElementById('notification-container');
-        if (toast && toast.children.length > 0) {
-            // Реальная нижняя граница стека toast (а не фиксированные 90px): иначе при нескольких
-            // или многострочных toast HUD накладывается на них.
-            const bottom = Math.ceil(toast.getBoundingClientRect().bottom);
-            top = Math.max(top, 90, bottom + 8);
-        }
-        STATE.container.style.top = `${top}px`;
+        // HUD живёт в левом нижнем углу и с уведомлениями (справа сверху) не пересекается:
+        // отступ сверху больше не нужен, а встроенный top растягивал HUD на полэкрана.
+        STATE.container.style.removeProperty('top');
     }
 
     function aggregatePercent() {
@@ -483,7 +473,7 @@ export function initBackgroundStatusHUD() {
         const duration = 300;
         cardsToAnimate.forEach((el) => {
             el.style.transition = `transform ${duration}ms ease-out`;
-            el.style.transform = 'translateX(calc(100% + 32px))';
+            el.style.transform = 'translateX(calc(-100% - 32px))';
         });
         let ended = 0;
         const onEnd = () => {

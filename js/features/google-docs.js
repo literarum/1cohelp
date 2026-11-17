@@ -1170,6 +1170,44 @@ function writeLastSuccess(ts) {
     }
 }
 
+/**
+ * Сколько запусков подряд Google Docs был недоступен. В сетях, где Google заблокирован навсегда,
+ * закреплённая ошибка при каждом запуске — шум: после QUIET_AFTER_FAILED_SESSIONS она больше
+ * не всплывает сама (статус остаётся на индикаторе раздела «Шаблоны»), ручное «Повторить» — как обычно.
+ */
+export const GDOCS_FAIL_SESSIONS_KEY = 'copilot1co:gdocs-failed-sessions';
+export const QUIET_AFTER_FAILED_SESSIONS = 3;
+let failureCountedThisSession = false;
+export function readFailedSessions() {
+    try {
+        return Math.max(0, Number(localStorage.getItem(GDOCS_FAIL_SESSIONS_KEY)) || 0);
+    } catch {
+        return 0;
+    }
+}
+function bumpFailedSessionsOnce() {
+    if (failureCountedThisSession) return;
+    failureCountedThisSession = true;
+    try {
+        localStorage.setItem(GDOCS_FAIL_SESSIONS_KEY, String(readFailedSessions() + 1));
+    } catch {
+        /* ignore */
+    }
+}
+function resetFailedSessions() {
+    failureCountedThisSession = false;
+    try {
+        localStorage.removeItem(GDOCS_FAIL_SESSIONS_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+/** Показывать ли карточку ошибки: после N неудачных запусков подряд — только по ручному запросу. */
+export function shouldShowOutageCard(failedSessions, reason) {
+    if (reason === 'manual') return true;
+    return failedSessions < QUIET_AFTER_FAILED_SESSIONS;
+}
+
 const gdocsConnection = {
     /** unknown | syncing | ok | error */
     status: 'unknown',
@@ -1313,8 +1351,12 @@ function recordSyncFailure(error, { reason, usingCache }) {
     gdocsConnection.consecutiveFailures += 1;
     gdocsConnection.usingCache = Boolean(usingCache);
     const forceShow = reason !== 'interval' && !String(reason).startsWith('catchup');
+    const failedBefore = readFailedSessions();
+    bumpFailedSessionsOnce();
     // Фоновые повторы не «воскрешают» карточку, закрытую пользователем, но обновляют видимую
-    showConnectionErrorCard(info, raw, { forceShow: forceShow || wasOk });
+    if (shouldShowOutageCard(failedBefore, reason) || NotificationService?.has?.(GDOCS_ERROR_NOTIFICATION_ID)) {
+        showConnectionErrorCard(info, raw, { forceShow: forceShow || wasOk });
+    }
     emitConnection();
 }
 
@@ -1329,6 +1371,7 @@ function recordSyncSuccess({ reason, usingCache = false }) {
     gdocsConnection.usingCache = usingCache;
     gdocsConnection.lastSuccessAt = Date.now();
     writeLastSuccess(gdocsConnection.lastSuccessAt);
+    resetFailedSessions();
     gdocsErrorDismissedByUser = false;
     NotificationService?.dismiss(GDOCS_ERROR_NOTIFICATION_ID);
     if (wasError) {

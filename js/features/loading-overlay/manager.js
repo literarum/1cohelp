@@ -8,6 +8,7 @@ import {
 import { getThemeProfile } from './particles-config.js';
 
 import { createSphereRenderer } from './sphere-renderer.js';
+import { readOverlaySettings } from './overlay-settings.js';
 
 /** Минимальное время показа оверлея (мс): анимация успевает раскрыться целиком. */
 export const MIN_VISIBLE_MS = 7000;
@@ -193,7 +194,9 @@ export const loadingOverlayManager = {
             this.overlayElement.classList.remove('is-exiting');
             this._shownAt = isFirstBootShow ? 0 : performance.now();
             this._holdMs =
-                isFirstBootShow && !(typeof window !== 'undefined' && window.__COPILOT_TEST_FAST_OVERLAY__)
+                isFirstBootShow &&
+                readOverlaySettings().duration !== 'quick' &&
+                !(typeof window !== 'undefined' && window.__COPILOT_TEST_FAST_OVERLAY__)
                     ? this.minVisibleMs
                     : 0;
             this._startProgressTicker();

@@ -1078,7 +1078,14 @@ export async function handleImportFileChange(e) {
             message: 'Произошла неизвестная ошибка во время импорта.',
         };
         try {
-            importResult = await _processActualImport(event.target.result);
+            // Сжатые/зашифрованные копии (backup-envelope): распаковка с запросом пароля.
+            const { unwrapBackupText } = await import('./backup-envelope.js');
+            const plain = await unwrapBackupText(event.target.result);
+            if (plain === null) {
+                importResult = { success: false, message: 'Импорт отменён: пароль не введён.' };
+                return;
+            }
+            importResult = await _processActualImport(plain);
         } catch (error) {
             console.error(
                 '[handleImportFileChange v_FOCUS_HANDLER_AWARE_FINAL_FULL] Ошибка из _processActualImport:',

@@ -537,7 +537,16 @@ export async function deleteFromIndexedDB(storeName, key) {
                     reason: 'delete',
                     context: null,
                 };
-                await saveToIndexedDB(RECENTLY_DELETED_STORE_NAME, recentRecord);
+                const entryId = await saveToIndexedDB(RECENTLY_DELETED_STORE_NAME, recentRecord);
+                try {
+                    document.dispatchEvent(
+                        new CustomEvent('copilot1co:entity-trashed', {
+                            detail: { entryId, storeName, entityId: String(keyToUse) },
+                        }),
+                    );
+                } catch {
+                    /* событие — только для «Удалено. Вернуть» */
+                }
             }
         } catch (recentErr) {
             console.warn(
