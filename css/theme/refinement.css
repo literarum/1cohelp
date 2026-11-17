@@ -206,5 +206,6 @@ html:not(.dark) .tab-btn.tab-active,
 html:not(.dark) .tab-btn.tab-active > *,
 html:not(.dark) .tab-btn.tab-active i,
 html:not(.dark) .tab-btn.tab-active svg {
-    color: color-mix(in srgb, var(--color-primary, #9933ff) 70%, #000000) !important;
+    /* 58%: и светлые акценты (бирюзовый «Океана») дают на белом не меньше 4,5:1. */
+    color: color-mix(in srgb, var(--color-primary, #9933ff) 58%, #000000) !important;
 }
