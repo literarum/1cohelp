@@ -103,7 +103,7 @@ function renderPopup(ta, items, active) {
     if (!popup) {
         popup = document.createElement('div');
         popup.id = 'notesSnippetsPopup';
-        popup.className = 'ns-popup';
+        popup.className = 'snp-popup';
         popup.setAttribute('role', 'listbox');
         popup.setAttribute('aria-label', 'Быстрые фразы');
         popup.addEventListener('mousedown', (e) => {
@@ -118,10 +118,10 @@ function renderPopup(ta, items, active) {
         ? items
               .map(
                   (s, i) =>
-                      `<div role="option" class="ns-item${i === active ? ' is-active' : ''}" aria-selected="${i === active}" data-ns-i="${i}"><b>/${escapeHtml(s.key)}</b><span>${escapeHtml(s.title || s.text.slice(0, 60))}</span></div>`,
+                      `<div role="option" class="snp-item${i === active ? ' is-active' : ''}" aria-selected="${i === active}" data-ns-i="${i}"><b>/${escapeHtml(s.key)}</b><span>${escapeHtml(s.title || s.text.slice(0, 60))}</span></div>`,
               )
               .join('')
-        : '<div class="ns-empty">Нет фраз с таким ключом. Фразы настраиваются в палитре: «Быстрые фразы».</div>';
+        : '<div class="snp-empty">Нет фраз с таким ключом. Фразы настраиваются в палитре: «Быстрые фразы».</div>';
 }
 
 function applyChoice(ta, index) {
@@ -205,7 +205,7 @@ export async function openSnippetsEditor() {
                 <button type="button" class="rq-icon-btn rq-close" data-ns-close aria-label="Закрыть"><i class="fas fa-times" aria-hidden="true"></i></button>
             </header>
             <div class="rq-body">
-                <div class="ns-rows" data-ns-rows></div>
+                <div class="snp-rows" data-snp-rows></div>
                 <div class="so-actions">
                     <button type="button" class="vc-chip" data-ns-add>Добавить фразу</button>
                     <button type="button" class="vc-chip bp-primary" data-ns-save>Сохранить</button>
@@ -213,12 +213,12 @@ export async function openSnippetsEditor() {
             </div>
         </div>`;
     document.body.appendChild(root);
-    const rowsEl = root.querySelector('[data-ns-rows]');
+    const rowsEl = root.querySelector('[data-snp-rows]');
     const render = () => {
         rowsEl.innerHTML = list
             .map(
-                (s, i) => `<div class="ns-row" data-ns-row="${i}">
-                    <span class="ns-num">${i < 9 ? `Alt+${i + 1}` : ''}</span>
+                (s, i) => `<div class="snp-row" data-snp-row="${i}">
+                    <span class="snp-num">${i < 9 ? `Alt+${i + 1}` : ''}</span>
                     <input class="rq-input" data-f="key" value="${escapeHtml(s.key)}" placeholder="ключ" aria-label="Ключ фразы ${i + 1}">
                     <input class="rq-input" data-f="title" value="${escapeHtml(s.title)}" placeholder="название" aria-label="Название фразы ${i + 1}">
                     <textarea class="rq-input" data-f="text" rows="2" placeholder="текст, например: ИНН: {ИНН}" aria-label="Текст фразы ${i + 1}">${escapeHtml(s.text)}</textarea>
@@ -229,8 +229,8 @@ export async function openSnippetsEditor() {
     };
     render();
     const collect = () => {
-        rowsEl.querySelectorAll('[data-ns-row]').forEach((row) => {
-            const i = Number(row.getAttribute('data-ns-row'));
+        rowsEl.querySelectorAll('[data-snp-row]').forEach((row) => {
+            const i = Number(row.getAttribute('data-snp-row'));
             row.querySelectorAll('[data-f]').forEach((el) => {
                 list[i][el.getAttribute('data-f')] = el.value;
             });
@@ -256,10 +256,10 @@ export async function openSnippetsEditor() {
             collect();
             list.push({ key: '', title: '', text: '' });
             render();
-            rowsEl.querySelector('[data-ns-row]:last-child [data-f="key"]')?.focus();
+            rowsEl.querySelector('[data-snp-row]:last-child [data-f="key"]')?.focus();
         } else if (t.closest('[data-ns-del]')) {
             collect();
-            list.splice(Number(t.closest('[data-ns-row]').getAttribute('data-ns-row')), 1);
+            list.splice(Number(t.closest('[data-snp-row]').getAttribute('data-snp-row')), 1);
             render();
         } else if (t.closest('[data-ns-save]')) {
             collect();

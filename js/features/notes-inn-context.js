@@ -12,11 +12,10 @@ import { pluralRu } from '../utils/plural.js';
 
 export function describeInnContext({ inn, appeals, blacklisted }) {
     const parts = [`ИНН ${inn}`];
-    parts.push(
-        appeals > 0
-            ? `в базе клиентов: ${appeals} ${pluralRu(appeals, ['обращение', 'обращения', 'обращений'])}`
-            : 'в базе клиентов не найден',
-    );
+    // «Не найден в базе» не пишем: строка появляется, только когда есть что сообщить.
+    if (appeals > 0) {
+        parts.push(`в базе клиентов: ${appeals} ${pluralRu(appeals, ['обращение', 'обращения', 'обращений'])}`);
+    }
     if (blacklisted) parts.push('⚠ в чёрном списке');
     return parts.join(' · ');
 }
@@ -75,9 +74,15 @@ export function initNotesInnContext() {
             box.textContent = '';
             return;
         }
-        const results = await Promise.all(inns.map(lookup));
+        const results = (await Promise.all(inns.map(lookup))).filter(
+            (r) => r.appeals > 0 || r.blacklisted,
+        );
         if (inns.join(',') !== lastKey) return;
         box.textContent = '';
+        if (!results.length) {
+            box.hidden = true;
+            return;
+        }
         for (const r of results) {
             const line = document.createElement('div');
             line.className = r.blacklisted ? 'is-blacklisted' : '';

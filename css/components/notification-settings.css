@@ -341,3 +341,56 @@
 }
 .gs-status__title { font-weight: 700; }
 .gs-status__hint { margin-top: 2px; color: var(--color-text-secondary, #6b7280); line-height: 1.4; }
+
+/* ---------- Окно «Уведомления»: выравнивание элементов управления ---------- */
+.ns-row {
+    align-items: center;
+}
+.ns-range {
+    width: min(260px, 42vw);
+}
+.ns-range__val {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.ns-stepper .ns-btn--icon {
+    width: 32px;
+    min-height: 32px;
+}
+.ns-stepper__val {
+    min-width: 2.5ch;
+}
+.ns-dnd {
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+.ns-dnd .app-toggle {
+    margin-right: 6px;
+}
+.ns-time {
+    min-height: 32px;
+    width: auto;
+    min-width: 6.5rem;
+    padding: 3px 8px;
+    font-size: 0.85rem;
+    background: var(--color-input-bg, var(--color-surface-1, #fff));
+}
+.ns-dnd__state {
+    min-height: 0;
+    margin-top: 2px;
+}
+.ns-dnd__state:empty {
+    display: none;
+}
+.ns-section > .ns-row:first-of-type {
+    padding-top: 4px;
+}
+@media (max-width: 640px) {
+    .ns-dnd {
+        flex-wrap: wrap;
+    }
+    .ns-range {
+        width: 100%;
+    }
+}

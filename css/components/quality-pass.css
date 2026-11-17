@@ -168,88 +168,6 @@ html.dark .notes-inn-warn {
     margin-right: 0.25rem;
 }
 
-/* Чек-лист главного алгоритма. */
-#mainAlgorithm .algorithm-step {
-    position: relative;
-}
-.mc-toggle {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 999px;
-    border: 1.5px solid color-mix(in srgb, var(--color-text-primary, #111) 30%, transparent);
-    background: transparent;
-    color: transparent;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.65rem;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 150ms ease, background-color 150ms ease, border-color 150ms ease;
-}
-#mainAlgorithm .algorithm-step:hover .mc-toggle,
-.mc-toggle:focus-visible,
-.mc-toggle[aria-pressed='true'] {
-    opacity: 1;
-}
-.mc-toggle:hover {
-    border-color: #22c55e;
-    color: #22c55e;
-}
-.mc-toggle[aria-pressed='true'] {
-    background: #16a34a;
-    border-color: #16a34a;
-    color: #fff;
-}
-#mainAlgorithm .algorithm-step.mc-done > *:not(.mc-toggle) {
-    opacity: 0.55;
-}
-.mc-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin: 0 0 0.5rem;
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-}
-.mc-track {
-    flex: 1 1 auto;
-    height: 3px;
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--color-text-primary, #111) 12%, transparent);
-    overflow: hidden;
-}
-.mc-track span {
-    display: block;
-    height: 100%;
-    background: #16a34a;
-    transition: width 200ms ease;
-}
-.mc-reset {
-    background: none;
-    border: 0;
-    color: var(--color-primary, #9933ff);
-    cursor: pointer;
-    font-size: 0.75rem;
-}
-@media (hover: none) {
-    .mc-toggle {
-        opacity: 1;
-    }
-}
-
-.mc-bar[hidden] {
-    display: none;
-}
-#mainAlgorithm .algorithm-step .mc-toggle[aria-pressed='true'],
-#mainAlgorithm .algorithm-step:hover .mc-toggle,
-#mainAlgorithm .algorithm-step .mc-toggle:focus-visible {
-    opacity: 1 !important;
-}
-
 /* ---- Режим демонстрации экрана: персональные данные размыты ---- */
 html.privacy-mode #clientNotes,
 html.privacy-mode #clientNotesInnWarnings,
@@ -378,7 +296,7 @@ html.search-results-open #notification-container {
 div:has(> #clientNotes) {
     position: relative;
 }
-.ns-popup {
+.snp-popup {
     position: absolute;
     z-index: 60;
     left: 0.75rem;
@@ -394,53 +312,53 @@ div:has(> #clientNotes) {
     padding: 0.3rem;
     font-size: 0.8rem;
 }
-.ns-item {
+.snp-item {
     display: flex;
     gap: 0.6rem;
     padding: 0.4rem 0.55rem;
     border-radius: 0.5rem;
     cursor: pointer;
 }
-.ns-item b {
+.snp-item b {
     color: var(--color-primary, #9933ff);
     font-weight: 600;
 }
-.ns-item span {
+.snp-item span {
     opacity: 0.8;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.ns-item.is-active,
-.ns-item:hover {
+.snp-item.is-active,
+.snp-item:hover {
     background: color-mix(in srgb, var(--color-primary, #9933ff) 14%, transparent);
 }
-.ns-empty {
+.snp-empty {
     padding: 0.5rem;
     opacity: 0.75;
 }
-.ns-rows {
+.snp-rows {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
-.ns-row {
+.snp-row {
     display: grid;
     grid-template-columns: 3.2rem 7rem 1fr 2rem;
     grid-template-rows: auto auto;
     gap: 0.35rem;
     align-items: start;
 }
-.ns-row textarea {
+.snp-row textarea {
     grid-column: 2 / 4;
     min-height: 2.5rem;
 }
-.ns-row .ns-num {
+.snp-row .snp-num {
     font-size: 0.7rem;
     opacity: 0.6;
     padding-top: 0.55rem;
 }
-.ns-row input {
+.snp-row input {
     min-height: 0;
     padding: 0.4rem 0.55rem;
     font-size: 0.8rem;
@@ -541,4 +459,42 @@ html.dark .notes-inn-ctx .is-blacklisted {
     color: var(--color-text-secondary, #6b7280);
     font: 500 11px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     white-space: nowrap;
+}
+
+/* «Информация по обращению»: заголовок слева, кнопки — справа в той же строке.
+   Раньше при нехватке места кнопки переносились на вторую строку и прижимались влево
+   (justify-content: space-between с одним элементом в строке). */
+#clientNotesPanel .client-notes-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 0;
+}
+#clientNotesPanel .client-notes-head > h2 {
+    min-width: 0;
+    line-height: 1.25;
+    padding-top: 4px;
+}
+#clientNotesPanel .client-notes-head > h2 .client-notes-save-status {
+    display: block;
+    margin-top: 2px;
+}
+#clientNotesActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-content: flex-start;
+    gap: 4px;
+    max-width: 100%;
+}
+#clientNotesActions > button {
+    width: 30px;
+    height: 30px;
+}
+@media (max-width: 420px) {
+    #clientNotesPanel .client-notes-head {
+        grid-template-columns: 1fr;
+        row-gap: 8px;
+    }
 }

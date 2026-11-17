@@ -98,3 +98,31 @@ describe('fresh-document global search state', () => {
         expect(head).toMatch(/<script src="js\/search-startup\.js\?v=[^"]+"><\/script>/);
     });
 });
+
+describe('автозаполнение поля поиска после загрузки', () => {
+    it('доверенный input без нажатий клавиш (автозаполнение) очищается, ввод с клавиатуры — нет', () => {
+        const { win, input } = mount('');
+        const calls = win.document.addEventListener.mock.calls;
+        const handler = (type, name) => calls.find(([t, fn]) => t === type && (!name || fn.name === name))?.[1];
+        const dropAutofill = handler('input', 'dropAutofill');
+        const markGesture = handler('keydown');
+        expect(typeof dropAutofill).toBe('function');
+        const ev = (inputType = '') => ({ isTrusted: true, target: input, inputType, stopImmediatePropagation: vi.fn() });
+
+        input.value = '100';
+        const auto = ev();
+        dropAutofill(auto);
+        expect(input.value).toBe('');
+        expect(auto.stopImmediatePropagation).toHaveBeenCalled();
+
+        markGesture({ target: input });
+        input.value = '1';
+        dropAutofill(ev('insertText'));
+        expect(input.value).toBe('1');
+
+        // программные события приложения (не доверенные) не трогаются
+        input.value = 'отчет';
+        dropAutofill({ ...ev(), isTrusted: false });
+        expect(input.value).toBe('отчет');
+    });
+});
