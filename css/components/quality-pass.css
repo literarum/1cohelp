@@ -469,3 +469,14 @@ html.dark .notes-inn-ctx .is-blacklisted {
     cursor: pointer;
     font-size: inherit;
 }
+
+/* История поиска */
+#searchResults .sh-clear {
+    background: none;
+    border: 0;
+    font-size: 0.7rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--color-primary, #9933ff);
+    cursor: pointer;
+}
