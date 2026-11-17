@@ -584,11 +584,14 @@ export function loadTimerState() {
             const savedState = JSON.parse(savedStateJSON);
             dlog('Loaded timer state from localStorage:', savedState);
 
-            timerCurrentSetDuration =
+            // При каждом запуске приложения длительность — по умолчанию (01:50); изменения «−/+»
+            // действуют до перезапуска. Идущий отсчёт и пауза посреди отсчёта сохраняются.
+            const savedSetDuration =
                 typeof savedState.timerCurrentSetDuration === 'number' &&
                 savedState.timerCurrentSetDuration >= 0
                     ? savedState.timerCurrentSetDuration
                     : timerDefaultDuration;
+            timerCurrentSetDuration = timerDefaultDuration;
 
             isTimerRunning =
                 typeof savedState.isTimerRunning === 'boolean' ? savedState.isTimerRunning : false;
@@ -609,11 +612,11 @@ export function loadTimerState() {
             } else {
                 isTimerRunning = false;
                 targetEndTime = 0;
-                timeLeftVisual =
+                const pausedMid =
                     typeof savedState.timeLeftVisualOnPause === 'number' &&
-                    savedState.timeLeftVisualOnPause >= 0
-                        ? savedState.timeLeftVisualOnPause
-                        : timerCurrentSetDuration;
+                    savedState.timeLeftVisualOnPause > 0 &&
+                    savedState.timeLeftVisualOnPause < savedSetDuration;
+                timeLeftVisual = pausedMid ? savedState.timeLeftVisualOnPause : timerCurrentSetDuration;
                 pausedRemainingMs =
                     typeof savedState.timeLeftMsOnPause === 'number' &&
                     savedState.timeLeftMsOnPause > 0 &&

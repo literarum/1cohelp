@@ -157,6 +157,84 @@ for (const theme of ['dark', 'light']) {
     });
 }
 
+await check('оверлей загрузки: кадры по стадиям (непустые, гамма, вспышка, затухание)', async () => {
+    const page = await context.newPage();
+    await page.goto(base.replace('index.html', 'sw.js'));
+    const origin = base.replace('/index.html', '');
+    const stats = await page.evaluate(async (origin) => {
+        document.documentElement.dataset.motion = 'full';
+        document.body.innerHTML = '<canvas id="c" style="width:960px;height:600px;display:block"></canvas>';
+        document.body.style.margin = '0';
+        const { createSphereRenderer } = await import(`${origin}/js/features/loading-overlay/sphere-renderer.js`);
+        const out = {};
+        for (const theme of ['dark', 'light']) {
+            document.documentElement.dataset.loadingOverlayTheme = theme;
+            const canvas = document.getElementById('c');
+            const r = createSphereRenderer(canvas);
+            r.start();
+            r.stop();
+            const ctx = canvas.getContext('2d');
+            const measure = (t, e) => {
+                const t0 = performance.now();
+                r.renderAt(t, e);
+                const ms = performance.now() - t0;
+                const { width: w, height: h } = canvas;
+                const data = ctx.getImageData(0, 0, w, h).data;
+                let lit = 0;
+                let sum = 0;
+                let inGamut = 0;
+                let colored = 0;
+                for (let i = 0; i < data.length; i += 16) {
+                    const R = data[i];
+                    const G = data[i + 1];
+                    const B = data[i + 2];
+                    const A = data[i + 3] / 255;
+                    const l = (0.2126 * R + 0.7152 * G + 0.0722 * B) * A;
+                    sum += l;
+                    if (A > 0.05) lit += 1;
+                    const max = Math.max(R, G, B);
+                    const min = Math.min(R, G, B);
+                    if (A > 0.05 && max - min > 25) {
+                        colored += 1;
+                        // Гамма «синий → фиолетовый → маджента»: синий канал не слабее зелёного.
+                        if (B >= G) inGamut += 1;
+                    }
+                }
+                const n = data.length / 16;
+                const cx = Math.round(w / 2);
+                const cy = Math.round(h * 0.44);
+                const c = ctx.getImageData(cx - 2, cy - 2, 4, 4).data;
+                return {
+                    ms,
+                    coverage: lit / n,
+                    mean: sum / n,
+                    gamut: colored ? inGamut / colored : 1,
+                    center: (c[0] + c[1] + c[2]) / 3,
+                };
+            };
+            out[theme] = {
+                steady: measure(5, null),
+                flash: measure(6, 0.3),
+                burst: measure(6, 0.6),
+                end: measure(6, 1),
+            };
+        }
+        return out;
+    }, origin);
+    await page.close();
+    for (const theme of ['dark', 'light']) {
+        const s = stats[theme];
+        assert(s.steady.coverage > 0.3, `${theme}: кадр почти пустой (${s.steady.coverage.toFixed(2)})`);
+        assert(s.steady.gamut > 0.9, `${theme}: цвета вне гаммы (${s.steady.gamut.toFixed(2)})`);
+        assert(s.steady.center > 150, `${theme}: ядро не светится (${s.steady.center})`);
+        for (const [k, v] of Object.entries(s)) assert(v.ms < 120, `${theme}/${k}: кадр ${v.ms.toFixed(0)} мс`);
+    }
+    const d = stats.dark;
+    assert(d.flash.mean > d.steady.mean * 2, `вспышка не ярче покоя (${d.flash.mean.toFixed(1)} / ${d.steady.mean.toFixed(1)})`);
+    assert(d.end.mean < d.burst.mean, 'к концу финала кадр не гаснет');
+    assert(d.end.coverage < 0.05, `после финала на холсте остались частицы (${d.end.coverage.toFixed(2)})`);
+});
+
 await browser.close();
 server.close();
 console.log(results.join('\n'));

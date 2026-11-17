@@ -51,6 +51,33 @@
         }, 0);
     });
 
+    // Автозаполнение браузера / менеджера паролей: поле поиска принимается за «логин» рядом со
+    // скрытым полем пароля и получает сохранённое значение (например «100») уже после загрузки.
+    // Такое заполнение приходит доверенным input без нажатий клавиш, вставки или перетаскивания —
+    // его отбрасываем. Ввод самого пользователя и программные события приложения не трогаем.
+    var lastUserGesture = 0;
+    function markGesture(event) {
+        if (event.target && event.target.id === 'searchInput') lastUserGesture = Date.now();
+    }
+    ['keydown', 'paste', 'drop', 'compositionstart', 'cut'].forEach(function (type) {
+        document.addEventListener(type, markGesture, true);
+    });
+    document.addEventListener(
+        'input',
+        function dropAutofill(event) {
+            var input = event.target;
+            if (!event.isTrusted || !input || input.id !== 'searchInput') return;
+            var it = event.inputType || '';
+            var gesture = Date.now() - lastUserGesture < 1500;
+            if (gesture || it === 'insertFromPaste' || it === 'insertFromDrop' || it === 'insertText' || it.indexOf('delete') === 0) return;
+            if (!input.value) return;
+            event.stopImmediatePropagation();
+            input.value = '';
+            document.getElementById('clearSearchInputBtn')?.classList.add('hidden');
+        },
+        true,
+    );
+
     window.__copilotSearchStartup = Object.freeze({
         initialize: function () {
             if (initialized) return;

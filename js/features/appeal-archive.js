@@ -86,7 +86,6 @@ export async function startNewAppeal() {
         console.warn('[appeal-archive] не удалось сохранить очищенное поле', e);
     }
     try {
-        localStorage.removeItem('copilot.mainChecklist.v1');
         document.dispatchEvent(new CustomEvent('copilot1co:new-appeal'));
     } catch {
         /* ignore */

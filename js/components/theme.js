@@ -7,6 +7,12 @@ import {
     THEME_RESOLVED_KEY as LOADING_THEME_RESOLVED_KEY,
     OVERLAY_SNAPSHOT_KEY as LOADING_OVERLAY_SNAPSHOT_KEY,
 } from '../features/loading-overlay/index.js';
+import {
+    readThemeSchedule,
+    isDarkBySchedule,
+    msUntilNextSwitch,
+    initThemeScheduleUI,
+} from './theme-schedule.js';
 
 /**
  * Компонент темы (светлая / тёмная / системная).
@@ -161,10 +167,30 @@ export function setTheme(mode, options = {}) {
         setTheme._mq = null;
         setTheme._onChange = null;
     }
+    clearTimeout(setTheme._scheduleTimer);
+    setTheme._scheduleTimer = null;
     let isDark;
     if (mode === 'dark') isDark = true;
     else if (mode === 'light') isDark = false;
-    else {
+    else if (readThemeSchedule().enabled) {
+        // «Авто» по расписанию: тема по времени суток, переключение — таймером к следующей границе.
+        const schedule = readThemeSchedule();
+        isDark = isDarkBySchedule(schedule);
+        const rearm = () => {
+            setTheme._scheduleTimer = setTimeout(() => {
+                const nowDark = isDarkBySchedule(readThemeSchedule());
+                if (nowDark !== root.classList.contains('dark')) {
+                    apply(nowDark);
+                    const persist = !options.preview;
+                    if (persist) persistLoadingThemeHint('auto', nowDark);
+                    applyLoadingOverlayTheme(nowDark, persist);
+                    updateThemeToggleButtonIcons(nowDark);
+                }
+                rearm();
+            }, Math.min(msUntilNextSwitch(readThemeSchedule()), 15 * 60000));
+        };
+        rearm();
+    } else {
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
         setTheme._mq = mq;
         setTheme._onChange = (e) => {
@@ -276,4 +302,17 @@ export function applyThemeOverrides(map = {}) {
             if (cfg.dark) root.style.setProperty(`--override-${toKebab(key)}-dark`, cfg.dark);
         }
     }
+}
+
+/** Блок «Авто по расписанию» в «Оформлении»; при изменении переприменяет тему, если выбрано «Авто». */
+export function initThemeSchedule() {
+    initThemeScheduleUI({
+        onChange: () => {
+            const mode = State.userPreferences?.theme;
+            const previewAuto = document.querySelector(
+                '#appCustomizationModal input[name="themeMode"][value="auto"]',
+            )?.checked;
+            if (mode === 'auto' || previewAuto) setTheme('auto', { preview: mode !== 'auto' });
+        },
+    });
 }

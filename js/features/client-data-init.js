@@ -452,9 +452,12 @@ export async function initClientDataSystem() {
     import('./appeal-archive.js')
         .then((m) => m.initAppealArchiveButtons())
         .catch((e) => console.warn('[appeal-archive] init failed', e));
-    import('./main-checklist.js')
-        .then((m) => m.initMainChecklist())
-        .catch((e) => console.warn('[main-checklist] init failed', e));
+    try {
+        // Чек-лист шагов главного алгоритма убран по решению владельца — чистим его прежнюю отметку.
+        localStorage.removeItem('copilot.mainChecklist.v1');
+    } catch {
+        /* хранилище недоступно */
+    }
     import('./notes-snippets.js')
         .then((m) => m.initNotesSnippets())
         .catch((e) => console.warn('[notes-snippets] init failed', e));

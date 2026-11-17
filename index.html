@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
-        <script src="js/search-startup.js?v=20261117-overlay-v3"></script>
+        <script src="js/search-startup.js?v=20261117-owner-fixes"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
         <meta name="description" content="Copilot 1СО — локальный помощник оператора: алгоритмы, закладки, регламенты, анализатор XML и данные клиента. Работает офлайн." />
@@ -144,8 +144,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=20261117-overlay-v3"></script>
-        <script src="js/vendor-loader.js?v=20261117-overlay-v3"></script>
+        <script src="js/vendor-config.js?v=20261117-owner-fixes"></script>
+        <script src="js/vendor-loader.js?v=20261117-owner-fixes"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -211,12 +211,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=20261117-overlay-v3"
+            href="css/tailwind.generated.css?v=20261117-owner-fixes"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=20261117-overlay-v3" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261117-overlay-v3" />
+        <link rel="stylesheet" href="css/main.css?v=20261117-owner-fixes" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261117-owner-fixes" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -256,6 +256,24 @@
                     resolvedTheme = hint;
                 } else if (hint === 'auto') {
                     resolvedTheme = prefersDark ? 'dark' : 'light';
+                    // «Авто» по расписанию (js/components/theme-schedule.js).
+                    try {
+                        var sched = JSON.parse(readStorage('copilot.themeSchedule.v1') || 'null');
+                        var tm = function (v) {
+                            var m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(v || ''));
+                            return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+                        };
+                        var lf = sched && tm(sched.lightFrom);
+                        var df = sched && tm(sched.darkFrom);
+                        if (sched && sched.enabled === true && lf !== null && df !== null && lf !== df) {
+                            var d = new Date();
+                            var n = d.getHours() * 60 + d.getMinutes();
+                            var isLight = lf < df ? n >= lf && n < df : n >= lf || n < df;
+                            resolvedTheme = isLight ? 'light' : 'dark';
+                        }
+                    } catch (e) {
+                        /* расписание повреждено — как в системе */
+                    }
                 } else if (storedResolved === 'dark' || storedResolved === 'light') {
                     resolvedTheme = storedResolved;
                 } else if (storedOverlaySnapshot && (storedOverlaySnapshot.tone === 'dark' || storedOverlaySnapshot.tone === 'light')) {
@@ -752,6 +770,9 @@
                                     type="text"
                                     id="searchInput"
                                     autocomplete="off"
+                                    data-1p-ignore
+                                    data-lpignore="true"
+                                    data-form-type="other"
                                     name="copilotGlobalSearch"
                                     placeholder="Поиск..."
                                     aria-label="Поиск по приложению"
@@ -1185,7 +1206,7 @@
                             class="bg-gray-100 dark:bg-gray-800 p-content-sm rounded-lg shadow-md min-w-0"
                         >
                             <div
-                                class="flex flex-row flex-wrap justify-between items-center gap-x-3 gap-y-2 mb-content-sm"
+                                class="client-notes-head flex flex-row flex-wrap justify-between items-center gap-x-3 gap-y-2 mb-content-sm"
                             >
                                 <h2
                                     class="text-lg font-bold text-gray-900 dark:text-gray-100 flex-shrink-0"
@@ -4092,7 +4113,10 @@
                                 id="engineeringCockpitPasswordInput"
                                 type="password"
                                 inputmode="numeric"
-                                autocomplete="off"
+                                autocomplete="new-password"
+                                data-1p-ignore
+                                data-lpignore="true"
+                                data-form-type="other"
                                 class="engineering-cockpit-password-input"
                                 placeholder="Пароль доступа"
                                 title="Введите пароль доступа к машинному отделению"
@@ -5117,6 +5141,14 @@
                                     14 дней
                                 </button>
                             </div>
+                            <label for="reminderFormRepeat" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mt-4 mb-2">Повтор</label>
+                            <select id="reminderFormRepeat" class="reminder-form-control w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm">
+                                <option value="none">Не повторять</option>
+                                <option value="daily">Каждый день</option>
+                                <option value="weekdays">По будням</option>
+                                <option value="weekly">Каждую неделю</option>
+                                <option value="monthly">Каждый месяц</option>
+                            </select>
                         </div>
 
                         <div class="flex min-h-0 min-w-0 flex-col">
@@ -5811,7 +5843,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=20261117-overlay-v3"></script>
-        <script type="module" src="./js/entry.js?v=20261117-overlay-v3"></script>
+        <script type="module" src="./script.js?v=20261117-owner-fixes"></script>
+        <script type="module" src="./js/entry.js?v=20261117-owner-fixes"></script>
     </body>
 </html>

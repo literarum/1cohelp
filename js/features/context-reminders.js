@@ -11,6 +11,9 @@ import {
     compareRemindersByDueAsc,
     isPendingDue,
     intentLabel,
+    REMINDER_REPEAT_LABELS,
+    normalizeRepeat,
+    nextRepeatDue,
 } from './context-reminders-core.js';
 
 /** @type {import('../services/notification.js').showNotification | null} */
@@ -429,6 +432,7 @@ function renderReminderCard(row, archived = false) {
                 <div class="flex flex-wrap items-center gap-2 mb-1">
                     <span class="font-semibold text-gray-900 dark:text-gray-100 truncate">${title}</span>
                     <span class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-primary/15 text-primary">${escapeHtml(intent)}</span>
+                    ${normalizeRepeat(row.repeat) !== 'none' ? `<span class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200" title="Повторяющееся напоминание"><i class="fas fa-redo-alt mr-1" aria-hidden="true"></i>${escapeHtml(REMINDER_REPEAT_LABELS[normalizeRepeat(row.repeat)])}</span>` : ''}
                 </div>
                 ${ctxLine ? `<p class="text-xs text-gray-600 dark:text-gray-400 mb-1 truncate">${ctxLine}</p>` : ''}
                 <p class="text-sm ${overdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-700 dark:text-gray-300'}">
@@ -512,6 +516,8 @@ export function openReminderModal(options = {}) {
     const pad = (n) => String(n).padStart(2, '0');
     const localStr = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}T${pad(dueDate.getHours())}:${pad(dueDate.getMinutes())}`;
     dueInput.value = localStr;
+    const repeatSelect = modal.querySelector('#reminderFormRepeat');
+    if (repeatSelect) repeatSelect.value = normalizeRepeat(options.repeat);
 
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden', 'modal-open');
@@ -612,6 +618,8 @@ async function submitReminderForm() {
         contextId: (ctxIdInput?.value || '').trim() || null,
         contextLabel: (ctxLabelInput?.value || '').trim() || null,
         status: 'pending',
+        repeat: normalizeRepeat(modal.querySelector('#reminderFormRepeat')?.value),
+        repeatDay: new Date(dueIso).getDate(),
         updatedAt: new Date().toISOString(),
     };
 
@@ -634,6 +642,19 @@ async function markReminderDone(id) {
     const rows = await getAllRemindersFromDB();
     const row = rows.find((r) => String(r.id) === String(id));
     if (!row) return;
+    // Повторяющееся: не в архив, а переносится на следующий срок.
+    const next = nextRepeatDue(row.dueAt, row.repeat, Date.now(), row.repeatDay);
+    if (next) {
+        row.dueAt = next;
+        row.lastDoneAt = new Date().toISOString();
+        row.updatedAt = row.lastDoneAt;
+        toastShownThisSession.delete(String(id));
+        await saveReminderRow(row);
+        deps.showNotification?.(`Выполнено. Следующее — ${formatDueRu(next)}.`, 'success', 3500);
+        await renderRemindersPage();
+        await runReminderDueCheck();
+        return;
+    }
     row.status = 'done';
     row.completedAt = new Date().toISOString();
     await saveReminderRow(row);
