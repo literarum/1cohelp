@@ -203,7 +203,14 @@ import {
     linkify as linkifyModule,
     createBookmarkDetailUrlSectionElement,
 } from './js/utils/html.js';
-import { bookmarkDescriptionHtml } from './js/features/bookmark-rich-text.js';
+import {
+    bookmarkDescriptionHtml,
+    bookmarkInlineShotIds,
+} from './js/features/bookmark-rich-text.js';
+import {
+    hydrateBookmarkFigures,
+    revokeObjectUrlsIn,
+} from './js/features/bookmark-inline-images.js';
 
 import {
     escapeRegExp,
@@ -3128,7 +3135,7 @@ async function showBookmarkDetailModal(bookmarkId) {
                 currentModal.classList.add('hidden');
 
                 const images = currentModal.querySelectorAll(
-                    '#bookmarkDetailScreenshotsGrid img[data-object-url]',
+                    '#bookmarkDetailScreenshotsGrid img[data-object-url], #bookmarkDetailTextContent img[data-object-url]',
                 );
                 images.forEach((img) => {
                     if (img.dataset.objectUrl) {
@@ -3283,6 +3290,7 @@ async function showBookmarkDetailModal(bookmarkId) {
     };
 
     titleEl.textContent = 'Загрузка...';
+    revokeObjectUrlsIn(textContentEl);
     textContentEl.innerHTML = '<p>Загрузка...</p>';
     editButton.classList.add('hidden');
     exportButton.classList.add('hidden');
@@ -3313,6 +3321,13 @@ async function showBookmarkDetailModal(bookmarkId) {
             descWrap.style.fontSize = '102%';
             descWrap.innerHTML = bookmarkDescriptionHtml(bookmark) || '<p>Нет описания.</p>';
             textContentEl.appendChild(descWrap);
+            const inlineShotIds = bookmarkInlineShotIds(descWrap.innerHTML);
+            if (inlineShotIds.size) {
+                hydrateBookmarkFigures(descWrap, {
+                    loadShot: (id) => getFromIndexedDB('screenshots', id),
+                    openLightbox,
+                }).catch((e) => console.warn('[bookmarkDetail] inline images:', e));
+            }
 
             editButton.classList.remove('hidden');
             exportButton.classList.remove('hidden');
@@ -3352,10 +3367,14 @@ async function showBookmarkDetailModal(bookmarkId) {
                             'parentId',
                             bookmarkId,
                         );
+                        // Изображения, встроенные в текст, повторно в галерее не показываются.
                         const bookmarkScreenshots = (allParentScreenshots || []).filter(
-                            (s) => s.parentType === 'bookmark',
+                            (s) => s.parentType === 'bookmark' && !inlineShotIds.has(Number(s.id)),
                         );
-                        if (
+                        if (bookmarkScreenshots.length === 0 && inlineShotIds.size > 0) {
+                            if (imagesSection) imagesSection.classList.add('hidden');
+                            screenshotsGridEl.innerHTML = '';
+                        } else if (
                             bookmarkScreenshots.length > 0 &&
                             typeof renderScreenshotThumbnails === 'function'
                         ) {

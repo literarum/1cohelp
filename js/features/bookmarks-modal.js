@@ -160,8 +160,8 @@ export async function ensureBookmarkModal() {
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">В глобальном поиске используйте <span class="font-mono">#тег</span> для фильтра по меткам.</p>
                         </div>
                         <div class="mb-4 ${SCREENSHOT_EDIT_FIELD.wrapperCard}">
-                             <label class="${SCREENSHOT_EDIT_FIELD.label}">Скриншоты (опционально)</label>
-                             <p class="${SCREENSHOT_EDIT_FIELD.hint}">Добавляйте изображения кнопкой или вставкой из буфера (Ctrl/Cmd+V) в эту область.</p>
+                             <label class="${SCREENSHOT_EDIT_FIELD.label}">Вложения-изображения (опционально)</label>
+                             <p class="${SCREENSHOT_EDIT_FIELD.hint}">Чтобы изображение стояло между строками, вставьте его прямо в текст описания: кнопка <i class="fas fa-image" aria-hidden="true"></i>, Ctrl/Cmd+V или перетаскивание. Здесь — изображения, прикреплённые отдельно; кнопка <i class="fas fa-level-up-alt" aria-hidden="true"></i> на миниатюре переносит его в текст.</p>
                              <div id="bookmarkScreenshotThumbnailsContainer" class="${SCREENSHOT_EDIT_FIELD.dropzone}" role="button" tabindex="0" aria-label="Добавить скриншоты: нажмите, перетащите изображения или вставьте из буфера">
                              </div>
                              <div class="${SCREENSHOT_EDIT_FIELD.actions}">

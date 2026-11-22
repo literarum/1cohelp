@@ -20,6 +20,134 @@ export const BOOKMARK_FONTS = [
 ];
 export const BOOKMARK_SIZES = { 1: 10, 2: 13, 3: 16, 4: 18, 5: 24, 6: 32, 7: 48 };
 
+/*
+ * Встроенные изображения. В HTML хранится только ссылка на запись хранилища `screenshots`
+ * (data-shot="ID") или, до сохранения, на черновик (data-shot-temp="t…"). Сам Blob в разметку
+ * не попадает никогда: так не раздуваются запись закладки, поисковый индекс и история правок,
+ * а резервные копии, слияние, удаление закладки и проверка целостности продолжают работать
+ * со скриншотами по прежним правилам (они остаются в bookmark.screenshotIds).
+ */
+export const FIGURE_ALIGNS = ['left', 'center', 'right', 'wide'];
+export const FIGURE_MIN_WIDTH = 15;
+const SHOT_ID_RE = /^[1-9]\d{0,12}$/;
+const SHOT_TEMP_RE = /^t[a-z0-9]{6,32}$/;
+const round4 = (n) => Math.round(n * 10000) / 10000;
+const plainText = (value, max) =>
+    String(value || '')
+        .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, max);
+
+/** "x,y,w,h" в долях исходного изображения; null — без кадрирования или некорректно. */
+export function parseFigureCrop(value) {
+    const parts = String(value || '')
+        .split(',')
+        .map((s) => Number(s.trim()));
+    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+    const [x, y, w, h] = parts;
+    if (x < 0 || y < 0 || w < 0.02 || h < 0.02 || x + w > 1.0001 || y + h > 1.0001) return null;
+    if (x < 0.0005 && y < 0.0005 && w > 0.9995 && h > 0.9995) return null;
+    return { x: round4(x), y: round4(y), w: round4(Math.min(w, 1 - x)), h: round4(Math.min(h, 1 - y)) };
+}
+export function formatFigureCrop(crop) {
+    const c = crop && parseFigureCrop(`${crop.x},${crop.y},${crop.w},${crop.h}`);
+    return c ? `${c.x},${c.y},${c.w},${c.h}` : '';
+}
+
+/** Нормализованная модель figure (из исходного или уже очищенного элемента). */
+export function readFigureModel(el) {
+    const shot = el.getAttribute('data-shot');
+    const temp = el.getAttribute('data-shot-temp');
+    const align = el.getAttribute('data-align');
+    const width = Number(el.getAttribute('data-width'));
+    const ratio = Number(el.getAttribute('data-ratio'));
+    const caption = Array.from(el.children).find((c) => c.tagName === 'FIGCAPTION');
+    return {
+        shot: SHOT_ID_RE.test(shot || '') ? Number(shot) : null,
+        temp: !SHOT_ID_RE.test(shot || '') && SHOT_TEMP_RE.test(temp || '') ? temp : null,
+        align: FIGURE_ALIGNS.includes(align) ? align : 'center',
+        width:
+            Number.isFinite(width) && width >= FIGURE_MIN_WIDTH && width <= 100
+                ? Math.round(width)
+                : 100,
+        crop: parseFigureCrop(el.getAttribute('data-crop')),
+        ratio: Number.isFinite(ratio) && ratio >= 0.02 && ratio <= 50 ? round4(ratio) : null,
+        alt: plainText(el.getAttribute('data-alt'), 300),
+        caption: caption ? plainText(caption.textContent, 500) : null,
+    };
+}
+
+/** Каноническая разметка: значения по умолчанию не пишутся, чтобы сравнение «есть ли изменения» было стабильным. */
+export function buildFigureElement(model) {
+    const fig = document.createElement('figure');
+    if (model.shot) fig.setAttribute('data-shot', String(model.shot));
+    else if (model.temp) fig.setAttribute('data-shot-temp', model.temp);
+    else return null;
+    const align = FIGURE_ALIGNS.includes(model.align) ? model.align : 'center';
+    if (align !== 'center') fig.setAttribute('data-align', align);
+    // «Во всю ширину» по определению 100 %; для остальных 100 % — значение по умолчанию.
+    if (align !== 'wide' && model.width && model.width !== 100)
+        fig.setAttribute('data-width', String(model.width));
+    const crop = formatFigureCrop(model.crop);
+    if (crop) fig.setAttribute('data-crop', crop);
+    if (model.ratio) fig.setAttribute('data-ratio', String(round4(model.ratio)));
+    if (model.alt) fig.setAttribute('data-alt', model.alt);
+    if (model.caption) {
+        const cap = document.createElement('figcaption');
+        cap.textContent = model.caption;
+        fig.append(cap);
+    }
+    return fig;
+}
+
+export function hasBookmarkFigures(html) {
+    return typeof html === 'string' && /<figure\b[^>]*\sdata-shot(-temp)?="/i.test(html);
+}
+
+/** ID сохранённых скриншотов, на которые ссылается текст. Без DOM: используется и при слиянии БД. */
+export function bookmarkInlineShotIds(html) {
+    const ids = new Set();
+    if (typeof html !== 'string') return ids;
+    for (const m of html.matchAll(/<figure\b[^>]*?\sdata-shot="([1-9]\d{0,12})"/gi)) ids.add(Number(m[1]));
+    return ids;
+}
+export function bookmarkInlineTempKeys(html) {
+    const keys = new Set();
+    if (typeof html !== 'string') return keys;
+    for (const m of html.matchAll(/<figure\b[^>]*?\sdata-shot-temp="(t[a-z0-9]{6,32})"/gi)) keys.add(m[1]);
+    return keys;
+}
+
+/** Перепривязка ссылок при импорте/слиянии (старый ID → новый ID). */
+export function remapBookmarkInlineShotIds(html, idMap) {
+    if (typeof html !== 'string' || !idMap || !idMap.size) return html;
+    return html.replace(
+        /(<figure\b[^>]*?\sdata-shot=")([1-9]\d{0,12})(")/gi,
+        (all, a, id, b) => {
+            const mapped = idMap.get(Number(id)) ?? idMap.get(id) ?? idMap.get(String(id));
+            return SHOT_ID_RE.test(String(mapped ?? '')) ? a + String(mapped) + b : all;
+        },
+    );
+}
+
+/** Черновики → сохранённые ID. Ссылки на черновики без записи удаляются, а не сохраняются «битыми». */
+export function resolveBookmarkInlineTempShots(html, tempToId) {
+    if (typeof html !== 'string' || !html) return html;
+    const template = document.createElement('template');
+    template.innerHTML = sanitizeBookmarkHtml(html);
+    for (const fig of template.content.querySelectorAll('figure[data-shot-temp]')) {
+        const id = tempToId?.get(fig.getAttribute('data-shot-temp'));
+        if (!SHOT_ID_RE.test(String(id ?? ''))) {
+            fig.remove();
+            continue;
+        }
+        fig.removeAttribute('data-shot-temp');
+        fig.setAttribute('data-shot', String(id));
+    }
+    return sanitizeBookmarkHtml(template.innerHTML);
+}
+
 /** Links created by the editor are explicit, non-executable destinations. */
 export function bookmarkLink(value, normalizeHost = true) {
     let text = String(value || '').trim();
@@ -112,6 +240,22 @@ export function sanitizeBookmarkHtml(value) {
             el.remove();
             continue;
         }
+        if (tag === 'FIGCAPTION') {
+            // Подпись — только простой текст и только внутри figure; иначе остаётся текстом.
+            if (el.parentElement?.tagName === 'FIGURE') {
+                const cap = document.createElement('figcaption');
+                cap.textContent = plainText(el.textContent, 500);
+                el.replaceWith(cap);
+            } else el.replaceWith(...el.childNodes);
+            continue;
+        }
+        if (tag === 'FIGURE') {
+            // Всё содержимое, кроме подписи (img, рамки, ручки редактора), отбрасывается.
+            const clean = buildFigureElement(readFigureModel(el));
+            if (clean) el.replaceWith(clean);
+            else el.remove();
+            continue;
+        }
         if (tag === 'FONT') {
             const span = document.createElement('span');
             span.style.cssText = el.style.cssText;
@@ -167,7 +311,7 @@ export function bookmarkHtmlToText(html) {
     template.content.querySelectorAll('br').forEach((el) => el.replaceWith('\n'));
     template.content.querySelectorAll('td,th').forEach((el) => el.append('\t'));
     template.content
-        .querySelectorAll('p,div,li,h1,h2,h3,h4,blockquote,pre,hr,tr,table')
+        .querySelectorAll('p,div,li,h1,h2,h3,h4,blockquote,pre,hr,tr,table,figure,figcaption')
         .forEach((el) => el.append('\n'));
     return (template.content.textContent || '')
         .replace(/\u00a0/g, ' ')
@@ -179,7 +323,7 @@ export function bookmarkHtmlToText(html) {
 export function bookmarkDescriptionHtml(bookmark) {
     if (typeof bookmark?.descriptionHtml === 'string' && bookmark.descriptionHtml.trim()) {
         const clean = sanitizeBookmarkHtml(bookmark.descriptionHtml);
-        if (bookmarkHtmlToText(clean)) return clean;
+        if (bookmarkHtmlToText(clean) || hasBookmarkFigures(clean)) return clean;
     }
     return bookmark?.description ? `<p>${linkify(String(bookmark.description))}</p>` : '';
 }
@@ -189,10 +333,12 @@ export function bookmarkDescriptionState(form) {
     if (rich) {
         const html = sanitizeBookmarkHtml(rich.value);
         const text = bookmarkHtmlToText(html);
-        return { description: text, descriptionHtml: text ? html : null };
+        const hasImages = hasBookmarkFigures(html);
+        return { description: text, descriptionHtml: text || hasImages ? html : null, hasImages };
     }
     return {
         description: form?.elements.bookmarkDescription?.value.trim() || '',
         descriptionHtml: null,
+        hasImages: false,
     };
 }

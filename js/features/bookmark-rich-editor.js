@@ -6,6 +6,7 @@ import {
     bookmarkLink,
     sanitizeBookmarkHtml,
 } from './bookmark-rich-text.js';
+import { attachBookmarkInlineImages } from './bookmark-image-editor.js';
 
 const make = (tag, cls, text) => {
     const el = document.createElement(tag);
@@ -13,6 +14,109 @@ const make = (tag, cls, text) => {
     if (text !== undefined) el.textContent = text;
     return el;
 };
+const DEFAULT_STATUS =
+    'Ctrl+B — жирный · Ctrl+I — курсив · Ctrl+K — ссылка · Изображение: кнопка, Ctrl+V или перетаскивание';
+
+/** Пустые строки по краям документа (служебные строки возле изображений) не сохраняются. */
+export function trimEmptyEdges(html) {
+    if (!html) return '';
+    const t = document.createElement('template');
+    t.innerHTML = html;
+    const blank = (n) =>
+        n &&
+        ((n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) ||
+            (n.nodeType === Node.ELEMENT_NODE &&
+                /^(P|DIV)$/.test(n.tagName) &&
+                !n.textContent.replace(/[​ ]/g, '').trim() &&
+                !n.querySelector('figure,img,table,hr,ul,ol')));
+    while (blank(t.content.firstChild)) t.content.firstChild.remove();
+    while (blank(t.content.lastChild)) t.content.lastChild.remove();
+    return t.innerHTML.trim();
+}
+
+/**
+ * История правок редактора (текст и изображения в одном потоке).
+ * Нативная отмена браузера не видит изменений DOM, сделанных не через execCommand
+ * (перемещение, размер, кадр изображения), поэтому история ведётся явно: снимок
+ * очищенной разметки + позиция курсора; подряд идущий набор текста объединяется.
+ */
+function createHistory(editable, { serialize, restore, limit = 200 }) {
+    let stack = [];
+    let index = -1;
+    let lastAt = 0;
+    let lastKind = '';
+    const caretOffset = () => {
+        const sel = document.getSelection();
+        if (!sel?.rangeCount || !editable.contains(sel.getRangeAt(0).startContainer)) return null;
+        const r = document.createRange();
+        r.selectNodeContents(editable);
+        const range = sel.getRangeAt(0);
+        r.setEnd(range.startContainer, range.startOffset);
+        return r.toString().length;
+    };
+    const snapshot = () => ({ html: serialize(), caret: caretOffset() });
+    return {
+        reset() {
+            stack = [snapshot()];
+            index = 0;
+            lastAt = 0;
+            lastKind = '';
+        },
+        record(kind = 'op') {
+            const snap = snapshot();
+            const top = stack[index];
+            if (top && top.html === snap.html) {
+                top.caret = snap.caret;
+                return;
+            }
+            const now = Date.now();
+            const coalesce = kind === 'typing' && lastKind === 'typing' && now - lastAt < 1200 && index > 0;
+            stack = stack.slice(0, index + 1);
+            if (coalesce) stack[index] = snap;
+            else {
+                stack.push(snap);
+                if (stack.length > limit) stack.shift();
+                index = stack.length - 1;
+            }
+            lastAt = now;
+            lastKind = kind;
+        },
+        undo() {
+            if (index <= 0) return false;
+            index--;
+            lastKind = '';
+            restore(stack[index]);
+            return true;
+        },
+        redo() {
+            if (index >= stack.length - 1) return false;
+            index++;
+            lastKind = '';
+            restore(stack[index]);
+            return true;
+        },
+        canUndo: () => index > 0,
+        canRedo: () => index < stack.length - 1,
+        placeCaret(offset) {
+            if (offset == null) return;
+            const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT);
+            let left = offset;
+            let node = null;
+            while ((node = walker.nextNode())) {
+                if (left <= node.length) {
+                    const r = document.createRange();
+                    r.setStart(node, left);
+                    r.collapse(true);
+                    const sel = document.getSelection();
+                    sel?.removeAllRanges();
+                    sel?.addRange(r);
+                    return;
+                }
+                left -= node.length;
+            }
+        },
+    };
+}
 
 /** One editor per bookmark form. Hidden fields preserve the existing save/search/dirty contracts. */
 export function mountBookmarkRichEditor(form) {
@@ -37,11 +141,7 @@ export function mountBookmarkRichEditor(form) {
     editable.dataset.placeholder = 'Описание закладки или текст заметки';
     const panel = make('div', 'bookmark-format-panel');
     panel.hidden = true;
-    const status = make(
-        'div',
-        'bookmark-editor-status',
-        'Ctrl+B — жирный · Ctrl+I — курсив · Ctrl+U — подчёркивание · Ctrl+K — ссылка',
-    );
+    const status = make('div', 'bookmark-editor-status', DEFAULT_STATUS);
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     host.append(toolbar, panel, editable, status);
@@ -75,15 +175,45 @@ export function mountBookmarkRichEditor(form) {
         selection.removeAllRanges();
         selection.addRange(range);
     };
-    const sync = (emit = true) => {
-        rich.value = sanitizeBookmarkHtml(editable.innerHTML);
+    let restoring = false;
+    let images = null;
+    const history = createHistory(editable, {
+        serialize: () => sanitizeBookmarkHtml(editable.innerHTML),
+        restore: (snap) => {
+            restoring = true;
+            try {
+                editable.innerHTML = snap.html || '<p><br></p>';
+                images?.decorateAll();
+                editable.focus({ preventScroll: true });
+                history.placeCaret(snap.caret);
+                remember();
+                sync(true, null);
+                images?.refreshGallery();
+                refresh();
+            } finally {
+                restoring = false;
+            }
+        },
+    });
+    /** kind: 'typing' | 'op' — шаг истории; null — без записи (восстановление, загрузка). */
+    const sync = (emit = true, kind = 'op') => {
+        rich.value = trimEmptyEdges(sanitizeBookmarkHtml(editable.innerHTML));
         plain.value = bookmarkHtmlToText(rich.value);
         editable.removeAttribute('aria-invalid');
+        if (kind && !restoring) history.record(kind);
         if (emit) {
             syncing = true;
             plain.dispatchEvent(new Event('input', { bubbles: true }));
             syncing = false;
         }
+    };
+    const undo = () => {
+        images?.deselect();
+        if (!history.undo()) status.textContent = 'Отменять больше нечего.';
+    };
+    const redo = () => {
+        images?.deselect();
+        if (!history.redo()) status.textContent = 'Повторять больше нечего.';
     };
     const selectedElement = () => {
         const anchor = range?.startContainer;
@@ -375,6 +505,16 @@ export function mountBookmarkRichEditor(form) {
             paragraphs,
         );
     const insert = group('Вставка');
+    button(
+        'Вставить изображение в позицию курсора (также Ctrl+V или перетаскивание)',
+        'fa-image',
+        () => {
+            closePanel();
+            remember();
+            images.pickAndInsert();
+        },
+        insert,
+    ).classList.add('bookmark-format-button--image');
     let linkButton;
     linkButton = button(
         'Вставить или изменить ссылку (Ctrl+K)',
@@ -573,24 +713,24 @@ export function mountBookmarkRichEditor(form) {
         ['Удалить таблицу', 'fa-table-cells', 'delete'],
     ])
         tableButtons.push(button(label, icon, () => tableAction(action), tables));
-    const history = group('История и очистка');
+    const historyGroup = group('История и очистка');
     button(
         'Отменить (Ctrl+Z)',
         'fa-undo',
         () => {
             closePanel();
-            command('undo');
+            undo();
         },
-        history,
+        historyGroup,
     );
     button(
         'Повторить (Ctrl+Y)',
         'fa-redo',
         () => {
             closePanel();
-            command('redo');
+            redo();
         },
-        history,
+        historyGroup,
     );
     button(
         'Очистить оформление',
@@ -599,38 +739,89 @@ export function mountBookmarkRichEditor(form) {
             closePanel();
             restore();
             if (document.getSelection()?.isCollapsed) {
-                range = document.createRange();
-                range.selectNodeContents(editable);
-                const text = bookmarkHtmlToText(editable.innerHTML);
-                command(
-                    'insertHTML',
-                    bookmarkDescriptionHtml({ description: text }) || '<p><br></p>',
-                );
+                // Текст становится простым, изображения остаются на своих местах.
+                const t = document.createElement('template');
+                t.innerHTML = sanitizeBookmarkHtml(editable.innerHTML);
+                const parts = [];
+                let buffer = '';
+                const flush = () => {
+                    const text = bookmarkHtmlToText(buffer);
+                    if (text) parts.push(bookmarkDescriptionHtml({ description: text }));
+                    buffer = '';
+                };
+                for (const node of Array.from(t.content.childNodes)) {
+                    if (node.nodeName === 'FIGURE') {
+                        flush();
+                        parts.push(node.outerHTML);
+                    } else buffer += node.nodeType === Node.ELEMENT_NODE ? node.outerHTML : node.textContent;
+                }
+                flush();
+                images.deselect();
+                editable.innerHTML = parts.join('') || '<p><br></p>';
+                images.decorateAll();
+                sync();
+                images.refreshGallery();
+                refresh();
+                status.textContent = 'Оформление очищено. Ctrl+Z — вернуть.';
             } else {
                 command('removeFormat');
                 command('unlink');
             }
         },
-        history,
+        historyGroup,
     );
-    editable.addEventListener('input', () => {
-        sync();
+    images = attachBookmarkInlineImages({
+        form,
+        host,
+        editable,
+        say: (message) => {
+            status.textContent = message;
+        },
+        getRange: () => range,
+        setRange: (r) => {
+            range = r;
+        },
+        commit: (kind = 'op') => {
+            sync(true, kind);
+            refresh();
+        },
+    });
+    const TYPING = /^(insertText|insertCompositionText|insertReplacementText|deleteContent|deleteWord|deleteSoftLine|deleteHardLine)/;
+    editable.addEventListener('input', (event) => {
+        sync(true, TYPING.test(event.inputType || '') ? 'typing' : 'op');
         refresh();
     });
+    editable.addEventListener('beforeinput', (event) => {
+        // Отмена из меню «Правка» или жестом — через общую историю, а не нативную.
+        if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') {
+            event.preventDefault();
+            if (event.inputType === 'historyUndo') undo();
+            else redo();
+        }
+    });
     editable.addEventListener('paste', (event) => {
+        if (images.handlePaste(event)) return;
         event.preventDefault();
         remember();
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain') || '';
         const clean = html
-            ? sanitizeBookmarkHtml(html)
+            ? images.filterPastedHtml(sanitizeBookmarkHtml(html))
             : bookmarkDescriptionHtml({ description: text });
-        if (clean) command('insertHTML', clean);
+        if (clean) {
+            command('insertHTML', clean);
+            if (/<figure/i.test(clean)) {
+                images.decorateAll();
+                sync();
+                images.refreshGallery();
+            }
+        }
     });
     editable.addEventListener('drop', (event) => {
+        if (images.onDrop(event)) return;
         event.preventDefault();
         status.textContent =
-            'Вставляйте текст через Ctrl+V, изображения добавляйте в блок скриншотов.';
+            'Сюда можно перетащить изображения. Текст вставляйте через Ctrl+V.';
     });
     editable.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !panel.hidden) {
@@ -640,8 +831,20 @@ export function mountBookmarkRichEditor(form) {
             restore();
             return;
         }
+        if (images.handleKeydown(event)) return;
         if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
         const key = event.key.toLowerCase();
+        // По физической клавише: работает и в русской раскладке.
+        if (event.code === 'KeyZ' && !event.shiftKey) {
+            event.preventDefault();
+            undo();
+            return;
+        }
+        if ((event.code === 'KeyZ' && event.shiftKey) || event.code === 'KeyY') {
+            event.preventDefault();
+            redo();
+            return;
+        }
         const commands = { b: 'bold', i: 'italic', u: 'underline' };
         if (commands[key]) {
             event.preventDefault();
@@ -660,7 +863,11 @@ export function mountBookmarkRichEditor(form) {
             restore();
         }
     });
-    document.addEventListener('selectionchange', refresh);
+    const onSelectionChange = () => {
+        images.onSelectionChange();
+        refresh();
+    };
+    document.addEventListener('selectionchange', onSelectionChange);
     plain.addEventListener('input', () => {
         if (!syncing) api.setContent({ description: plain.value });
     });
@@ -675,21 +882,27 @@ export function mountBookmarkRichEditor(form) {
     form.addEventListener('reset', onReset);
     const api = {
         editable,
+        /** Встроенные изображения: черновики, удалённые из текста, вставка из вложений. */
+        inlineImages: images,
         setContent(bookmark = {}) {
             closePanel();
-            status.textContent =
-                'Ctrl+B — жирный · Ctrl+I — курсив · Ctrl+U — подчёркивание · Ctrl+K — ссылка';
+            status.textContent = DEFAULT_STATUS;
             editable.innerHTML = bookmarkDescriptionHtml(bookmark) || '<p><br></p>';
             range = null;
-            sync(false);
+            images.reset();
+            sync(false, null);
+            history.reset();
             refresh();
         },
         focus() {
             editable.focus();
         },
+        undo,
+        redo,
         destroy() {
-            document.removeEventListener('selectionchange', refresh);
+            document.removeEventListener('selectionchange', onSelectionChange);
             form.removeEventListener('reset', onReset);
+            images.destroy();
             host.remove();
             rich.remove();
             plain.hidden = false;

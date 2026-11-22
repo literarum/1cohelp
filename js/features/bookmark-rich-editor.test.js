@@ -102,7 +102,11 @@ describe('bookmark visual editor integration', () => {
     });
     it('mounts once and exposes all groups with accessible controls', () => {
         expect(mountBookmarkRichEditor(form)).toBe(editor);
-        expect(form.querySelectorAll('[role="toolbar"]')).toHaveLength(1);
+        expect(form.querySelectorAll('.bookmark-format-toolbar[role="toolbar"]')).toHaveLength(1);
+        // Панель настроек изображения существует, но скрыта, пока изображение не выбрано.
+        const hud = form.querySelector('.bm-fig-hud[role="toolbar"]');
+        expect(hud).not.toBeNull();
+        expect(hud.hidden).toBe(true);
         for (const label of [
             'Цвет текста',
             'Цвет выделения',

@@ -1,0 +1,573 @@
+/* Изображения внутри текста закладки: просмотр, редактор, кадрирование. */
+
+/* ---------------------------------------------------------------- общая раскладка */
+.bookmark-rich-content figure[data-shot],
+.bookmark-rich-content figure[data-shot-temp] {
+    --bm-fig-w: 100%;
+    position: relative;
+    width: var(--bm-fig-w);
+    max-width: 100%;
+    margin: 0.9em auto;
+    clear: both;
+}
+.bookmark-rich-content figure[data-align='left'] {
+    float: left;
+    clear: left;
+    margin: 0.25em 1.1em 0.6em 0;
+}
+.bookmark-rich-content figure[data-align='right'] {
+    float: right;
+    clear: right;
+    margin: 0.25em 0 0.6em 1.1em;
+}
+.bookmark-rich-content figure[data-align='wide'] {
+    width: 100%;
+}
+/* Текст после обтекания не «повисает» под последним изображением. */
+.bookmark-rich-content::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+.bm-fig-frame {
+    position: relative;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--color-surface-2);
+    box-shadow:
+        0 0 0 1px var(--color-border-subtle, rgba(0, 0, 0, 0.08)),
+        0 1px 3px rgba(0, 0, 0, 0.08);
+    line-height: 0;
+}
+.bm-fig-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.bm-fig-frame.is-cropped img {
+    position: absolute;
+    max-width: none;
+}
+.bm-fig-frame[role='button'] {
+    cursor: zoom-in;
+}
+.bm-fig-frame[role='button']:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+}
+.bm-fig-frame.is-missing {
+    display: grid;
+    place-items: center;
+    min-height: 5rem;
+    line-height: 1.4;
+}
+.bm-fig-missing {
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+}
+.bookmark-rich-content figure figcaption {
+    margin-top: 0.45em;
+    color: var(--color-text-secondary);
+    font-size: 0.85em;
+    line-height: 1.4;
+    text-align: center;
+}
+/* В карточках списка изображения не показываются — там только начало текста. */
+.bookmark-description.bookmark-rich-content figure {
+    display: none;
+}
+
+/* ---------------------------------------------------------------- редактор */
+.bookmark-rich-editor {
+    position: relative;
+}
+.bookmark-rich-editable figure.bm-fig-edit {
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.bookmark-rich-editable figure.bm-fig-edit .bm-fig-frame {
+    cursor: grab;
+    transition: box-shadow 140ms ease;
+}
+.bookmark-rich-editable figure.bm-fig-edit:hover .bm-fig-frame {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent),
+        0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.bookmark-rich-editable figure.is-selected .bm-fig-frame {
+    box-shadow:
+        0 0 0 2px var(--color-primary),
+        0 0 0 5px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+.bookmark-rich-editable figure.is-dragging {
+    opacity: 0.35;
+}
+.bookmark-rich-editable figure::selection,
+.bookmark-rich-editable figure *::selection {
+    background: transparent;
+}
+.bookmark-rich-editable figure figcaption {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+    outline: none;
+    min-height: 1.4em;
+    border-radius: 4px;
+}
+.bookmark-rich-editable figure figcaption:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+}
+.bookmark-rich-editable figure figcaption:focus {
+    background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+
+/* Ручки изменения размера — по краям, видны только у выбранного изображения. */
+.bm-fig-resize {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 34px;
+    margin-top: -17px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 70%, #000);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    cursor: ew-resize;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+    touch-action: none;
+    z-index: 2;
+}
+.bm-fig-resize--w {
+    left: -6px;
+}
+.bm-fig-resize--e {
+    right: -6px;
+}
+figure.is-selected > .bm-fig-resize {
+    opacity: 1;
+    pointer-events: auto;
+}
+/* Пальцем ручку удобнее «поймать», если зона касания больше видимой ручки. */
+.bm-fig-resize::after {
+    content: '';
+    position: absolute;
+    inset: -12px -10px;
+}
+.bm-fig-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.68);
+    color: #fff;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+figure.is-resizing > .bm-fig-badge {
+    opacity: 1;
+}
+
+/* Плавающая панель настроек выбранного изображения. */
+.bm-fig-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: calc(100% - 12px);
+    padding: 5px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--color-surface-1) 96%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    backdrop-filter: saturate(180%) blur(18px);
+    border: 1px solid var(--color-border);
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.16),
+        0 1px 3px rgba(0, 0, 0, 0.1);
+    animation: bm-hud-in 140ms ease-out;
+}
+.bm-fig-hud[hidden],
+.bm-fig-hud.is-offscreen {
+    display: none;
+}
+@keyframes bm-hud-in {
+    from {
+        opacity: 0;
+        transform: var(--bm-hud-from, none);
+    }
+}
+.bm-fig-hud-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+.bm-fig-hud-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    padding: 2px;
+    border-radius: 9px;
+    background: var(--color-surface-2);
+}
+.bm-fig-hud-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 28px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    transform: none !important;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+.bm-fig-hud-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+}
+.bm-fig-hud-btn[aria-pressed='true'],
+.bm-fig-hud-btn[aria-expanded='true'] {
+    background: var(--color-surface-1);
+    color: var(--color-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+.bm-fig-hud-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+.bm-fig-hud-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.bm-fig-hud-btn.is-danger:hover {
+    color: #dc2626;
+    background: color-mix(in srgb, #dc2626 12%, transparent);
+}
+.bm-fig-hud-btn--wide {
+    padding: 0 12px;
+    background: var(--color-primary);
+    color: var(--color-text-on-primary, #fff);
+}
+.bm-fig-hud-btn--wide:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 85%, #000);
+}
+.bm-fig-hud-alt {
+    display: flex;
+    gap: 6px;
+}
+.bm-fig-hud-alt[hidden] {
+    display: none;
+}
+.bm-fig-hud-input {
+    flex: 1 1 16rem;
+    min-width: 0;
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid var(--color-border);
+    border-radius: 7px;
+    background: var(--color-surface-1);
+    color: var(--color-text-primary);
+    font-size: 13px;
+}
+.bm-fig-hud-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+/* Линия, показывающая, куда встанет изображение при перетаскивании. */
+.bm-fig-drop {
+    position: absolute;
+    z-index: 4;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    pointer-events: none;
+}
+.bm-fig-drop::before,
+.bm-fig-drop::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--color-primary);
+}
+.bm-fig-drop::before {
+    left: -4px;
+}
+.bm-fig-drop::after {
+    right: -4px;
+}
+.bm-fig-drop[hidden] {
+    display: none;
+}
+.bookmark-rich-editor.is-busy .bookmark-format-button--image {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Кнопка «Перенести в текст» на миниатюре вложения. */
+.app-screenshot-thumb__to-text {
+    position: absolute;
+    left: 2px;
+    bottom: 2px;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    z-index: 10;
+}
+.app-screenshot-thumb:hover .app-screenshot-thumb__to-text,
+.app-screenshot-thumb:focus-within .app-screenshot-thumb__to-text,
+.app-screenshot-thumb__to-text:focus-visible {
+    opacity: 1;
+}
+@media (hover: none) {
+    .app-screenshot-thumb__to-text {
+        opacity: 1;
+    }
+}
+
+/* ---------------------------------------------------------------- кадрирование */
+.bm-crop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    animation: bm-fade-in 160ms ease-out;
+}
+@keyframes bm-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+.bm-crop-sheet {
+    display: flex;
+    flex-direction: column;
+    width: min(64rem, 100%);
+    height: min(46rem, 100%);
+    border-radius: 16px;
+    overflow: hidden;
+    background: #1c1c1e;
+    color: #f5f5f7;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.bm-crop-header {
+    padding: 0.9rem 1.2rem 0.5rem;
+}
+.bm-crop-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.bm-crop-hint {
+    margin: 0.2rem 0 0;
+    font-size: 0.75rem;
+    color: rgba(245, 245, 247, 0.6);
+}
+.bm-crop-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0.5rem 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bm-crop-canvas {
+    position: relative;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: crosshair;
+}
+.bm-crop-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    pointer-events: none;
+}
+.bm-crop-box {
+    position: absolute;
+    cursor: move;
+    outline: none;
+}
+/* Затемнение всего, что вне кадра, и тонкая рамка самого кадра. */
+.bm-crop-shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.95),
+        0 0 0 9999px rgba(0, 0, 0, 0.55);
+}
+.bm-crop-stage {
+    overflow: hidden;
+}
+.bm-crop-grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    background:
+        linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.45) 0, rgba(255, 255, 255, 0.45) calc(33.33% + 0.5px), transparent 0, transparent calc(66.66% - 0.5px), rgba(255, 255, 255, 0.45) 0, rgba(255, 255, 255, 0.45) calc(66.66% + 0.5px), transparent 0),
+        linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.45) 0, rgba(255, 255, 255, 0.45) calc(33.33% + 0.5px), transparent 0, transparent calc(66.66% - 0.5px), rgba(255, 255, 255, 0.45) 0, rgba(255, 255, 255, 0.45) calc(66.66% + 0.5px), transparent 0);
+}
+.bm-crop-overlay.is-dragging .bm-crop-grid,
+.bm-crop-box:focus-visible .bm-crop-grid {
+    opacity: 1;
+}
+.bm-crop-handle {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    touch-action: none;
+}
+.bm-crop-handle::before {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.bm-crop-handle--nw { left: -11px; top: -11px; cursor: nwse-resize; }
+.bm-crop-handle--n { left: calc(50% - 11px); top: -11px; cursor: ns-resize; }
+.bm-crop-handle--ne { right: -11px; top: -11px; cursor: nesw-resize; }
+.bm-crop-handle--e { right: -11px; top: calc(50% - 11px); cursor: ew-resize; }
+.bm-crop-handle--se { right: -11px; bottom: -11px; cursor: nwse-resize; }
+.bm-crop-handle--s { left: calc(50% - 11px); bottom: -11px; cursor: ns-resize; }
+.bm-crop-handle--sw { left: -11px; bottom: -11px; cursor: nesw-resize; }
+.bm-crop-handle--w { left: -11px; top: calc(50% - 11px); cursor: ew-resize; }
+.bm-crop-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.2rem 1rem;
+}
+.bm-segmented {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.1);
+}
+.bm-segment {
+    padding: 4px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(245, 245, 247, 0.85);
+    font-size: 12px;
+    font-weight: 500;
+    transform: none !important;
+}
+.bm-segment[aria-checked='true'] {
+    background: rgba(255, 255, 255, 0.24);
+    color: #fff;
+}
+.bm-segment:focus-visible,
+.bm-btn:focus-visible {
+    outline: 2px solid #0a84ff;
+    outline-offset: 1px;
+}
+.bm-crop-size {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(245, 245, 247, 0.6);
+}
+.bm-crop-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+.bm-btn {
+    min-height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #f5f5f7;
+    font-size: 13px;
+    font-weight: 500;
+    transform: none !important;
+}
+.bm-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+.bm-btn--primary {
+    background: #0a84ff;
+    color: #fff;
+}
+.bm-btn--primary:hover {
+    background: #3b9bff;
+}
+
+@media (max-width: 540px) {
+    .bookmark-rich-content figure[data-align='left'],
+    .bookmark-rich-content figure[data-align='right'] {
+        float: none;
+        margin: 0.9em auto;
+    }
+    .bm-crop-overlay {
+        padding: 0;
+    }
+    .bm-crop-sheet {
+        height: 100%;
+        border-radius: 0;
+    }
+    .bm-crop-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+    .bm-crop-actions .bm-btn {
+        flex: 1;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bm-fig-hud,
+    .bm-crop-overlay {
+        animation: none;
+    }
+}
