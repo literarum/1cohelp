@@ -977,6 +977,29 @@ export function attachScreenshotHandlers(stepElement) {
 }
 
 /**
+ * Кнопка «Перенести в текст» на миниатюре вложения (только в форме закладки с визуальным редактором).
+ * @param {HTMLElement} thumbDiv
+ * @param {HTMLElement} parentElement — форма закладки
+ * @param {() => void} onInsert
+ */
+function appendInsertIntoTextButton(thumbDiv, parentElement, onInsert) {
+    if (!parentElement?._bookmarkEditor?.inlineImages) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'app-screenshot-thumb__to-text';
+    btn.title = 'Перенести в текст — на место курсора';
+    btn.setAttribute('aria-label', 'Перенести изображение в текст закладки');
+    btn.innerHTML = '<i class="fas fa-level-up-alt" aria-hidden="true"></i>';
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onInsert();
+    });
+    thumbDiv.appendChild(btn);
+}
+
+/**
  * Рендерит временную миниатюру скриншота (для новых, ещё не сохранённых)
  * @param {Blob} blob - Blob изображения
  * @param {number} tempIndex - Индекс во временном массиве
@@ -1101,6 +1124,13 @@ export function renderTemporaryThumbnail(blob, tempIndex, container, stepEl) {
     };
     thumbDiv.appendChild(img);
     thumbDiv.appendChild(deleteBtn);
+    appendInsertIntoTextButton(thumbDiv, stepEl, () => {
+        const index = parseInt(thumbDiv.dataset.tempIndex, 10);
+        const blob = stepEl._tempScreenshotBlobs?.[index];
+        if (!(blob instanceof Blob)) return;
+        deleteBtn.onclick({ stopPropagation() {} });
+        stepEl._bookmarkEditor.inlineImages.insertBlobs([blob], { processed: true });
+    });
     container.appendChild(thumbDiv);
 }
 
@@ -1577,5 +1607,11 @@ export async function renderExistingThumbnail(screenshotId, container, parentEle
 
     thumbDiv.appendChild(img);
     thumbDiv.appendChild(deleteBtn);
+    if (!isMarkedForDeletion)
+        appendInsertIntoTextButton(thumbDiv, parentElement, () =>
+            parentElement._bookmarkEditor.inlineImages.insertExistingShot(screenshotId),
+        );
     container.appendChild(thumbDiv);
+    // Изображения, уже стоящие в тексте, во вложениях не дублируются.
+    parentElement._bookmarkEditor?.inlineImages?.refreshGallery();
 }

@@ -23,6 +23,7 @@ import {
     saveToIndexedDB,
 } from '../db/indexeddb.js';
 import { escapeHtml } from '../utils/html.js';
+import { remapBookmarkInlineShotIds } from './bookmark-rich-text.js';
 import { base64ToBlob } from '../utils/helpers.js';
 
 // ============================================================================
@@ -1861,9 +1862,17 @@ export async function applyMergePlan(mergePlan, options = {}) {
                     const remapped = bm.screenshotIds.map((sid) =>
                         screenshotIdMap.has(sid) ? screenshotIdMap.get(sid) : sid,
                     );
+                    const next = { ...bm, screenshotIds: remapped };
+                    // Изображения в тексте ссылаются на те же записи — ссылки перепривязываются вместе.
+                    if (typeof bm.descriptionHtml === 'string' && bm.descriptionHtml) {
+                        next.descriptionHtml = remapBookmarkInlineShotIds(
+                            bm.descriptionHtml,
+                            screenshotIdMap,
+                        );
+                    }
                     await writeAndBump(
                         'bookmarks',
-                        { ...bm, screenshotIds: remapped },
+                        next,
                         { op: 'update', detail: 'Закладки: перепривязка screenshotIds' },
                     );
                 }

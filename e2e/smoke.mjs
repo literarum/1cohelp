@@ -235,6 +235,71 @@ await check('оверлей загрузки: кадры по стадиям (н
     assert(d.end.coverage < 0.05, `после финала на холсте остались частицы (${d.end.coverage.toFixed(2)})`);
 });
 
+await check('закладка: изображение между строками — вставка, кадр, сохранение, просмотр, удаление', async () => {
+    const { page: p, errors } = await openApp();
+    await p.evaluate(() => window.setActiveTab('bookmarks'));
+    await p.evaluate(() => window.showAddBookmarkModal());
+    await p.waitForSelector('#bookmarkModal:not(.hidden) #bookmarkDescriptionEditor');
+    await p.fill('#bookmarkTitle', 'E2E: изображение в тексте');
+    await p.click('#bookmarkDescriptionEditor');
+    await p.keyboard.type('Первая строка');
+    await p.keyboard.press('Enter');
+    await p.keyboard.type('Вторая строка');
+    await p.evaluate(async () => {
+        const p1 = document.querySelector('#bookmarkDescriptionEditor p');
+        const r = document.createRange();
+        r.selectNodeContents(p1);
+        r.collapse(false);
+        getSelection().removeAllRanges();
+        getSelection().addRange(r);
+        const c = document.createElement('canvas');
+        c.width = 800;
+        c.height = 450;
+        c.getContext('2d').fillRect(0, 0, 800, 450);
+        const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], 'shot.png', { type: 'image/png' }));
+        document
+            .querySelector('#bookmarkDescriptionEditor')
+            .dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await p.waitForFunction(() => document.querySelector('#bookmarkDescriptionEditor figure img')?.naturalWidth > 0, null, { timeout: 10000 });
+    const order = await p.evaluate(() => Array.from(document.querySelector('#bookmarkDescriptionEditor').children, (n) => n.tagName).join(','));
+    assert(order === 'P,FIGURE,P', `изображение не между строками: ${order}`);
+    assert(await p.isVisible('.bm-fig-hud'), 'нет панели настроек изображения');
+    await p.click('[aria-label="Справа, текст обтекает слева"]');
+    await p.click('[aria-label="Кадрировать"]');
+    await p.waitForSelector('.bm-crop-overlay');
+    await p.keyboard.press('Alt+ArrowLeft');
+    await p.keyboard.press('Escape');
+    assert(await p.isVisible('#bookmarkModal'), 'Esc в кадрировании закрыл форму');
+    await p.click('#saveBookmarkBtn');
+    await p.waitForFunction(() => document.getElementById('bookmarkModal').classList.contains('hidden'), null, { timeout: 10000 });
+    const saved = await p.evaluate(async () => {
+        const { getAllFromIndexedDB } = await import('/js/db/indexeddb.js');
+        const bm = (await getAllFromIndexedDB('bookmarks')).find((b) => b.title === 'E2E: изображение в тексте');
+        const shots = (await getAllFromIndexedDB('screenshots')).filter((s) => s.parentId === bm.id);
+        return { id: bm.id, html: bm.descriptionHtml, shots: shots.length };
+    });
+    assert(/<figure data-shot="\d+" data-align="right"/.test(saved.html) && saved.shots === 1, `сохранено: ${JSON.stringify(saved)}`);
+    await p.evaluate((id) => window.showBookmarkDetailModal(id), saved.id);
+    await p.waitForFunction(() => document.querySelector('#bookmarkDetailTextContent figure img')?.naturalWidth > 0, null, { timeout: 10000 });
+    await p.keyboard.press('Escape');
+    await p.evaluate((id) => window.showEditBookmarkModal(id), saved.id);
+    await p.waitForFunction(() => document.querySelector('#bookmarkDescriptionEditor figure img')?.naturalWidth > 0, null, { timeout: 10000 });
+    await p.click('#bookmarkDescriptionEditor figure .bm-fig-frame');
+    await p.keyboard.press('Delete');
+    await p.click('#saveBookmarkBtn');
+    await p.waitForFunction(() => document.getElementById('bookmarkModal').classList.contains('hidden'), null, { timeout: 10000 });
+    const left = await p.evaluate(async (id) => {
+        const { getAllFromIndexedDB } = await import('/js/db/indexeddb.js');
+        return (await getAllFromIndexedDB('screenshots')).filter((s) => s.parentId === id).length;
+    }, saved.id);
+    assert(left === 0, 'удалённое из текста изображение осталось в базе');
+    assert(errors.length === 0, errors.join(' | '));
+    await p.close();
+});
+
 await browser.close();
 server.close();
 console.log(results.join('\n'));

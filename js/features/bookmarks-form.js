@@ -11,7 +11,11 @@ import {
     shakeField,
 } from '../ui/form-helpers.js';
 import { recordStoreEntityHistoryAfterSave } from '../history/store-record-history.js';
-import { bookmarkDescriptionState } from './bookmark-rich-text.js';
+import {
+    bookmarkDescriptionState,
+    bookmarkInlineTempKeys,
+    resolveBookmarkInlineTempShots,
+} from './bookmark-rich-text.js';
 
 // ============================================================================
 // BOOKMARKS FORM SUBMIT (вынос из script.js)
@@ -89,7 +93,10 @@ export async function handleBookmarkFormSubmit(event) {
     const id = form.elements.bookmarkId.value;
     const title = form.elements.bookmarkTitle.value.trim();
     const urlRaw = form.elements.bookmarkUrl.value.trim();
-    const { description, descriptionHtml } = bookmarkDescriptionState(form);
+    const descriptionState = bookmarkDescriptionState(form);
+    const { description, hasImages } = descriptionState;
+    let { descriptionHtml } = descriptionState;
+    const inlineImages = form._bookmarkEditor?.inlineImages || null;
 
     const folderValue = form.elements.bookmarkFolder.value;
     let folder;
@@ -143,7 +150,13 @@ export async function handleBookmarkFormSubmit(event) {
         }
         url = normalized.url;
     }
-    if (!url && !description) {
+    if (inlineImages?.isBusy?.()) {
+        restoreSaveButton();
+        if (typeof showNotification === 'function')
+            showNotification('Подождите: изображение ещё обрабатывается.', 'warning');
+        return;
+    }
+    if (!url && !description && !hasImages) {
         failField(
             form.elements.bookmarkDescription,
             'Укажите описание — без URL закладка хранит только текст',
@@ -158,13 +171,23 @@ export async function handleBookmarkFormSubmit(event) {
     newScreenshotBlobs.forEach((blob) => {
         if (blob instanceof Blob) screenshotOps.push({ action: 'add', blob });
     });
-    idsToDeleteStr
-        .split(',')
-        .map((idStr) => parseInt(idStr.trim(), 10))
-        .filter((idNum) => !isNaN(idNum) && idNum > 0)
-        .forEach((idToDelete) =>
-            screenshotOps.push({ action: 'delete', oldScreenshotId: idToDelete }),
-        );
+    // Изображения в тексте: черновики, на которые есть ссылки, записываются в той же транзакции.
+    const inlineDrafts = inlineImages?.drafts?.() || new Map();
+    for (const key of bookmarkInlineTempKeys(descriptionHtml)) {
+        const blob = inlineDrafts.get(key);
+        if (blob instanceof Blob) screenshotOps.push({ action: 'add', blob, tempKey: key });
+    }
+    const idsToDelete = new Set(
+        idsToDeleteStr
+            .split(',')
+            .map((idStr) => parseInt(idStr.trim(), 10))
+            .filter((idNum) => !isNaN(idNum) && idNum > 0),
+    );
+    // Убранные из текста изображения удаляются (до сохранения их можно вернуть через Ctrl+Z).
+    for (const removedId of inlineImages?.removedShotIds?.() || []) idsToDelete.add(removedId);
+    idsToDelete.forEach((idToDelete) =>
+        screenshotOps.push({ action: 'delete', oldScreenshotId: idToDelete }),
+    );
     console.log(
         `[Save Bookmark v6 TX] Запланировано ${screenshotOps.length} операций со скриншотами.`,
     );
@@ -258,13 +281,14 @@ export async function handleBookmarkFormSubmit(event) {
         const screenshotOpResults = [];
         const screenshotPromises = [];
         const newScreenshotIds = [];
+        const tempKeyToId = new Map();
 
         if (screenshotOps.length > 0) {
             console.log(
                 `[Save Bookmark v6 TX ${finalId}] Обработка ${screenshotOps.length} операций со скриншотами...`,
             );
             screenshotOps.forEach((op) => {
-                const { action, blob, oldScreenshotId } = op;
+                const { action, blob, oldScreenshotId, tempKey } = op;
                 screenshotPromises.push(
                     // eslint-disable-next-line no-async-promise-executor
                     new Promise(async (resolve) => {
@@ -306,6 +330,7 @@ export async function handleBookmarkFormSubmit(event) {
                                         newId,
                                     });
                                     newScreenshotIds.push(newId);
+                                    if (tempKey) tempKeyToId.set(tempKey, newId);
                                     resolve();
                                 };
                                 request.onerror = (e_add_err) => {
@@ -345,6 +370,11 @@ export async function handleBookmarkFormSubmit(event) {
                         failedOps[0].error?.message || 'Unknown error'
                     }`,
                 );
+        }
+
+        if (descriptionHtml && /data-shot-temp=/.test(descriptionHtml)) {
+            descriptionHtml = resolveBookmarkInlineTempShots(descriptionHtml, tempKeyToId) || null;
+            newDataBase.descriptionHtml = descriptionHtml;
         }
 
         newDataBase.screenshotIds = [...new Set([...existingIdsToKeep, ...newScreenshotIds])];
