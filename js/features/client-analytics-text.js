@@ -262,7 +262,7 @@ export function classifyText(text) {
     const t = normalizeForAnalysis(text);
     const starts = wordStarts(t);
     const topics = [];
-    for (const tp of TOPICS) if (matchAtStarts(t, starts, tp.re)) topics.push(tp.id);
+    for (const tp of ACTIVE_TOPICS) if (matchAtStarts(t, starts, tp.re)) topics.push(tp.id);
     let intent = 'other';
     for (const it of INTENTS) {
         if (matchAtStarts(t, starts, it.re)) {
@@ -304,4 +304,68 @@ export function splitSentences(text) {
         .split(/(?<=[.!?…])\s+|\n+/)
         .map((s) => s.trim())
         .filter((s) => /\p{L}/u.test(s));
+}
+
+// ---------------------------------------------------------------------------
+// Пользовательские темы
+// ---------------------------------------------------------------------------
+/** Текущий набор тем: словарь предметной области + темы пользователя. */
+let ACTIVE_TOPICS = TOPICS.slice();
+
+/** Темы, участвующие в рубрикации сейчас. */
+export function activeTopics() {
+    return ACTIVE_TOPICS;
+}
+
+function escapeRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Ключевые слова темы → регулярное выражение. Через запятую или с новой строки;
+ * слово совпадает с началом любого слова текста («сверк» найдёт «сверка», «сверки»),
+ * фраза — слова подряд («акт сверки»), «*» внутри — любые буквы.
+ * @param {string} words
+ * @returns {RegExp|null}
+ */
+export function compileTopicKeywords(words) {
+    const alts = String(words || '')
+        .split(/[,;\n]+/)
+        .map((w) => normalizeForAnalysis(w).trim())
+        .filter((w) => w.length >= 2)
+        .map((w) =>
+            w
+                .split(/\s+/)
+                .map((part) => escapeRe(part).replace(/\\\*/g, '\\p{L}*'))
+                .join('[\\p{L}\\d-]*\\s+'),
+        );
+    if (!alts.length) return null;
+    return rx(alts.join('|'));
+}
+
+/**
+ * Установить пользовательские темы (id получают префикс «u_»; пустые и ошибочные пропускаются).
+ * @param {Array<{ id: string, label: string, words: string }>} list
+ * @returns {Array<{ id: string, label: string, ok: boolean }>}
+ */
+export function setCustomTopics(list) {
+    const out = [];
+    const custom = [];
+    for (const raw of Array.isArray(list) ? list : []) {
+        if (!raw || !raw.label) continue;
+        const id = String(raw.id || '').startsWith('u_') ? String(raw.id) : `u_${raw.id || custom.length + 1}`;
+        let re = null;
+        try {
+            re = compileTopicKeywords(raw.words);
+        } catch {
+            re = null;
+        }
+        out.push({ id, label: String(raw.label), ok: !!re });
+        if (!re) continue;
+        custom.push({ id, label: String(raw.label), re, custom: true });
+    }
+    for (const k of Object.keys(TOPIC_LABELS)) if (k.startsWith('u_')) delete TOPIC_LABELS[k];
+    for (const t of custom) TOPIC_LABELS[t.id] = t.label;
+    ACTIVE_TOPICS = [...TOPICS, ...custom];
+    return out;
 }

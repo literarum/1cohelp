@@ -38,6 +38,8 @@ import { sparkline } from './client-analytics-charts.js';
 import {
     summarizeAppealsForFrogEntry,
     buildFrogPhoneLevelMap,
+    buildFrogIndex,
+    matchRecordToFrogs,
     FROG_VIA_LABELS,
 } from './client-analytics-frogs.js';
 import {
@@ -80,6 +82,8 @@ import {
 /** @typedef {import('./client-analytics-organization.js').CaGroupMode} CaGroupMode */
 
 const CA_ORG_VIEW_PREF_ID = 'clientAnalyticsOrgView';
+/** Пользовательские темы аналитики обращений (хранилище preferences). */
+const CA_CUSTOM_TOPICS_PREF_ID = 'clientAnalyticsCustomTopics';
 
 let deps = {
     showNotification: null,
@@ -120,8 +124,19 @@ function resetCaDerived() {
     caCache.units = null;
 }
 
+/** Сообщить другим разделам (чёрный список), что набор обращений изменился. */
+function notifyClientAnalyticsChanged() {
+    if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+    try {
+        window.dispatchEvent(new CustomEvent('copilot:client-analytics-changed'));
+    } catch {
+        /* окружение без событий */
+    }
+}
+
 /** Сбросить кэш (после внешних изменений данных раздела). */
 export function invalidateClientAnalyticsCache() {
+    notifyClientAnalyticsChanged();
     caCache.version++;
     caCache.sig = null;
     caCache.records = null;
@@ -199,6 +214,7 @@ async function loadClientAnalyticsDataset(opts = {}) {
 
 /** После локальной мутации: поправить кэш без полного перечитывания. */
 async function caPatchAfterMutation(removedIds) {
+    notifyClientAnalyticsChanged();
     caCache.version++;
     resetCaDerived();
     caCache.blLevels = null;
@@ -215,6 +231,8 @@ async function caPatchAfterMutation(removedIds) {
 }
 
 let clientAnalyticsSearchQuery = '';
+/** Фильтр раздела по чёрному списку: all | frogs | l3 | nonfrogs (на время сеанса). */
+let clientAnalyticsFrogFilter = 'all';
 let clientAnalyticsFilesCollapsed = true;
 
 /**
@@ -1340,7 +1358,34 @@ export async function ingestTxtFile(file, opts = {}) {
         throw e;
     }
 
-    return { fileId: id, recordCount };
+    // сверка нового файла с чёрным списком: сразу сообщить, есть ли в нём обращения жаб
+    let frogs = null;
+    try {
+        const entries = await getAllFromIndexedDB('blacklistedClients');
+        if (entries.length) {
+            const idx = buildFrogIndex(entries);
+            const inns = new Set();
+            const names = new Set();
+            let appeals = 0;
+            let maxLevel = 0;
+            for (const row of parsed) {
+                const m = matchRecordToFrogs(row, idx);
+                if (!m.level) continue;
+                appeals++;
+                maxLevel = Math.max(maxLevel, m.level);
+                if (row.inn) inns.add(row.inn);
+                for (const eid of m.entries) {
+                    const f = idx.byId.get(eid);
+                    if (f && names.size < 5) names.add(f.name);
+                }
+            }
+            if (appeals) frogs = { appeals, clients: inns.size, maxLevel, names: [...names] };
+        }
+    } catch (e) {
+        console.warn('[client-analytics] сверка файла с чёрным списком', e);
+    }
+
+    return { fileId: id, recordCount, frogs };
 }
 
 /**
@@ -1480,6 +1525,37 @@ export async function buildClientAnalyticsAppealsHtmlForBlacklistEntry(entry) {
   ${rows ? `<ol class="list-none m-0 mt-2 p-0">${rows}</ol>` : ''}
   ${histInn ? `<button type="button" class="mt-2 px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" data-ca-open-history="${escapeHtml(histInn)}">Вся история обращений</button>` : ''}
 </div>`;
+}
+
+let appealCountsMemo = { key: null, map: null };
+/**
+ * Число обращений (сильные совпадения: ИНН, телефон, данные примечания) по каждой записи ЧС.
+ * Кэшируется по версии базы клиентов и содержимому чёрного списка.
+ * @returns {Promise<Map<number, { count: number, last: string|null }>>}
+ */
+export async function getClientAnalyticsAppealCountsByBlacklistEntry() {
+    if (!State.db) return new Map();
+    const entries = await getAllFromIndexedDB('blacklistedClients');
+    const records = await loadClientAnalyticsDataset();
+    const key = `${caCache.sig}|${caCache.version}|${entries.map((e) => `${e.id}:${e.inn}:${e.phone}:${e.notes}:${e.level}`).join(';')}`;
+    if (appealCountsMemo.key === key && appealCountsMemo.map) return appealCountsMemo.map;
+    const idx = buildFrogIndex(entries);
+    const map = new Map();
+    if (idx.frogs.length) {
+        for (const r of records) {
+            const m = matchRecordToFrogs(r, idx);
+            if (!m.level) continue;
+            const when = r.appealDate || String(r.uploadedAt || '').slice(0, 10);
+            for (const id of m.entries) {
+                const cur = map.get(id) || { count: 0, last: null };
+                cur.count++;
+                if (when && (!cur.last || when > cur.last)) cur.last = when;
+                map.set(id, cur);
+            }
+        }
+    }
+    appealCountsMemo = { key, map };
+    return map;
 }
 
 /** Все записи раздела из кэша набора данных (для аналитики). */
@@ -2087,6 +2163,7 @@ export async function renderClientAnalyticsPage(opts = {}) {
     if (countEl) {
         const filterSuffix =
             orgState.view.folderFilter !== CA_FOLDER_FILTER_ALL ||
+            clientAnalyticsFrogFilter !== 'all' ||
             (orgState.view.tagFilterIds || []).length
                 ? ' · фильтр'
                 : '';
@@ -2122,6 +2199,9 @@ export async function renderClientAnalyticsPage(opts = {}) {
             orgState.view.groupMode,
             orgState.view.folderFilter,
             orgState.view.tagFilterIds,
+            clientAnalyticsFrogFilter,
+            caCache.blLevels ? caCache.blLevels.size : 0,
+            caCache.blPhoneLevels ? caCache.blPhoneLevels.size : 0,
             orgState.folders.map((f) => [f.id, f.name, f.sortOrder]),
             orgState.tags.map((t) => [t.id, t.name, t.sortOrder]),
             orgState.metaById.size,
@@ -2137,6 +2217,19 @@ export async function renderClientAnalyticsPage(opts = {}) {
             units = sortClientAnalyticsDisplayUnits(units, orgState.view.sortMode);
             units = filterUnitsByFolder(units, orgState.view.folderFilter, metaRecord);
             units = filterUnitsByTagsAny(units, orgState.view.tagFilterIds, metaRecord);
+            if (clientAnalyticsFrogFilter !== 'all') {
+                const lvl = (u) => {
+                    const recs = u.type === 'inn' ? u.records : [u.record];
+                    const key = u.type === 'inn' ? u.innKey : u.record.inn;
+                    return getBlacklistLevelForClientInn(key, blacklistLevelByInn) || frogLevelByPhones(recs);
+                };
+                units = units.filter((u) => {
+                    const L = lvl(u);
+                    if (clientAnalyticsFrogFilter === 'frogs') return L > 0;
+                    if (clientAnalyticsFrogFilter === 'l3') return L >= 3;
+                    return L === 0;
+                });
+            }
             unitCount = units.length;
             const sections = groupClientAnalyticsUnitsForRender(
                 units,
@@ -2805,6 +2898,14 @@ export function initClientAnalyticsUi() {
     setClientAnalyticsDashboardApi({
         loadRecords: (o) => loadClientAnalyticsDataset(o),
         loadBlacklistEntries: async () => (State.db ? getAllFromIndexedDB('blacklistedClients') : []),
+        loadCustomTopics: async () => {
+            if (!State.db) return [];
+            const row = await getFromIndexedDB('preferences', CA_CUSTOM_TOPICS_PREF_ID);
+            return row && Array.isArray(row.topics) ? row.topics : [];
+        },
+        saveCustomTopics: async (topics) => {
+            await saveToIndexedDB('preferences', { id: CA_CUSTOM_TOPICS_PREF_ID, topics, updatedAt: new Date().toISOString() });
+        },
         openBlacklistEntry: async (id) => {
             const m = await import('./blacklist.js');
             await m.showBlacklistDetailModal(id);
@@ -2857,12 +2958,19 @@ export function initClientAnalyticsUi() {
                 const file = files[fi];
                 const progressFileLabel = total > 1 ? `Файл ${fi + 1} из ${total}` : '';
                 try {
-                    const { recordCount } = await ingestTxtFile(file, { progressFileLabel });
+                    const { recordCount, frogs } = await ingestTxtFile(file, { progressFileLabel });
                     if (deps.showNotification) {
                         deps.showNotification(
                             `Файл «${file.name}»: сохранено, извлечено записей: ${recordCount}`,
                             'success',
                         );
+                        if (frogs) {
+                            const lvl = frogBadgeLabelsForLevel(frogs.maxLevel).short;
+                            deps.showNotification(
+                                `🐸 В файле «${file.name}» ${pluralRuAppeals(frogs.appeals)} от жаб (клиентов: ${frogs.clients}, максимум — ${lvl}): ${frogs.names.join(', ')}${frogs.names.length >= 5 ? '…' : ''}`,
+                                frogs.maxLevel >= 3 ? 'error' : 'warning',
+                            );
+                        }
                     }
                 } catch (err) {
                     const isDuplicate = err?.code === 'CA_DUPLICATE_FILE';
@@ -3100,6 +3208,14 @@ export function initClientAnalyticsUi() {
             const st = await loadClientAnalyticsOrgState();
             st.view.groupMode = /** @type {CaGroupMode} */ (groupSel.value);
             await saveClientAnalyticsOrgViewPref(st.view);
+            await renderClientAnalyticsPage();
+        });
+    }
+    const frogSel = document.getElementById('clientAnalyticsFrogFilterSelect');
+    if (frogSel) {
+        frogSel.value = clientAnalyticsFrogFilter;
+        frogSel.addEventListener('change', async () => {
+            clientAnalyticsFrogFilter = frogSel.value;
             await renderClientAnalyticsPage();
         });
     }

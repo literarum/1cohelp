@@ -157,7 +157,7 @@ export function timeSeries(pts, { height = 220, xFmt = fmt.date, ariaLabel = 'Д
     const padT = 16;
     const plotW = W - padL - 8;
     const plotH = H - padB - padT;
-    const axis = niceAxis(Math.max(...pts.map((p) => Math.max(p.y, p.smooth || 0)), 1));
+    const axis = niceAxis(Math.max(...pts.map((p) => Math.max(p.y, p.smooth || 0, p.hi || 0)), 1));
     const max = axis.max;
     const step = plotW / pts.length;
     const X = (i) => padL + i * step + step / 2;
@@ -172,6 +172,14 @@ export function timeSeries(pts, { height = 220, xFmt = fmt.date, ariaLabel = 'Д
             return h > 0 ? `<rect x="${(X(i) - bw / 2).toFixed(2)}" y="${Y(p.y).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" class="ca-viz-tsbar${p.flag ? ' is-flag' : ''}${p.muted ? ' is-muted' : ''}"/>` : '';
         })
         .join('');
+    // полоса интервала прогноза (lo–hi), рисуется под столбиками
+    const band = pts.some((p) => p.hi != null)
+        ? `<path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(2)},${Y(p.hi ?? p.y).toFixed(2)}`).join('')}${pts
+              .map((p, i) => i)
+              .reverse()
+              .map((i) => `L${X(i).toFixed(2)},${Y(pts[i].lo ?? pts[i].y).toFixed(2)}`)
+              .join('')}Z" class="ca-viz-band"/>`
+        : '';
     const hasSmooth = pts.some((p) => p.smooth != null);
     const line = hasSmooth
         ? `<path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(2)},${Y(p.smooth || 0).toFixed(2)}`).join('')}" class="ca-viz-line"/>`
@@ -191,8 +199,8 @@ export function timeSeries(pts, { height = 220, xFmt = fmt.date, ariaLabel = 'Д
             return `<rect x="${(padL + i * step).toFixed(2)}" y="${padT}" width="${step.toFixed(2)}" height="${plotH}" fill="transparent" class="ca-viz-hit${p.drill ? ' is-drill' : ''}" data-tip="${tip}" data-xi="${i}"${drill}/>`;
         })
         .join('');
-    const legend = `<div class="ca-viz-legend"><span><i class="ca-viz-key key-bar"></i>обращений за период</span>${hasSmooth ? `<span><i class="ca-viz-key key-line"></i>${escapeHtml(smoothLabel)}</span>` : ''}${pts.some((p) => p.flag) ? '<span><i class="ca-viz-key key-flag"></i>всплеск (робастный z &gt; 3,5)</span>' : ''}</div>`;
-    return `${legend}<svg class="ca-viz-svg ca-viz-ts" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(ariaLabel)}">${grid}${bars}${line}${flags}<line x1="${padL}" x2="${W - 8}" y1="${padT + plotH}" y2="${padT + plotH}" class="ca-viz-baseline"/>${xLabels}<line class="ca-viz-cross" x1="0" x2="0" y1="${padT}" y2="${padT + plotH}" visibility="hidden"/>${hits}</svg>`;
+    const legend = `<div class="ca-viz-legend"><span><i class="ca-viz-key key-bar"></i>${band ? 'прогноз (точка)' : 'обращений за период'}</span>${band ? '<span><i class="ca-viz-key key-band"></i>80% интервал прогноза</span>' : ''}${hasSmooth ? `<span><i class="ca-viz-key key-line"></i>${escapeHtml(smoothLabel)}</span>` : ''}${pts.some((p) => p.flag) ? '<span><i class="ca-viz-key key-flag"></i>всплеск (робастный z &gt; 3,5)</span>' : ''}</div>`;
+    return `${legend}<svg class="ca-viz-svg ca-viz-ts" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(ariaLabel)}">${grid}${band}${bars}${line}${flags}<line x1="${padL}" x2="${W - 8}" y1="${padT + plotH}" y2="${padT + plotH}" class="ca-viz-baseline"/>${xLabels}<line class="ca-viz-cross" x1="0" x2="0" y1="${padT}" y2="${padT + plotH}" visibility="hidden"/>${hits}</svg>`;
 }
 
 /**

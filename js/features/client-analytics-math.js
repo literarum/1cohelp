@@ -937,3 +937,42 @@ export function crossValidatedAuc(X, y, k = 5, opts = {}) {
     }
     return rocAuc(scores, y);
 }
+
+// ---------------------------------------------------------------------------
+// Множественные сравнения
+// ---------------------------------------------------------------------------
+/**
+ * Поправка Бенджамини — Хохберга: q-значения (контроль доли ложных открытий, FDR).
+ * q₍ᵢ₎ = min по j ≥ i от min(p₍ⱼ₎·m/j, 1) — как p.adjust(method = "BH") в R.
+ * @param {number[]} pvals
+ * @returns {number[]} q в исходном порядке
+ */
+export function benjaminiHochberg(pvals) {
+    const m = pvals.length;
+    if (!m) return [];
+    const order = pvals.map((p, i) => [Number.isFinite(p) ? p : 1, i]).sort((a, b) => a[0] - b[0]);
+    const q = new Array(m);
+    let prev = 1;
+    for (let k = m - 1; k >= 0; k--) {
+        const [p, i] = order[k];
+        prev = Math.min(prev, (p * m) / (k + 1), 1);
+        q[i] = prev;
+    }
+    return q;
+}
+
+/** p-значение для статистики G² (χ² с одной степенью свободы). */
+export function pFromG2(g2) {
+    const g = Math.abs(Number(g2) || 0);
+    return 2 * (1 - normalCdf(Math.sqrt(g)));
+}
+
+/** Проставить q (BH) и флаг significant в массиве объектов с полем p. */
+export function applyFdr(rows, { alpha = 0.05, guard = () => true } = {}) {
+    const q = benjaminiHochberg(rows.map((r) => (r && Number.isFinite(r.p) ? r.p : 1)));
+    rows.forEach((r, i) => {
+        r.q = q[i];
+        r.significant = !!(guard(r) && q[i] < alpha);
+    });
+    return rows;
+}

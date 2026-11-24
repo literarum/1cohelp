@@ -8,8 +8,8 @@
  * каждый необычный символ (кодовая точка), темы, намерение, срочность, разбор ИНН/КПП.
  */
 
-import { computeInsights, effectiveDate, xrayRecord } from './client-analytics-insights.js';
-import { tokenizeDetailed, TOPICS, normalizeForAnalysis } from './client-analytics-text.js';
+import { computeInsights, comparePeriods, effectiveDate, xrayRecord } from './client-analytics-insights.js';
+import { tokenizeDetailed, activeTopics, setCustomTopics, compileTopicKeywords, normalizeForAnalysis } from './client-analytics-text.js';
 import {
     barsH,
     columns,
@@ -38,6 +38,7 @@ const TABS = [
     ['frogs', 'Жабы'],
     ['topics', 'Темы и смысл'],
     ['text', 'Текст и язык'],
+    ['compare', 'Сравнение периодов'],
     ['dups', 'Повторы'],
     ['quality', 'Качество данных'],
     ['method', 'Методика'],
@@ -55,10 +56,13 @@ const st = {
     grain: 'week',
     filter: { period: 'all', from: '', to: '', innOnly: false, query: '', frog: 'all' },
     frogEntries: [],
+    customTopics: [],
     frogIndex: null,
     drill: null,
     drillPage: 1,
     computing: null,
+    compare: null,
+    compareRange: null,
     seq: 0,
 };
 
@@ -88,6 +92,9 @@ function slimRecord(r) {
     };
 }
 
+/** id сообщений воркеру — отдельный счётчик: st.seq означает «актуальный расчёт» и не должен сдвигаться. */
+let workerSeq = 0;
+
 function runInsights(records, opts, onProgress) {
     const slim = records.map(slimRecord);
     if (typeof Worker === 'undefined' || slim.length < 1500) {
@@ -101,7 +108,7 @@ function runInsights(records, opts, onProgress) {
             resolve(computeInsights(slim, { ...opts, onProgress }));
             return;
         }
-        const id = ++st.seq;
+        const id = ++workerSeq;
         const fallback = (why) => {
             console.warn('[client-analytics] аналитика в основном потоке:', why);
             worker.terminate();
@@ -121,6 +128,62 @@ function runInsights(records, opts, onProgress) {
         worker.onerror = (e) => fallback((e && e.message) || 'worker error');
         worker.postMessage({ id, records: slim, opts });
     });
+}
+
+function runCompare(records, A, B) {
+    const slim = records.map(slimRecord);
+    const opts = { blacklistEntries: st.frogEntries, customTopics: st.customTopics };
+    if (typeof Worker === 'undefined' || slim.length < 3000) return Promise.resolve(comparePeriods(slim, A, B, opts));
+    return new Promise((resolve) => {
+        let worker;
+        try {
+            worker = new Worker(new URL('./client-analytics-insights-worker.js', import.meta.url), { type: 'module' });
+        } catch {
+            resolve(comparePeriods(slim, A, B, opts));
+            return;
+        }
+        const id = ++workerSeq;
+        worker.onmessage = (e) => {
+            const d = e.data || {};
+            if (d.id !== id || d.progress) return;
+            worker.terminate();
+            resolve(d.ok ? d.result : comparePeriods(slim, A, B, opts));
+        };
+        worker.onerror = () => {
+            worker.terminate();
+            resolve(comparePeriods(slim, A, B, opts));
+        };
+        worker.postMessage({ id, kind: 'compare', records: slim, A, B, opts });
+    });
+}
+
+/** Периоды по умолчанию: последние 30 дней против предыдущих 30 (по последней дате выборки). */
+function defaultCompareRange(I) {
+    const to = I.overview.to;
+    if (!to) return null;
+    const shift = (ymd, d) => {
+        const x = new Date(`${ymd}T00:00:00Z`);
+        x.setUTCDate(x.getUTCDate() + d);
+        return x.toISOString().slice(0, 10);
+    };
+    return { A: { from: shift(to, -59), to: shift(to, -30) }, B: { from: shift(to, -29), to } };
+}
+
+async function doCompare() {
+    const form = document.getElementById('caInsCompareForm');
+    if (!form) return;
+    const A = { from: form.aFrom.value, to: form.aTo.value };
+    const B = { from: form.bFrom.value, to: form.bTo.value };
+    if (!A.from || !A.to || !B.from || !B.to || A.from > A.to || B.from > B.to) {
+        const out = document.getElementById('caInsCompareOut');
+        if (out) out.innerHTML = '<p class="ca-viz-empty">Укажите обе даты каждого периода (начало не позже конца).</p>';
+        return;
+    }
+    st.compareRange = { A, B };
+    const out = document.getElementById('caInsCompareOut');
+    if (out) out.innerHTML = '<p class="ca-viz-muted">Сравнение…</p>';
+    st.compare = await runCompare(st.filtered, A, B);
+    if (st.tab === 'compare') renderTab();
 }
 
 function applyFilter(records, f) {
@@ -175,13 +238,14 @@ async function recompute() {
         prog.querySelector('[data-role="phase"]').textContent = 'Подготовка…';
         prog.querySelector('[data-role="bar"]').style.width = '2%';
     }
-    const result = await runInsights(st.filtered, { blacklistEntries: st.frogEntries, now: Date.now() }, (phase, pct) => {
+    const result = await runInsights(st.filtered, { blacklistEntries: st.frogEntries, customTopics: st.customTopics, now: Date.now() }, (phase, pct) => {
         if (!prog || token !== st.seq) return;
         prog.querySelector('[data-role="phase"]').textContent = phase;
         prog.querySelector('[data-role="bar"]').style.width = `${Math.max(2, pct)}%`;
     });
     if (token !== st.seq && st.insights) return; // устаревший расчёт
     st.insights = result;
+    st.compare = null;
     if (prog) prog.hidden = true;
     const meta = document.getElementById('caInsMeta');
     if (meta) {
@@ -293,6 +357,20 @@ function bindModal(modal) {
                 st.grain = act.getAttribute('data-grain');
                 return renderTab();
             }
+            if (a === 'compare-run') return doCompare();
+            if (a === 'topic-add') return saveCustomTopicFromForm();
+            if (a === 'topic-del') return deleteCustomTopic(act.getAttribute('data-topic-id'));
+            if (a === 'topic-edit') return editCustomTopic(act.getAttribute('data-topic-id'));
+            if (a === 'suggest-word') {
+                const ta = document.getElementById('caInsTopicWords');
+                if (ta) {
+                    const w = act.getAttribute('data-word');
+                    ta.value = ta.value.trim() ? `${ta.value.trim().replace(/[,\s]+$/, '')}, ${w}` : w;
+                    ta.dispatchEvent(new Event('input'));
+                    ta.focus();
+                }
+                return;
+            }
             if (a === 'open-frog') {
                 const id = Number(act.getAttribute('data-frog-id'));
                 if (api.openBlacklistEntry && Number.isFinite(id)) api.openBlacklistEntry(id);
@@ -340,6 +418,17 @@ function bindModal(modal) {
             readFiltersAndRecompute();
         }
     });
+    let previewTimer = 0;
+    modal.addEventListener('input', (e) => {
+        if (!(e.target instanceof Element) || !e.target.matches('#caInsTopicWords')) return;
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(() => {
+            const pv = document.getElementById('caInsTopicPreview');
+            if (!pv) return;
+            const c = topicPreviewCount(e.target.value);
+            pv.textContent = c == null ? '' : `Совпадений в выборке: ${fmt.int(c)}`;
+        }, 250);
+    });
     const form = modal.querySelector('#caInsFilters');
     form.period.addEventListener('change', () => {
         const custom = form.period.value === 'custom';
@@ -384,6 +473,12 @@ async function reload() {
         st.frogEntries = [];
     }
     st.frogIndex = buildFrogIndex(st.frogEntries);
+    try {
+        st.customTopics = api.loadCustomTopics ? await api.loadCustomTopics() : [];
+    } catch {
+        st.customTopics = [];
+    }
+    setCustomTopics(st.customTopics);
     st.byId = new Map(st.all.map((r) => [r.id, r]));
     closeDrawer();
     await recompute();
@@ -437,7 +532,7 @@ function renderTab() {
     const inner = Math.max(280, body.clientWidth - 32 - 34);
     const twoCols = body.clientWidth >= 1100;
     setChartWidths({ wide: inner, half: twoCols ? (inner - 14) / 2 : inner });
-    const map = { overview: renderOverview, time: renderTime, clients: renderClients, frogs: renderFrogs, topics: renderTopics, text: renderText, dups: renderDups, quality: renderQuality, method: renderMethod };
+    const map = { compare: renderCompare, overview: renderOverview, time: renderTime, clients: renderClients, frogs: renderFrogs, topics: renderTopics, text: renderText, dups: renderDups, quality: renderQuality, method: renderMethod };
     body.innerHTML = `<div class="ca-ins-grid">${(map[st.tab] || renderOverview)(I)}</div>`;
     body.scrollTop = 0;
     lastBodyWidth = body.clientWidth;
@@ -556,6 +651,7 @@ function renderTime(I) {
     const wd = columns(T.weekday.map((v, i) => ({ label: WEEKDAYS[i], value: v, drill: `wd:${i}` })), { height: 170, ariaLabel: 'Обращения по дням недели' });
     const parts = [
         section('Динамика обращений', `<div class="ca-ins-seggroup" role="group" aria-label="Шаг графика">${grainBtns}</div>${chart}`, { wide: true, note: I.overview.dateReliable < 0.5 ? '⚠ Большинство записей без даты обращения: ряд построен по датам загрузки файлов.' : `Дата обращения из текста/файла у ${fmt.pct(I.overview.dateReliable, 0)} записей.` }),
+        section('Прогноз на 14 дней', forecastHtml(T.forecast, I), { wide: true }),
         section('Статистика ряда', stats, { wide: true }),
         section('По дням недели', wd),
     ];
@@ -569,6 +665,28 @@ function renderTime(I) {
         parts.push(section('Всплески', table(['Дата', 'Обращений', 'Робастный z'], T.anomalies.map((a) => ({ cells: [fmt.date(a.date), fmt.int(a.count), fmt.num1(a.z)], drill: `day:${a.date}` })), { numeric: [1, 2] })));
     }
     return parts.join('');
+}
+
+function forecastHtml(F, I) {
+    if (!F || F.insufficient) {
+        return `<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: ${escapeHtml((F && F.reason) || 'ряд слишком короткий')}</p>`;
+    }
+    const pts = F.days.map((d) => ({
+        x: d.date,
+        y: Math.round(d.value * 10) / 10,
+        lo: d.lo80,
+        hi: d.hi80,
+        tip: `${fmt.date(d.date)} (${WEEKDAYS[(new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7]}): ≈ ${fmt.num1(d.value)} · 80%: ${fmt.num1(d.lo80)}–${fmt.num1(d.hi80)} · 95%: ${fmt.num1(d.lo95)}–${fmt.num1(d.hi95)}`,
+    }));
+    const warn = I.overview.dateReliable < 0.5 ? '<p class="ca-ins-card-note">⚠ У большинства записей нет даты обращения — ряд построен по датам загрузки, прогноз описывает загрузки файлов, а не поток обращений.</p>' : '';
+    const cands = table(
+        ['Модель', 'MASE', ''],
+        F.candidates.map((c) => ({ cells: [c.label, fmt.num2(c.mase), c.key === F.method ? 'выбрана' : ''] })),
+        { numeric: [1] },
+    );
+    return `${warn}<div class="ca-ins-tiles">${statTile('Следующие 7 дней', `≈ ${fmt.int(F.nextWeek.value)}`, `80%: ${fmt.int(F.nextWeek.lo80)}–${fmt.int(F.nextWeek.hi80)} (по ${F.nextWeek.samples} неделям бэктеста)`)}${statTile('Точность (MASE)', fmt.num2(F.mase), F.quality, { tip: 'MAE модели / MAE прогноза «как неделю назад». < 1 — модель полезнее наивного прогноза' })}${statTile('Калибровка 80%-интервала', Number.isFinite(F.coverage80) ? fmt.pct(F.coverage80, 0) : '—', 'доля факта внутри интервала на бэктесте (идеал ≈ 80%)')}</div>
+${timeSeries(pts, { height: 200, ariaLabel: 'Прогноз обращений на 14 дней с 80% интервалом', band: true, smoothLabel: '' })}
+<h4 class="ca-ins-subtitle">Сравнение моделей на скользящем бэктесте (${F.origins} точек отсчёта, горизонт ${F.horizon} дн.)</h4>${cands}`;
 }
 
 function renderClients(I) {
@@ -665,7 +783,7 @@ function renderFrogs(I) {
                 c.label,
                 c.key === 'k' ? `${fmt.num1(c.frogMean)} / ${fmt.num1(c.frogMedian)}` : `${fmt.pct(c.frogMean)} / ${fmt.pct(c.frogMedian)}`,
                 c.key === 'k' ? `${fmt.num1(c.otherMean)} / ${fmt.num1(c.otherMedian)}` : `${fmt.pct(c.otherMean)} / ${fmt.pct(c.otherMedian)}`,
-                c.insufficient ? 'мало данных' : { html: `<span class="${c.significant ? 'ca-ins-up' : ''}">${escapeHtml(pval(c.p))}${c.significant ? ' *' : ''}</span>` },
+                c.insufficient ? 'мало данных' : { html: `<span class="${c.significant ? 'ca-ins-up' : ''}">${escapeHtml(pval(c.p))} · q = ${escapeHtml(fmt.num2(c.q))}${c.significant ? ' *' : ''}</span>` },
                 c.insufficient ? '—' : fmt.num2(c.effect),
             ],
         })),
@@ -781,10 +899,10 @@ function renderFrogs(I) {
         `<div class="ca-ins-tiles is-wide">${tiles}</div>`,
         section('Как найдены совпадения', via, { note: 'ИНН, телефон и данные из примечания — сильные совпадения (дают уровень). Название организации в тексте — слабое, только подсказка.' }),
         section('Обращения жаб по уровням', levels),
-        section('Чем жабы отличаются от остальных клиентов', cmp, { wide: true, note: 'U-тест Манна — Уитни по клиентам; r — ранго-бисериальная корреляция (> 0 — у жаб больше). * — p < 0,05.' }),
-        section('Признаки обращений: жабы против остальных', props, { wide: true, note: 'z-тест разности долей; отношение шансов с поправкой Холдейна и 95% ДИ по Вульфу.' }),
-        section('Темы, характерные для жаб', topics, { wide: true, note: 'Отношение шансов > 1 — тема у жаб встречается чаще. * — 95% ДИ не включает 1.' }),
-        section('Слова, характерные для жаб', words, { note: 'G² Даннинга (> 6,63 ≈ p < 0,01) по сравнению с остальными обращениями.' }),
+        section('Чем жабы отличаются от остальных клиентов', cmp, { wide: true, note: 'U-тест Манна — Уитни по клиентам; r — ранго-бисериальная корреляция (> 0 — у жаб больше). * — значимо после поправки Бенджамини — Хохберга (q < 0,05).' }),
+        section('Признаки обращений: жабы против остальных', props, { wide: true, note: 'z-тест разности долей; отношение шансов с поправкой Холдейна и 95% ДИ по Вульфу. * — q < 0,05 (Бенджамини — Хохберг).' }),
+        section('Темы, характерные для жаб', topics, { wide: true, note: 'Отношение шансов > 1 — тема у жаб встречается чаще. * — различие значимо после поправки Бенджамини — Хохберга на число тем (q < 0,05).' }),
+        section('Слова, характерные для жаб', words, { note: 'G² Даннинга по сравнению с остальными обращениями; оставлены слова с q < 0,01 после поправки Бенджамини — Хохберга на число проверенных слов.' }),
         section('Доля обращений жаб по месяцам, %', monthly),
         section('Градиент по уровню жабы', grad, { wide: true, note: 'Связь уровня (0 — не в списке … 3 — гипержаба) с поведением клиента.' }),
         section('До и после внесения в список', ba, { wide: true, note: 'Сравнение темпа обращений жаб до и после даты добавления в чёрный список (только жабы, внесённые внутри периода базы).' }),
@@ -793,6 +911,87 @@ function renderFrogs(I) {
         section('Записи чёрного списка и их обращения', entries, { wide: true }),
         section('Проверка самого чёрного списка', hygiene, { wide: true }),
     ].join('');
+}
+
+function customTopicsHtml(I) {
+    const counts = Object.fromEntries(I.topics.list.map((t) => [t.id, t.count]));
+    const rows = st.customTopics.length
+        ? table(
+              ['Тема', 'Ключевые слова', 'Обращений', ''],
+              st.customTopics.map((t) => {
+                  const id = String(t.id).startsWith('u_') ? t.id : `u_${t.id}`;
+                  return {
+                      cells: [
+                          t.label,
+                          t.words,
+                          counts[id] != null ? fmt.int(counts[id]) : 'ошибка в словах',
+                          { html: `<button type="button" class="ca-ins-link" data-ca-drill="topic:${escapeHtml(id)}">записи</button> · <button type="button" class="ca-ins-link" data-ins-action="topic-edit" data-topic-id="${escapeHtml(String(t.id))}">изменить</button> · <button type="button" class="ca-ins-link" data-ins-action="topic-del" data-topic-id="${escapeHtml(String(t.id))}">удалить</button>` },
+                      ],
+                  };
+              }),
+              { numeric: [2] },
+          )
+        : '<p class="ca-viz-empty">Своих тем пока нет.</p>';
+    const sugg = (I.topics.untaggedTerms || []).length
+        ? `<h4 class="ca-ins-subtitle">Частые слова в обращениях без темы (${fmt.int(I.topics.untagged)}) — нажмите, чтобы добавить в ключевые слова · <button type="button" class="ca-ins-link" data-ca-drill="untagged">показать эти обращения</button></h4><div class="ca-ins-cloud">${I.topics.untaggedTerms
+              .map((w) => `<button type="button" class="ca-ins-term" data-ins-action="suggest-word" data-word="${escapeHtml(w.word)}" data-tip="${escapeHtml(`в ${fmt.int(w.df)} обращениях без темы (${fmt.pct(w.share)})`)}">${escapeHtml(w.word)} <small>${fmt.int(w.df)}</small></button>`)
+              .join('')}</div>`
+        : '';
+    return `${rows}
+<form class="ca-ins-topicform" id="caInsTopicForm" onsubmit="return false">
+  <input type="hidden" name="topicId" value="">
+  <label class="ca-ins-field"><span>Название темы</span><input type="text" name="label" maxlength="80" placeholder="например: Акты сверки"></label>
+  <label class="ca-ins-field ca-ins-grow"><span>Ключевые слова (через запятую)</span><textarea id="caInsTopicWords" name="words" rows="2" placeholder="акт сверки, сверк, взаиморасч*т"></textarea></label>
+  <div class="ca-ins-topicform-actions"><span id="caInsTopicPreview" class="ca-viz-muted text-xs" aria-live="polite"></span><button type="button" class="ca-ins-btn ca-ins-btn-primary" data-ins-action="topic-add">Сохранить тему</button></div>
+</form>${sugg}`;
+}
+
+function topicPreviewCount(words) {
+    const re = compileTopicKeywords(words);
+    if (!re) return null;
+    let c = 0;
+    for (const r of st.filtered) {
+        if (re.test(normalizeForAnalysis(r.question || ''))) c++;
+    }
+    return c;
+}
+
+async function saveCustomTopicFromForm() {
+    const form = document.getElementById('caInsTopicForm');
+    if (!form) return;
+    const label = form.label.value.trim();
+    const words = form.words.value.trim();
+    if (!label || !compileTopicKeywords(words)) {
+        const pv = document.getElementById('caInsTopicPreview');
+        if (pv) pv.textContent = !label ? 'Укажите название темы.' : 'Добавьте хотя бы одно слово из 2+ букв.';
+        return;
+    }
+    const id = form.topicId.value || String(Date.now());
+    const next = st.customTopics.filter((t) => String(t.id) !== id);
+    next.push({ id, label, words });
+    st.customTopics = next;
+    if (api.saveCustomTopics) await api.saveCustomTopics(next);
+    setCustomTopics(next);
+    if (api.notify) api.notify(`Тема «${label}» сохранена`, 'success');
+    await recompute();
+}
+
+async function deleteCustomTopic(id) {
+    st.customTopics = st.customTopics.filter((t) => String(t.id) !== String(id));
+    if (api.saveCustomTopics) await api.saveCustomTopics(st.customTopics);
+    setCustomTopics(st.customTopics);
+    await recompute();
+}
+
+function editCustomTopic(id) {
+    const t = st.customTopics.find((x) => String(x.id) === String(id));
+    const form = document.getElementById('caInsTopicForm');
+    if (!t || !form) return;
+    form.topicId.value = t.id;
+    form.label.value = t.label;
+    form.words.value = t.words;
+    form.words.dispatchEvent(new Event('input'));
+    form.label.focus();
 }
 
 function renderTopics(I) {
@@ -822,13 +1021,14 @@ function renderTopics(I) {
         : '<p class="ca-viz-empty">Темы почти не пересекаются.</p>';
     const urg = columns(['0 — обычное', '1', '2', '3', '4+ — критично'].map((l, i) => ({ label: l, value: T.urgencyDist[i] })), { height: 160, ariaLabel: 'Распределение срочности' });
     return [
+        section('Свои темы', customTopicsHtml(I), { wide: true, note: 'Добавьте тему со своими ключевыми словами — она сразу участвует во всей аналитике (доли, тренды, жабы, CSV). Слово совпадает с началом слов текста: «сверк» найдёт «сверка», «сверки». Фраза — слова подряд, «*» — любые буквы.' }),
         section('Темы обращений', topicBars(I), { note: `Рубрикатор по словарю предметной области; одно обращение может относиться к нескольким темам. Без темы: ${fmt.int(T.untagged)} (${fmt.pct(T.untaggedShare)}). Разнообразие тем (норм. энтропия): ${fmt.num2(T.diversity)}.` }),
         section('Намерения', barsH(T.intents.map((t) => ({ label: t.label, value: t.count, drill: `intent:${t.id}` })), { showShare: I.overview.records })),
-        section('Изменение долей тем: 30 дней против предыдущих 30', table(['Тема', 'Всего', 'Доля (95% ДИ Уилсона)', 'Доля: было → стало', 'Изменение'], trendRows, { numeric: [1] }) + '<p class="ca-ins-card-note">* — изменение значимо (G² Даннинга > 3,84, p < 0,05; в каждом окне ≥ 20 обращений).</p>', { wide: true }),
+        section('Изменение долей тем: 30 дней против предыдущих 30', table(['Тема', 'Всего', 'Доля (95% ДИ Уилсона)', 'Доля: было → стало', 'Изменение'], trendRows, { numeric: [1] }) + '<p class="ca-ins-card-note">* — изменение значимо после поправки Бенджамини — Хохберга на число тем (q < 0,05; G² Даннинга; в каждом окне ≥ 20 обращений).</p>', { wide: true }),
         section(`Смысловые группы (k-means, k = ${I.clusters.k || '—'})`, clusters, { wide: true, note: I.clusters.insufficient ? '' : `Сферический k-means по TF-IDF основ слов (${fmt.int(I.clusters.vocabulary)} признаков), k выбран по силуэту (${fmt.num2(I.clusters.silhouette)}). Вне групп (мало слов): ${fmt.int(I.clusters.unclustered)}.` }),
         section('Срочность', urg, { note: `Срочных (≥ 2 баллов): ${fmt.int(T.urgent)}. Негативная окраска: ${fmt.int(T.negative)}.` }),
         section('Совместная встречаемость тем', co),
-        section('Матрица тем', heatmap(T.matrix, T.matrixLabels.map((l) => l.split(/[,(]/)[0].trim()), T.matrixLabels.map((_, i) => String(i + 1)), { cellLabel: false, tipFmt: (r, c, v) => `${T.matrixLabels[r]} × ${T.matrixLabels[c]}: ${fmt.int(v)}`, drillFmt: (r, c) => `topicpair:${TOPICS[r].id}:${TOPICS[c].id}`, ariaLabel: 'Матрица совместной встречаемости тем' }), { wide: true, note: 'Столбцы пронумерованы в том же порядке, что и строки; диагональ — число обращений темы.' }),
+        section('Матрица тем', heatmap(T.matrix, T.matrixLabels.map((l) => l.split(/[,(]/)[0].trim()), T.matrixLabels.map((_, i) => String(i + 1)), { cellLabel: false, tipFmt: (r, c, v) => `${T.matrixLabels[r]} × ${T.matrixLabels[c]}: ${fmt.int(v)}`, drillFmt: (r, c) => `topicpair:${activeTopics()[r].id}:${activeTopics()[c].id}`, ariaLabel: 'Матрица совместной встречаемости тем' }), { wide: true, note: 'Столбцы пронумерованы в том же порядке, что и строки; диагональ — число обращений темы.' }),
     ].join('');
 }
 
@@ -885,13 +1085,46 @@ function renderText(I) {
         section('Самые частые слова', terms, { note: 'Доля — в скольких обращениях встречается основа (стоп-слова и вежливые формулы исключены).' }),
         section('Ключевые слова (TF-IDF)', tfidf, { note: 'Частые, но не повсеместные слова: характерная лексика базы.' }),
         section('Устойчивые словосочетания', coll, { note: 't-score > 2,6 — неслучайное сочетание; PMI — сила связи слов.' }),
-        section('Новые и уходящие слова (30 дней)', emerging, { note: 'Логарифмическое правдоподобие G² Даннинга, |G²| > 10,83 ≈ p < 0,001.' }),
+        section('Новые и уходящие слова (30 дней)', emerging, { note: 'Логарифмическое правдоподобие G² Даннинга: |G²| > 10,83 и q < 0,01 после поправки Бенджамини — Хохберга на число проверенных слов.' }),
         section('Буквенный профиль', letters, { note: `Расстояние Йенсена — Шеннона до эталона русского языка: ${fmt.num2(X.letterJsd)} (0 — совпадение; > 0,2 — много аббревиатур, сокращений или проблемы кодировки). Всего букв: ${fmt.int(X.lettersTotal)}.` }),
         section('Классы символов', chars),
         section('Смешанная письменность', mixed),
         section('Возможные опечатки', typos, { note: 'Редкое слово (≤ 2 раз) на расстоянии одной правки (Дамерау — Левенштейн) от частого слова (≥ 10× чаще).' }),
         section('Закон Ципфа (лог-лог)', zipfChart(X.zipf.points, X.zipf), { note: 'Точки — частоты основ по рангу; линия — регрессия.' }),
     ].join('');
+}
+
+function renderCompare(I) {
+    const R = st.compareRange || defaultCompareRange(I);
+    if (!R) return section('Сравнение периодов', '<p class="ca-viz-empty">Нет дат.</p>', { wide: true });
+    const form = `<form class="ca-ins-filters ca-ins-compareform" id="caInsCompareForm" onsubmit="return false">
+  <fieldset class="ca-ins-period"><legend>Период A (было)</legend><label class="ca-ins-field"><span>с</span><input type="date" name="aFrom" value="${escapeHtml(R.A.from)}"></label><label class="ca-ins-field"><span>по</span><input type="date" name="aTo" value="${escapeHtml(R.A.to)}"></label></fieldset>
+  <fieldset class="ca-ins-period"><legend>Период B (стало)</legend><label class="ca-ins-field"><span>с</span><input type="date" name="bFrom" value="${escapeHtml(R.B.from)}"></label><label class="ca-ins-field"><span>по</span><input type="date" name="bTo" value="${escapeHtml(R.B.to)}"></label></fieldset>
+  <button type="button" class="ca-ins-btn ca-ins-btn-primary" data-ins-action="compare-run">Сравнить</button>
+</form>`;
+    const C = st.compare;
+    let body = '<div id="caInsCompareOut"><p class="ca-viz-muted">Выберите периоды и нажмите «Сравнить».</p></div>';
+    if (C) {
+        if (C.insufficient) {
+            body = `<div id="caInsCompareOut"><p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: в периоде A ${fmt.int(C.A.n)}, в периоде B ${fmt.int(C.B.n)} обращений (нужно ≥ 5 в каждом).</p></div>`;
+        } else {
+            const sig = (x) => (x.significant ? { html: `<span class="${x.deltaPp > 0 ? 'ca-ins-up' : 'ca-ins-down'}">${x.deltaPp > 0 ? '▲ +' : '▼ '}${fmt.num1(x.deltaPp)} п.п. *</span>` } : `${x.deltaPp > 0 ? '+' : ''}${fmt.num1(x.deltaPp)} п.п.`);
+            const shareTable = (rows, first) =>
+                table([first, 'A', 'B', 'Изменение', 'p / q', 'OR (95% ДИ)'], rows.map((x) => ({ cells: [x.label, `${fmt.pct(x.shareA)} (${fmt.int(x.a)})`, `${fmt.pct(x.shareB)} (${fmt.int(x.b)})`, sig(x), `${pval(x.p)} / q = ${x.q != null ? fmt.num2(x.q) : '—'}`, x.or ? `${fmt.num2(x.or.or)} (${fmt.num2(x.or.lo)}–${fmt.num2(x.or.hi)})` : '—'] })), { numeric: [1, 2] });
+            const wordsTbl = (rows, head) =>
+                rows.length ? table([head, 'A', 'B', 'G²'], rows.map((w) => ({ cells: [w.word, fmt.int(w.a), fmt.int(w.b), fmt.num1(w.g2)] })), { numeric: [1, 2, 3] }) : '<p class="ca-viz-empty">Значимых изменений нет.</p>';
+            const rateSig = C.rate.p < 0.05;
+            body = `<div id="caInsCompareOut" class="ca-ins-grid">
+<div class="ca-ins-tiles is-wide">${statTile('Обращений в день', `${fmt.num1(C.rate.a)} → ${fmt.num1(C.rate.b)}`, `${C.rate.ratio != null ? `×${fmt.num2(C.rate.ratio)}` : ''} · ${pval(C.rate.p)}${rateSig ? ' · значимо' : ' · незначимо'} · дисперсия φ = ${fmt.num1(C.rate.phi)}`, { tone: rateSig && C.rate.ratio > 1 ? 'warning' : '' })}${statTile('Обращений', `${fmt.int(C.A.n)} → ${fmt.int(C.B.n)}`, `${C.A.days} и ${C.B.days} дн.`)}${statTile('Клиентов', `${fmt.int(C.clients.a)} → ${fmt.int(C.clients.b)}`, `новых в B: ${fmt.int(C.clients.newInB)} · ушли: ${fmt.int(C.clients.lostFromA)} · в обоих: ${fmt.int(C.clients.both)}`)}</div>
+${section('Сигналы', shareTable(C.signals, 'Признак'), { wide: true })}
+${section('Темы', shareTable(C.topics, 'Тема'), { wide: true, note: '* — z-тест разности долей с поправкой Бенджамини — Хохберга на все темы и намерения (q < 0,05) при ≥ 20 обращениях в каждом периоде. Без поправки при ~25 проверках 1–2 «значимых» различия появлялись бы случайно.' })}
+${section('Намерения', shareTable(C.intents, 'Намерение'), { wide: true })}
+${section('Слова, которые учащаются в B', wordsTbl(C.rising, 'Слово'), { note: 'G² Даннинга: |G²| > 10,83 и q < 0,01 (Бенджамини — Хохберг).' })}
+${section('Слова, которые уходят в B', wordsTbl(C.falling, 'Слово'))}
+</div>`;
+        }
+    }
+    return section('Сравнение двух периодов', form + body, { wide: true, note: 'Периоды берутся из текущей выборки (с учётом фильтров сверху). Разница темпа проверяется условным биномиальным тестом с квазипуассоновской поправкой на «волновой» поток (φ — индекс дисперсии дневных объёмов).' });
 }
 
 function renderDups(I) {
@@ -968,6 +1201,9 @@ function renderMethod() {
         ['Жабы: сопоставление', 'Запись обращения связывается с записью чёрного списка по ИНН, по второму ИНН в тексте, по телефону и по ИНН/телефонам/e-mail из примечания (сильные совпадения, дают уровень). Название организации в тексте (без формы собственности и кавычек) — слабое совпадение, только подсказка.'],
         ['Жабы: сравнение', 'Клиенты-жабы против остальных — U-тест Манна — Уитни и ранго-бисериальная корреляция; признаки обращений — z-тест долей и отношение шансов (поправка Холдейна, 95% ДИ Вульфа); лексика — G² Даннинга; связь с уровнем — ρ Спирмена; темп обращений до/после даты внесения в список.'],
         ['Жабы: модель', 'Логистическая регрессия с L2 по поведенческим признакам клиента, веса классов уравновешены, качество — AUC на стратифицированной 5-кратной перекрёстной проверке. Кандидаты не показываются при AUC < 0,6. Лексика в модель не входит, чтобы не было утечки метки.'],
+        ['Множественные сравнения', 'Когда проверяется много гипотез сразу (темы, намерения, слова, признаки жаб), p-значения корректируются процедурой Бенджамини — Хохберга (контроль доли ложных открытий): тема или слово помечается значимым, только если q < 0,05 (для слов — q < 0,01). Без поправки при 25 проверках 1–2 ложные «находки» ожидаются просто случайно.'],
+        ['Прогноз', 'Три модели — «как неделю назад», среднее того же дня недели за 4 недели, Холт — Винтерс с затухающим трендом; выбирается лучшая по MASE на скользящем бэктесте (8 точек отсчёта, горизонт 14 дней). Интервалы — эмпирические квантили ошибок бэктеста; рядом показана их фактическая калибровка.'],
+        ['Сравнение периодов', 'Темп — условный биномиальный тест (при равном темпе доля обращений периода A равна доле его дней) с квазипуассоновской поправкой z/√φ, где φ — индекс дисперсии дневных объёмов; доли тем, намерений и сигналов — z-тест с поправкой Бенджамини — Хохберга; слова — G² с поправкой; клиенты — новые, ушедшие и оставшиеся по ИНН.'],
         ['Ограничения', 'Это классическая статистика и словари, а не языковая модель: смысл вне словаря и вне текстов базы не «понимается». При малых выборках выводы помечаются «НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА».'],
     ];
     return section('Как считается каждый показатель', table(['Что', 'Метод'], rows.map((c) => ({ cells: c }))), { wide: true });
@@ -991,11 +1227,15 @@ function resolveDrill(key) {
     switch (kind) {
         case 'topic': {
             ids = I.index.topic[arg] || [];
-            const tp = TOPICS.find((t) => t.id === arg);
+            const tp = activeTopics().find((t) => t.id === arg);
             title = `Тема: ${tp ? tp.label : arg}`;
             if (tp) highlight = { re: tp.re };
             break;
         }
+        case 'untagged':
+            ids = I.topics.untaggedIds || [];
+            title = 'Обращения без темы';
+            break;
         case 'topicpair': {
             const [a, b] = arg.split(':');
             const sb = new Set(I.index.topic[b] || []);
@@ -1089,13 +1329,13 @@ function resolveDrill(key) {
             const fs = new Set((I.index.frog && I.index.frog.all) || []);
             ids = (I.index.topic[arg] || []).filter((id) => fs.has(id));
             title = `Жабы · тема: ${I.labels.topics[arg] || arg}`;
-            const tp = TOPICS.find((t) => t.id === arg);
+            const tp = activeTopics().find((t) => t.id === arg);
             if (tp) highlight = { re: tp.re };
             break;
         }
         case 'frogword': {
             const fs = new Set((I.index.frog && I.index.frog.all) || []);
-            ids = recs.filter((r) => fs.has(r.id) && tokenizeDetailed(r.question || '').some((t) => t.stem === arg)).map((r) => r.id);
+            ids = recs.filter((r) => fs.has(r.id) && tokenizeDetailed(r.question || '').some((t) => ((I.stemCanon || {})[t.stem] || t.stem) === arg)).map((r) => r.id);
             title = `Жабы · слово: ${arg}…`;
             highlight = { stems: new Set([arg]) };
             break;
@@ -1191,8 +1431,9 @@ function highlightQuestion(text, hl) {
     if (hl.stems) {
         let out = '';
         let last = 0;
+        const canon = (st.insights && st.insights.stemCanon) || {};
         for (const t of tokenizeDetailed(q)) {
-            if (!hl.stems.has(t.stem)) continue;
+            if (!hl.stems.has(canon[t.stem] || t.stem)) continue;
             out += escapeHtml(q.slice(last, t.start)) + `<mark>${escapeHtml(t.surface)}</mark>`;
             last = t.end;
         }
@@ -1245,7 +1486,7 @@ function renderXray(recordId) {
     const d = document.getElementById('caInsDrawer');
     const r = st.byId.get(recordId);
     if (!d || !r) return;
-    const x = xrayRecord(r, { df: st.insights.df, n: st.insights.overview.records });
+    const x = xrayRecord(r, { df: st.insights.df, canon: st.insights.stemCanon, n: st.insights.overview.records });
     const q = String(r.question || '');
     let tokHtml = '';
     let last = 0;

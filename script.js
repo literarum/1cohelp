@@ -634,6 +634,7 @@ import {
     renderClientAnalyticsPage as renderClientAnalyticsPageModule,
     buildClientAnalyticsAppealsHtmlForBlacklistEntry,
     showClientAnalyticsInnHistoryModal,
+    getClientAnalyticsAppealCountsByBlacklistEntry,
 } from './js/features/client-analytics.js';
 
 // Алиас для глобального использования в appInit и при экспорте в window
@@ -4298,6 +4299,7 @@ setBlacklistDependencies({
             ? renderClientAnalyticsPageModule
             : null,
     buildClientAnalyticsAppealsHtml: buildClientAnalyticsAppealsHtmlForBlacklistEntry,
+    getClientAnalyticsAppealCounts: getClientAnalyticsAppealCountsByBlacklistEntry,
     openClientAnalyticsInnHistory: async (inn) => {
         await showClientAnalyticsInnHistoryModal(inn);
         // окно жабы может быть поднято над аналитикой — история должна открыться поверх него

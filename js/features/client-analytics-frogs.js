@@ -28,6 +28,8 @@ import {
     trainLogistic,
     crossValidatedAuc,
     mean,
+    applyFdr,
+    pFromG2,
 } from './client-analytics-math.js';
 import {
     normalizeRussianPhone,
@@ -36,7 +38,7 @@ import {
     findInnOccurrences,
     innConfidence,
 } from './client-analytics-parse.js';
-import { TOPICS, TOPIC_LABELS, normalizeForAnalysis } from './client-analytics-text.js';
+import { activeTopics, TOPIC_LABELS, normalizeForAnalysis } from './client-analytics-text.js';
 
 export const FROG_VIA_LABELS = {
     inn: 'ИНН',
@@ -304,8 +306,9 @@ export function computeFrogInsights(list, recInfo, rawEntries, ctx) {
         const a = pick(frogInns, key);
         const b = pick(otherInns, key);
         const mw = mannWhitneyU(a, b);
-        return { key, label, frogMean: mean(a), otherMean: mean(b), frogMedian: describe(a).median, otherMedian: describe(b).median, ...mw, significant: !mw.insufficient && mw.p < 0.05 };
+        return { key, label, frogMean: mean(a), otherMean: mean(b), frogMedian: describe(a).median, otherMedian: describe(b).median, ...mw };
     });
+    applyFdr(compare, { guard: (r) => !r.insufficient });
 
     // --- обращения: доли признаков
     const isFrogRec = (i) => out.perRecord[i].level > 0;
@@ -323,7 +326,7 @@ export function computeFrogInsights(list, recInfo, rawEntries, ctx) {
         const z = twoProportionZ(a, fN, c, oN);
         // признак не встретился ни разу — сравнивать нечего (поправка Холдейна дала бы ложное OR)
         if (a + c === 0) return { label, frog: 0, other: 0, ...z, or: null, significant: false, empty: true };
-        return { label, frog: a, other: c, ...z, or: oddsRatio(a, fN - a, c, oN - c), significant: fN >= 5 && z.p < 0.05 };
+        return { label, frog: a, other: c, ...z, or: oddsRatio(a, fN - a, c, oN - c) };
     };
     const proportions = [
         propRow('Срочные (≥ 2 баллов)', (i) => recInfo[i].urgency >= 2),
@@ -333,7 +336,8 @@ export function computeFrogInsights(list, recInfo, rawEntries, ctx) {
         propRow('Оплата / продление', (i) => recInfo[i].intent === 'billing'),
         propRow('Текст ЗАГЛАВНЫМИ', (i) => recInfo[i].caps > 0.6),
     ];
-    const topics = TOPICS.map((t) => {
+    applyFdr(proportions, { guard: (r) => !r.empty && fN >= 5 });
+    const topics = activeTopics().map((t) => {
         let a = 0;
         let c = 0;
         for (let i = 0; i < n; i++) {
@@ -343,8 +347,10 @@ export function computeFrogInsights(list, recInfo, rawEntries, ctx) {
         }
         if (a + c === 0) return { id: t.id, label: TOPIC_LABELS[t.id], frog: 0, other: 0, frogShare: 0, otherShare: 0, lift: null, or: null, lo: null, hi: null, significant: false, empty: true };
         const or = oddsRatio(a, fN - a, c, oN - c);
-        return { id: t.id, label: TOPIC_LABELS[t.id], frog: a, other: c, frogShare: fN ? a / fN : 0, otherShare: oN ? c / oN : 0, lift: oN && c ? a / fN / (c / oN) : null, ...or, significant: fN >= 5 && or.significant };
+        const z = twoProportionZ(a, fN, c, oN);
+        return { id: t.id, label: TOPIC_LABELS[t.id], frog: a, other: c, frogShare: fN ? a / fN : 0, otherShare: oN ? c / oN : 0, lift: oN && c ? a / fN / (c / oN) : null, ...or, p: z.p };
     }).sort((x, y) => (y.empty ? -1e9 : Math.log(y.or)) - (x.empty ? -1e9 : Math.log(x.or)));
+    applyFdr(topics, { guard: (t) => !t.empty && fN >= 5 });
 
     // --- характерная лексика жаб (G²)
     const fa = new Map();
@@ -363,8 +369,12 @@ export function computeFrogInsights(list, recInfo, rawEntries, ctx) {
             const b = fb.get(st) || 0;
             if (a < 3) continue;
             const g = logLikelihoodG2(a, b, ta, tb);
-            if (g > 6.63) words.push({ stem: st, word: ctx.displayForm(st), frog: a, other: b, g2: g });
+            words.push({ stem: st, word: ctx.displayForm(st), frog: a, other: b, g2: g, p: pFromG2(g) });
         }
+        applyFdr(words, { alpha: 0.01 });
+        const kept = words.filter((w) => w.significant && w.g2 > 6.63);
+        words.length = 0;
+        words.push(...kept);
         words.sort((x, y) => y.g2 - x.g2);
     }
 

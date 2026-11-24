@@ -41,13 +41,19 @@ import {
     fnv1a,
     ewma,
     linearRegression,
+    normalCdf as normalCdfLocal,
+    twoProportionZ as twoProportionZLocal,
+    oddsRatio as oddsRatioLocal,
+    applyFdr,
+    pFromG2,
 } from './client-analytics-math.js';
 import {
     tokenizeDetailed,
     classifyText,
     wordShingles,
     splitSentences,
-    TOPICS,
+    activeTopics,
+    setCustomTopics,
     INTENTS,
     TOPIC_LABELS,
     INTENT_LABELS,
@@ -56,7 +62,8 @@ import {
 import { describeInn, kppReason, regionByCode } from './client-analytics-registry.js';
 import { innConfidence } from './client-analytics-parse.js';
 import { editDistance } from './search-text-utils.js';
-import { computeFrogInsights } from './client-analytics-frogs.js';
+import { computeFrogInsights, buildFrogIndex as buildFrogIndexLocal, matchRecordToFrogs as matchFrogLocal } from './client-analytics-frogs.js';
+import { forecastDaily } from './client-analytics-forecast.js';
 
 export const INSIGHTS_VERSION = 1;
 
@@ -134,6 +141,8 @@ export function computeInsights(records, opts = {}) {
     let totalContent = 0;
     const recInfo = new Array(n);
 
+    if (opts.customTopics) setCustomTopics(opts.customTopics);
+    const TOPICS = activeTopics();
     const topicIndex = Object.fromEntries(TOPICS.map((t) => [t.id, []]));
     const intentIndex = Object.fromEntries([...INTENTS.map((t) => [t.id, []]), ['other', []]]);
     const urgentIds = [];
@@ -205,6 +214,31 @@ export function computeInsights(records, opts = {}) {
         if (i % 2000 === 0) progress('Разбор текста и признаков записей', 5 + Math.round((30 * i) / Math.max(1, n)));
     }
     heapsCurve.push({ n: totalContent, v: tf.size });
+
+    // ---------------- объединение форм одного слова (нестабильность стеммера) ----------------
+    const stemCanon = buildStemFamilies(tf);
+    if (stemCanon.size) {
+        const canon = (st) => stemCanon.get(st) || st;
+        const tf2 = new Map();
+        for (const [st, c] of tf) tf2.set(canon(st), (tf2.get(canon(st)) || 0) + c);
+        const surf2 = new Map();
+        for (const [st, sm] of surfaceByStem) {
+            const k = canon(st);
+            if (!surf2.has(k)) surf2.set(k, new Map());
+            const dst = surf2.get(k);
+            for (const [w, c] of sm) dst.set(w, (dst.get(w) || 0) + c);
+        }
+        df.clear();
+        for (let i = 0; i < n; i++) {
+            docTokens[i] = docTokens[i].map(canon);
+            docStems[i] = new Set(docTokens[i]);
+            for (const st of docStems[i]) df.set(st, (df.get(st) || 0) + 1);
+        }
+        tf.clear();
+        for (const [k, v] of tf2) tf.set(k, v);
+        surfaceByStem.clear();
+        for (const [k, v] of surf2) surfaceByStem.set(k, v);
+    }
 
     const displayForm = (st) => {
         const sm = surfaceByStem.get(st);
@@ -346,6 +380,22 @@ export function computeInsights(records, opts = {}) {
     // ---------------- темы и намерения ----------------
     progress('Темы, намерения, срочность', 68);
     const topics = computeTopics(recInfo, topicIndex, intentIndex, topicCo, maxDay, n, urgentIds, negativeIds);
+    // подсказка для своих тем: частые слова в обращениях, не попавших ни в одну тему
+    {
+        const udf = new Map();
+        let un = 0;
+        for (let i = 0; i < n; i++) {
+            if (recInfo[i].topics.length) continue;
+            un++;
+            for (const st of docStems[i]) udf.set(st, (udf.get(st) || 0) + 1);
+        }
+        topics.untaggedTerms = [...udf.entries()]
+            .filter(([, d]) => d >= Math.max(2, Math.ceil(un * 0.01)))
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 40)
+            .map(([stem, d]) => ({ stem, word: displayForm(stem), df: d, share: un ? d / un : 0 }));
+        topics.untaggedIds = recInfo.filter((x) => !x.topics.length).map((x) => x.id);
+    }
 
     // ---------------- кластеры ----------------
     progress('Кластеризация (сферический k-means)', 74);
@@ -428,6 +478,7 @@ export function computeInsights(records, opts = {}) {
         index: { topic: topicIndex, intent: intentIndex, term: termIndex, urgent: urgentIds, negative: negativeIds, quality: quality.index, frog: frogIndex, frogEntry: frogEntryIds },
         perRecord,
         df: Object.fromEntries([...df.entries()].filter((e) => e[1] >= 2)),
+        stemCanon: Object.fromEntries(stemCanon),
         labels: { topics: TOPIC_LABELS, intents: INTENT_LABELS },
     };
 }
@@ -455,6 +506,48 @@ export function countChars(text, cls, letters) {
         else if (PUNCT_RE.test(text[i])) cls.punct++;
         else cls.other++;
     }
+}
+
+/**
+ * Семейства основ: стеммер по-разному режет падежи отглагольных существительных
+ * («обращение» → «обращ», «обращения» → «обращен»), беглую гласную («ошибк»/«ошибок»)
+ * и «-ость» («отчетн»/«отчетност»). Длинная основа сводится к короткой, только если короткая
+ * действительно встречается в словаре базы (иначе слово остаётся как есть).
+ * @param {Map<string, number>} tf
+ * @returns {Map<string, string>} основа → каноническая основа
+ */
+export function buildStemFamilies(tf) {
+    const out = new Map();
+    for (const st of tf.keys()) {
+        if (st.length < 5 || /[^а-я]/.test(st)) continue;
+        let base = null;
+        for (const suf of ['ован', 'ен', 'ан']) {
+            if (st.endsWith(suf)) {
+                const b = st.slice(0, -suf.length);
+                if (b.length >= 3 && tf.has(b)) {
+                    base = b;
+                    break;
+                }
+            }
+        }
+        if (!base && /[ое]к$/.test(st)) {
+            const b = `${st.slice(0, -2)}к`;
+            if (b.length >= 4 && tf.has(b)) base = b;
+        }
+        if (!base && st.endsWith('ост')) {
+            const b = st.slice(0, -3);
+            if (b.length >= 4 && tf.has(b)) base = b;
+        }
+        if (base && base !== st) out.set(st, base);
+    }
+    // цепочки (a → b → c) сворачиваются до конца
+    for (const [k, v] of out) {
+        let t = v;
+        let guard = 0;
+        while (out.has(t) && guard++ < 5) t = out.get(t);
+        out.set(k, t);
+    }
+    return out;
 }
 
 function thinPoints(points, max) {
@@ -637,6 +730,11 @@ function computeTimeSeries(recInfo, minDay, maxDay) {
     const ew = ewma(counts, 0.25);
     out.level = ew.length ? ew[ew.length - 1] : 0; // текущий сглаженный уровень, обращений/день
     out.insufficient = len < 14;
+    try {
+        out.forecast = forecastDaily(out.daily.map((d) => ({ date: d.date, count: d.count })));
+    } catch (e) {
+        out.forecast = { insufficient: true, reason: String((e && e.message) || e) };
+    }
     out.from = dayNumToYmd(from);
     out.to = dayNumToYmd(maxDay);
     return out;
@@ -797,6 +895,7 @@ function computeClients(list, recInfo, innCounts, innRecs, blacklistInns) {
 // Темы
 // ---------------------------------------------------------------------------
 function computeTopics(recInfo, topicIndex, intentIndex, topicCo, maxDay, n, urgentIds, negativeIds) {
+    const TOPICS = activeTopics();
     const recentFrom = maxDay != null ? maxDay - 29 : null;
     const prevFrom = maxDay != null ? maxDay - 59 : null;
     const byId = new Map(recInfo.map((x) => [x.id, x]));
@@ -822,8 +921,10 @@ function computeTopics(recInfo, topicIndex, intentIndex, topicCo, maxDay, n, urg
         const shareRecent = recentN ? rec / recentN : 0;
         const sharePrev = prevN ? prev / prevN : 0;
         const g2 = rec + prev >= 5 ? logLikelihoodG2(rec, prev, recentN || 1, prevN || 1) : 0;
-        return { id: t.id, label: t.label, count: ids.length, share: w.p, lo: w.lo, hi: w.hi, recent: rec, prev, shareRecent, sharePrev, deltaPp: (shareRecent - sharePrev) * 100, g2, significant: Math.abs(g2) > 3.84 && recentN >= 20 && prevN >= 20 };
+        return { id: t.id, label: t.label, custom: !!t.custom, count: ids.length, share: w.p, lo: w.lo, hi: w.hi, recent: rec, prev, shareRecent, sharePrev, deltaPp: (shareRecent - sharePrev) * 100, g2, p: rec + prev >= 5 ? pFromG2(g2) : 1 };
     }).sort((a, b) => b.count - a.count);
+    // поправка Бенджамини — Хохберга на число тем (иначе 1 из 20 тем «растёт» случайно)
+    applyFdr(list, { guard: () => recentN >= 20 && prevN >= 20 });
     const untagged = recInfo.filter((x) => !x.topics.length).length;
     const intents = [...INTENTS.map((t) => t.id), 'other']
         .map((id) => ({ id, label: INTENT_LABELS[id], count: intentIndex[id].length, share: n ? intentIndex[id].length / n : 0 }))
@@ -1089,8 +1190,11 @@ function computeEmergingTerms(docTokens, recInfo, maxDay, displayForm) {
         const g = logLikelihoodG2(fa, fb, ta, tb);
         scored.push({ stem: k, word: displayForm(k), recent: fa, before: fb, g2: g, ratio: (fa / ta + 1e-9) / (fb / tb + 1e-9) });
     }
-    res.rising = scored.filter((s) => s.g2 > 10.83).sort((x, y) => y.g2 - x.g2).slice(0, 20);
-    res.falling = scored.filter((s) => s.g2 < -10.83).sort((x, y) => x.g2 - y.g2).slice(0, 12);
+    for (const s of scored) s.p = pFromG2(s.g2);
+    applyFdr(scored, { alpha: 0.01 });
+    res.tested = scored.length;
+    res.rising = scored.filter((s) => s.significant && s.g2 > 10.83).sort((x, y) => y.g2 - x.g2).slice(0, 20);
+    res.falling = scored.filter((s) => s.significant && s.g2 < -10.83).sort((x, y) => x.g2 - y.g2).slice(0, 12);
     res.insufficient = false;
     res.recentTokens = ta;
     res.beforeTokens = tb;
@@ -1171,7 +1275,7 @@ export function xrayRecord(rec, ctx = {}) {
     const content = tokens.filter((t) => !t.stop && !t.numeric);
     const n = ctx.n || 0;
     const weights = content.map((t) => {
-        const d = ctx.df && ctx.df[t.stem];
+        const d = ctx.df && ctx.df[(ctx.canon && ctx.canon[t.stem]) || t.stem];
         return { ...t, idf: n && d ? Math.log((n + 1) / (d + 1)) + 1 : null };
     });
     return {
@@ -1186,5 +1290,151 @@ export function xrayRecord(rec, ctx = {}) {
         date: effectiveDate(rec),
         inn: rec && rec.inn ? { ...describeInn(rec.inn), valid: innConfidence(rec.inn) === 'high' } : null,
         kpp: rec && rec.kpp ? { reason: kppReason(rec.kpp), region: regionByCode(rec.kpp.slice(0, 2)) } : null,
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Сравнение двух периодов
+// ---------------------------------------------------------------------------
+/**
+ * Период A против периода B (даты включительно, YYYY-MM-DD).
+ *  • темп: обращений в день; разница проверяется условным биномиальным тестом
+ *    (при равном темпе доля обращений A среди всех равна доле дней A);
+ *  • клиенты: новые (есть в B, нет в A), ушедшие, оставшиеся;
+ *  • темы и намерения: доли, разница в п.п., отношение шансов с 95% ДИ;
+ *  • слова: G² Даннинга (учащаются / уходят в B);
+ *  • доля жаб, срочных, негативных: z-тест долей.
+ * @param {object[]} records
+ * @param {{from:string,to:string}} A
+ * @param {{from:string,to:string}} B
+ * @param {{ blacklistEntries?: object[], customTopics?: object[] }} [opts]
+ */
+export function comparePeriods(records, A, B, opts = {}) {
+    if (opts.customTopics) setCustomTopics(opts.customTopics);
+    const TOPICS = activeTopics();
+    const inRange = (d, p) => d && d >= p.from && d <= p.to;
+    const groups = { a: [], b: [] };
+    for (const r of records || []) {
+        const d = effectiveDate(r).ymd;
+        if (inRange(d, A)) groups.a.push(r);
+        if (inRange(d, B)) groups.b.push(r);
+    }
+    const days = (p) => Math.max(1, Math.round((Date.parse(`${p.to}T00:00:00Z`) - Date.parse(`${p.from}T00:00:00Z`)) / DAY_MS) + 1);
+    const dA = days(A);
+    const dB = days(B);
+    const nA = groups.a.length;
+    const nB = groups.b.length;
+    // условный биномиальный тест равенства темпов (нормальное приближение) с квазипуассоновской
+    // поправкой: обращения приходят волнами (дисперсия дневных объёмов > среднего), и без поправки
+    // тест слишком часто объявлял бы различие значимым. φ — индекс дисперсии внутри каждого периода.
+    const p0 = dA / (dA + dB);
+    const nT = nA + nB;
+    const dailyDisp = (list, P, days) => {
+        const c = new Map();
+        for (const r of list) {
+            const d = effectiveDate(r).ymd;
+            c.set(d, (c.get(d) || 0) + 1);
+        }
+        const xs = [];
+        const start = Date.parse(`${P.from}T00:00:00Z`);
+        for (let k = 0; k < days; k++) xs.push(c.get(new Date(start + k * DAY_MS).toISOString().slice(0, 10)) || 0);
+        const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+        const v = xs.length > 1 ? xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1) : 0;
+        return { m, v, n: xs.length };
+    };
+    const da = dailyDisp(groups.a, A, dA);
+    const db = dailyDisp(groups.b, B, dB);
+    const pooledVar = (da.v * (da.n - 1) + db.v * (db.n - 1)) / Math.max(1, da.n + db.n - 2);
+    const pooledMean = (da.m * da.n + db.m * db.n) / Math.max(1, da.n + db.n);
+    const phi = pooledMean > 0 && da.n + db.n > 4 ? Math.max(1, pooledVar / pooledMean) : 1;
+    const zRaw = nT ? (nA - nT * p0) / Math.sqrt(nT * p0 * (1 - p0)) : 0;
+    const zRate = zRaw / Math.sqrt(phi);
+    const rate = {
+        a: nA / dA,
+        b: nB / dB,
+        ratio: nA ? nB / dB / (nA / dA) : null,
+        z: zRate,
+        zRaw,
+        phi,
+        p: nT ? 2 * (1 - normalCdfLocal(Math.abs(zRate))) : 1,
+    };
+    const feats = (list) =>
+        list.map((r) => {
+            const c = classifyText(r.question || '');
+            const stems = [];
+            for (const t of tokenizeDetailed(r.question || '')) if (!t.stop && !t.numeric && (t.norm.length >= 2 || /\d/.test(t.norm))) stems.push(t.stem);
+            return { r, c, stems };
+        });
+    const fa = feats(groups.a);
+    const fb = feats(groups.b);
+    const innsA = new Set(groups.a.map((r) => String(r.inn || '')).filter(Boolean));
+    const innsB = new Set(groups.b.map((r) => String(r.inn || '')).filter(Boolean));
+    const clients = {
+        a: innsA.size,
+        b: innsB.size,
+        newInB: [...innsB].filter((x) => !innsA.has(x)).length,
+        lostFromA: [...innsA].filter((x) => !innsB.has(x)).length,
+        both: [...innsB].filter((x) => innsA.has(x)).length,
+    };
+    const shareRow = (label, predA, predB, id) => {
+        const xa = fa.filter(predA).length;
+        const xb = fb.filter(predB).length;
+        const empty = xa + xb === 0;
+        const z = twoProportionZLocal(xb, nB, xa, nA);
+        const or = empty ? null : oddsRatioLocal(xb, nB - xb, xa, nA - xa);
+        return { id, label, a: xa, b: xb, shareA: nA ? xa / nA : 0, shareB: nB ? xb / nB : 0, deltaPp: ((nB ? xb / nB : 0) - (nA ? xa / nA : 0)) * 100, p: z.p, or, significant: false, empty };
+    };
+    const topics = TOPICS.map((t) => shareRow(t.label, (f) => f.c.topics.includes(t.id), (f) => f.c.topics.includes(t.id), t.id))
+        .filter((t) => !t.empty)
+        .sort((x, y) => Math.abs(y.deltaPp) - Math.abs(x.deltaPp));
+    const intents = [...INTENTS.map((i) => i.id), 'other']
+        .map((id) => shareRow(INTENT_LABELS[id], (f) => f.c.intent === id, (f) => f.c.intent === id, id))
+        .filter((t) => !t.empty);
+    const signals = [shareRow('Срочные', (f) => f.c.urgency >= 2, (f) => f.c.urgency >= 2, 'urgent'), shareRow('Негативные', (f) => f.c.negativity >= 2, (f) => f.c.negativity >= 2, 'negative')];
+    if (opts.blacklistEntries && opts.blacklistEntries.length) {
+        const fi = buildFrogIndexLocal(opts.blacklistEntries);
+        const isFrog = (f) => matchFrogLocal(f.r, fi).level > 0;
+        signals.push(shareRow('Обращения жаб', isFrog, isFrog, 'frogs'));
+    }
+    // одна «семья» проверок — темы и намерения вместе, сигналы отдельно (BH, q < 0,05)
+    const enough = () => nA >= 20 && nB >= 20;
+    applyFdr([...topics, ...intents], { guard: enough });
+    applyFdr(signals, { guard: enough });
+    // слова
+    const ca = new Map();
+    const cb = new Map();
+    let ta = 0;
+    let tb = 0;
+    const surf = new Map();
+    for (const f of fa) for (const s of f.stems) { ca.set(s, (ca.get(s) || 0) + 1); ta++; }
+    for (const f of fb) for (const s of f.stems) { cb.set(s, (cb.get(s) || 0) + 1); tb++; }
+    for (const f of [...fa, ...fb]) for (const t of tokenizeDetailed(f.r.question || '')) if (!surf.has(t.stem)) surf.set(t.stem, t.norm);
+    const words = [];
+    if (ta >= 50 && tb >= 50) {
+        for (const k of new Set([...ca.keys(), ...cb.keys()])) {
+            const a = ca.get(k) || 0;
+            const b = cb.get(k) || 0;
+            if (a + b < 5) continue;
+            const g = logLikelihoodG2(b, a, tb, ta);
+            words.push({ stem: k, word: surf.get(k) || k, a, b, g2: g, p: pFromG2(g) });
+        }
+        applyFdr(words, { alpha: 0.01 });
+    }
+    const sigWords = words.filter((w) => w.significant && Math.abs(w.g2) > 10.83);
+    return {
+        A: { ...A, days: dA, n: nA },
+        B: { ...B, days: dB, n: nB },
+        rate,
+        clients,
+        topics,
+        intents,
+        signals,
+        rising: sigWords.filter((w) => w.g2 > 0).sort((x, y) => y.g2 - x.g2).slice(0, 25),
+        falling: sigWords.filter((w) => w.g2 < 0).sort((x, y) => x.g2 - y.g2).slice(0, 25),
+        testsWords: words.length,
+        testsShares: topics.length + intents.length,
+        insufficient: nA < 5 || nB < 5,
+        idsA: groups.a.map((r) => r.id),
+        idsB: groups.b.map((r) => r.id),
     };
 }
