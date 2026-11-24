@@ -44,6 +44,11 @@ let deps = {
  * После изменения ЧС перерисовать «Базу клиентов» (перекрёстная сверка ИНН).
  */
 async function refreshClientAnalyticsAfterBlacklistChange() {
+    try {
+        window.dispatchEvent(new CustomEvent('copilot:blacklist-changed'));
+    } catch {
+        /* окружение без событий */
+    }
     const fn = deps.refreshClientAnalyticsPage;
     if (typeof fn !== 'function') return;
     try {

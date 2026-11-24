@@ -1833,7 +1833,7 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null, 
     ${chipsRow}
     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Тел.: ${phones}</p>
     <p class="text-sm text-gray-600 dark:text-gray-400">E-mail: ${emails}</p>
-    <p class="text-sm mt-1 line-clamp-2">${q || '—'}</p>
+    <p class="text-sm mt-1 line-clamp-2 ca-card-question">${q || '—'}</p>
     <p class="text-xs text-gray-500 mt-1">${escapeHtml(formatRecordWhen(rec))} · ${fn}</p>
   </div>
   <div class="flex gap-2 shrink-0 self-start" data-role="actions">
@@ -1849,7 +1849,7 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null, 
   ${chipsRow}
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Тел.: ${phones}</p>
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">E-mail: ${emails}</p>
-  <p class="text-sm mt-2 line-clamp-4">${q || '—'}</p>
+  <p class="text-sm mt-2 line-clamp-4 ca-card-question">${q || '—'}</p>
   <p class="text-xs text-gray-500 mt-3">${escapeHtml(formatRecordWhen(rec))} · ${fn}</p>
 </div>`;
     return el;
@@ -1979,7 +1979,7 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
     ${chipsRow}
     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Тел.: ${phones}</p>
     <p class="text-sm text-gray-600 dark:text-gray-400">E-mail: ${emails}</p>
-    <p class="text-sm mt-1 line-clamp-2">${q || '—'}</p>
+    <p class="text-sm mt-1 line-clamp-2 ca-card-question">${q || '—'}</p>
     <p class="text-xs text-gray-500 mt-1">${fn}</p>
     ${historyHint}
   </div>
@@ -1999,7 +1999,7 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
   ${chipsRow}
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Тел.: ${phones}</p>
   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">E-mail: ${emails}</p>
-  <p class="text-sm mt-2 line-clamp-4">${q || '—'}</p>
+  <p class="text-sm mt-2 line-clamp-4 ca-card-question">${q || '—'}</p>
   <p class="text-xs text-gray-500 mt-3">${fn}</p>
   ${historyHint}
 </div>`;
@@ -2416,7 +2416,7 @@ function recordSourceText(rec, file) {
         const m = re.exec(raw);
         if (m) {
             const start = m.index;
-            const nextRe = /\n\s*\d+\)\.?\s+/g;
+            const nextRe = /\n[ \t]*\d+\)\.?\s+/g;
             nextRe.lastIndex = start + m[0].length;
             const nm = nextRe.exec(raw);
             return raw.slice(start, nm ? nm.index : Math.min(raw.length, start + 20000)).trim();

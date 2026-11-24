@@ -411,6 +411,13 @@ export function computeInsights(records, opts = {}) {
         topics.untaggedIds = recInfo.filter((x) => !x.topics.length).map((x) => x.id);
     }
 
+    // ---------------- решение с первого обращения (FCR, по повторным обращениям) ----------------
+    const fcr = computeFcr(list, recInfo);
+    const fcrRepeatIds = fcr.repeatIds7;
+    const fcrChainIds = fcr.chainIds;
+    delete fcr.repeatIds7;
+    delete fcr.chainIds;
+
     // ---------------- кластеры ----------------
     progress('Кластеризация (сферический k-means)', 74);
     const clusters = computeClusters(list, docStems, df, n, displayForm, opts.seed || 42);
@@ -486,10 +493,11 @@ export function computeInsights(records, opts = {}) {
         clients,
         text,
         topics,
+        fcr,
         clusters,
         duplicates,
         frogs,
-        index: { topic: topicIndex, intent: intentIndex, term: termIndex, urgent: urgentIds, negative: negativeIds, quality: quality.index, frog: frogIndex, frogEntry: frogEntryIds },
+        index: { topic: topicIndex, intent: intentIndex, term: termIndex, urgent: urgentIds, negative: negativeIds, quality: quality.index, frog: frogIndex, frogEntry: frogEntryIds, repeat7: fcrRepeatIds, chainIds: fcrChainIds },
         perRecord,
         df: Object.fromEntries([...df.entries()].filter((e) => e[1] >= 2)),
         stemCanon: Object.fromEntries(stemCanon),
@@ -562,6 +570,119 @@ export function buildStemFamilies(tf) {
         out.set(k, t);
     }
     return out;
+}
+
+/**
+ * FCR-прокси (First Contact Resolution): обращение считается решённым с первого раза, если тот же
+ * клиент (ИНН, иначе первый телефон) не обратился снова по той же теме в течение окна.
+ * Окна 7 и 14 дней (7–14 дней — обычная практика для B2B). Дословные дубли не считаются повтором.
+ * Ограничение: внутренний расчёт по повторам завышает FCR относительно опросов клиентов.
+ */
+function computeFcr(list, recInfo) {
+    const byClient = new Map();
+    for (let i = 0; i < list.length; i++) {
+        const r = list[i];
+        const x = recInfo[i];
+        if (x.day == null) continue;
+        const inn = String(r.inn || '').replace(/\D/g, '');
+        const key = inn.length === 10 || inn.length === 12 ? `i:${inn}` : (r.phones || [])[0] ? `p:${r.phones[0]}` : null;
+        if (!key) continue;
+        if (!byClient.has(key)) byClient.set(key, []);
+        byClient.get(key).push(i);
+    }
+    const topicStats = new Map();
+    const W = [7, 14];
+    const totals = { 7: { n: 0, rep: 0 }, 14: { n: 0, rep: 0 } };
+    const repeatIds7 = [];
+    const chains = [];
+    const sameTopic = (a, b) => {
+        const ta = recInfo[a].topics;
+        const tb = recInfo[b].topics;
+        if (!ta.length && !tb.length) return true;
+        return ta.some((t) => tb.includes(t));
+    };
+    const normCache = new Map();
+    const norm = (i) => {
+        let v = normCache.get(i);
+        if (v === undefined) {
+            v = String(list[i].question || '').toLowerCase().replace(/[^\p{L}\d]+/gu, ' ').trim();
+            normCache.set(i, v);
+        }
+        return v;
+    };
+    for (const [key, idxs] of byClient) {
+        idxs.sort((a, b) => recInfo[a].day - recInfo[b].day || String(recInfo[a].time || '').localeCompare(String(recInfo[b].time || '')) || list[a].id - list[b].id);
+        let chain = [idxs[0]];
+        for (let k = 0; k < idxs.length; k++) {
+            const i = idxs[k];
+            for (const w of W) {
+                totals[w].n++;
+                let rep = false;
+                for (let j = k + 1; j < idxs.length; j++) {
+                    const gap = recInfo[idxs[j]].day - recInfo[i].day;
+                    if (gap > w) break;
+                    if (norm(idxs[j]) === norm(i)) continue; // дубль той же записи, а не повторное обращение
+                    if (sameTopic(i, idxs[j])) {
+                        rep = true;
+                        break;
+                    }
+                }
+                if (rep) totals[w].rep++;
+                if (w === 7) {
+                    if (rep) repeatIds7.push(list[i].id);
+                    for (const t of recInfo[i].topics.length ? recInfo[i].topics : ['__none']) {
+                        const s = topicStats.get(t) || { n: 0, rep: 0 };
+                        s.n++;
+                        if (rep) s.rep++;
+                        topicStats.set(t, s);
+                    }
+                }
+            }
+            // цепочки: подряд идущие обращения клиента с разрывом ≤ 7 дней
+            if (k > 0) {
+                if (recInfo[i].day - recInfo[idxs[k - 1]].day <= 7) chain.push(i);
+                else {
+                    if (chain.length >= 3) chains.push({ key, idxs: chain });
+                    chain = [i];
+                }
+            }
+        }
+        if (chain.length >= 3) chains.push({ key, idxs: chain });
+    }
+    const rate = (o) => {
+        const w = wilson(o.n - o.rep, o.n);
+        return { n: o.n, repeats: o.rep, fcr: w.p, lo: w.lo, hi: w.hi };
+    };
+    const topics = [...topicStats.entries()]
+        .filter(([, v]) => v.n >= 5)
+        .map(([id, v]) => ({ id, label: id === '__none' ? 'Без темы' : TOPIC_LABELS[id] || id, ...rate(v) }))
+        .sort((a, b) => a.fcr - b.fcr);
+    chains.sort((a, b) => b.idxs.length - a.idxs.length);
+    const chainIds = {};
+    const chainList = chains.slice(0, 25).map((c, n) => {
+        chainIds[n] = c.idxs.map((i) => list[i].id);
+        const tcount = new Map();
+        for (const i of c.idxs) for (const t of recInfo[i].topics) tcount.set(t, (tcount.get(t) || 0) + 1);
+        const top = [...tcount.entries()].sort((a, b) => b[1] - a[1])[0];
+        return {
+            client: c.key.slice(2),
+            byInn: c.key.startsWith('i:'),
+            length: c.idxs.length,
+            from: dayNumToYmd(recInfo[c.idxs[0]].day),
+            to: dayNumToYmd(recInfo[c.idxs[c.idxs.length - 1]].day),
+            topic: top ? TOPIC_LABELS[top[0]] : '—',
+        };
+    });
+    return {
+        w7: rate(totals[7]),
+        w14: rate(totals[14]),
+        topics,
+        chains: chainList,
+        chainsTotal: chains.length,
+        repeatIds7,
+        chainIds,
+        insufficient: totals[7].n < 20,
+    };
 }
 
 function thinPoints(points, max) {

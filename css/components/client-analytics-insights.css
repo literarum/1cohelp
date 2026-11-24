@@ -1260,3 +1260,19 @@ html.dark .client-analytics-insights-btn {
     font-size: 0.75rem;
     color: var(--viz-text-2);
 }
+
+@media (max-width: 520px) {
+    .ca-ins-drawer-head .ca-ins-btn span {
+        display: none;
+    }
+    .ca-ins-drawer-head .ca-ins-btn {
+        width: 2.25rem;
+        justify-content: center;
+        padding: 0;
+    }
+}
+
+.ca-ins-stale {
+    color: var(--viz-warning-fg);
+    font-weight: 600;
+}

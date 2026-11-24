@@ -103,3 +103,37 @@ describe('провалы и сроки в движке', () => {
         expect(I.time.holidayStats.holiday.days).toBeGreaterThan(0);
     });
 });
+
+describe('дата из шапки файла', () => {
+    it('файл без шапки: пункт без даты не получает дату первого пункта', () => {
+        const rows = parseTxtIntoRecords('1). 01.10.2025 ИНН 7707083893 первый\n2). ИНН 7707083893 второй без даты', 'обращения.txt');
+        expect(rows[0].appealDate).toBe('2025-10-01');
+        expect(rows[1].appealDate).toBeNull();
+        expect(rows[1].appealDateSource).toBeNull();
+    });
+    it('шапка перед первым пунктом по-прежнему работает', () => {
+        const rows = parseTxtIntoRecords('Выгрузка за 02.10.2025\n1). ИНН 7707083893 вопрос', 'x.txt');
+        expect(rows[0].appealDate).toBe('2025-10-02');
+        expect(rows[0].appealDateSource).toBe('file-header');
+    });
+});
+
+describe('решение с первого обращения (FCR)', () => {
+    const mk = (id, inn, day, q) => ({ id, inn, question: q, appealDate: `2025-10-${String(day).padStart(2, '0')}`, appealDateSource: 'block' });
+    const recs = [
+        mk(1, '7707083893', 1, 'Как настроить ЭДО с контрагентом'),
+        mk(2, '7707083893', 3, 'ЭДО: контрагент не видит документы'),
+        mk(3, '7707083893', 20, 'Пришло требование из налоговой'),
+        mk(4, '500100732259', 2, 'Как настроить ЭДО с контрагентом'),
+        mk(5, '500100732259', 2, 'Как настроить ЭДО с контрагентом'), // дословный дубль — не повтор
+    ];
+    for (let i = 0; i < 20; i++) recs.push(mk(100 + i, `77070838${String(10 + i)}`, 5, 'Вопрос про отчёт в СФР'));
+    const I = computeInsights(recs, { now: Date.UTC(2025, 11, 1) });
+    it('повтор по той же теме в 7 дней снижает FCR, дубль и другая тема — нет', () => {
+        expect(I.fcr.w7.repeats).toBe(1);
+        expect(I.index.repeat7).toEqual([1]);
+        // темы с < 5 обращениями в таблицу FCR по темам не попадают (долю по 3 обращениям не оценить)
+        expect(I.fcr.topics.find((t) => t.id === 'edo')).toBeUndefined();
+        expect(I.fcr.w7.n).toBe(25);
+    });
+});

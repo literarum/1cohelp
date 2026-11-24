@@ -9,7 +9,7 @@
 import { cleanDisplayText } from './client-analytics-text.js';
 
 /** Версия разборщика: записи со старой версией можно переобработать из исходного текста файла. */
-export const CA_PARSER_VERSION = 3;
+export const CA_PARSER_VERSION = 4;
 
 /**
  * КПП: NNNN PP XXX, где P — цифра или ЗАГЛАВНАЯ латинская буква A–Z
@@ -143,10 +143,16 @@ export function normalizeQuestionAfterParse(question, inn) {
  */
 export function extractPhoneExtensions(text) {
     const out = {};
-    const re = /(\+?\d[\d\s\-().]{7,}\d)\s*,?\s*(?:доб(?:авочный)?|вн(?:утр(?:енний)?)?|ext)\.?\s*[:№]?\s*(\d{1,6})(?!\d)/giu;
-    for (const m of String(text || '').matchAll(re)) {
-        const n = normalizeRussianPhone(m[1]);
-        if (n) out[n] = m[2];
+    const src = String(text || '');
+    // линейно: сначала метка добавочного, затем телефон в 40 символах перед ней
+    // (общий шаблон «телефон…доб.» откатывался квадратично на длинных цифровых строках)
+    const re = /(?<![\p{L}])(?:доб(?:авочный)?|вн(?:утр(?:енний)?)?|ext)\.?\s*[:№]?\s*(\d{1,6})(?!\d)/giu;
+    for (const m of src.matchAll(re)) {
+        const before = src.slice(Math.max(0, m.index - 40), m.index);
+        const ph = before.match(/(\+?\d[\d\s\-().]{7,30}\d)\s*,?\s*$/);
+        if (!ph) continue;
+        const n = normalizeRussianPhone(ph[1]);
+        if (n) out[n] = m[1];
     }
     return out;
 }
@@ -343,7 +349,7 @@ export function stripLeadingNumberedMarker(blockText) {
  */
 export function hasNumberedAppealFormat(text) {
     if (!text || typeof text !== 'string') return false;
-    return /(?:^|\n)\s*\d+\)\.?\s+/.test(text.replace(/\r\n/g, '\n'));
+    return /(?:^|\n)[ \t]*\d+\)\.?\s+/.test(text.replace(/\r\n/g, '\n'));
 }
 
 /**
@@ -354,7 +360,7 @@ export function hasNumberedAppealFormat(text) {
 export function splitIntoNumberedBlocks(fullText) {
     if (!fullText || typeof fullText !== 'string') return [];
     const normalized = fullText.replace(/\r\n/g, '\n');
-    const parts = normalized.split(/(?=\n\s*\d+\)\.?\s+)/);
+    const parts = normalized.split(/(?=\n[ \t]*\d+\)\.?\s+)/);
     return parts.map((c) => c.trim()).filter((c) => c.length > 0);
 }
 
@@ -547,8 +553,11 @@ export function parseTxtIntoRecords(fullText, fileName = '') {
     const out0 = parseTxtIntoRecordsCore(sanitizeRawText(fullText), fileName);
     // дата обращения по умолчанию: из «шапки» файла (до первого пункта) или из имени файла
     const sanitized = sanitizeRawText(fullText);
-    const firstItem = sanitized.search(/(?:^|\n)\s*\d+\)\.?\s+/);
-    const preamble = firstItem > 0 ? sanitized.slice(0, Math.min(firstItem, 600)) : sanitized.split('\n')[0].slice(0, 200);
+    const firstItem = sanitized.search(/(?:^|\n)[ \t]*\d+\)\.?\s+/);
+    // шапка — только текст ДО первого пункта; если файл начинается сразу с «1). …», шапки нет
+    // (раньше первой строкой считался сам пункт 1, и его дата приписывалась всем пунктам без даты)
+    const preamble =
+        firstItem > 0 ? sanitized.slice(0, Math.min(firstItem, 600)) : firstItem === 0 ? '' : sanitized.split('\n')[0].slice(0, 200);
     const headDates = findDatesInText(preamble);
     const fileDate = headDates.length ? headDates[0].date : dateFromFileName(fileName);
     const fileDateSource = headDates.length ? 'file-header' : fileDate ? 'file-name' : null;

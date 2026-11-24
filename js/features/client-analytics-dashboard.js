@@ -330,8 +330,24 @@ function onWindowResize() {
     }, 200);
 }
 
+/** Данные изменились, пока окно открыто: предложить пересчёт (а не показывать «призраки» удалённых записей). */
+function markStale(reason) {
+    const modal = document.getElementById(MODAL_ID);
+    if (!modal || modal.classList.contains('hidden') || !st.insights) return;
+    st.stale = true;
+    const meta = document.getElementById('caInsMeta');
+    if (meta && !meta.querySelector('.ca-ins-stale')) {
+        meta.insertAdjacentHTML(
+            'beforeend',
+            ` <span class="ca-ins-stale" role="status">· ${escapeHtml(reason)} — <button type="button" class="ca-ins-link" data-ins-action="recompute">пересчитать</button></span>`,
+        );
+    }
+}
+
 function bindModal(modal) {
     window.addEventListener('resize', onWindowResize);
+    window.addEventListener('copilot:client-analytics-changed', () => markStale('обращения изменились'));
+    window.addEventListener('copilot:blacklist-changed', () => markStale('чёрный список изменился'));
     bindVizTooltips(modal.querySelector('#caInsBody'));
     bindVizTooltips(modal.querySelector('#caInsDrawer'));
     modal.addEventListener('click', async (e) => {
@@ -389,17 +405,30 @@ function bindModal(modal) {
         const drill = t.closest('[data-ca-drill]');
         if (drill) return openDrill(drill.getAttribute('data-ca-drill'), drill.getAttribute('aria-label') || drill.getAttribute('data-tip') || '');
     });
-    modal.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            const bm = document.getElementById('blacklistDetailModal');
-            if (bm && !bm.classList.contains('hidden')) return; // окно жабы закроется своим обработчиком
+    // Escape перехватывается на уровне документа (фаза захвата): если фокус «упал» на <body>
+    // (кнопку, по которой кликнули, перерисовали), событие иначе уходило глобальному обработчику,
+    // и он закрывал всё окно аналитики вместо панели записей.
+    document.addEventListener(
+        'keydown',
+        (e) => {
+            if (e.key !== 'Escape' || modal.classList.contains('hidden')) return;
+            // поверх аналитики открыто другое окно (история клиента, жаба, подтверждение) — пусть закроется оно
+            const above = ['clientAnalyticsDetailModal', 'blacklistDetailModal', 'appConfirmModal', 'clientAnalyticsAssignModal'].some((id) => {
+                const m = document.getElementById(id);
+                return m && !m.classList.contains('hidden') && m.getAttribute('aria-hidden') !== 'true';
+            });
+            if (above) return;
+            // открытый выпадающий список (кастомный select) закрывается своим обработчиком
+            if (document.querySelector('.cs-wrap.cs-open')) return;
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
             const drawer = document.getElementById('caInsDrawer');
             if (drawer && !drawer.hidden) closeDrawer();
             else closeClientAnalyticsInsights();
-            return;
-        }
+        },
+        true,
+    );
+    modal.addEventListener('keydown', (e) => {
         const tabBtn = e.target instanceof Element ? e.target.closest('[role="tab"]') : null;
         if (tabBtn && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
             const ids = TABS.map((x) => x[0]);
@@ -466,6 +495,7 @@ function selectTab(id) {
 }
 
 async function reload() {
+    st.stale = false;
     st.all = api.loadRecords ? await api.loadRecords({ force: true }) : [];
     try {
         st.frogEntries = api.loadBlacklistEntries ? await api.loadBlacklistEntries() : [];
@@ -502,6 +532,7 @@ export function closeClientAnalyticsInsights() {
     modal.setAttribute('aria-hidden', 'true');
     deactivateModalFocus(modal);
     st.seq++; // отменяет отображение незавершённого расчёта
+    closeDrawer();
     requestAnimationFrame(() => {
         const anyOpen = [...document.querySelectorAll('[id$="Modal"]')].some((m) => !m.classList.contains('hidden') && m.getAttribute('aria-hidden') !== 'true' && m.offsetParent !== null);
         if (!anyOpen) document.body.classList.remove('overflow-hidden', 'modal-open');
@@ -525,7 +556,13 @@ function renderTab() {
     const I = st.insights;
     if (!body || !I) return;
     if (!I.overview.records) {
-        body.innerHTML = `<div class="ca-ins-empty"><p class="text-base font-semibold">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА</p><p class="ca-viz-muted">В выбранной выборке нет обращений. Измените фильтры или загрузите файлы .txt.</p></div>`;
+        const f = st.filter;
+        let why = 'В выбранной выборке нет обращений. Измените фильтры или загрузите файлы .txt.';
+        if (!st.all.length) why = 'База клиентов пуста — загрузите файлы .txt в разделе «База клиентов».';
+        else if (f.period === 'custom' && f.from && f.to && f.from > f.to) why = `Начало периода (${fmt.date(f.from)}) позже его конца (${fmt.date(f.to)}) — поменяйте даты местами.`;
+        else if (f.query) why = `По запросу «${f.query}» обращений не найдено (из ${fmt.int(st.all.length)}).`;
+        else if (f.frog === 'frogs' && !st.frogEntries.length) why = 'Чёрный список пуст — фильтр «Только жабы» нечего показывать.';
+        body.innerHTML = `<div class="ca-ins-empty"><p class="text-base font-semibold">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА</p><p class="ca-viz-muted">${escapeHtml(why)}</p></div>`;
         return;
     }
     // графики строятся под фактическую ширину карточек (без растяжения текста в SVG)
@@ -555,6 +592,10 @@ function conclusions(I) {
     if (I.time.anomalies && I.time.anomalies.length) {
         const a = I.time.anomalies[0];
         out.push(['warning', `Самый сильный всплеск: ${fmt.date(a.date)} — ${fmt.int(a.count)} обращений (робастный z = ${fmt.num1(a.z)}). Всего всплесков: ${I.time.anomalies.length}.`]);
+    }
+    if (I.fcr && !I.fcr.insufficient && I.fcr.topics.length) {
+        const worst = I.fcr.topics[0];
+        out.push(['info', `Решено с первого обращения (нет повтора по той же теме за 7 дней): ${fmt.pct(I.fcr.w7.fcr, 0)}. Хуже всего — «${worst.label}»: ${fmt.pct(worst.fcr, 0)} (${fmt.int(worst.repeats)} повторов из ${fmt.int(worst.n)}).`]);
     }
     const DE = I.time.deadlineEffect;
     if (DE && !DE.insufficient && DE.significant && DE.farMean) {
@@ -603,6 +644,7 @@ function renderOverview(I) {
         statTile('Период', o.from ? `${fmt.date(o.from)} — ${fmt.date(o.to)}` : '—', `${fmt.int(o.spanDays)} дн.`),
         statTile('В активный день', o.perActiveDay ? fmt.num1(o.perActiveDay.median) : '—', o.perActiveDay ? `медиана; пик ${fmt.int(o.perActiveDay.max)}` : ''),
         statTile('Тренд', I.time.insufficient ? 'мало данных' : tr.trend === 'нет' ? 'нет' : tr.trend, I.time.insufficient ? '' : pval(tr.p), { tone: tr && tr.trend === 'рост' ? 'warning' : '' }),
+        statTile('Решено с 1-го обращения', I.fcr && !I.fcr.insufficient ? fmt.pct(I.fcr.w7.fcr, 0) : '—', I.fcr && !I.fcr.insufficient ? `без повтора по теме за 7 дн.; за 14 дн. — ${fmt.pct(I.fcr.w14.fcr, 0)}` : 'мало данных', { tip: 'Прокси FCR по повторным обращениям того же клиента; обычно завышает FCR относительно опросов клиентов' }),
         statTile('Полнота данных', fmt.pct(I.quality.completeness, 0), 'ИНН, вопрос, контакт, дата'),
         statTile('Срочные', fmt.int(o.urgent), fmt.pct(o.records ? o.urgent / o.records : 0)),
         statTile('Негативные', fmt.int(o.negative), fmt.pct(o.records ? o.negative / o.records : 0)),
@@ -762,6 +804,9 @@ function renderClients(I) {
         section('Телефоны: типы номеров', barsH(C.phoneKinds.map((k) => ({ label: k.name, value: k.count })), { showShare: C.phonesTotal || 1, empty: 'Телефонов нет' }), { note: `Уникальных номеров: ${fmt.int(C.phonesTotal)}. «+7 6xx/7xx» — Казахстан (общая зона +7). Номера 8-800 — горячие линии: в связях клиентов и сверке с жабами не используются.` }),
         section('Регион и причина по КПП', `${barsH(C.kppRegions.slice(0, 8).map((r) => ({ label: r.name, value: r.count })))}<h4 class="ca-ins-subtitle">Причина постановки на учёт (5–6 знаки КПП)</h4>${barsH(C.kppReasons.map((r) => ({ label: r.name, value: r.count })))}`),
         section('Самые активные клиенты', top, { wide: true }),
+        section('Цепочки повторных обращений', I.fcr && I.fcr.chains.length
+            ? table(['Клиент', 'Обращений подряд', 'Период', 'Главная тема'], I.fcr.chains.map((c, n) => ({ cells: [c.byInn ? { html: `<button type="button" class="ca-ins-link" data-ins-action="open-inn" data-inn="${escapeHtml(c.client)}">ИНН ${escapeHtml(c.client)}</button>` } : formatRussianPhoneForDisplay(c.client), fmt.int(c.length), `${fmt.date(c.from)} — ${fmt.date(c.to)}`, c.topic], drill: `chain:${n}` })), { numeric: [1] })
+            : '<p class="ca-viz-empty">Цепочек из 3+ обращений с разрывом ≤ 7 дней нет.</p>', { wide: true, note: `Клиент обращается снова и снова с разрывом не больше 7 дней — вероятно, вопрос не решается. Всего цепочек: ${fmt.int(I.fcr ? I.fcr.chainsTotal : 0)}.` }),
         section('Клиенты с общими контактами', groups + hubs, { wide: true, note: 'Компоненты связности графа «ИНН — телефон/почта» (система непересекающихся множеств).' }),
     ].join('');
 }
@@ -942,6 +987,15 @@ function renderFrogs(I) {
     ].join('');
 }
 
+function fcrTopicsHtml(I) {
+    const F = I.fcr;
+    if (!F || F.insufficient) return '<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: нужно ≥ 20 датированных обращений с ИНН или телефоном.</p>';
+    return `<div class="ca-ins-tiles">${statTile('FCR, окно 7 дней', fmt.pct(F.w7.fcr, 1), `95% ДИ ${fmt.pct(F.w7.lo)}–${fmt.pct(F.w7.hi)} · повторов ${fmt.int(F.w7.repeats)}`)}${statTile('FCR, окно 14 дней', fmt.pct(F.w14.fcr, 1), `95% ДИ ${fmt.pct(F.w14.lo)}–${fmt.pct(F.w14.hi)}`)}</div>
+<h4 class="ca-ins-subtitle">Доля обращений с повтором по теме (чем длиннее — тем хуже решается)</h4>
+${barsH(F.topics.map((t) => ({ label: t.label, value: (1 - t.fcr) * 100, note: `FCR ${fmt.pct(t.fcr, 0)} · ${fmt.int(t.repeats)} из ${fmt.int(t.n)}`, tip: `${t.label}: повтор после ${fmt.pct(1 - t.fcr)} обращений; FCR ${fmt.pct(t.fcr)} (95% ДИ ${fmt.pct(t.lo)}–${fmt.pct(t.hi)})` })), { valueFmt: (v) => `${fmt.num1(v)}%` })}
+<p class="ca-ins-card-note"><button type="button" class="ca-ins-link" data-ca-drill="repeat7">Показать обращения, после которых был повтор (${fmt.int(F.w7.repeats)})</button></p>`;
+}
+
 function customTopicsHtml(I) {
     const counts = Object.fromEntries(I.topics.list.map((t) => [t.id, t.count]));
     const rows = st.customTopics.length
@@ -1025,7 +1079,7 @@ function editCustomTopic(id) {
 
 function renderTopics(I) {
     const T = I.topics;
-    const trendRows = T.list.map((t) => ({
+    const trendRows = T.list.filter((t) => t.count > 0).map((t) => ({
         cells: [
             t.label,
             fmt.int(t.count),
@@ -1053,6 +1107,7 @@ function renderTopics(I) {
         section('Свои темы', customTopicsHtml(I), { wide: true, note: 'Добавьте тему со своими ключевыми словами — она сразу участвует во всей аналитике (доли, тренды, жабы, CSV). Слово совпадает с началом слов текста: «сверк» найдёт «сверка», «сверки». Фраза — слова подряд, «*» — любые буквы.' }),
         section('Темы обращений', topicBars(I), { note: `Рубрикатор по словарю предметной области; одно обращение может относиться к нескольким темам. Без темы: ${fmt.int(T.untagged)} (${fmt.pct(T.untaggedShare)}). Разнообразие тем (норм. энтропия): ${fmt.num2(T.diversity)}.` }),
         section('Намерения', barsH(T.intents.map((t) => ({ label: t.label, value: t.count, drill: `intent:${t.id}` })), { showShare: I.overview.records })),
+        section('Решение с первого обращения по темам', fcrTopicsHtml(I), { wide: true, note: 'Повтор — тот же клиент (ИНН, иначе телефон) обратился снова по той же теме в течение 7 дней; дословные дубли не считаются. Внутренний расчёт по повторам обычно завышает FCR на 10–20 п.п. относительно опросов клиентов — используйте для сравнения тем между собой.' }),
         section('Изменение долей тем: 30 дней против предыдущих 30', table(['Тема', 'Всего', 'Доля (95% ДИ Уилсона)', 'Доля: было → стало', 'Изменение'], trendRows, { numeric: [1] }) + '<p class="ca-ins-card-note">* — изменение значимо после поправки Бенджамини — Хохберга на число тем (q < 0,05; G² Даннинга; в каждом окне ≥ 20 обращений).</p>', { wide: true }),
         section(`Смысловые группы (k-means, k = ${I.clusters.k || '—'})`, clusters, { wide: true, note: I.clusters.insufficient ? '' : `Сферический k-means по TF-IDF основ слов (${fmt.int(I.clusters.vocabulary)} признаков), k выбран по силуэту (${fmt.num2(I.clusters.silhouette)}). Вне групп (мало слов): ${fmt.int(I.clusters.unclustered)}.` }),
         section('Срочность', urg, { note: `Срочных (≥ 2 баллов): ${fmt.int(T.urgent)}. Негативная окраска: ${fmt.int(T.negative)}.` }),
@@ -1233,6 +1288,7 @@ function renderMethod() {
         ['Множественные сравнения', 'Когда проверяется много гипотез сразу (темы, намерения, слова, признаки жаб), p-значения корректируются процедурой Бенджамини — Хохберга (контроль доли ложных открытий): тема или слово помечается значимым, только если q < 0,05 (для слов — q < 0,01). Без поправки при 25 проверках 1–2 ложные «находки» ожидаются просто случайно.'],
         ['Прогноз', 'Три модели — «как неделю назад», среднее того же дня недели за 4 недели, Холт — Винтерс с затухающим трендом; выбирается лучшая по MASE на скользящем бэктесте (8 точек отсчёта, горизонт 14 дней). Интервалы — эмпирические квантили ошибок бэктеста; рядом показана их фактическая калибровка.'],
         ['Сравнение периодов', 'Темп — условный биномиальный тест (при равном темпе доля обращений периода A равна доле его дней) с квазипуассоновской поправкой z/√φ, где φ — индекс дисперсии дневных объёмов; доли тем, намерений и сигналов — z-тест с поправкой Бенджамини — Хохберга; слова — G² с поправкой; клиенты — новые, ушедшие и оставшиеся по ИНН.'],
+        ['Решение с первого обращения', 'Прокси FCR: обращение решено, если тот же клиент (ИНН, иначе первый телефон) не обратился снова по той же теме (или оба без темы) за 7 / 14 дней; дословные дубли не считаются. Интервал — Уилсон. Внутренний расчёт по повторам обычно завышает FCR на 10–20 п.п. по сравнению с опросами клиентов.'],
         ['Календарь', 'Производственный календарь РФ 2024–2027 (постановления № 1314, 1335, 1466, 1187): праздники, перенесённые выходные, рабочие субботы. Всплески и провалы ищутся отдельно среди рабочих и нерабочих дней. Прогноз учится на ряду, где праздники заменены типичным уровнем, и применяет к будущим праздникам коэффициент, измеренный по прошлым. Для дат вне 2024–2027 праздники не учитываются.'],
         ['Сроки отчётности', 'Учитываются только подтверждённые общие правила: уведомления и отчётность — 25-е, уплата ЕНП — 28-е, квартальные НДС, РСВ, 6-НДФЛ, ЕФС-1 (раздел 2) — 25-е месяца после квартала, годовой 6-НДФЛ — 25 февраля, годовая декларация по прибыли — 25 марта; с переносом на ближайший рабочий день. Эффект сроков — U-тест «0–2 рабочих дня до срока против остальных»; совпадение всплесков со сроками — точный биномиальный тест против доли таких дней в календаре.'],
         ['Телефоны', 'Российские номера нормализуются к 11 цифрам (7XXXXXXXXXX), иностранные хранятся как «+код…». «+7 6xx/7xx» — Казахстан. 8-800 — горячие линии: не связывают клиентов и не используются в сверке с чёрным списком. Добавочный («доб. 1234») сохраняется отдельно.'],
@@ -1264,6 +1320,14 @@ function resolveDrill(key) {
             if (tp) highlight = { re: tp.re };
             break;
         }
+        case 'repeat7':
+            ids = I.index.repeat7 || [];
+            title = 'Обращения, после которых был повтор по той же теме (≤ 7 дней)';
+            break;
+        case 'chain':
+            ids = (I.index.chainIds && I.index.chainIds[arg]) || [];
+            title = `Цепочка повторных обращений (${ids.length})`;
+            break;
         case 'untagged':
             ids = I.topics.untaggedIds || [];
             title = 'Обращения без темы';
@@ -1534,7 +1598,8 @@ function renderXray(recordId) {
         const kind = t.homoglyph || t.script === 'mixed' ? 'mixed' : t.stop ? 'stop' : t.numeric ? 'numeric' : 'content';
         const tip = `${TOKEN_KIND_LABEL[kind]} · основа «${t.stem}»${t.norm !== t.surface.toLowerCase() ? ` · исправлено: «${t.norm}»` : ''}${t.idf ? ` · IDF ${fmt.num2(t.idf)}` : ''}`;
         const w = t.idf ? Math.min(4, Math.max(1, Math.round(t.idf / 2))) : 1;
-        tokHtml += `<span class="ca-ins-tok k-${kind}${kind === 'content' ? ` w${w}` : ''}" data-tip="${escapeHtml(tip)}" tabindex="0">${escapeHtml(t.surface)}</span>`;
+        // слова не фокусируемые: иначе длинный текст давал сотни остановок Tab; подсказка — при наведении
+        tokHtml += `<span class="ca-ins-tok k-${kind}${kind === 'content' ? ` w${w}` : ''}" data-tip="${escapeHtml(tip)}">${escapeHtml(t.surface)}</span>`;
         last = t.end;
     }
     tokHtml += escapeHtml(q.slice(last));
@@ -1571,7 +1636,7 @@ function renderXray(recordId) {
     const chars = x.chars;
     d.hidden = false;
     d.innerHTML = `<div class="ca-ins-drawer-head"><div class="min-w-0"><h3 class="ca-ins-card-title m-0">Разбор обращения</h3><p class="ca-viz-muted text-xs m-0">${fmt.int(x.length)} символов · ${fmt.int(x.words)} слов (значимых ${fmt.int(x.contentWords)}, служебных ${fmt.int(x.stopWords)}) · предложений ${fmt.int(x.sentences)}</p></div>
-<div class="flex gap-1">${st.drill ? '<button type="button" class="ca-ins-btn" data-ins-action="drawer-back"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>К списку</span></button>' : ''}<button type="button" class="ca-ins-btn ca-ins-btn-icon" data-ins-action="drawer-close" aria-label="Закрыть"><i class="fas fa-times" aria-hidden="true"></i></button></div></div>
+<div class="flex gap-1">${st.drill ? '<button type="button" class="ca-ins-btn" data-ins-action="drawer-back" aria-label="К списку записей"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>К списку</span></button>' : ''}<button type="button" class="ca-ins-btn ca-ins-btn-icon" data-ins-action="drawer-close" aria-label="Закрыть"><i class="fas fa-times" aria-hidden="true"></i></button></div></div>
 <div class="ca-ins-xray-text" aria-label="Текст вопроса по словам">${tokHtml || '<span class="ca-viz-muted">Текст вопроса пуст</span>'}</div>
 <div class="ca-viz-legend"><span><i class="ca-ins-tok k-content w3">аа</i> значимое (жирнее — реже в базе)</span><span><i class="ca-ins-tok k-stop">аа</i> служебное</span><span><i class="ca-ins-tok k-numeric">00</i> число</span><span><i class="ca-ins-tok k-mixed">аa</i> смешанная письменность</span></div>
 <dl class="ca-ins-dl">${dl}</dl>
@@ -1588,6 +1653,8 @@ ${unusualRows.length ? table(['Символ', 'Код', 'Класс', 'Раз'],
 ${r.inn ? `<p class="mt-3"><button type="button" class="ca-ins-btn" data-ins-action="open-inn" data-inn="${escapeHtml(r.inn)}"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><span>История клиента</span></button></p>` : ''}
 <details class="ca-ins-src"><summary>Исходный текст обращения</summary><pre>${escapeHtml(r.sourceText || r.contextSnippet || '—')}</pre></details>`;
     d.scrollTop = 0;
+    // кнопка записи, по которой кликнули, перерисована — фокус переносится в панель, а не теряется
+    d.querySelector('[data-ins-action="drawer-back"], [data-ins-action="drawer-close"]')?.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------------------

@@ -368,3 +368,9 @@ html.dark #clientAnalyticsDetailModal .client-analytics-frog-banner--l3 {
     background: rgb(69 10 10 / 0.45);
     color: rgb(254 202 202);
 }
+
+/* текст вопроса на карточке: длинные «слова» (ссылки, склеенный текст) переносятся, а не обрезаются */
+#clientAnalyticsContent .ca-card-question {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
