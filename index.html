@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
-        <script src="js/search-startup.js?v=20261122-inline-images"></script>
+        <script src="js/search-startup.js?v=20261124-client-insights"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Copilot 1СО 2.0</title>
         <meta name="description" content="Copilot 1СО — локальный помощник оператора: алгоритмы, закладки, регламенты, анализатор XML и данные клиента. Работает офлайн." />
@@ -144,8 +144,8 @@
             rel="icon"
             href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>SOS Icon (Red)</title><defs><style>.sos-text{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";font-size:12px;font-weight:bold;text-anchor:middle;dominant-baseline:central;fill:%23DC2626;letter-spacing:-0.5px}.frame{fill:none;stroke:%23DC2626;stroke-width:2}</style></defs><rect x="4" y="4" width="24" height="24" rx="4" class="frame"/><text x="16" y="16" class="sos-text">SOS</text></svg>'
         />
-        <script src="js/vendor-config.js?v=20261122-inline-images"></script>
-        <script src="js/vendor-loader.js?v=20261122-inline-images"></script>
+        <script src="js/vendor-config.js?v=20261124-client-insights"></script>
+        <script src="js/vendor-loader.js?v=20261124-client-insights"></script>
         <script type="text/javascript">
             if (window.VendorLoader) VendorLoader.writeVendors('main', '');
         </script>
@@ -211,12 +211,12 @@
         <link
             id="tailwind-built"
             rel="stylesheet"
-            href="css/tailwind.generated.css?v=20261122-inline-images"
+            href="css/tailwind.generated.css?v=20261124-client-insights"
             onerror="window.__loadTailwindCDN && window.__loadTailwindCDN()"
         />
         <!-- Основные стили (main.css импортирует все модули, включая inline-styles.css) -->
-        <link rel="stylesheet" href="css/main.css?v=20261122-inline-images" />
-        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261122-inline-images" />
+        <link rel="stylesheet" href="css/main.css?v=20261124-client-insights" />
+        <link rel="stylesheet" href="css/components/header-layout-hotfix.css?v=20261124-client-insights" />
         <script id="early-loading-overlay-theme-init">
             (function () {
                 const root = document.documentElement;
@@ -1818,6 +1818,15 @@
                                     class="hidden"
                                 />
                             </label>
+                            <button
+                                type="button"
+                                id="clientAnalyticsInsightsBtn"
+                                class="client-analytics-insights-btn"
+                                title="Аналитика обращений: динамика, клиенты, темы, текст, повторы, качество данных"
+                            >
+                                <i class="fas fa-chart-column" aria-hidden="true"></i>
+                                <span>Аналитика</span>
+                            </button>
                             <button
                                 type="button"
                                 id="clientAnalyticsExportBtn"
@@ -5843,7 +5852,7 @@
                 }
             });
         </script>
-        <script type="module" src="./script.js?v=20261122-inline-images"></script>
-        <script type="module" src="./js/entry.js?v=20261122-inline-images"></script>
+        <script type="module" src="./script.js?v=20261124-client-insights"></script>
+        <script type="module" src="./js/entry.js?v=20261124-client-insights"></script>
     </body>
 </html>

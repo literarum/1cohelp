@@ -16,7 +16,8 @@ describe('QA v19: регрессии', () => {
         const r = parseNumberedAppealBlock(
             '1) ИНН 7707083893 КПП 770701001\nТел. +7 903 111-22-33\nВопрос: как подать отчёт?',
         );
-        expect(r.question).toBe('Вопрос: как подать отчёт?');
+        // с версии 2 разборщика ведущая подпись «Вопрос:» тоже убирается — это служебная метка
+        expect(r.question).toBe('как подать отчёт?');
         const inline = parseNumberedAppealBlock('3) ИНН 7707083893, КПП: 770701001 — не уходит отчёт');
         expect(inline.question).toBe('не уходит отчёт');
     });
