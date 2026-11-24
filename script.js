@@ -632,6 +632,9 @@ import {
     setClientAnalyticsDependencies,
     initClientAnalyticsSystem,
     renderClientAnalyticsPage as renderClientAnalyticsPageModule,
+    buildClientAnalyticsAppealsHtmlForBlacklistEntry,
+    showClientAnalyticsInnHistoryModal,
+    getClientAnalyticsAppealCountsByBlacklistEntry,
 } from './js/features/client-analytics.js';
 
 // Алиас для глобального использования в appInit и при экспорте в window
@@ -4295,6 +4298,14 @@ setBlacklistDependencies({
         typeof renderClientAnalyticsPageModule !== 'undefined'
             ? renderClientAnalyticsPageModule
             : null,
+    buildClientAnalyticsAppealsHtml: buildClientAnalyticsAppealsHtmlForBlacklistEntry,
+    getClientAnalyticsAppealCounts: getClientAnalyticsAppealCountsByBlacklistEntry,
+    openClientAnalyticsInnHistory: async (inn) => {
+        await showClientAnalyticsInnHistoryModal(inn);
+        // окно жабы может быть поднято над аналитикой — история должна открыться поверх него
+        const m = document.getElementById('clientAnalyticsDetailModal');
+        if (m) m.style.zIndex = '75';
+    },
 });
 console.log('[script.js] Зависимости модуля Blacklist установлены');
 

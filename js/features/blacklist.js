@@ -44,6 +44,11 @@ let deps = {
  * После изменения ЧС перерисовать «Базу клиентов» (перекрёстная сверка ИНН).
  */
 async function refreshClientAnalyticsAfterBlacklistChange() {
+    try {
+        window.dispatchEvent(new CustomEvent('copilot:blacklist-changed'));
+    } catch {
+        /* окружение без событий */
+    }
     const fn = deps.refreshClientAnalyticsPage;
     if (typeof fn !== 'function') return;
     try {
@@ -322,7 +327,42 @@ let blacklistRenderToken = 0;
 /**
  * Рендерит таблицу черного списка
  */
+/** Число обращений жабы в «Базе клиентов» (заполняется асинхронно; null — ещё не посчитано). */
+let blacklistAppealCounts = null;
+
+function appealsCellText(id) {
+    if (!blacklistAppealCounts) return '';
+    const c = blacklistAppealCounts.get(Number(id));
+    if (!c) return 'обращений в базе нет';
+    const last = c.last ? c.last.split('-').reverse().join('.') : '';
+    return `обращений в базе: ${c.count}${last ? ` · последнее ${last}` : ''}`;
+}
+
+function refreshBlacklistAppealCounts() {
+    if (typeof deps.getClientAnalyticsAppealCounts !== 'function') return;
+    Promise.resolve(deps.getClientAnalyticsAppealCounts())
+        .then((map) => {
+            blacklistAppealCounts = map instanceof Map ? map : null;
+            document.querySelectorAll('[data-bl-appeals]').forEach((el) => {
+                el.textContent = appealsCellText(el.getAttribute('data-bl-appeals'));
+            });
+        })
+        .catch((e) => console.warn('[Blacklist] обращения из базы клиентов:', e));
+}
+
+// база клиентов изменилась (загрузка, удаление, переобработка) — пересчитать счётчики обращений
+if (typeof window !== 'undefined') {
+    let t = 0;
+    window.addEventListener('copilot:client-analytics-changed', () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+            if (document.querySelector('[data-bl-appeals]')) refreshBlacklistAppealCounts();
+        }, 1500);
+    });
+}
+
 export function renderBlacklistTable(entries) {
+    refreshBlacklistAppealCounts();
     const container = document.getElementById('blacklistTableContainer');
     if (!container) {
         console.error('renderBlacklistTable: Контейнер #blacklistTableContainer не найден.');
@@ -425,6 +465,7 @@ export function renderBlacklistTable(entries) {
                 <div class="truncate" title="${escHtml(entry.organizationName)}">${highlight(
                     entry.organizationName,
                 )}</div>
+                <div class="bl-ca-appeals text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5" data-bl-appeals="${escHtml(String(entry.id))}">${appealsCellText(entry.id)}</div>
             </td>
             <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono">
                 <div class="truncate" title="${escHtml(entry.inn || '-')}">${highlight(
@@ -826,7 +867,26 @@ export async function showBlacklistDetailModal(entryId) {
                     ).toLocaleString('ru-RU')}</dd>
                 </div>
             </dl>
+            <div id="blacklistDetailAppeals"></div>
         `;
+        // связь с «Базой клиентов»: обращения этой жабы (по ИНН, телефону, примечанию, названию)
+        if (typeof deps.buildClientAnalyticsAppealsHtml === 'function') {
+            const slot = contentEl.querySelector('#blacklistDetailAppeals');
+            slot.innerHTML = '<p class="mt-4 text-sm text-gray-500">Поиск обращений в базе клиентов…</p>';
+            Promise.resolve(deps.buildClientAnalyticsAppealsHtml(entry))
+                .then((html) => {
+                    if (modal.dataset.currentId !== String(entryId)) return;
+                    slot.innerHTML = html || '';
+                    const btn = slot.querySelector('[data-ca-open-history]');
+                    if (btn && typeof deps.openClientAnalyticsInnHistory === 'function') {
+                        btn.addEventListener('click', () => deps.openClientAnalyticsInnHistory(btn.getAttribute('data-ca-open-history')));
+                    }
+                })
+                .catch((err) => {
+                    console.warn('[Blacklist] обращения из базы клиентов:', err);
+                    slot.innerHTML = '';
+                });
+        }
     } catch (error) {
         titleEl.textContent = 'Ошибка';
         contentEl.innerHTML = `<p class="text-center text-red-500">Не удалось загрузить данные: ${error.message}</p>`;

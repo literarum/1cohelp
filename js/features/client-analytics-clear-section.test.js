@@ -56,6 +56,7 @@ vi.mock('../db/indexeddb.js', () => ({
     yieldToMain: async () => {},
 }));
 
+import * as idb from '../db/indexeddb.js';
 import {
     clearEntireClientAnalyticsSection,
     importClientAnalyticsSection,
@@ -110,5 +111,44 @@ describe('client-analytics clear section', () => {
         expect(inventory.clientAnalyticsFolders).toHaveLength(0);
         expect(inventory.clientAnalyticsTags).toHaveLength(0);
         expect(inventory.clientAnalyticsCardMeta).toHaveLength(0);
+    });
+
+    it('импорт раздела: «rec:<id>» карточек без ИНН пересчитывается на новые id, свои темы переносятся', async () => {
+        setClientAnalyticsDependencies({ updateSearchIndex: vi.fn(), bulkAddToSearchIndex: vi.fn() });
+        let auto = 500;
+        idb.saveToIndexedDB.mockImplementation(async (store, row) => {
+            const arr = (inventory[store] = inventory[store] || []);
+            const id = row.id ?? ++auto;
+            const i = arr.findIndex((r) => r.id === id);
+            if (i !== -1) arr.splice(i, 1);
+            arr.push({ ...row, id });
+            return id;
+        });
+        await importClientAnalyticsSection({
+            exportKind: 'clientAnalyticsSection',
+            files: [{ id: 7, fileName: 'x.txt' }],
+            records: [
+                { id: 41, inn: '', phones: ['79031112233'], sourceFileId: 7, question: 'без ИНН' },
+                { id: 42, inn: '7707083893', sourceFileId: 7, question: 'с ИНН' },
+            ],
+            folders: [{ id: 3, name: 'Важное' }],
+            tags: [{ id: 9, name: 'тег' }],
+            cardMeta: [
+                { id: 'rec:41', folderId: 3, tagIds: [9] },
+                { id: 'inn:7707083893', folderId: 3, tagIds: [] },
+                { id: 'rec:999', folderId: 3, tagIds: [] },
+            ],
+            customTopics: [{ id: '1', label: 'Кассы', words: 'касс' }],
+        });
+        const noInn = inventory.clientAnalyticsRecords.find((r) => r.question === 'без ИНН');
+        expect(noInn.id).not.toBe(41);
+        const metaIds = inventory.clientAnalyticsCardMeta.map((m) => m.id);
+        expect(metaIds).toContain(`rec:${noInn.id}`);
+        expect(metaIds).toContain('inn:7707083893');
+        expect(metaIds).not.toContain('rec:41');
+        expect(metaIds).not.toContain('rec:999'); // запись не импортирована — метаданные не висят
+        const moved = inventory.clientAnalyticsCardMeta.find((m) => m.id === `rec:${noInn.id}`);
+        expect(moved.tagIds).toHaveLength(1);
+        expect(inventory.preferences.find((p) => p.id === 'clientAnalyticsCustomTopics').topics[0].label).toBe('Кассы');
     });
 });
