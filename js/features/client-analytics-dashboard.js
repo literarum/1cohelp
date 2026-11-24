@@ -27,6 +27,7 @@ import { escapeHtml } from '../utils/html.js';
 import { formatRussianPhoneForDisplay } from './client-analytics-parse.js';
 import { activateModalFocus, deactivateModalFocus } from '../ui/modals-manager.js';
 import { regionByCode } from './client-analytics-registry.js';
+import { buildFrogIndex, matchRecordToFrogs, FROG_VIA_LABELS, FROG_LEVEL_LABELS } from './client-analytics-frogs.js';
 
 const MODAL_ID = 'clientAnalyticsInsightsModal';
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -34,6 +35,7 @@ const TABS = [
     ['overview', 'Обзор'],
     ['time', 'Динамика'],
     ['clients', 'Клиенты'],
+    ['frogs', 'Жабы'],
     ['topics', 'Темы и смысл'],
     ['text', 'Текст и язык'],
     ['dups', 'Повторы'],
@@ -51,7 +53,9 @@ const st = {
     insights: null,
     tab: 'overview',
     grain: 'week',
-    filter: { period: 'all', from: '', to: '', innOnly: false, query: '' },
+    filter: { period: 'all', from: '', to: '', innOnly: false, query: '', frog: 'all' },
+    frogEntries: [],
+    frogIndex: null,
     drill: null,
     drillPage: 1,
     computing: null,
@@ -80,6 +84,7 @@ function slimRecord(r) {
         appealTime: r.appealTime,
         appealDateSource: r.appealDateSource,
         parserVersion: r.parserVersion,
+        sourceText: r.sourceText ? String(r.sourceText).slice(0, 3000) : '',
     };
 }
 
@@ -141,8 +146,13 @@ function applyFilter(records, f) {
     }
     const q = normalizeForAnalysis(f.query || '').trim();
     const qDigits = q.replace(/\D/g, '');
+    const fi = f.frog && f.frog !== 'all' ? st.frogIndex : null;
     return records.filter((r) => {
         if (f.innOnly && !r.inn) return false;
+        if (fi) {
+            const isFrog = matchRecordToFrogs(r, fi).level > 0;
+            if (f.frog === 'frogs' ? !isFrog : isFrog) return false;
+        }
         if (from || to) {
             const d = effectiveDate(r).ymd;
             if (!d || (from && d < from) || (to && d > to)) return false;
@@ -165,13 +175,7 @@ async function recompute() {
         prog.querySelector('[data-role="phase"]').textContent = 'Подготовка…';
         prog.querySelector('[data-role="bar"]').style.width = '2%';
     }
-    let blacklistInns = [];
-    try {
-        blacklistInns = api.loadBlacklistInns ? await api.loadBlacklistInns() : [];
-    } catch {
-        blacklistInns = [];
-    }
-    const result = await runInsights(st.filtered, { blacklistInns, now: Date.now() }, (phase, pct) => {
+    const result = await runInsights(st.filtered, { blacklistEntries: st.frogEntries, now: Date.now() }, (phase, pct) => {
         if (!prog || token !== st.seq) return;
         prog.querySelector('[data-role="phase"]').textContent = phase;
         prog.querySelector('[data-role="bar"]').style.width = `${Math.max(2, pct)}%`;
@@ -223,6 +227,10 @@ function ensureModal() {
     <label class="ca-ins-field" data-role="custom" hidden><span>с</span><input type="date" name="from"></label>
     <label class="ca-ins-field" data-role="custom" hidden><span>по</span><input type="date" name="to"></label>
     <label class="ca-ins-field ca-ins-grow"><span>Текст, ИНН, телефон</span><input type="search" name="query" placeholder="например: требование или 7707083893" autocomplete="off"></label>
+    <label class="ca-ins-field"><span>Жабы</span>
+      <select name="frog">
+        <option value="all">Все клиенты</option><option value="frogs">Только жабы</option><option value="nonfrogs">Без жаб</option>
+      </select></label>
     <label class="ca-ins-check"><input type="checkbox" name="innOnly"> только с ИНН</label>
     <button type="button" class="ca-ins-btn ca-ins-btn-primary" data-ins-action="apply">Применить</button>
   </form>
@@ -285,6 +293,11 @@ function bindModal(modal) {
                 st.grain = act.getAttribute('data-grain');
                 return renderTab();
             }
+            if (a === 'open-frog') {
+                const id = Number(act.getAttribute('data-frog-id'));
+                if (api.openBlacklistEntry && Number.isFinite(id)) api.openBlacklistEntry(id);
+                return;
+            }
             if (a === 'open-inn') {
                 const inn = act.getAttribute('data-inn');
                 if (api.openInnHistory && inn) api.openInnHistory(inn);
@@ -300,6 +313,8 @@ function bindModal(modal) {
     });
     modal.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+            const bm = document.getElementById('blacklistDetailModal');
+            if (bm && !bm.classList.contains('hidden')) return; // окно жабы закроется своим обработчиком
             e.preventDefault();
             e.stopPropagation();
             const drawer = document.getElementById('caInsDrawer');
@@ -332,6 +347,7 @@ function bindModal(modal) {
         if (!custom) readFiltersAndRecompute();
     });
     form.innOnly.addEventListener('change', readFiltersAndRecompute);
+    form.frog.addEventListener('change', readFiltersAndRecompute);
 }
 
 function readFiltersAndRecompute() {
@@ -343,6 +359,7 @@ function readFiltersAndRecompute() {
         to: form.to.value,
         innOnly: form.innOnly.checked,
         query: form.query.value.trim(),
+        frog: form.frog.value,
     };
     closeDrawer();
     recompute();
@@ -361,6 +378,12 @@ function selectTab(id) {
 
 async function reload() {
     st.all = api.loadRecords ? await api.loadRecords({ force: true }) : [];
+    try {
+        st.frogEntries = api.loadBlacklistEntries ? await api.loadBlacklistEntries() : [];
+    } catch {
+        st.frogEntries = [];
+    }
+    st.frogIndex = buildFrogIndex(st.frogEntries);
     st.byId = new Map(st.all.map((r) => [r.id, r]));
     closeDrawer();
     await recompute();
@@ -414,7 +437,7 @@ function renderTab() {
     const inner = Math.max(280, body.clientWidth - 32 - 34);
     const twoCols = body.clientWidth >= 1100;
     setChartWidths({ wide: inner, half: twoCols ? (inner - 14) / 2 : inner });
-    const map = { overview: renderOverview, time: renderTime, clients: renderClients, topics: renderTopics, text: renderText, dups: renderDups, quality: renderQuality, method: renderMethod };
+    const map = { overview: renderOverview, time: renderTime, clients: renderClients, frogs: renderFrogs, topics: renderTopics, text: renderText, dups: renderDups, quality: renderQuality, method: renderMethod };
     body.innerHTML = `<div class="ca-ins-grid">${(map[st.tab] || renderOverview)(I)}</div>`;
     body.scrollTop = 0;
     lastBodyWidth = body.clientWidth;
@@ -449,6 +472,19 @@ function conclusions(I) {
     if (I.duplicates.templates.length) out.push(['info', `Самый частый повторяющийся вопрос встречается ${fmt.int(I.duplicates.templates[0].count)} раз — кандидат в шаблон ответа/статью базы знаний.`]);
     const qBad = I.quality.checks.filter((x) => x.level === 'serious' && x.count > 0);
     if (qBad.length) out.push(['serious', `Проблемы данных: ${qBad.map((x) => `${x.label.toLowerCase()} — ${fmt.int(x.count)}`).join('; ')}.`]);
+    const F = I.frogs;
+    if (F && !F.insufficient) {
+        out.push(['info', `Жабы: ${fmt.int(F.summary.appeals)} обращений (${fmt.pct(F.summary.appealsShare)}) от ${fmt.int(F.summary.clients)} клиентов; из ${fmt.int(F.entries.total)} записей списка в базе найдено ${fmt.int(F.entries.matched)}.`]);
+        const sigCmp = F.compare.filter((c) => c.significant && c.effect > 0);
+        if (sigCmp.length) out.push(['warning', `У жаб значимо выше: ${sigCmp.map((c) => c.label.toLowerCase()).join(', ')} (U-тест, p < 0,05).`]);
+        const sigTopics = F.topics.filter((t) => t.significant && t.or > 1).slice(0, 3);
+        if (sigTopics.length) out.push(['info', `Темы, характерные для жаб: ${sigTopics.map((t) => `«${t.label}» (OR ${fmt.num2(t.or)})`).join(', ')}.`]);
+        if (!F.beforeAfter.insufficient && F.beforeAfter.continued) out.push(['warning', `${fmt.int(F.beforeAfter.continued)} из ${fmt.int(F.beforeAfter.eligible)} жаб продолжили обращаться после внесения в список.`]);
+        if (F.neighborsTotal) out.push(['warning', `${fmt.int(F.neighborsTotal)} других ИНН используют те же телефоны/почту, что и жабы — см. вкладку «Жабы».`]);
+        if (!F.model.insufficient && F.model.candidates.length) out.push(['info', `Модель находит клиентов, похожих на жаб по поведению (AUC ${fmt.num2(F.model.auc)}, ${F.model.quality}).`]);
+        const bad = F.hygiene.filter((h) => h.level === 'serious' && h.count);
+        if (bad.length) out.push(['serious', `В самом чёрном списке: ${bad.map((h) => `${h.label.toLowerCase()} — ${fmt.int(h.count)}`).join('; ')}.`]);
+    }
     if (!I.clusters.insufficient) out.push(['info', `Найдено ${I.clusters.k} смысловых групп (силуэт ${fmt.num2(I.clusters.silhouette)} — ${I.clusters.silhouette > 0.5 ? 'чёткие' : I.clusters.silhouette > 0.25 ? 'умеренно различимые' : 'перекрывающиеся'}).`]);
     return out;
 }
@@ -470,6 +506,7 @@ function renderOverview(I) {
         statTile('Полнота данных', fmt.pct(I.quality.completeness, 0), 'ИНН, вопрос, контакт, дата'),
         statTile('Срочные', fmt.int(o.urgent), fmt.pct(o.records ? o.urgent / o.records : 0)),
         statTile('Негативные', fmt.int(o.negative), fmt.pct(o.records ? o.negative / o.records : 0)),
+        statTile('Обращения жаб', fmt.int(o.frogAppeals || 0), I.frogs && !I.frogs.insufficient ? `${fmt.int(o.frogClients)} клиентов · ${fmt.pct(I.frogs.summary.appealsShare)}` : 'чёрный список пуст'),
     ].join('');
     const concl = conclusions(I)
         .map(([lvl, text]) => `<li class="ca-ins-concl lvl-${lvl}"><i class="fas ${LEVEL_ICON[lvl]}" aria-hidden="true"></i><span class="sr-only">${LEVEL_TEXT[lvl]}: </span><span>${escapeHtml(text)}</span></li>`)
@@ -550,7 +587,7 @@ function renderClients(I) {
         ['ИНН', 'Обращ.', 'Первое', 'Последнее', 'Темы', 'Регион', ''],
         C.top.map((c) => ({
             cells: [
-                { html: `<button type="button" class="ca-ins-link" data-ins-action="open-inn" data-inn="${escapeHtml(c.inn)}">${escapeHtml(c.inn)}</button>${c.valid ? '' : ' <span class="ca-ins-badge lvl-serious" title="Контрольная сумма ИНН не сходится">КС</span>'}${c.blacklisted ? ' <span class="ca-ins-badge lvl-warning">ЧС</span>' : ''}` },
+                { html: `<button type="button" class="ca-ins-link" data-ins-action="open-inn" data-inn="${escapeHtml(c.inn)}">${escapeHtml(c.inn)}</button>${c.valid ? '' : ' <span class="ca-ins-badge lvl-serious" title="Контрольная сумма ИНН не сходится">КС</span>'}${c.frogLevel ? ` ${frogBadge(c.frogLevel)}` : c.blacklisted ? ' <span class="ca-ins-badge lvl-warning">ЧС</span>' : ''}` },
                 fmt.int(c.count),
                 fmt.date(c.first),
                 fmt.date(c.last),
@@ -563,9 +600,9 @@ function renderClients(I) {
     );
     const groups = C.linkedGroups.length
         ? table(
-              ['Клиентов', 'Обращений', 'ИНН', 'Общие контакты'],
-              C.linkedGroups.map((g, i) => ({ cells: [fmt.int(g.size), fmt.int(g.appeals), g.inns.slice(0, 6).join(', ') + (g.inns.length > 6 ? ` и ещё ${g.inns.length - 6}` : ''), g.shared.map((s) => (/^\d{11}$/.test(s) ? formatRussianPhoneForDisplay(s) : s)).join(', ')], drill: `group:${i}` })),
-              { numeric: [0, 1] },
+              ['Клиентов', 'Обращений', 'Из них жаб', 'ИНН', 'Общие контакты'],
+              C.linkedGroups.map((g, i) => ({ cells: [fmt.int(g.size), fmt.int(g.appeals), g.frogs ? { html: `🐸 ${fmt.int(g.frogs)}` } : '—', g.inns.slice(0, 6).join(', ') + (g.inns.length > 6 ? ` и ещё ${g.inns.length - 6}` : ''), g.shared.map((s) => (/^\d{11}$/.test(s) ? formatRussianPhoneForDisplay(s) : s)).join(', ')], drill: `group:${i}` })),
+              { numeric: [0, 1, 2] },
           )
         : '<p class="ca-viz-empty">Общих телефонов и почты у разных ИНН не найдено.</p>';
     const hubs = C.hubContacts.length
@@ -579,6 +616,182 @@ function renderClients(I) {
         section('Регион и причина по КПП', `${barsH(C.kppRegions.slice(0, 8).map((r) => ({ label: r.name, value: r.count })))}<h4 class="ca-ins-subtitle">Причина постановки на учёт (5–6 знаки КПП)</h4>${barsH(C.kppReasons.map((r) => ({ label: r.name, value: r.count })))}`),
         section('Самые активные клиенты', top, { wide: true }),
         section('Клиенты с общими контактами', groups + hubs, { wide: true, note: 'Компоненты связности графа «ИНН — телефон/почта» (система непересекающихся множеств).' }),
+    ].join('');
+}
+
+
+// ---------------------------------------------------------------------------
+// Жабы (чёрный список)
+// ---------------------------------------------------------------------------
+/** Значок жабы: уровень + чем подтверждено (цвет дублируется текстом). */
+function frogBadge(level, via, { weak = false } = {}) {
+    if (!level) return '';
+    const lvl = level >= 3 ? 'serious' : level === 2 ? 'warning' : 'info';
+    const viaText = via && via.length ? ` · ${via.map((v) => FROG_VIA_LABELS[v] || v).join(', ')}` : '';
+    return `<span class="ca-ins-badge lvl-${lvl}" title="${escapeHtml(`${FROG_LEVEL_LABELS[level]}${viaText}${weak ? ' (слабое совпадение)' : ''}`)}">🐸 ${escapeHtml(weak ? `упоминание · ур. ${level}` : FROG_LEVEL_LABELS[level])}${escapeHtml(viaText)}</span>`;
+}
+
+function fmtOr(x) {
+    if (!x || x.or == null) return '—';
+    return `${fmt.num2(x.or)} (${fmt.num2(x.lo)}–${fmt.num2(x.hi)})`;
+}
+
+function renderFrogs(I) {
+    const F = I.frogs;
+    if (!F || F.insufficient) {
+        return section('Жабы', '<p class="ca-viz-empty">Чёрный список пуст — сопоставлять не с чем. Добавьте записи в разделе «Чёрный список», и здесь появится их связь с обращениями.</p>', { wide: true });
+    }
+    const S = F.summary;
+    const E = F.entries;
+    const tiles = [
+        statTile('Записей в списке', fmt.int(E.total), `ур. 1/2/3: ${E.byLevel[1]} / ${E.byLevel[2]} / ${E.byLevel[3]}`),
+        statTile('Найдены в базе', fmt.int(E.matched), `не обращались: ${fmt.int(E.silent)}`),
+        statTile('Обращений жаб', fmt.int(S.appeals), `${fmt.pct(S.appealsShare)} (95% ДИ ${fmt.pct(S.appealsLo)}–${fmt.pct(S.appealsHi)})`),
+        statTile('Клиентов-жаб', fmt.int(S.clients), `${fmt.pct(S.clientsShare)} клиентов с ИНН`),
+        statTile('Соседи жаб', fmt.int(F.neighborsTotal), 'другие ИНН с общим контактом'),
+        statTile('Только упоминания', fmt.int(S.weakOnly), 'название в тексте, без ИНН/тел.'),
+    ].join('');
+    const via = barsH(
+        Object.entries(S.byVia)
+            .filter(([, v]) => v > 0)
+            .map(([k, v]) => ({ label: FROG_VIA_LABELS[k], value: v, drill: `frogvia:${k}` })),
+        { empty: 'Совпадений нет' },
+    );
+    const levels = barsH([1, 2, 3].map((L) => ({ label: FROG_LEVEL_LABELS[L], value: S.byLevelAppeals[L], drill: `frog:l${L}`, tone: '' })), { showShare: S.appeals || 1 });
+    const cmp = table(
+        ['Показатель клиента', 'Жабы (ср. / медиана)', 'Остальные (ср. / медиана)', 'U-тест', 'Эффект r'],
+        F.compare.map((c) => ({
+            cells: [
+                c.label,
+                c.key === 'k' ? `${fmt.num1(c.frogMean)} / ${fmt.num1(c.frogMedian)}` : `${fmt.pct(c.frogMean)} / ${fmt.pct(c.frogMedian)}`,
+                c.key === 'k' ? `${fmt.num1(c.otherMean)} / ${fmt.num1(c.otherMedian)}` : `${fmt.pct(c.otherMean)} / ${fmt.pct(c.otherMedian)}`,
+                c.insufficient ? 'мало данных' : { html: `<span class="${c.significant ? 'ca-ins-up' : ''}">${escapeHtml(pval(c.p))}${c.significant ? ' *' : ''}</span>` },
+                c.insufficient ? '—' : fmt.num2(c.effect),
+            ],
+        })),
+    );
+    const props = table(
+        ['Признак обращения', 'У жаб', 'У остальных', 'Отношение шансов (95% ДИ)', 'z-тест'],
+        F.proportions.map((c) => ({
+            cells: [c.label, c.empty ? '—' : `${fmt.pct(c.p1)} (${fmt.int(c.frog)})`, c.empty ? '—' : `${fmt.pct(c.p2)} (${fmt.int(c.other)})`, fmtOr(c.or), c.empty ? 'не встречается' : { html: `<span class="${c.significant ? (c.diff > 0 ? 'ca-ins-up' : 'ca-ins-down') : ''}">${escapeHtml(pval(c.p))}${c.significant ? ' *' : ''}</span>` }],
+        })),
+    );
+    const topics = table(
+        ['Тема', 'Доля у жаб', 'Доля у остальных', 'Отношение шансов (95% ДИ)', ''],
+        F.topics
+            .filter((t) => !t.empty)
+            .map((t) => ({
+                cells: [t.label, `${fmt.pct(t.frogShare)} (${fmt.int(t.frog)})`, `${fmt.pct(t.otherShare)} (${fmt.int(t.other)})`, fmtOr(t), t.significant ? { html: `<span class="${t.or > 1 ? 'ca-ins-up' : 'ca-ins-down'}">${t.or > 1 ? 'чаще у жаб' : 'реже у жаб'} *</span>` } : 'различие незначимо'],
+                drill: `frogtopic:${t.id}`,
+            })),
+    );
+    const words = F.words.length
+        ? `<div class="ca-ins-cloud">${F.words.map((w, i) => `<button type="button" class="ca-ins-term w${Math.max(1, 4 - Math.floor(i / 6))}" data-ca-drill="frogword:${escapeHtml(w.stem)}" data-tip="${escapeHtml(`G² = ${fmt.num1(w.g2)}: у жаб ${fmt.int(w.frog)}, у остальных ${fmt.int(w.other)}`)}">${escapeHtml(w.word)}</button>`).join('')}</div>`
+        : '<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: у жаб мало текста или их лексика не отличается.</p>';
+    const grad = table(
+        ['Признак', 'ρ Спирмена', 'p', 'Вывод'],
+        F.gradient.map((g) => ({ cells: [g.label, fmt.num2(g.rho), pval(g.p), g.p < 0.05 ? (g.rho > 0 ? 'растёт с уровнем жабы' : 'снижается с уровнем жабы') : 'связи с уровнем нет'] })),
+    ) + table(
+        ['Уровень', 'Клиентов', 'Обращений на клиента', 'Негатив', 'Срочные'],
+        F.byLevel.map((b) => ({ cells: [b.level ? FROG_LEVEL_LABELS[b.level] : 'не в списке', fmt.int(b.clients), fmt.num1(b.appealsPerClient), fmt.pct(b.neg), fmt.pct(b.urg)] })),
+        { numeric: [1, 2] },
+    );
+    const BA = F.beforeAfter;
+    const ba = BA.insufficient
+        ? '<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: нужно ≥ 3 жаб, внесённых в список внутри периода базы и имеющих обращения.</p>'
+        : `<div class="ca-ins-tiles">${statTile('До внесения', `${fmt.num2(BA.beforeRate)}`, 'обращений в 30 дней (на все такие жабы)')}${statTile('После внесения', `${fmt.num2(BA.afterRate)}`, 'обращений в 30 дней')}${statTile('Продолжили обращаться', fmt.pct(BA.continuedShare, 0), `${fmt.int(BA.continued)} из ${fmt.int(BA.eligible)}`)}</div>`;
+    const monthly = F.monthly.length
+        ? columns(F.monthly.map((m) => ({ label: fmt.month(m.month), value: Math.round(m.share * 1000) / 10, tip: `${fmt.month(m.month)}: ${fmt.int(m.frog)} из ${fmt.int(m.total)} (${fmt.pct(m.share)})`, drill: `frogmonth:${m.month}` })), { height: 170, valueFmt: (v) => `${fmt.num1(v)}%`, ariaLabel: 'Доля обращений жаб по месяцам, %' })
+        : '<p class="ca-viz-empty">Нет дат.</p>';
+    const M = F.model;
+    let model;
+    if (M.insufficient) {
+        model = `<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: для модели нужно ≥ 8 клиентов-жаб с обращениями и ≥ 30 остальных (сейчас ${fmt.int(M.positives)} и ${fmt.int(M.negatives)}).</p>`;
+    } else {
+        const weights = barsH(M.weights.map((w) => ({ label: w.label, value: Math.abs(w.w), note: w.w >= 0 ? '↑ повышает' : '↓ понижает' })), { valueFmt: (v) => fmt.num2(v) });
+        const cands = M.candidates.length
+            ? table(
+                  ['ИНН', 'Сходство', 'Обращений', 'Почему', ''],
+                  M.candidates.map((c) => ({
+                      cells: [
+                          { html: `<button type="button" class="ca-ins-link" data-ins-action="open-inn" data-inn="${escapeHtml(c.inn)}">${escapeHtml(c.inn)}</button>` },
+                          fmt.pct(c.p, 0),
+                          fmt.int(c.appeals),
+                          c.reasons.join(', ') || '—',
+                          { html: `<button type="button" class="ca-ins-link" data-ca-drill="inn:${escapeHtml(c.inn)}">записи</button>` },
+                      ],
+                  })),
+                  { numeric: [1, 2] },
+              )
+            : `<p class="ca-viz-empty">Кандидаты не показываются: качество модели ${escapeHtml(M.quality)} (AUC ${Number.isFinite(M.auc) ? fmt.num2(M.auc) : '—'} < 0,6) — её подсказки были бы не лучше случайных.</p>`;
+        model = `<p class="ca-ins-card-note">Логистическая регрессия по поведенческим признакам клиента (лексика не используется — иначе модель «подсматривала» бы ответ). Обучено на ${fmt.int(M.trainedOn)} клиентах. Качество на 5-кратной перекрёстной проверке: AUC ${Number.isFinite(M.auc) ? fmt.num2(M.auc) : '—'} — ${escapeHtml(M.quality)}. Это статистическое сходство с профилем жаб, а не решение о внесении в список.</p>
+<h4 class="ca-ins-subtitle">Вклад признаков (стандартизованные коэффициенты)</h4>${weights}<h4 class="ca-ins-subtitle">Клиенты, больше всего похожие на жаб</h4>${cands}`;
+    }
+    const entries = table(
+        ['Организация', 'Уровень', 'ИНН', 'Обращений', 'Последнее', 'После внесения', 'Найдено по', ''],
+        F.entryRows.slice(0, 200).map((r) => ({
+            cells: [
+                { html: `<button type="button" class="ca-ins-link" data-ins-action="open-frog" data-frog-id="${escapeHtml(String(r.id))}">${escapeHtml(r.name || '—')}</button>` },
+                { html: frogBadge(r.level) },
+                { html: `${escapeHtml(r.inn || '—')}${r.inn && !r.innValid ? ' <span class="ca-ins-badge lvl-serious" title="Контрольная сумма ИНН не сходится">КС</span>' : ''}` },
+                fmt.int(r.appeals) + (r.mentions ? ` (+${fmt.int(r.mentions)} упом.)` : ''),
+                fmt.date(r.last),
+                r.afterAdded == null ? '—' : fmt.int(r.afterAdded),
+                r.via.map((v) => FROG_VIA_LABELS[v]).join(', ') || '—',
+                r.appeals || r.mentions ? { html: `<button type="button" class="ca-ins-link" data-ca-drill="frogentry:${escapeHtml(String(r.id))}">записи</button>` } : '',
+            ],
+        })),
+        { numeric: [3, 5] },
+    );
+    const neighbors = F.neighbors.length
+        ? table(
+              ['ИНН', 'Обращений', 'Связан с жабами', 'Через контакт'],
+              F.neighbors.map((v) => ({
+                  cells: [
+                      { html: `<button type="button" class="ca-ins-link" data-ins-action="open-inn" data-inn="${escapeHtml(v.inn)}">${escapeHtml(v.inn)}</button>` },
+                      fmt.int(v.appeals),
+                      { html: `${frogBadge(v.maxLevel)} ${escapeHtml(v.frogs.slice(0, 3).join(', '))}` },
+                      v.via.map((c) => (/^\d{11}$/.test(c) ? formatRussianPhoneForDisplay(c) : c)).join(', '),
+                  ],
+                  drill: `inn:${v.inn}`,
+              })),
+              { numeric: [1] },
+          )
+        : '<p class="ca-viz-empty">Других ИНН с телефонами или почтой жаб не найдено.</p>';
+    const hyg = F.hygiene.filter((h) => h.count > 0);
+    const hygiene = hyg.length
+        ? table(
+              ['Проблема списка', 'Уровень', 'Записей', 'Примеры', 'Пояснение'],
+              hyg.map((h) => ({
+                  cells: [
+                      h.label,
+                      { html: `<span class="ca-ins-badge lvl-${h.level}"><i class="fas ${LEVEL_ICON[h.level]}" aria-hidden="true"></i> ${LEVEL_TEXT[h.level]}</span>` },
+                      fmt.int(h.count),
+                      { html: h.ids.slice(0, 4).map((id) => {
+                          const row = F.entryRows.find((r) => r.id === id);
+                          return `<button type="button" class="ca-ins-link" data-ins-action="open-frog" data-frog-id="${escapeHtml(String(id))}">${escapeHtml((row && row.name) || `#${id}`)}</button>`;
+                      }).join(', ') + (h.ids.length > 4 ? ` и ещё ${h.ids.length - 4}` : '') },
+                      h.hint,
+                  ],
+              })),
+              { numeric: [2] },
+          )
+        : '<p class="ca-viz-empty">Проблем в списке не найдено.</p>';
+    return [
+        `<div class="ca-ins-tiles is-wide">${tiles}</div>`,
+        section('Как найдены совпадения', via, { note: 'ИНН, телефон и данные из примечания — сильные совпадения (дают уровень). Название организации в тексте — слабое, только подсказка.' }),
+        section('Обращения жаб по уровням', levels),
+        section('Чем жабы отличаются от остальных клиентов', cmp, { wide: true, note: 'U-тест Манна — Уитни по клиентам; r — ранго-бисериальная корреляция (> 0 — у жаб больше). * — p < 0,05.' }),
+        section('Признаки обращений: жабы против остальных', props, { wide: true, note: 'z-тест разности долей; отношение шансов с поправкой Холдейна и 95% ДИ по Вульфу.' }),
+        section('Темы, характерные для жаб', topics, { wide: true, note: 'Отношение шансов > 1 — тема у жаб встречается чаще. * — 95% ДИ не включает 1.' }),
+        section('Слова, характерные для жаб', words, { note: 'G² Даннинга (> 6,63 ≈ p < 0,01) по сравнению с остальными обращениями.' }),
+        section('Доля обращений жаб по месяцам, %', monthly),
+        section('Градиент по уровню жабы', grad, { wide: true, note: 'Связь уровня (0 — не в списке … 3 — гипержаба) с поведением клиента.' }),
+        section('До и после внесения в список', ba, { wide: true, note: 'Сравнение темпа обращений жаб до и после даты добавления в чёрный список (только жабы, внесённые внутри периода базы).' }),
+        section('Похожие на жаб клиенты (модель)', model, { wide: true }),
+        section('Соседи жаб: тот же телефон или e-mail', neighbors, { wide: true, note: 'Другие ИНН, у которых в обращениях тот же контакт, что у клиента-жабы (контакты у 30+ клиентов не учитываются).' }),
+        section('Записи чёрного списка и их обращения', entries, { wide: true }),
+        section('Проверка самого чёрного списка', hygiene, { wide: true }),
     ].join('');
 }
 
@@ -752,6 +965,9 @@ function renderMethod() {
         ['Связи клиентов', 'Граф «ИНН — телефон/почта», компоненты связности; контакты у 30+ клиентов не связывают (это номера-«хабы»).'],
         ['Язык', 'Законы Ципфа (регрессия log частоты по log ранга) и Хипса (V = K·N^β), энтропия Шеннона, TTR, доля гапаксов, коллокации (t-score, PMI), расстояние Йенсена — Шеннона буквенного профиля до эталона НКРЯ.'],
         ['Опечатки', 'Редкое слово на расстоянии одной правки Дамерау — Левенштейна от слова, встречающегося в 10+ раз чаще.'],
+        ['Жабы: сопоставление', 'Запись обращения связывается с записью чёрного списка по ИНН, по второму ИНН в тексте, по телефону и по ИНН/телефонам/e-mail из примечания (сильные совпадения, дают уровень). Название организации в тексте (без формы собственности и кавычек) — слабое совпадение, только подсказка.'],
+        ['Жабы: сравнение', 'Клиенты-жабы против остальных — U-тест Манна — Уитни и ранго-бисериальная корреляция; признаки обращений — z-тест долей и отношение шансов (поправка Холдейна, 95% ДИ Вульфа); лексика — G² Даннинга; связь с уровнем — ρ Спирмена; темп обращений до/после даты внесения в список.'],
+        ['Жабы: модель', 'Логистическая регрессия с L2 по поведенческим признакам клиента, веса классов уравновешены, качество — AUC на стратифицированной 5-кратной перекрёстной проверке. Кандидаты не показываются при AUC < 0,6. Лексика в модель не входит, чтобы не было утечки метки.'],
         ['Ограничения', 'Это классическая статистика и словари, а не языковая модель: смысл вне словаря и вне текстов базы не «понимается». При малых выборках выводы помечаются «НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА».'],
     ];
     return section('Как считается каждый показатель', table(['Что', 'Метод'], rows.map((c) => ({ cells: c }))), { wide: true });
@@ -851,6 +1067,43 @@ function resolveDrill(key) {
             const [w, h] = arg.split(':').map(Number);
             ids = byDate((d) => d.time && Number(d.time.slice(0, 2)) === h && (new Date(`${d.ymd}T00:00:00Z`).getUTCDay() + 6) % 7 === w);
             title = `${WEEKDAYS[w]}, ${h}:00–${h}:59`;
+            break;
+        }
+        case 'frog': {
+            const key = arg === 'all' ? 'all' : arg;
+            ids = (I.index.frog && I.index.frog[key]) || [];
+            title = key === 'all' ? 'Обращения жаб' : `Обращения: ${FROG_LEVEL_LABELS[Number(key.slice(1))] || key}`;
+            break;
+        }
+        case 'frogvia':
+            ids = (I.index.frog && I.index.frog[arg]) || [];
+            title = `Жабы, найденные по: ${FROG_VIA_LABELS[arg] || arg}`;
+            break;
+        case 'frogentry': {
+            ids = (I.index.frogEntry && I.index.frogEntry[arg]) || [];
+            const row = I.frogs.entryRows.find((r) => String(r.id) === arg);
+            title = `Жаба: ${row ? row.name : arg}`;
+            break;
+        }
+        case 'frogtopic': {
+            const fs = new Set((I.index.frog && I.index.frog.all) || []);
+            ids = (I.index.topic[arg] || []).filter((id) => fs.has(id));
+            title = `Жабы · тема: ${I.labels.topics[arg] || arg}`;
+            const tp = TOPICS.find((t) => t.id === arg);
+            if (tp) highlight = { re: tp.re };
+            break;
+        }
+        case 'frogword': {
+            const fs = new Set((I.index.frog && I.index.frog.all) || []);
+            ids = recs.filter((r) => fs.has(r.id) && tokenizeDetailed(r.question || '').some((t) => t.stem === arg)).map((r) => r.id);
+            title = `Жабы · слово: ${arg}…`;
+            highlight = { stems: new Set([arg]) };
+            break;
+        }
+        case 'frogmonth': {
+            const fs = new Set((I.index.frog && I.index.frog.all) || []);
+            ids = byDate((d) => d.ymd.startsWith(arg)).filter((id) => fs.has(id));
+            title = `Жабы · ${fmt.month(arg)}`;
             break;
         }
         case 'inn':
@@ -954,7 +1207,7 @@ function recordRowHtml(r, hl) {
     const topics = (pr.t || []).map((t) => `<span class="ca-ins-chip">${escapeHtml(st.insights.labels.topics[t] || t)}</span>`).join('');
     const dateLabel = ed.ymd ? `${fmt.date(ed.ymd)}${ed.time ? ` ${ed.time}` : ''}${ed.source === 'upload' ? ' (загрузка)' : ''}` : '—';
     return `<li><button type="button" class="ca-ins-rec" data-ins-record="${r.id}">
-  <span class="ca-ins-rec-head"><span>${escapeHtml(dateLabel)}</span><span>${r.inn ? `ИНН ${escapeHtml(r.inn)}` : 'без ИНН'}</span>${pr.u >= 2 ? '<span class="ca-ins-badge lvl-warning">срочно</span>' : ''}</span>
+  <span class="ca-ins-rec-head"><span>${escapeHtml(dateLabel)}</span><span>${r.inn ? `ИНН ${escapeHtml(r.inn)}` : 'без ИНН'}</span>${pr.u >= 2 ? '<span class="ca-ins-badge lvl-warning">срочно</span>' : ''}${pr.f ? (pr.f.l ? frogBadge(pr.f.l, pr.f.v) : frogBadge(pr.f.w, pr.f.v, { weak: true })) : ''}</span>
   <span class="ca-ins-rec-q">${highlightQuestion(r.question || '—', hl) || '—'}</span>
   <span class="ca-ins-rec-meta">${topics}<span class="ca-viz-muted">${escapeHtml(st.insights.labels.intents[pr.i] || '')}</span></span>
 </button></li>`;
@@ -972,6 +1225,18 @@ function renderDrawer() {
 ${recs.length > shown.length ? `<button type="button" class="ca-ins-btn w-full justify-center" data-ins-action="drawer-more">Показать ещё (${fmt.int(recs.length - shown.length)})</button>` : ''}`;
     d.scrollTop = st.drillPage === 1 ? 0 : d.scrollTop;
     d.querySelector('.ca-ins-drawer-head button')?.focus({ preventScroll: true });
+}
+
+function frogXrayHtml(r) {
+    if (!st.frogIndex || !st.frogIndex.frogs.length) return 'список пуст';
+    const m = matchRecordToFrogs(r, st.frogIndex);
+    if (!m.entries.length) return 'совпадений нет';
+    return m.entries
+        .map((id) => {
+            const f = st.frogIndex.byId.get(id);
+            return `${frogBadge(f.level)} <button type="button" class="ca-ins-link" data-ins-action="open-frog" data-frog-id="${escapeHtml(String(id))}">${escapeHtml(f.name || `#${id}`)}</button>`;
+        })
+        .join('<br>') + `<br><span class="ca-viz-muted">найдено по: ${escapeHtml(m.via.map((v) => FROG_VIA_LABELS[v]).join(', '))}${m.level ? '' : ' (слабое совпадение — только название)'}</span>`;
 }
 
 const TOKEN_KIND_LABEL = { stop: 'стоп-слово', numeric: 'число', mixed: 'смешанная письменность', content: 'значимое слово' };
@@ -1019,6 +1284,7 @@ function renderXray(recordId) {
         ['Намерение', c.intentLabel],
         ['Срочность / негатив', `${c.urgency} / ${c.negativity}${c.capsRatio > 0.6 ? ' · ЗАГЛАВНЫЕ' : ''}${c.exclam ? ` · «!» ×${c.exclam}` : ''}`],
         ['Файл / пункт', `${r.sourceFileName || '—'}${r.listItemIndex != null ? ` · пункт ${r.listItemIndex}` : ''}`],
+        ['Чёрный список', frogXrayHtml(r), true],
     ]
         .map(([k, v, html]) => `<div><dt>${escapeHtml(k)}</dt><dd>${html ? v : escapeHtml(v)}</dd></div>`)
         .join('');
@@ -1104,14 +1370,14 @@ export function csvCell(v) {
 function exportCsv() {
     const I = st.insights;
     if (!I) return;
-    const head = ['id', 'дата', 'время', 'источник даты', 'ИНН', 'КПП', 'телефоны', 'e-mail', 'темы', 'намерение', 'группа', 'срочность', 'негатив', 'вопрос', 'файл', 'пункт'];
+    const head = ['id', 'дата', 'время', 'источник даты', 'ИНН', 'КПП', 'телефоны', 'e-mail', 'темы', 'намерение', 'группа', 'срочность', 'негатив', 'жаба: уровень', 'жаба: найдено по', 'вопрос', 'файл', 'пункт'];
     const lines = [head.join(';')];
     for (const r of st.filtered) {
         const p = I.perRecord[r.id] || {};
         const ed = effectiveDate(r);
         const cl = I.clusters.list.find((c) => c.id === p.c);
         lines.push(
-            [r.id, ed.ymd || '', ed.time || '', ed.source || '', r.inn || '', r.kpp || '', (r.phones || []).join(', '), (r.emails || []).join(', '), (p.t || []).map((t) => I.labels.topics[t]).join(', '), I.labels.intents[p.i] || '', cl ? cl.label : '', p.u ?? '', p.g ?? '', r.question || '', r.sourceFileName || '', r.listItemIndex ?? '']
+            [r.id, ed.ymd || '', ed.time || '', ed.source || '', r.inn || '', r.kpp || '', (r.phones || []).join(', '), (r.emails || []).join(', '), (p.t || []).map((t) => I.labels.topics[t]).join(', '), I.labels.intents[p.i] || '', cl ? cl.label : '', p.u ?? '', p.g ?? '', p.f ? p.f.l || `упоминание (${p.f.w})` : '', p.f ? p.f.v.map((v) => FROG_VIA_LABELS[v]).join(', ') : '', r.question || '', r.sourceFileName || '', r.listItemIndex ?? '']
                 .map(csvCell)
                 .join(';'),
         );

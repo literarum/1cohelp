@@ -756,3 +756,184 @@ export class UnionFind {
         return true;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Сравнение групп (жабы против остальных)
+// ---------------------------------------------------------------------------
+/** Средние ранги (связки получают средний ранг). */
+export function ranks(xs) {
+    const idx = xs.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+    const r = new Array(xs.length);
+    for (let i = 0; i < idx.length; ) {
+        let j = i;
+        while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+        const avg = (i + j) / 2 + 1;
+        for (let k = i; k <= j; k++) r[idx[k][1]] = avg;
+        i = j + 1;
+    }
+    return r;
+}
+
+/**
+ * U-тест Манна — Уитни (нормальное приближение с поправкой на связки и непрерывность).
+ * Эффект — ранго-бисериальная корреляция r = 1 − 2U/(n1·n2) ∈ [−1; 1]
+ * (> 0 — значения группы A в среднем больше).
+ */
+export function mannWhitneyU(a, b) {
+    const n1 = a.length;
+    const n2 = b.length;
+    if (n1 < 2 || n2 < 2) return { u: 0, z: 0, p: 1, effect: 0, insufficient: true };
+    const all = [...a, ...b];
+    const r = ranks(all);
+    let r1 = 0;
+    for (let i = 0; i < n1; i++) r1 += r[i];
+    const u1 = r1 - (n1 * (n1 + 1)) / 2;
+    const u2 = n1 * n2 - u1;
+    const n = n1 + n2;
+    const ties = new Map();
+    for (const v of all) ties.set(v, (ties.get(v) || 0) + 1);
+    let tieSum = 0;
+    for (const t of ties.values()) if (t > 1) tieSum += t * t * t - t;
+    const varU = ((n1 * n2) / 12) * (n + 1 - tieSum / (n * (n - 1)));
+    const mu = (n1 * n2) / 2;
+    const z = varU > 0 ? (u1 - mu - Math.sign(u1 - mu) * 0.5) / Math.sqrt(varU) : 0;
+    const p = 2 * (1 - normalCdf(Math.abs(z)));
+    return { u: Math.min(u1, u2), z, p, effect: (2 * u1) / (n1 * n2) - 1, insufficient: false };
+}
+
+/** Ранговая корреляция Спирмена с t-приближением p-значения (нормальным при n > 30). */
+export function spearman(xs, ys) {
+    const n = Math.min(xs.length, ys.length);
+    if (n < 4) return { rho: 0, p: 1, n };
+    const rx = ranks(xs.slice(0, n));
+    const ry = ranks(ys.slice(0, n));
+    const mx = mean(rx);
+    const my = mean(ry);
+    let sxy = 0;
+    let sxx = 0;
+    let syy = 0;
+    for (let i = 0; i < n; i++) {
+        sxy += (rx[i] - mx) * (ry[i] - my);
+        sxx += (rx[i] - mx) ** 2;
+        syy += (ry[i] - my) ** 2;
+    }
+    const rho = sxx && syy ? sxy / Math.sqrt(sxx * syy) : 0;
+    const z = rho * Math.sqrt(n - 1);
+    return { rho, p: 2 * (1 - normalCdf(Math.abs(z))), n };
+}
+
+/** z-тест разности двух долей (объединённая оценка дисперсии). */
+export function twoProportionZ(x1, n1, x2, n2) {
+    if (!n1 || !n2) return { p1: 0, p2: 0, diff: 0, z: 0, p: 1 };
+    const p1 = x1 / n1;
+    const p2 = x2 / n2;
+    const pp = (x1 + x2) / (n1 + n2);
+    const se = Math.sqrt(pp * (1 - pp) * (1 / n1 + 1 / n2));
+    const z = se ? (p1 - p2) / se : 0;
+    return { p1, p2, diff: p1 - p2, z, p: 2 * (1 - normalCdf(Math.abs(z))) };
+}
+
+/**
+ * Отношение шансов таблицы 2×2 с поправкой Холдейна (+0,5 к каждой клетке) и 95% ДИ по Вульфу.
+ * a — признак в группе A, b — нет признака в A, c — признак в B, d — нет признака в B.
+ */
+export function oddsRatio(a, b, c, d) {
+    const [A, Bv, C, D] = [a + 0.5, b + 0.5, c + 0.5, d + 0.5];
+    const lor = Math.log((A * D) / (Bv * C));
+    const se = Math.sqrt(1 / A + 1 / Bv + 1 / C + 1 / D);
+    return { or: Math.exp(lor), lo: Math.exp(lor - 1.96 * se), hi: Math.exp(lor + 1.96 * se), significant: lor - 1.96 * se > 0 || lor + 1.96 * se < 0 };
+}
+
+/** ROC AUC = вероятность, что случайный положительный пример оценён выше отрицательного. */
+export function rocAuc(scores, labels) {
+    const pos = [];
+    const neg = [];
+    scores.forEach((s, i) => (labels[i] ? pos : neg).push(s));
+    if (!pos.length || !neg.length) return NaN;
+    const r = ranks([...pos, ...neg]);
+    let rp = 0;
+    for (let i = 0; i < pos.length; i++) rp += r[i];
+    return (rp - (pos.length * (pos.length + 1)) / 2) / (pos.length * neg.length);
+}
+
+const sigmoid = (z) => (z >= 0 ? 1 / (1 + Math.exp(-z)) : Math.exp(z) / (1 + Math.exp(z)));
+
+/**
+ * Логистическая регрессия с L2-регуляризацией (градиентный спуск по стандартизованным признакам,
+ * веса классов уравновешены — положительных примеров мало).
+ * @param {number[][]} X
+ * @param {number[]} y 0/1
+ */
+export function trainLogistic(X, y, { l2 = 1, iters = 400, lr = 0.3 } = {}) {
+    const n = X.length;
+    const d = n ? X[0].length : 0;
+    const mu = new Array(d).fill(0);
+    const sd = new Array(d).fill(1);
+    for (let j = 0; j < d; j++) {
+        const col = X.map((r) => r[j]);
+        mu[j] = mean(col);
+        sd[j] = stdev(col) || 1;
+    }
+    const Z = X.map((r) => r.map((v, j) => (v - mu[j]) / sd[j]));
+    const npos = y.reduce((s, v) => s + v, 0);
+    const wPos = npos ? n / (2 * npos) : 1;
+    const wNeg = n - npos ? n / (2 * (n - npos)) : 1;
+    const w = new Array(d).fill(0);
+    let b = 0;
+    for (let it = 0; it < iters; it++) {
+        const gw = new Array(d).fill(0);
+        let gb = 0;
+        let wsum = 0;
+        for (let i = 0; i < n; i++) {
+            let z = b;
+            for (let j = 0; j < d; j++) z += w[j] * Z[i][j];
+            const cw = y[i] ? wPos : wNeg;
+            const err = (sigmoid(z) - y[i]) * cw;
+            for (let j = 0; j < d; j++) gw[j] += err * Z[i][j];
+            gb += err;
+            wsum += cw;
+        }
+        for (let j = 0; j < d; j++) w[j] -= lr * (gw[j] / wsum + (l2 * w[j]) / n);
+        b -= lr * (gb / wsum);
+    }
+    return {
+        w,
+        b,
+        mu,
+        sd,
+        predict(x) {
+            let z = b;
+            for (let j = 0; j < d; j++) z += w[j] * ((x[j] - mu[j]) / sd[j]);
+            return sigmoid(z);
+        },
+        contributions(x) {
+            return w.map((wj, j) => wj * ((x[j] - mu[j]) / sd[j]));
+        },
+    };
+}
+
+/** k-кратная перекрёстная проверка логистической регрессии → AUC вне обучающей выборки. */
+export function crossValidatedAuc(X, y, k = 5, opts = {}) {
+    const n = X.length;
+    const npos = y.reduce((s, v) => s + v, 0);
+    if (npos < k || n - npos < k) return NaN;
+    // стратифицированные фолды, детерминированно
+    const posIdx = [];
+    const negIdx = [];
+    y.forEach((v, i) => (v ? posIdx : negIdx).push(i));
+    const fold = new Array(n);
+    posIdx.forEach((i, t) => (fold[i] = t % k));
+    negIdx.forEach((i, t) => (fold[i] = t % k));
+    const scores = new Array(n);
+    for (let f = 0; f < k; f++) {
+        const tr = [];
+        const ty = [];
+        for (let i = 0; i < n; i++) if (fold[i] !== f) {
+            tr.push(X[i]);
+            ty.push(y[i]);
+        }
+        const m = trainLogistic(tr, ty, opts);
+        for (let i = 0; i < n; i++) if (fold[i] === f) scores[i] = m.predict(X[i]);
+    }
+    return rocAuc(scores, y);
+}

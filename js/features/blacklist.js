@@ -826,7 +826,26 @@ export async function showBlacklistDetailModal(entryId) {
                     ).toLocaleString('ru-RU')}</dd>
                 </div>
             </dl>
+            <div id="blacklistDetailAppeals"></div>
         `;
+        // связь с «Базой клиентов»: обращения этой жабы (по ИНН, телефону, примечанию, названию)
+        if (typeof deps.buildClientAnalyticsAppealsHtml === 'function') {
+            const slot = contentEl.querySelector('#blacklistDetailAppeals');
+            slot.innerHTML = '<p class="mt-4 text-sm text-gray-500">Поиск обращений в базе клиентов…</p>';
+            Promise.resolve(deps.buildClientAnalyticsAppealsHtml(entry))
+                .then((html) => {
+                    if (modal.dataset.currentId !== String(entryId)) return;
+                    slot.innerHTML = html || '';
+                    const btn = slot.querySelector('[data-ca-open-history]');
+                    if (btn && typeof deps.openClientAnalyticsInnHistory === 'function') {
+                        btn.addEventListener('click', () => deps.openClientAnalyticsInnHistory(btn.getAttribute('data-ca-open-history')));
+                    }
+                })
+                .catch((err) => {
+                    console.warn('[Blacklist] обращения из базы клиентов:', err);
+                    slot.innerHTML = '';
+                });
+        }
     } catch (error) {
         titleEl.textContent = 'Ошибка';
         contentEl.innerHTML = `<p class="text-center text-red-500">Не удалось загрузить данные: ${error.message}</p>`;

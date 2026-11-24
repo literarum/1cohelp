@@ -36,6 +36,11 @@ import { describeInn, kppReason, regionByCode } from './client-analytics-registr
 import { computeClientProfile, effectiveDate } from './client-analytics-insights.js';
 import { sparkline } from './client-analytics-charts.js';
 import {
+    summarizeAppealsForFrogEntry,
+    buildFrogPhoneLevelMap,
+    FROG_VIA_LABELS,
+} from './client-analytics-frogs.js';
+import {
     openClientAnalyticsInsights,
     setClientAnalyticsDashboardApi,
 } from './client-analytics-dashboard.js';
@@ -103,6 +108,7 @@ const caCache = {
     lastFilteredBase: null,
     units: null,
     blLevels: null,
+    blPhoneLevels: null,
     filesMeta: null,
 };
 
@@ -1443,6 +1449,39 @@ export async function reprocessClientAnalyticsFiles(onProgress = () => {}) {
     return { files: filesDone, records: recordsDone, added, removed };
 }
 
+/**
+ * Обращения, связанные с записью чёрного списка (для окна жабы в разделе «Чёрный список»).
+ * @param {object} entry запись blacklistedClients
+ */
+export async function getClientAnalyticsAppealsSummaryForBlacklistEntry(entry) {
+    const records = await loadClientAnalyticsDataset();
+    return summarizeAppealsForFrogEntry(entry, records);
+}
+
+/** HTML-блок «Обращения в базе клиентов» для окна записи чёрного списка. */
+export async function buildClientAnalyticsAppealsHtmlForBlacklistEntry(entry) {
+    const s = await getClientAnalyticsAppealsSummaryForBlacklistEntry(entry);
+    const d = (x) => (x ? x.split('-').reverse().join('.') : '—');
+    const via = Object.entries(s.via)
+        .map(([k, v]) => `${FROG_VIA_LABELS[k] || k}: ${v}`)
+        .join(', ');
+    if (!s.count && !s.mentions) {
+        return `<div class="mt-4 rounded-md border border-gray-200 dark:border-gray-600 p-3 text-sm text-gray-600 dark:text-gray-300"><b>Обращения в базе клиентов:</b> не найдены (по ИНН, телефону, данным примечания и названию).</div>`;
+    }
+    const rows = s.recent
+        .map(
+            (r) => `<li class="py-1 border-b border-gray-100 dark:border-gray-700 last:border-0"><span class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(d(r.date))}${r.time ? ` ${escapeHtml(r.time)}` : ''}${r.inn ? ` · ИНН ${escapeHtml(r.inn)}` : ''} · по: ${escapeHtml(r.via.map((v) => FROG_VIA_LABELS[v] || v).join(', '))}</span><br>${escapeHtml(String(r.question || '—').slice(0, 300))}</li>`,
+        )
+        .join('');
+    const histInn = s.inns[0] || '';
+    return `<div class="mt-4 rounded-md border border-gray-200 dark:border-gray-600 p-3 text-sm text-gray-800 dark:text-gray-200">
+  <p class="m-0 font-semibold">Обращения в базе клиентов: ${s.count}${s.mentions ? ` <span class="font-normal text-gray-500 dark:text-gray-400">(+${s.mentions} упоминаний названия)</span>` : ''}</p>
+  <p class="m-0 mt-1 text-xs text-gray-600 dark:text-gray-400">Период: ${escapeHtml(d(s.first))} — ${escapeHtml(d(s.last))}${s.afterAdded != null ? ` · после внесения в список: ${s.afterAdded}` : ''}${s.inns.length ? ` · ИНН в обращениях: ${escapeHtml(s.inns.join(', '))}` : ''}${via ? ` · найдено по: ${escapeHtml(via)}` : ''}</p>
+  ${rows ? `<ol class="list-none m-0 mt-2 p-0">${rows}</ol>` : ''}
+  ${histInn ? `<button type="button" class="mt-2 px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" data-ca-open-history="${escapeHtml(histInn)}">Вся история обращений</button>` : ''}
+</div>`;
+}
+
 /** Все записи раздела из кэша набора данных (для аналитики). */
 export function getClientAnalyticsRecordsForInsights(opts = {}) {
     return loadClientAnalyticsDataset(opts);
@@ -1591,8 +1630,18 @@ const CA_LIST_DELETE_BTN_CLASS = [
  * @param {number} level 1|2|3
  * @returns {string}
  */
-function frogBlacklistBadgeHtml(level) {
-    const { short } = frogBadgeLabelsForLevel(level);
+/** Уровень жабы по телефонам записей (если ИНН в списке нет, а телефон — есть). */
+function frogLevelByPhones(records) {
+    const map = caCache.blPhoneLevels;
+    if (!map || !map.size) return 0;
+    let lv = 0;
+    for (const r of records || []) for (const p of (r && r.phones) || []) lv = Math.max(lv, map.get(p) || 0);
+    return lv;
+}
+
+function frogBlacklistBadgeHtml(level, via = 'inn') {
+    const base = frogBadgeLabelsForLevel(level).short;
+    const short = via === 'phone' ? `${base} · по тел.` : base;
     let badgeCls = 'bg-green-100 text-green-800 dark:bg-green-800/80 dark:text-green-200';
     if (level === 2) {
         badgeCls = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/80 dark:text-yellow-200';
@@ -1610,7 +1659,7 @@ function frogBlacklistBadgeHtml(level) {
  * @param {{ metaId?: string, chipsHtml?: string } | null} [org]
  * @returns {HTMLElement}
  */
-function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null) {
+function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null, blVia = 'inn') {
     const el = document.createElement('article');
     const bl =
         typeof blacklistLevel === 'number' && blacklistLevel >= 1 && blacklistLevel <= 3
@@ -1642,16 +1691,17 @@ function createRecordCardElement(rec, viewMode, blacklistLevel = 0, org = null) 
         title = 'Запись';
         titlePlain = 'Запись';
     }
+    const viaAria = blVia === 'phone' ? ' Совпадение по телефону.' : '';
     if (bl > 0) {
-        el.setAttribute('aria-label', `${titlePlain}. ${frogBadgeLabelsForLevel(bl).aria}.`);
+        el.setAttribute('aria-label', `${titlePlain}. ${frogBadgeLabelsForLevel(bl).aria}.${viaAria}`);
     }
     const frogBadge =
-        bl > 0 && rec.inn
+        bl > 0 && rec.inn && blVia !== 'phone'
             ? `<button type="button" class="inline-flex items-center p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded" data-action="open-blacklist-by-inn" data-inn="${escapeHtml(rec.inn)}" title="Открыть запись в черном списке по ИНН">${frogBlacklistBadgeHtml(
                   bl,
               )}</button>`
             : bl > 0
-              ? frogBlacklistBadgeHtml(bl)
+              ? frogBlacklistBadgeHtml(bl, blVia)
               : '';
     const phones = (rec.phones || []).length
         ? escapeHtml(rec.phones.map(formatRussianPhoneForDisplay).join(', '))
@@ -1725,7 +1775,7 @@ function formatClientAnalyticsRuDateTime(iso) {
  * @param {{ metaId?: string, chipsHtml?: string } | null} [org]
  * @returns {HTMLElement}
  */
-function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = null) {
+function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = null, blVia = 'inn') {
     const rec = stack.records[0];
     const n = stack.records.length;
     const el = document.createElement('article');
@@ -1764,7 +1814,7 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
     if (bl > 0) {
         el.setAttribute(
             'aria-label',
-            `${titlePlain}. ${pluralRuAppeals(n)}. ${frogBadgeLabelsForLevel(bl).aria}.`,
+            `${titlePlain}. ${pluralRuAppeals(n)}. ${frogBadgeLabelsForLevel(bl).aria}.${blVia === 'phone' ? ' Совпадение по телефону.' : ''}`,
         );
     } else {
         el.setAttribute(
@@ -1773,12 +1823,12 @@ function createInnStackCardElement(stack, viewMode, blacklistLevel = 0, org = nu
         );
     }
     const frogBadge =
-        bl > 0 && stack.innKey
+        bl > 0 && stack.innKey && blVia !== 'phone'
             ? `<button type="button" class="inline-flex items-center p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded" data-action="open-blacklist-by-inn" data-inn="${escapeHtml(
                   rec.inn || stack.innKey,
               )}" title="Открыть запись в черном списке по ИНН">${frogBlacklistBadgeHtml(bl)}</button>`
             : bl > 0
-              ? frogBlacklistBadgeHtml(bl)
+              ? frogBlacklistBadgeHtml(bl, blVia)
               : '';
     const uniq = (key) => [...new Set(stack.records.flatMap((r) => (r && Array.isArray(r[key]) ? r[key] : [])))];
     const allPhones = uniq('phones');
@@ -1983,6 +2033,7 @@ export async function renderClientAnalyticsPage(opts = {}) {
             const blEntries = await getAllFromIndexedDB('blacklistedClients');
             blacklistLevelByInn = buildMaxBlacklistLevelByInnMap(blEntries);
             caCache.blLevels = blacklistLevelByInn;
+            caCache.blPhoneLevels = buildFrogPhoneLevelMap(blEntries);
         } catch (err) {
             console.warn(
                 '[client-analytics] не удалось загрузить чёрный список для перекрёстной сверки',
@@ -2144,18 +2195,24 @@ export async function renderClientAnalyticsPage(opts = {}) {
                 }
                 const u = item.u;
                 if (u.type === 'inn') {
+                    const byInn = getBlacklistLevelForClientInn(u.innKey, blacklistLevelByInn);
+                    const byPhone = byInn ? 0 : frogLevelByPhones(u.records);
                     el = createInnStackCardElement(
                         { innKey: u.innKey, records: u.records },
                         mode,
-                        getBlacklistLevelForClientInn(u.innKey, blacklistLevelByInn),
+                        byInn || byPhone,
                         orgPayloadForUnit(u),
+                        byPhone ? 'phone' : 'inn',
                     );
                 } else {
+                    const byInn = getBlacklistLevelForClientInn(u.record.inn, blacklistLevelByInn);
+                    const byPhone = byInn ? 0 : frogLevelByPhones([u.record]);
                     el = createRecordCardElement(
                         u.record,
                         mode,
-                        getBlacklistLevelForClientInn(u.record.inn, blacklistLevelByInn),
+                        byInn || byPhone,
                         orgPayloadForUnit(u),
+                        byPhone ? 'phone' : 'inn',
                     );
                 }
                 decorateCardForView(el, mode);
@@ -2747,10 +2804,13 @@ export function initClientAnalyticsUi() {
 
     setClientAnalyticsDashboardApi({
         loadRecords: (o) => loadClientAnalyticsDataset(o),
-        loadBlacklistInns: async () => {
-            if (!State.db) return [];
-            const rows = await getAllFromIndexedDB('blacklistedClients');
-            return rows.map((r) => normalizeInnForBlacklistLookup(r && r.inn)).filter(Boolean);
+        loadBlacklistEntries: async () => (State.db ? getAllFromIndexedDB('blacklistedClients') : []),
+        openBlacklistEntry: async (id) => {
+            const m = await import('./blacklist.js');
+            await m.showBlacklistDetailModal(id);
+            // поверх окна аналитики
+            const bm = document.getElementById('blacklistDetailModal');
+            if (bm) bm.style.zIndex = '70';
         },
         openInnHistory: (inn) => showClientAnalyticsInnHistoryModal(inn),
         reprocess: async (onProgress) => {

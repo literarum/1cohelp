@@ -56,6 +56,7 @@ import {
 import { describeInn, kppReason, regionByCode } from './client-analytics-registry.js';
 import { innConfidence } from './client-analytics-parse.js';
 import { editDistance } from './search-text-utils.js';
+import { computeFrogInsights } from './client-analytics-frogs.js';
 
 export const INSIGHTS_VERSION = 1;
 
@@ -245,7 +246,8 @@ export function computeInsights(records, opts = {}) {
 
     // ---------------- клиенты ----------------
     progress('Клиенты, концентрация, связи', 52);
-    const clients = computeClients(list, recInfo, innCounts, innRecs, opts.blacklistInns || []);
+    const blacklistInns = opts.blacklistInns || (opts.blacklistEntries || []).map((e) => String((e && e.inn) || '').replace(/\D/g, '')).filter(Boolean);
+    const clients = computeClients(list, recInfo, innCounts, innRecs, blacklistInns);
 
     // ---------------- текст ----------------
     progress('Лингвистика: частоты, Ципф, коллокации', 60);
@@ -353,6 +355,21 @@ export function computeInsights(records, opts = {}) {
     progress('Почти-дубликаты (MinHash + LSH)', 86);
     const duplicates = computeDuplicates(list, docTokens);
 
+    // ---------------- жабы (чёрный список) ----------------
+    progress('Сверка с чёрным списком («жабы»)', 91);
+    const frogsRaw = computeFrogInsights(list, recInfo, opts.blacklistEntries || [], { docTokens, displayForm, now });
+    const frogPer = frogsRaw.perRecord;
+    const frogIndex = frogsRaw.index;
+    const frogEntryIds = frogsRaw.entryIds;
+    delete frogsRaw.perRecord;
+    delete frogsRaw.index;
+    delete frogsRaw.entryIds;
+    const frogs = frogsRaw;
+    if (frogs.clientLevels) {
+        for (const c of clients.top) c.frogLevel = frogs.clientLevels[c.inn] || 0;
+        for (const g of clients.linkedGroups) g.frogs = g.inns.filter((x) => frogs.clientLevels[x]).length;
+    }
+
     // ---------------- индекс слов → записи для проваливания ----------------
     progress('Индексы для просмотра записей', 95);
     const termIndex = {};
@@ -365,7 +382,9 @@ export function computeInsights(records, opts = {}) {
     const perRecord = {};
     for (let i = 0; i < n; i++) {
         const x = recInfo[i];
+        const fm = frogPer[i];
         perRecord[x.id] = { t: x.topics, i: x.intent, c: clusters.assignById ? clusters.assignById[x.id] : -1, u: x.urgency, g: x.negativity, d: x.day, s: x.dateSource };
+        if (fm && fm.entries.length) perRecord[x.id].f = { l: fm.level, w: fm.weakLevel, v: fm.via, e: fm.entries };
     }
     delete clusters.assignById;
 
@@ -388,6 +407,8 @@ export function computeInsights(records, opts = {}) {
         topIntent: topics.intents[0] || null,
         urgent: urgentIds.length,
         negative: negativeIds.length,
+        frogAppeals: frogs.summary ? frogs.summary.appeals : 0,
+        frogClients: frogs.summary ? frogs.summary.clients : 0,
     };
 
     progress('Готово', 100);
@@ -403,7 +424,8 @@ export function computeInsights(records, opts = {}) {
         topics,
         clusters,
         duplicates,
-        index: { topic: topicIndex, intent: intentIndex, term: termIndex, urgent: urgentIds, negative: negativeIds, quality: quality.index },
+        frogs,
+        index: { topic: topicIndex, intent: intentIndex, term: termIndex, urgent: urgentIds, negative: negativeIds, quality: quality.index, frog: frogIndex, frogEntry: frogEntryIds },
         perRecord,
         df: Object.fromEntries([...df.entries()].filter((e) => e[1] >= 2)),
         labels: { topics: TOPIC_LABELS, intents: INTENT_LABELS },
