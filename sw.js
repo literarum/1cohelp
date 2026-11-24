@@ -7,10 +7,10 @@
 'use strict';
 
 /** @type {string} */
-const ASSET_QUERY_VERSION = '20261124-client-forecast';
+const ASSET_QUERY_VERSION = '20261124-client-calendar';
 /** Совпадает с query у main.css в index.html (иначе precache не совпадает с документом). */
-const MAIN_CSS_QUERY_VERSION = '20261124-client-forecast';
-const VERSION = `20261124-client-forecast`;
+const MAIN_CSS_QUERY_VERSION = '20261124-client-calendar';
+const VERSION = `20261124-client-calendar`;
 const CACHE_APP = `copilot-app-${VERSION}`;
 
 /**

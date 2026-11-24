@@ -9,7 +9,16 @@
 import { cleanDisplayText } from './client-analytics-text.js';
 
 /** Версия разборщика: записи со старой версией можно переобработать из исходного текста файла. */
-export const CA_PARSER_VERSION = 2;
+export const CA_PARSER_VERSION = 3;
+
+/**
+ * КПП: NNNN PP XXX, где P — цифра или ЗАГЛАВНАЯ латинская буква A–Z
+ * (приказ ФНС от 26.06.2025 № ЕД-7-14/559@). Регистрозависимо: «7701ab001» — не КПП.
+ */
+const KPP_SRC = '\\d{4}[\\dA-Z]{2}\\d{3}';
+const KPP_STANDALONE_RE = new RegExp(`(?<![\\dA-Za-z])(${KPP_SRC})(?![\\dA-Za-z])`);
+const KPP_STANDALONE_RE_G = new RegExp(KPP_STANDALONE_RE.source, 'g');
+const KPP_LABELED_RE = new RegExp(`(?:КПП|Кпп|кпп|KPP|kpp)\\s*[:№]?\\s*(${KPP_SRC})(?![\\dA-Za-z])`);
 
 const INN_10_COEFF = [2, 4, 10, 3, 5, 9, 4, 6, 8];
 const INN_12_COEFF_11 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8];
@@ -85,9 +94,15 @@ export function normalizeRussianPhone(raw) {
  * @param {string} text
  * @returns {string[]}
  */
+const EMAIL_SRC =
+    '(?<![\\p{L}\\d._%+-])[\\p{L}\\d][\\p{L}\\d._%+-]*@[\\p{L}\\d](?:[\\p{L}\\d-]*[\\p{L}\\d])?(?:\\.[\\p{L}\\d](?:[\\p{L}\\d-]*[\\p{L}\\d])?)*\\.(?:\\p{L}{2,}|xn--[a-z\\d-]+)(?![\\p{L}\\d-])';
+const EMAIL_RE_G = new RegExp(EMAIL_SRC, 'giu');
+
 export function extractEmailCandidates(text) {
     if (!text || typeof text !== 'string') return [];
-    const re = /\b[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
+    // латиница и кириллица (EAI, домены .рф), а также punycode-домены (xn--…)
+    const re = EMAIL_RE_G;
+    re.lastIndex = 0;
     const out = [];
     const seen = new Set();
     let m;
@@ -120,6 +135,20 @@ export function normalizeQuestionAfterParse(question, inn) {
         if (d && d[1] === inn) return '';
     }
     return q;
+}
+
+/**
+ * Добавочные номера: «+7 (495) 123-45-67 доб. 1234» → { '74951234567': '1234' }.
+ * @param {string} text
+ */
+export function extractPhoneExtensions(text) {
+    const out = {};
+    const re = /(\+?\d[\d\s\-().]{7,}\d)\s*,?\s*(?:доб(?:авочный)?|вн(?:утр(?:енний)?)?|ext)\.?\s*[:№]?\s*(\d{1,6})(?!\d)/giu;
+    for (const m of String(text || '').matchAll(re)) {
+        const n = normalizeRussianPhone(m[1]);
+        if (n) out[n] = m[2];
+    }
+    return out;
 }
 
 /**
@@ -181,6 +210,17 @@ export function extractPhoneCandidates(text) {
         tryAdd(pm[1], pm.index);
     }
 
+    // иностранные номера в международном формате (+375, +380, +998…): храним как «+цифры»
+    for (const im of text.matchAll(/\+(?!7)[1-9][\d\s\-()]{6,18}\d/g)) {
+        const digits = im[0].replace(/\D/g, '');
+        if (digits.length < 8 || digits.length > 15) continue;
+        const key = `+${digits}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            out.push(key);
+        }
+    }
+
     return out;
 }
 
@@ -190,12 +230,12 @@ export function extractPhoneCandidates(text) {
  */
 export function extractKppNearInn(windowText) {
     if (!windowText) return null;
-    const labeled = windowText.match(/(?:КПП|kpp)[\s:]*(\d{9})\b/i);
+    const labeled = windowText.match(KPP_LABELED_RE);
     if (labeled) return labeled[1];
     const afterInn = windowText.split(/ИНН|inn/i);
     if (afterInn.length > 1) {
         const tail = afterInn.slice(1).join(' ');
-        const m = tail.match(/\b(\d{9})\b/);
+        const m = tail.match(KPP_STANDALONE_RE);
         if (m) return m[1];
     }
     return null;
@@ -245,7 +285,8 @@ export function extractKppFromBlock(blockText) {
     const labeled = extractKppNearInn(blockText);
     if (labeled) return labeled;
     const spans = reservedDigitSpansForKpp(blockText);
-    const re = /\b(\d{9})\b/g;
+    const re = KPP_STANDALONE_RE_G;
+    re.lastIndex = 0;
     let m;
     while ((m = re.exec(blockText)) !== null) {
         if (!overlapsSpan(m.index, 9, spans)) {
@@ -393,10 +434,9 @@ export function extractQuestionFromAppealBody(text, inn, kpp, phones) {
         if (!line) return false;
         if (/^ИНН\s*[\d\s]+$/i.test(line)) return false;
         if (/^инн\s*[:\s]*\d{10,12}\s*$/i.test(line)) return false;
-        if (/^КПП\s*\d{9}/i.test(line)) return false;
+        if (/^КПП\s*[:№]?\s*\d{4}[\dA-Z]{2}\d{3}/i.test(line)) return false;
         // строка только из реквизитов: «ИНН 7707083893 КПП 770701001», «ИНН: …, КПП: …»
-        if (/^(?:(?:ИНН|КПП|ОГРНИП|ОГРН)\s*[:№]?\s*\d{9,15}[\s,;/]*)+$/i.test(line)) return false;
-        if (/^кпп\s*[:\s]*\d{9}\s*$/i.test(line)) return false;
+        if (/^(?:(?:ИНН|КПП|ИНН\s*\/\s*КПП|ОГРНИП|ОГРН)\s*[:№]?\s*(?:\d{9,15}|\d{4}[\dA-Z]{2}\d{3})(?:\s*\/\s*\d{4}[\dA-Z]{2}\d{3})?[\s,;/]*)+$/i.test(line)) return false;
         if (/^(?:тел|телефон|моб|phone)\s*[.:]?\s*[\d\s+()-]+$/i.test(line)) return false;
         if (innEsc && new RegExp(`^\\s*${innEsc}\\s*$`).test(line.replace(/\s/g, ''))) return false;
         if (kpp && new RegExp(`^\\s*${kpp}\\s*$`).test(line)) return false;
@@ -755,7 +795,7 @@ function validHm(h, mi) {
 export function findDatesInText(text) {
     const s = String(text || '');
     const out = [];
-    const timeTail = '(?:[ ,T]+(?:в\\s*)?(\\d{1,2})[:.](\\d{2})(?::(\\d{2}))?(?!\\d))?';
+    const timeTail = '(?:\\s*(?:г\\.|года?))?(?:[ ,T]+(?:в\\s*)?(\\d{1,2})[:.](\\d{2})(?::(\\d{2}))?(?!\\d))?';
     const reDmy = new RegExp(`(?<![\\d.])(\\d{1,2})([./-])(\\d{1,2})\\2(\\d{4}|\\d{2})(?![\\d])${timeTail}`, 'g');
     const reIso = new RegExp(`(?<!\\d)(\\d{4})-(\\d{2})-(\\d{2})(?!\\d)${timeTail}`, 'g');
     const reRu = new RegExp(
@@ -870,7 +910,7 @@ export function extractAllInns(text) {
 }
 
 const PHONE_RUN_RE = /\+?\d[\d\s\-().]{7,}\d/g;
-const EMAIL_RE = /\b[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+const EMAIL_RE = new RegExp(EMAIL_SRC, 'gu');
 
 /**
  * Финальная чистка текста вопроса: убирает телефоны в любом написании («+7 (903) 123-45-67»),
@@ -888,9 +928,20 @@ export function scrubQuestionText(question, ctx = {}) {
         return n && phoneSet.has(n) ? ' ' : whole;
     });
     q = q.replace(
-        new RegExp(`(?:(?<![\\p{L}])(?:e-?mail|email|почта|эл\\.?\\s?почта|эл\\.?\\s?адрес)\\s*[:№]?\\s*)?${EMAIL_RE.source}`, 'giu'),
+        new RegExp(`(?:(?<![\\p{L}])(?:e-?mail|email|mail|почта|эл\\.?\\s?почта|эл\\.?\\s?адрес)\\s*[:№]?\\s*)?${EMAIL_RE.source}`, 'giu'),
         ' ',
     );
+    // иностранные номера (+375 …), сохранённые как «+цифры»
+    for (const p of ctx.phones || []) {
+        if (!String(p).startsWith('+')) continue;
+        q = q.replace(new RegExp(`${PH_LABEL}\\+[\\d\\s\\-()]{6,22}\\d`, 'giu'), (run) => (run.replace(/\D/g, '').endsWith(p.slice(1)) ? ' ' : run));
+    }
+    if ((ctx.phones || []).length) {
+        // остаток добавочного номера после удалённого телефона
+        q = q.replace(/(?<![\p{L}])(?:доб(?:авочный)?|вн(?:утр(?:енний)?)?|ext)\.?\s*[:№]?\s*\d{1,6}(?!\d)/giu, ' ');
+    }
+    // «ИНН/КПП 7707083893/770701001» после удаления номеров оставлял «ИНН/КПП /»
+    q = q.replace(/(?<![\p{L}])инн\s*\/\s*кпп\s*[:№]?\s*(?:\/\s*)?(?=$|[\s,;])/giu, ' ');
     for (const o of ctx.ogrn || []) q = q.split(o).join(' ');
     if (ctx.dateRaw) {
         const idx = q.indexOf(ctx.dateRaw);
@@ -938,6 +989,8 @@ export function enrichParsedRecord(rec, block) {
     rec.sourceText = cleanDisplayText(src).slice(0, 20000);
     rec.inns = inns;
     rec.ogrn = ogrn;
+    const ext = extractPhoneExtensions(src);
+    if (Object.keys(ext).length) rec.phoneExt = ext;
     rec.appealDate = when ? when.date : null;
     rec.appealTime = when ? when.time : null;
     rec.appealDateSource = when ? 'block' : null;

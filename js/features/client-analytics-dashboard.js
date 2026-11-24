@@ -556,6 +556,11 @@ function conclusions(I) {
         const a = I.time.anomalies[0];
         out.push(['warning', `Самый сильный всплеск: ${fmt.date(a.date)} — ${fmt.int(a.count)} обращений (робастный z = ${fmt.num1(a.z)}). Всего всплесков: ${I.time.anomalies.length}.`]);
     }
+    const DE = I.time.deadlineEffect;
+    if (DE && !DE.insufficient && DE.significant && DE.farMean) {
+        out.push(['warning', `За 0–2 рабочих дня до срока отчётности обращений в ×${fmt.num2(DE.nearMean / DE.farMean)} больше, чем в остальные рабочие дни (${pval(DE.p)}) — закладывайте смены под 25-е числа.`]);
+    }
+    if (I.time.dips && I.time.dips.length) out.push(['warning', `Провалов в рабочие дни: ${I.time.dips.length} (например, ${fmt.date(I.time.dips[0].date)}) — проверьте, все ли выгрузки загружены.`]);
     const c = I.clients;
     if (c.total >= 10) {
         out.push(['info', `Концентрация: 20% самых активных клиентов дают ${fmt.pct(c.top20pctShare, 0)} обращений (Джини ${fmt.num2(c.gini)}). Повторно обращались ${fmt.pct(o.repeatRate, 0)} клиентов.`]);
@@ -630,7 +635,7 @@ function renderTime(I) {
         .join('');
     const anomalies = new Set((T.anomalies || []).map((a) => a.date));
     let pts;
-    if (st.grain === 'day') pts = T.daily.map((d) => ({ x: d.date, y: d.count, smooth: d.ma7, flag: anomalies.has(d.date), tip: `${fmt.date(d.date)} (${WEEKDAYS[(new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7]}): ${fmt.int(d.count)} · среднее за 7 дн. ${fmt.num1(d.ma7)}${anomalies.has(d.date) ? ` · всплеск, z = ${fmt.num1(d.z)}` : ''}`, drill: `day:${d.date}` }));
+    if (st.grain === 'day') pts = T.daily.map((d) => ({ x: d.date, y: d.count, smooth: d.ma7, flag: anomalies.has(d.date), muted: d.dk === 'weekend' || d.dk === 'holiday', tip: `${fmt.date(d.date)} (${WEEKDAYS[(new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7]}${d.hol ? `, ${d.hol}` : d.dk === 'workingSaturday' ? ', рабочая суббота' : ''}): ${fmt.int(d.count)} · среднее за 7 дн. ${fmt.num1(d.ma7)}${anomalies.has(d.date) ? ` · всплеск, z = ${fmt.num1(d.z)}` : ''}`, drill: `day:${d.date}` }));
     else if (st.grain === 'week') pts = T.weekly.map((w) => ({ x: w.week, y: w.count, muted: w.partial, tip: `неделя с ${fmt.date(w.week)}: ${fmt.int(w.count)}${w.partial ? ' (неполная неделя)' : ''}`, drill: `week:${w.week}` }));
     else pts = T.monthly.map((m) => ({ x: m.month, y: m.count, tip: `${fmt.month(m.month)}: ${fmt.int(m.count)}`, drill: `month:${m.month}` }));
     const chart = timeSeries(pts, { height: 240, xFmt: st.grain === 'month' ? fmt.month : fmt.date, smoothLabel: 'скользящее среднее за 7 дней' });
@@ -661,8 +666,30 @@ function renderTime(I) {
     } else {
         parts.push(section('По часам', '<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: время обращения указано менее чем у 20 записей.</p>'));
     }
-    if (T.anomalies && T.anomalies.length) {
-        parts.push(section('Всплески', table(['Дата', 'Обращений', 'Робастный z'], T.anomalies.map((a) => ({ cells: [fmt.date(a.date), fmt.int(a.count), fmt.num1(a.z)], drill: `day:${a.date}` })), { numeric: [1, 2] })));
+    const DK = { workday: 'рабочий', weekend: 'выходной', holiday: 'праздник', workingSaturday: 'рабочая суббота' };
+    const anomTable = (rows) =>
+        table(
+            ['Дата', 'День', 'Обращений', 'Робастный z', 'Рядом срок (≤ 3 раб. дн.)'],
+            rows.map((a) => ({ cells: [fmt.date(a.date), `${DK[a.dk] || ''}${a.hol ? ` · ${a.hol}` : ''}`, fmt.int(a.count), fmt.num1(a.z), a.deadline ? `${fmt.date(a.deadlineDate)}: ${a.deadline}` : a.payment ? 'срок уплаты ЕНП' : '—'], drill: `day:${a.date}` })),
+            { numeric: [2, 3] },
+        );
+    if (T.anomalies && T.anomalies.length) parts.push(section('Всплески', anomTable(T.anomalies), { wide: true, note: 'z считается отдельно для рабочих и нерабочих дней (производственный календарь РФ).' }));
+    if (T.dips && T.dips.length) parts.push(section('Провалы в рабочие дни', anomTable(T.dips), { wide: true, note: 'Рабочий день с аномально малым числом обращений: z < −3,5 или меньше четверти обычного уровня соседних рабочих дней. Возможно, обращения за этот день не попали в выгрузку.' }));
+    if (T.deadlineProfile && T.deadlineProfile.length) {
+        const E = T.deadlineEffect;
+        const S = T.spikesNearDeadline;
+        const effect = E.insufficient
+            ? '<p class="ca-viz-empty">НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА: мало рабочих дней рядом со сроками.</p>'
+            : `<div class="ca-ins-tiles">${statTile('За 0–2 раб. дня до срока', fmt.num1(E.nearMean), `в среднем за рабочий день (${E.nearDays} дн.)`)}${statTile('В остальные рабочие дни', fmt.num1(E.farMean), `${E.farDays} дн.`)}${statTile('Различие', E.farMean ? `×${fmt.num2(E.nearMean / E.farMean)}` : '—', `U-тест: ${pval(E.p)}${E.significant ? ' · значимо' : ' · незначимо'}`, { tone: E.significant && E.nearMean > E.farMean ? 'warning' : '' })}${S.spikes ? statTile('Всплески у сроков', `${S.hits} из ${S.spikes}`, `ожидалось бы ${fmt.pct(S.baseShare, 0)} случайно · ${pval(S.p)}`) : ''}</div>`;
+        const prof = columns(
+            T.deadlineProfile.map((g) => ({ label: g.gap >= 10 ? '10+' : String(g.gap), value: Math.round(g.mean * 10) / 10, tip: `${g.gap >= 10 ? '10 и более' : g.gap} раб. дн. до срока отчётности: в среднем ${fmt.num1(g.mean)} (×${fmt.num2(g.ratio)} к среднему рабочему дню; ${g.days} дн.)` })),
+            { height: 170, valueFmt: fmt.num1, ariaLabel: 'Среднее число обращений за рабочий день по числу рабочих дней до срока отчётности' },
+        );
+        parts.push(section('Нагрузка и сроки отчётности', `${effect}<h4 class="ca-ins-subtitle">Среднее обращений за рабочий день по числу рабочих дней до ближайшего срока (25-е, с переносом)</h4>${prof}`, { wide: true, note: 'Сроки: уведомления и отчётность — 25-е, уплата ЕНП — 28-е, квартальная отчётность (НДС, РСВ, 6-НДФЛ, ЕФС-1) — 25-е месяца после квартала; перенос на ближайший рабочий день по производственному календарю.' }));
+    }
+    if (T.holidayStats) {
+        const H = T.holidayStats;
+        parts.push(section('Рабочие и нерабочие дни', table(['Тип дня', 'Дней', 'Среднее обращений'], [['Рабочий', 'workday'], ['Рабочая суббота', 'workingSaturday'], ['Выходной', 'weekend'], ['Праздник / перенесённый выходной', 'holiday']].filter(([, k]) => H[k].days).map(([l, k]) => ({ cells: [l, fmt.int(H[k].days), H[k].mean != null ? fmt.num1(H[k].mean) : '—'] })), { numeric: [1, 2] }), { note: T.calendarKnownShare < 1 ? `Производственный календарь известен для 2024–2027 гг.; для остальных дат (${fmt.pct(1 - T.calendarKnownShare, 0)} ряда) праздники не учитываются.` : 'Производственный календарь РФ 2024–2027 (постановления о переносе выходных).' }));
     }
     return parts.join('');
 }
@@ -676,7 +703,8 @@ function forecastHtml(F, I) {
         y: Math.round(d.value * 10) / 10,
         lo: d.lo80,
         hi: d.hi80,
-        tip: `${fmt.date(d.date)} (${WEEKDAYS[(new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7]}): ≈ ${fmt.num1(d.value)} · 80%: ${fmt.num1(d.lo80)}–${fmt.num1(d.hi80)} · 95%: ${fmt.num1(d.lo95)}–${fmt.num1(d.hi95)}`,
+        muted: d.dayKind === 'holiday' || d.dayKind === 'weekend',
+        tip: `${fmt.date(d.date)} (${WEEKDAYS[(new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7]}${d.dayName ? `, ${d.dayName}` : ''}): ≈ ${fmt.num1(d.value)} · 80%: ${fmt.num1(d.lo80)}–${fmt.num1(d.hi80)} · 95%: ${fmt.num1(d.lo95)}–${fmt.num1(d.hi95)}`,
     }));
     const warn = I.overview.dateReliable < 0.5 ? '<p class="ca-ins-card-note">⚠ У большинства записей нет даты обращения — ряд построен по датам загрузки, прогноз описывает загрузки файлов, а не поток обращений.</p>' : '';
     const cands = table(
@@ -686,7 +714,7 @@ function forecastHtml(F, I) {
     );
     return `${warn}<div class="ca-ins-tiles">${statTile('Следующие 7 дней', `≈ ${fmt.int(F.nextWeek.value)}`, `80%: ${fmt.int(F.nextWeek.lo80)}–${fmt.int(F.nextWeek.hi80)} (по ${F.nextWeek.samples} неделям бэктеста)`)}${statTile('Точность (MASE)', fmt.num2(F.mase), F.quality, { tip: 'MAE модели / MAE прогноза «как неделю назад». < 1 — модель полезнее наивного прогноза' })}${statTile('Калибровка 80%-интервала', Number.isFinite(F.coverage80) ? fmt.pct(F.coverage80, 0) : '—', 'доля факта внутри интервала на бэктесте (идеал ≈ 80%)')}</div>
 ${timeSeries(pts, { height: 200, ariaLabel: 'Прогноз обращений на 14 дней с 80% интервалом', band: true, smoothLabel: '' })}
-<h4 class="ca-ins-subtitle">Сравнение моделей на скользящем бэктесте (${F.origins} точек отсчёта, горизонт ${F.horizon} дн.)</h4>${cands}`;
+${F.calendar ? `<p class="ca-ins-card-note">Учтён производственный календарь: праздники в истории заменены типичным уровнем, на праздники горизонта применён коэффициент ×${fmt.num2(F.calendar.holidayRatio ?? 1)} (${escapeHtml(F.calendar.holidayRatioSource)}).</p>` : ''}<h4 class="ca-ins-subtitle">Сравнение моделей на скользящем бэктесте (${F.origins} точек отсчёта, горизонт ${F.horizon} дн.)</h4>${cands}`;
 }
 
 function renderClients(I) {
@@ -731,6 +759,7 @@ function renderClients(I) {
         section('Кривая Лоренца', lorenzChart(C.lorenz, C.gini), { note: 'Чем дальше кривая от диагонали, тем сильнее обращения сосредоточены у немногих клиентов.' }),
         section('Сколько раз обращались клиенты', columns(C.repeatBuckets.map((b, i) => ({ label: b.label, value: b.clients, drill: `repeat:${i}`, tip: `${b.label} обращ.: ${fmt.int(b.clients)} клиентов` })), { height: 200, ariaLabel: 'Распределение клиентов по числу обращений' })),
         section('Регион по ИНН', barsH(C.regions.slice(0, 15).map((r) => ({ label: r.name, value: r.count, drill: `region:${r.name}` })), { showShare: C.total }), { note: 'Регион, где присвоен ИНН (при переезде ИНН не меняется).' }),
+        section('Телефоны: типы номеров', barsH(C.phoneKinds.map((k) => ({ label: k.name, value: k.count })), { showShare: C.phonesTotal || 1, empty: 'Телефонов нет' }), { note: `Уникальных номеров: ${fmt.int(C.phonesTotal)}. «+7 6xx/7xx» — Казахстан (общая зона +7). Номера 8-800 — горячие линии: в связях клиентов и сверке с жабами не используются.` }),
         section('Регион и причина по КПП', `${barsH(C.kppRegions.slice(0, 8).map((r) => ({ label: r.name, value: r.count })))}<h4 class="ca-ins-subtitle">Причина постановки на учёт (5–6 знаки КПП)</h4>${barsH(C.kppReasons.map((r) => ({ label: r.name, value: r.count })))}`),
         section('Самые активные клиенты', top, { wide: true }),
         section('Клиенты с общими контактами', groups + hubs, { wide: true, note: 'Компоненты связности графа «ИНН — телефон/почта» (система непересекающихся множеств).' }),
@@ -1204,6 +1233,9 @@ function renderMethod() {
         ['Множественные сравнения', 'Когда проверяется много гипотез сразу (темы, намерения, слова, признаки жаб), p-значения корректируются процедурой Бенджамини — Хохберга (контроль доли ложных открытий): тема или слово помечается значимым, только если q < 0,05 (для слов — q < 0,01). Без поправки при 25 проверках 1–2 ложные «находки» ожидаются просто случайно.'],
         ['Прогноз', 'Три модели — «как неделю назад», среднее того же дня недели за 4 недели, Холт — Винтерс с затухающим трендом; выбирается лучшая по MASE на скользящем бэктесте (8 точек отсчёта, горизонт 14 дней). Интервалы — эмпирические квантили ошибок бэктеста; рядом показана их фактическая калибровка.'],
         ['Сравнение периодов', 'Темп — условный биномиальный тест (при равном темпе доля обращений периода A равна доле его дней) с квазипуассоновской поправкой z/√φ, где φ — индекс дисперсии дневных объёмов; доли тем, намерений и сигналов — z-тест с поправкой Бенджамини — Хохберга; слова — G² с поправкой; клиенты — новые, ушедшие и оставшиеся по ИНН.'],
+        ['Календарь', 'Производственный календарь РФ 2024–2027 (постановления № 1314, 1335, 1466, 1187): праздники, перенесённые выходные, рабочие субботы. Всплески и провалы ищутся отдельно среди рабочих и нерабочих дней. Прогноз учится на ряду, где праздники заменены типичным уровнем, и применяет к будущим праздникам коэффициент, измеренный по прошлым. Для дат вне 2024–2027 праздники не учитываются.'],
+        ['Сроки отчётности', 'Учитываются только подтверждённые общие правила: уведомления и отчётность — 25-е, уплата ЕНП — 28-е, квартальные НДС, РСВ, 6-НДФЛ, ЕФС-1 (раздел 2) — 25-е месяца после квартала, годовой 6-НДФЛ — 25 февраля, годовая декларация по прибыли — 25 марта; с переносом на ближайший рабочий день. Эффект сроков — U-тест «0–2 рабочих дня до срока против остальных»; совпадение всплесков со сроками — точный биномиальный тест против доли таких дней в календаре.'],
+        ['Телефоны', 'Российские номера нормализуются к 11 цифрам (7XXXXXXXXXX), иностранные хранятся как «+код…». «+7 6xx/7xx» — Казахстан. 8-800 — горячие линии: не связывают клиентов и не используются в сверке с чёрным списком. Добавочный («доб. 1234») сохраняется отдельно.'],
         ['Ограничения', 'Это классическая статистика и словари, а не языковая модель: смысл вне словаря и вне текстов базы не «понимается». При малых выборках выводы помечаются «НЕТ ДАННЫХ ДЛЯ НАДЁЖНОГО ВЫВОДА».'],
     ];
     return section('Как считается каждый показатель', table(['Что', 'Метод'], rows.map((c) => ({ cells: c }))), { wide: true });
@@ -1397,6 +1429,9 @@ function regionNameForInn(inn) {
 
 function openDrill(key, label) {
     if (!key) return;
+    // куда вернуть фокус после закрытия списка (клавиатурная навигация)
+    const active = document.activeElement;
+    if (active && active !== document.body && !document.getElementById('caInsDrawer')?.contains(active)) st.drillReturn = active;
     const { ids, title, highlight } = resolveDrill(key);
     st.drill = { key, ids, title: title || label, highlight };
     st.drillPage = 1;
@@ -1405,11 +1440,15 @@ function openDrill(key, label) {
 
 function closeDrawer() {
     const d = document.getElementById('caInsDrawer');
+    const wasOpen = d && !d.hidden;
     if (d) {
         d.hidden = true;
         d.innerHTML = '';
     }
     st.drill = null;
+    const back = st.drillReturn;
+    st.drillReturn = null;
+    if (wasOpen && back && document.contains(back) && typeof back.focus === 'function') back.focus({ preventScroll: true });
 }
 
 function highlightQuestion(text, hl) {

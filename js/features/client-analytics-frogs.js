@@ -62,11 +62,16 @@ export function orgNameKey(name) {
         .trim();
 }
 
+/** 8-800 — горячие линии (часто самой поддержки): по ним нельзя отождествлять клиентов. */
+export function isSharedServiceNumber(p) {
+    return /^7800\d{7}$/.test(String(p || ''));
+}
+
 function phonesFrom(text) {
     const out = new Set(extractPhoneCandidates(String(text || '')));
     const direct = normalizeRussianPhone(String(text || ''));
     if (direct) out.add(direct);
-    return [...out];
+    return [...out].filter((p) => !isSharedServiceNumber(p));
 }
 
 /**
@@ -446,7 +451,7 @@ export function computeFrogInsights(list, recInfo, rawEntries, ctx) {
         const r = list[i];
         const inn = String(r.inn || '').replace(/\D/g, '');
         if (!clientRecs.has(inn)) continue;
-        const keys = [...(r.phones || []).map((p) => `т:${p}`), ...(r.emails || []).map((e) => `e:${String(e).toLowerCase()}`)];
+        const keys = [...(r.phones || []).filter((p) => !isSharedServiceNumber(p)).map((p) => `т:${p}`), ...(r.emails || []).map((e) => `e:${String(e).toLowerCase()}`)];
         for (const k of keys) {
             if (!contactOwners.has(k)) contactOwners.set(k, new Set());
             contactOwners.get(k).add(inn);

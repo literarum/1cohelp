@@ -46,7 +46,20 @@ import {
     oddsRatio as oddsRatioLocal,
     applyFdr,
     pFromG2,
+    mannWhitneyU as mannWhitneyULocal,
 } from './client-analytics-math.js';
+
+/** P(X ≥ k) для биномиального X ~ Bin(n, p) — точная сумма (n здесь ≤ 15). */
+function binomTailLocal(k, n, p) {
+    if (!n) return 1;
+    let total = 0;
+    let c = 1; // C(n, i)
+    for (let i = 0; i <= n; i++) {
+        if (i > 0) c = (c * (n - i + 1)) / i;
+        if (i >= k) total += c * p ** i * (1 - p) ** (n - i);
+    }
+    return Math.min(1, total);
+}
 import {
     tokenizeDetailed,
     classifyText,
@@ -59,11 +72,12 @@ import {
     INTENT_LABELS,
     normalizeForAnalysis,
 } from './client-analytics-text.js';
-import { describeInn, kppReason, regionByCode } from './client-analytics-registry.js';
-import { innConfidence } from './client-analytics-parse.js';
+import { describeInn, kppReason, regionByCode, phoneInfo } from './client-analytics-registry.js';
+import { innConfidence, CA_PARSER_VERSION } from './client-analytics-parse.js';
 import { editDistance } from './search-text-utils.js';
 import { computeFrogInsights, buildFrogIndex as buildFrogIndexLocal, matchRecordToFrogs as matchFrogLocal } from './client-analytics-frogs.js';
 import { forecastDaily } from './client-analytics-forecast.js';
+import { dayInfo, deadlinesBetween, workdaysToNextDeadline, isCalendarKnown } from './client-analytics-calendar.js';
 
 export const INSIGHTS_VERSION = 1;
 
@@ -610,7 +624,7 @@ function computeQuality(list, recInfo, innCounts, now) {
         if (x.day != null && x.day > todayDay) idx.futureDate.push(r.id);
         if (/[а-яё][a-z]|[a-z][а-яё]|\d[cC](?![a-zа-яё])/i.test(q)) idx.mixedScript.push(r.id);
         if (x.caps > 0.6) idx.caps.push(r.id);
-        if (!r.parserVersion) idx.legacyParser.push(r.id);
+        if ((Number(r.parserVersion) || 0) < CA_PARSER_VERSION) idx.legacyParser.push(r.id);
         if (q) {
             const key = `${inn}|${normalizeForAnalysis(q).replace(/[^\p{L}\d]+/gu, ' ').trim()}`;
             const h = fnv1a(key);
@@ -689,10 +703,94 @@ function computeTimeSeries(recInfo, minDay, maxDay) {
     out.hasTime = withTime >= 20;
     out.withTime = withTime;
     const ma7 = movingAverage(counts, 7);
-    const z = robustZ(counts);
-    out.daily = counts.map((c, i) => ({ date: dayNumToYmd(from + i), count: c, ma7: ma7[i], z: z[i] }));
+    // робастный z считается отдельно для рабочих и нерабочих дней: иначе низкие выходные
+    // «растягивают» MAD, всплески буднего дня теряются, а каждый праздник выглядит провалом
+    const dates = counts.map((_, i) => dayNumToYmd(from + i));
+    const infos = dates.map((d) => dayInfo(d));
+    const z = new Array(counts.length).fill(0);
+    for (const working of [true, false]) {
+        const idx = [];
+        for (let i = 0; i < counts.length; i++) if (infos[i].working === working) idx.push(i);
+        if (idx.length < 5) continue;
+        const zz = robustZ(idx.map((i) => counts[i]));
+        idx.forEach((i, k) => (z[i] = zz[k]));
+    }
+    out.daily = counts.map((c, i) => ({ date: dates[i], count: c, ma7: ma7[i], z: z[i], dk: infos[i].kind, hol: infos[i].name }));
+    // сроки отчётности и уплаты в периоде (уже с переносом на рабочий день)
+    const deadlines = deadlinesBetween(dates[0], dates[dates.length - 1]);
+    const deadlineOn = new Map(deadlines.map((d) => [d.date, d]));
+    out.calendarKnownShare = dates.filter((d) => isCalendarKnown(d)).length / Math.max(1, dates.length);
+    const annotate = (d) => {
+        const w = d.dk === 'workday' || d.dk === 'workingSaturday' ? workdaysToNextDeadline(d.date, deadlines) : null;
+        const near = deadlines.find((x) => x.kind === 'report' && x.date >= d.date) || null;
+        return { ...d, toDeadline: w, deadline: near && w != null && w <= 3 ? near.label : null, deadlineDate: near && w != null && w <= 3 ? near.date : null, payment: deadlineOn.get(d.date)?.kind === 'payment' };
+    };
     // всплески: робастный z > 3.5 и минимум 5 обращений (иначе «всплеск» из 2 записей)
-    out.anomalies = out.daily.filter((d) => d.z > 3.5 && d.count >= 5).sort((a, b) => b.z - a.z).slice(0, 15);
+    out.anomalies = out.daily.filter((d) => d.z > 3.5 && d.count >= 5).sort((a, b) => b.z - a.z).slice(0, 15).map(annotate);
+    // провалы: рабочий день с z < −3.5 — данные за день могли не выгрузиться или был сбой
+    // Для малых счётчиков робастный z слабоват (0 при обычных 15 даёт z ≈ −3,4), поэтому второе
+    // правило — от локального уровня: меньше четверти медианы соседних рабочих дней (±14 дн.), если
+    // этот уровень ≥ 6 в день (по Пуассону P(X ≤ λ/4) при λ = 6 ≈ 0,06, при λ = 15 — < 0,001).
+    const isWork = (d) => d.dk === 'workday' || d.dk === 'workingSaturday';
+    out.dips = out.daily
+        .map((d, i) => {
+            if (!isWork(d)) return null;
+            const neigh = [];
+            for (let j = Math.max(0, i - 14); j <= Math.min(out.daily.length - 1, i + 14); j++) if (j !== i && isWork(out.daily[j])) neigh.push(out.daily[j].count);
+            const sorted = neigh.sort((a, b) => a - b);
+            const local = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : 0;
+            const byLevel = sorted.length >= 8 && local >= 6 && d.count <= local / 4;
+            return d.z < -3.5 || byLevel ? { ...d, local } : null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.count / (a.local || 1) - b.count / (b.local || 1))
+        .slice(0, 15)
+        .map(annotate);
+    // связь нагрузки со сроками: среднее на рабочий день по числу рабочих дней до срока отчётности
+    {
+        const byGap = new Map();
+        const workVals = [];
+        for (const d of out.daily) {
+            if (!(d.dk === 'workday' || d.dk === 'workingSaturday')) continue;
+            workVals.push(d.count);
+            const g = workdaysToNextDeadline(d.date, deadlines);
+            if (g == null) continue;
+            const key = Math.min(g, 10);
+            if (!byGap.has(key)) byGap.set(key, []);
+            byGap.get(key).push(d.count);
+        }
+        const base = workVals.length ? workVals.reduce((a, b) => a + b, 0) / workVals.length : 0;
+        out.deadlineProfile = [...byGap.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .map(([gap, xs]) => ({ gap, days: xs.length, mean: xs.reduce((a, b) => a + b, 0) / xs.length, ratio: base ? xs.reduce((a, b) => a + b, 0) / xs.length / base : 0 }));
+        // проверка: последние 3 рабочих дня перед сроком против остальных рабочих дней (U-тест)
+        const near = [];
+        const far = [];
+        for (const [gap, xs] of byGap) (gap <= 2 ? near : far).push(...xs);
+        const mw = mannWhitneyULocal(near, far);
+        out.deadlineEffect = {
+            nearMean: near.length ? near.reduce((a, b) => a + b, 0) / near.length : 0,
+            farMean: far.length ? far.reduce((a, b) => a + b, 0) / far.length : 0,
+            nearDays: near.length,
+            farDays: far.length,
+            p: mw.p,
+            effect: mw.effect,
+            significant: !mw.insufficient && near.length >= 6 && mw.p < 0.05,
+            insufficient: mw.insufficient || near.length < 6,
+        };
+        // доля всплесков у сроков против доли таких дней в календаре (точный биномиальный тест)
+        const workDays = out.daily.filter((d) => d.dk === 'workday' || d.dk === 'workingSaturday');
+        const baseShare = workDays.length ? workDays.filter((d) => { const g = workdaysToNextDeadline(d.date, deadlines); return g != null && g <= 2; }).length / workDays.length : 0;
+        const spikes = out.anomalies.filter((a) => a.dk === 'workday' || a.dk === 'workingSaturday');
+        const hits = spikes.filter((a) => a.toDeadline != null && a.toDeadline <= 2).length;
+        out.spikesNearDeadline = { spikes: spikes.length, hits, baseShare, p: binomTailLocal(hits, spikes.length, baseShare) };
+    }
+    out.holidayStats = (() => {
+        const groups = { workday: [], weekend: [], holiday: [], workingSaturday: [] };
+        for (const d of out.daily) groups[d.dk].push(d.count);
+        const m = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+        return Object.fromEntries(Object.entries(groups).map(([k, xs]) => [k, { days: xs.length, mean: m(xs) }]));
+    })();
     // недели (пн — вс)
     const weekMap = new Map();
     for (let i = 0; i < len; i++) {
@@ -731,7 +829,7 @@ function computeTimeSeries(recInfo, minDay, maxDay) {
     out.level = ew.length ? ew[ew.length - 1] : 0; // текущий сглаженный уровень, обращений/день
     out.insufficient = len < 14;
     try {
-        out.forecast = forecastDaily(out.daily.map((d) => ({ date: d.date, count: d.count })));
+        out.forecast = forecastDaily(out.daily.map((d) => ({ date: d.date, count: d.count })), { dayInfo });
     } catch (e) {
         out.forecast = { insufficient: true, reason: String((e && e.message) || e) };
     }
@@ -825,6 +923,7 @@ function computeClients(list, recInfo, innCounts, innRecs, blacklistInns) {
         const inn = String(r.inn || '').replace(/\D/g, '');
         if (!innPos.has(inn)) continue;
         for (const p of r.phones || []) {
+            if (/^7800\d{7}$/.test(p)) continue; // 8-800 — горячая линия, а не телефон клиента
             const k = `т:${p}`;
             if (!contactOwners.has(k)) contactOwners.set(k, new Set());
             contactOwners.get(k).add(inn);
@@ -866,7 +965,21 @@ function computeClients(list, recInfo, innCounts, innRecs, blacklistInns) {
             return { inns, size: inns.length, appeals: inns.reduce((s, x) => s + (innCounts.get(x) || 0), 0), shared };
         });
 
+    // типы телефонов (уникальные номера)
+    const phoneKinds = new Map();
+    const seenPhones = new Set();
+    for (const r of list) {
+        for (const p of r.phones || []) {
+            if (seenPhones.has(p)) continue;
+            seenPhones.add(p);
+            const info = phoneInfo(p);
+            const key = info.kind === 'foreign' ? `иностранный: ${info.label}` : info.label;
+            phoneKinds.set(key, (phoneKinds.get(key) || 0) + 1);
+        }
+    }
     return {
+        phoneKinds: [...phoneKinds.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+        phonesTotal: seenPhones.size,
         total: innCounts.size,
         gini: gini(values),
         lorenz: lorenz(values, 51),

@@ -127,10 +127,87 @@ const METHODS = {
  * @param {Array<{date: string, count: number}>} daily непрерывный дневной ряд
  * @param {{ horizon?: number, origins?: number }} [opts]
  */
+/**
+ * Календарная поправка ряда. Праздничные будни и рабочие субботы ломают недельную сезонность:
+ * в обучающем ряду они заменяются типичным значением этого дня недели (среднее соседних недель
+ * без праздников), а для прогноза измеряется коэффициент «праздник / обычный будний день».
+ * @param {number[]} y
+ * @param {string[]} dates
+ * @param {(ymd: string) => { kind: string }} dayInfo
+ */
+export function calendarAdjust(y, dates, dayInfo) {
+    const kinds = dates.map((d) => dayInfo(d).kind);
+    const special = (k) => k === 'holiday' || k === 'workingSaturday';
+    const adj = y.slice();
+    const holidayRatios = [];
+    const wsRatios = [];
+    for (let i = 0; i < y.length; i++) {
+        if (!special(kinds[i])) continue;
+        const ref = [];
+        for (const off of [-14, -7, 7, 14]) {
+            const j = i + off;
+            if (j >= 0 && j < y.length && !special(kinds[j])) ref.push(y[j]);
+        }
+        if (!ref.length) continue;
+        const typical = mean(ref);
+        adj[i] = typical;
+        if (typical > 0) (kinds[i] === 'holiday' ? holidayRatios : wsRatios).push(y[i] / typical);
+    }
+    const med = (xs) => {
+        if (!xs.length) return null;
+        const s = [...xs].sort((a, b) => a - b);
+        return s[Math.floor((s.length - 1) / 2)];
+    };
+    // мало праздников в истории — коэффициент «как выходной»: среднее сб/вс к среднему пн–пт
+    let weekendRatio = null;
+    {
+        const we = [];
+        const wd = [];
+        dates.forEach((d, i) => (kinds[i] === 'weekend' ? we : kinds[i] === 'workday' ? wd : []).push(y[i]));
+        if (we.length && wd.length && mean(wd) > 0) weekendRatio = mean(we) / mean(wd);
+    }
+    return {
+        adjusted: adj,
+        kinds,
+        holidayRatio: holidayRatios.length >= 3 ? med(holidayRatios) : weekendRatio,
+        holidayRatioSource: holidayRatios.length >= 3 ? `по ${holidayRatios.length} праздникам в истории` : 'как в выходные (праздников в истории мало)',
+        // рабочая суббота: без истории считаем её обычным рабочим днём (коэффициент к будней — 1)
+        wsRatio: wsRatios.length >= 2 ? med(wsRatios) : 1,
+    };
+}
+
+function addDaysYmd(ymd, n) {
+    const d = new Date(`${ymd}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Прогноз с учётом календаря: модель учится на скорректированном ряду, затем для праздников
+ * и рабочих суббот горизонта применяются коэффициенты. Бэктест проходит тот же путь.
+ */
+function calendarForecast(meth, y, dates, h, dayInfo) {
+    if (!dayInfo) return meth.fc(y, h);
+    const cal = calendarAdjust(y, dates, dayInfo);
+    const base = meth.fc(cal.adjusted, h);
+    const last = dates[dates.length - 1];
+    const kinds = base.map((_, k) => dayInfo(addDaysYmd(last, k + 1)).kind);
+    // средний прогноз обычных будних дней горизонта — ориентир для рабочей субботы
+    const workdayVals = base.filter((_, k) => kinds[k] === 'workday');
+    const workdayMean = workdayVals.length ? mean(workdayVals) : null;
+    return base.map((v, k) => {
+        if (kinds[k] === 'holiday' && cal.holidayRatio != null) return v * cal.holidayRatio;
+        if (kinds[k] === 'workingSaturday' && workdayMean != null) return workdayMean * cal.wsRatio;
+        return v;
+    });
+}
+
 export function forecastDaily(daily, opts = {}) {
     const H = opts.horizon || 14;
     const ORIG = opts.origins || 8;
     const y = daily.map((d) => d.count);
+    const dates = daily.map((d) => d.date);
+    const dayInfo = opts.dayInfo || null;
     // нужно минимум 5 недель обучения + 2 недели на самую раннюю проверку
     if (y.length < 7 * 7) {
         return { insufficient: true, reason: `Нужно не меньше 49 дней ряда (сейчас ${y.length}).` };
@@ -149,7 +226,7 @@ export function forecastDaily(daily, opts = {}) {
         const weekErr = [];
         for (const o of origins) {
             const train = y.slice(0, o);
-            const fc = meth.fc(train, H);
+            const fc = calendarForecast(meth, train, dates.slice(0, o), H, dayInfo);
             const scale = seasonalNaiveScale(train);
             let wsumA = 0;
             let wsumF = 0;
@@ -173,7 +250,8 @@ export function forecastDaily(daily, opts = {}) {
     const ranked = Object.entries(res).filter(([, r]) => Number.isFinite(r.mase)).sort((a, b) => a[1].mase - b[1].mase);
     if (!ranked.length) return { insufficient: true, reason: 'Не удалось провести бэктест.' };
     const [bestKey, best] = ranked[0];
-    const point = METHODS[bestKey].fc(y, H).map((v) => Math.max(0, v));
+    const point = calendarForecast(METHODS[bestKey], y, dates, H, dayInfo).map((v) => Math.max(0, v));
+    const cal = dayInfo ? calendarAdjust(y, dates, dayInfo) : null;
     // эмпирические интервалы: ошибки бэктеста по блокам горизонта (1–7, 8–14)
     const block = (k) => (k < 7 ? 0 : 1);
     const pooled = [[], []];
@@ -184,8 +262,12 @@ export function forecastDaily(daily, opts = {}) {
         const d = new Date(lastDate);
         d.setUTCDate(d.getUTCDate() + k + 1);
         const b = bands[block(k)];
+        const ds = d.toISOString().slice(0, 10);
+        const info = dayInfo ? dayInfo(ds) : null;
         return {
-            date: d.toISOString().slice(0, 10),
+            date: ds,
+            dayKind: info ? info.kind : null,
+            dayName: info ? info.name : null,
             value: v,
             lo80: Math.max(0, v + b.lo80),
             hi80: Math.max(0, v + b.hi80),
@@ -222,5 +304,6 @@ export function forecastDaily(daily, opts = {}) {
             samples: we.length,
         },
         coverage80: total ? inside / total : NaN,
+        calendar: cal ? { holidayRatio: cal.holidayRatio, holidayRatioSource: cal.holidayRatioSource, wsRatio: cal.wsRatio } : null,
     };
 }

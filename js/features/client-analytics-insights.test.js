@@ -14,6 +14,7 @@ import {
     scrubQuestionText,
     extractPhoneCandidates,
     pickPrimaryInn,
+    CA_PARSER_VERSION,
 } from './client-analytics-parse.js';
 import { csvCell } from './client-analytics-dashboard.js';
 
@@ -80,7 +81,7 @@ describe('разборщик v2', () => {
         const rows = parseTxtIntoRecords('1). Вопрос про ЭДО 7707​083893', 'z.txt');
         expect(rows[0].inn).toBe('7707083893');
         expect(rows[0].sourceText).toContain('7707083893');
-        expect(rows[0].parserVersion).toBe(2);
+        expect(rows[0].parserVersion).toBe(CA_PARSER_VERSION);
     });
 });
 

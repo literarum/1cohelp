@@ -160,3 +160,49 @@ export function describeInn(inn) {
         taxOffice: s.slice(0, 4),
     };
 }
+
+/** Коды стран для иностранных номеров (страны, откуда чаще всего обращаются в российские сервисы). */
+const COUNTRY_CODES = {
+    375: 'Беларусь',
+    380: 'Украина',
+    374: 'Армения',
+    994: 'Азербайджан',
+    995: 'Грузия',
+    996: 'Киргизия',
+    992: 'Таджикистан',
+    993: 'Туркмения',
+    998: 'Узбекистан',
+    373: 'Молдова',
+    371: 'Латвия',
+    370: 'Литва',
+    372: 'Эстония',
+    86: 'Китай',
+    90: 'Турция',
+    49: 'Германия',
+    1: 'США/Канада',
+    44: 'Великобритания',
+    971: 'ОАЭ',
+};
+
+/**
+ * Тип телефона: мобильный РФ (+7 9xx), бесплатный (8-800), стационарный РФ, Казахстан (+7 6xx/7xx —
+ * общая с РФ зона +7), иностранный (+код страны).
+ * @param {string} phone нормализованный «7XXXXXXXXXX» или «+цифры»
+ */
+export function phoneInfo(phone) {
+    const p = String(phone || '');
+    if (p.startsWith('+')) {
+        const d = p.slice(1);
+        for (const len of [3, 2, 1]) {
+            const c = COUNTRY_CODES[d.slice(0, len)];
+            if (c) return { kind: 'foreign', label: c, country: c };
+        }
+        return { kind: 'foreign', label: 'иностранный', country: null };
+    }
+    if (!/^7\d{10}$/.test(p)) return { kind: 'unknown', label: 'не распознан', country: null };
+    const a = p[1];
+    if (a === '9') return { kind: 'mobile', label: 'мобильный', country: 'Россия' };
+    if (p.startsWith('7800')) return { kind: 'free', label: 'бесплатный 8-800', country: 'Россия' };
+    if (a === '6' || a === '7') return { kind: 'kz', label: 'Казахстан', country: 'Казахстан' };
+    return { kind: 'landline', label: 'стационарный', country: 'Россия' };
+}

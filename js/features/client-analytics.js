@@ -32,7 +32,7 @@ import {
     innConfidence,
     CA_PARSER_VERSION,
 } from './client-analytics-parse.js';
-import { describeInn, kppReason, regionByCode } from './client-analytics-registry.js';
+import { describeInn, kppReason, regionByCode, phoneInfo } from './client-analytics-registry.js';
 import { computeClientProfile, effectiveDate } from './client-analytics-insights.js';
 import { sparkline } from './client-analytics-charts.js';
 import {
@@ -323,6 +323,8 @@ function buildRecordFromParsedRow(row, base) {
         appealDateSource: row.appealDateSource || null,
         parserVersion: row.parserVersion || CA_PARSER_VERSION,
     };
+    if (row.phoneExt && Object.keys(row.phoneExt).length) rec.phoneExt = row.phoneExt;
+    else delete rec.phoneExt;
     if (row.listItemIndex != null && Number.isFinite(row.listItemIndex)) {
         rec.listItemIndex = row.listItemIndex;
     } else {
@@ -1572,6 +1574,13 @@ export async function exportClientAnalyticsSection() {
     const folders = await getAllFromIndexedDB('clientAnalyticsFolders');
     const tags = await getAllFromIndexedDB('clientAnalyticsTags');
     const cardMeta = await getAllFromIndexedDB('clientAnalyticsCardMeta');
+    let customTopics = [];
+    try {
+        const row = await getFromIndexedDB('preferences', CA_CUSTOM_TOPICS_PREF_ID);
+        if (row && Array.isArray(row.topics)) customTopics = row.topics;
+    } catch {
+        customTopics = [];
+    }
     return {
         exportKind: 'clientAnalyticsSection',
         exportDate: new Date().toISOString(),
@@ -1581,6 +1590,7 @@ export async function exportClientAnalyticsSection() {
         folders: Array.isArray(folders) ? folders : [],
         tags: Array.isArray(tags) ? tags : [],
         cardMeta: Array.isArray(cardMeta) ? cardMeta : [],
+        customTopics,
     };
 }
 
@@ -1607,11 +1617,15 @@ export async function importClientAnalyticsSection(data) {
         if (oldId != null) idMap.set(oldId, newId);
     }
 
+    // старый id записи → новый: карточки без ИНН хранят папки/теги по ключу «rec:<id>»
+    const recIdMap = new Map();
     for (let off = 0; off < records.length; off += 1000) {
         const batch = [];
+        const oldIds = [];
         for (const r of records.slice(off, off + 1000)) {
             if (!r || typeof r !== 'object') continue;
             const copy = { ...r };
+            oldIds.push(copy.id);
             delete copy.id;
             const sid = copy.sourceFileId;
             if (sid != null && idMap.has(sid)) {
@@ -1623,6 +1637,7 @@ export async function importClientAnalyticsSection(data) {
         const keys = await bulkPutToIndexedDB('clientAnalyticsRecords', batch);
         batch.forEach((r, i) => {
             r.id = keys[i];
+            if (oldIds[i] != null) recIdMap.set(String(oldIds[i]), keys[i]);
         });
         if (deps.bulkAddToSearchIndex) {
             await deps.bulkAddToSearchIndex('clientAnalyticsRecords', batch);
@@ -1634,6 +1649,9 @@ export async function importClientAnalyticsSection(data) {
         await yieldToMain();
     }
     invalidateClientAnalyticsCache();
+    if (Array.isArray(data.customTopics) && data.customTopics.length) {
+        await saveToIndexedDB('preferences', { id: CA_CUSTOM_TOPICS_PREF_ID, topics: data.customTopics, updatedAt: new Date().toISOString() });
+    }
 
     const folderRows = Array.isArray(data.folders) ? data.folders : [];
     const tagRows = Array.isArray(data.tags) ? data.tags : [];
@@ -1656,7 +1674,12 @@ export async function importClientAnalyticsSection(data) {
     }
     for (const m of metaRows) {
         if (!m || m.id == null) continue;
-        const strId = String(m.id);
+        let strId = String(m.id);
+        if (strId.startsWith('rec:')) {
+            const nid = recIdMap.get(strId.slice(4));
+            if (nid == null) continue; // запись не импортирована — метаданные некуда привязать
+            strId = `rec:${nid}`;
+        }
         const oldFolder = m.folderId;
         let folderId = null;
         if (oldFolder != null && folderIdMap.has(oldFolder)) {
@@ -2427,7 +2450,7 @@ function detailRowsHtml(rec, innBadgeHtml) {
         otherInns.length ? row('Другие ИНН в тексте', escapeHtml(otherInns.join(', '))) : '',
         row('КПП', `${escapeHtml(kpp || '—')}${kppExtra}`),
         (rec.ogrn || []).length ? row('ОГРН / ОГРНИП', escapeHtml(rec.ogrn.join(', '))) : '',
-        row('Телефоны', escapeHtml((rec.phones || []).map(formatRussianPhoneForDisplay).join(', ') || '—')),
+        row('Телефоны', escapeHtml((rec.phones || []).map((p) => `${formatRussianPhoneForDisplay(p)}${rec.phoneExt && rec.phoneExt[p] ? ` доб. ${rec.phoneExt[p]}` : ''} (${phoneInfo(p).label})`).join(', ') || '—')),
         row('E-mail', escapeHtml((rec.emails || []).join(', ') || '—')),
         row('Вопрос / суть', `<span class="whitespace-pre-wrap">${escapeHtml(rec.question || '—')}</span>`),
         row('Файл', `${escapeHtml(rec.sourceFileName || '')} <span class="text-xs text-gray-500">(id ${escapeHtml(String(rec.sourceFileId ?? '—'))})</span>`),
